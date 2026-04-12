@@ -8,213 +8,376 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ═══════════════════════════════════════════
+   RESET
+   ═══════════════════════════════════════════ */
 *{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --bg:#09090b;--bg2:#111113;--bg3:#18181b;
-  --border:#27272a;--border2:#3f3f46;
-  --text:#fafafa;--text2:#a1a1aa;--text3:#71717a;--text4:#52525b;
-  --purple:#8b5cf6;--purple2:#a78bfa;--purple-dim:rgba(139,92,246,.08);
-  --blue:#6366f1;
-  --green:#22c55e;--red:#ef4444;
-  --font:'Inter',system-ui,sans-serif;
-  --mono:'JetBrains Mono','Fira Code',monospace;
-  --radius:12px;
-  --max-w:720px;
+html{height:100%}
+body{
+  height:100%;
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:#050510;
+  color:#f4f4f5;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
 }
-html,body{height:100%;overflow:hidden}
-body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 
-/* ══ HEADER ══ */
+/* ═══════════════════════════════════════════
+   HEADER — 64px, blur, logo left, btn right
+   ═══════════════════════════════════════════ */
 .header{
-  height:52px;display:flex;align-items:center;padding:0 20px;
-  background:rgba(9,9,11,.8);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);flex-shrink:0;z-index:10;
+  height:64px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  padding:0 24px;
+  background:rgba(5,5,16,.75);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  z-index:100;
 }
-.header-logo{height:28px;object-fit:contain;border-radius:4px;mix-blend-mode:screen}
-.header-sep{width:1px;height:20px;background:var(--border);margin:0 14px}
-.header-label{font-size:13px;font-weight:600;letter-spacing:2.5px;color:var(--text2)}
-.header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.btn-ghost{
-  background:none;border:1px solid var(--border);color:var(--text3);
-  padding:6px 14px;border-radius:8px;font-size:12px;font-weight:500;
-  cursor:pointer;font-family:var(--font);transition:all .15s;letter-spacing:.3px;
+.header-left{
+  display:flex;
+  align-items:center;
+  gap:14px;
 }
-.btn-ghost:hover{border-color:var(--purple);color:var(--purple)}
-.btn-ghost:active{transform:scale(.97)}
+.header-logo{
+  width:32px;height:32px;
+  object-fit:contain;
+  border-radius:6px;
+  /* Kill white background */
+  mix-blend-mode:screen;
+  filter:brightness(1.1);
+}
+.header-wordmark{
+  font-size:14px;
+  font-weight:600;
+  letter-spacing:3px;
+  color:rgba(255,255,255,.7);
+}
+.header-right{
+  margin-left:auto;
+}
+.btn-new{
+  background:transparent;
+  border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.45);
+  padding:8px 18px;
+  border-radius:10px;
+  font-size:13px;
+  font-weight:500;
+  font-family:inherit;
+  cursor:pointer;
+  transition:all .2s ease;
+  letter-spacing:.2px;
+}
+.btn-new:hover{
+  border-color:rgba(124,58,237,.5);
+  color:rgba(124,58,237,.9);
+}
+.btn-new:active{transform:scale(.97)}
 
-/* ══ CHAT AREA ══ */
-#chat{flex:1;overflow-y:auto;overflow-x:hidden}
+/* ═══════════════════════════════════════════
+   CHAT SCROLL AREA
+   ═══════════════════════════════════════════ */
+#chat{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  /* Reserve space for fixed input */
+  padding-bottom:100px;
+}
 #chat::-webkit-scrollbar{width:3px}
-#chat::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.feed{max-width:var(--max-w);margin:0 auto;padding:28px 20px 20px}
+#chat::-webkit-scrollbar-track{background:transparent}
+#chat::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
 
-/* ══ WELCOME ══ */
+.feed{
+  max-width:820px;
+  width:100%;
+  margin:0 auto;
+  padding:32px 24px 24px;
+}
+
+/* ═══════════════════════════════════════════
+   WELCOME — centered vertically & horizontally
+   ═══════════════════════════════════════════ */
 .welcome{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:calc(100vh - 160px);gap:24px;text-align:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:calc(100vh - 64px - 100px);
+  text-align:center;
+  user-select:none;
 }
 .welcome.hide{display:none}
-.welcome-logo{
-  width:88px;height:88px;object-fit:contain;border-radius:16px;
-  mix-blend-mode:screen;filter:drop-shadow(0 0 40px rgba(139,92,246,.15));
-}
-.welcome-tagline{font-size:11px;letter-spacing:5px;text-transform:uppercase;color:var(--text4);font-weight:500}
-.welcome-title{font-size:28px;font-weight:300;color:var(--text2)}
-.welcome-title b{color:var(--purple);font-weight:500}
 
-/* ══ USER MSG ══ */
-.bubble-user{
-  display:flex;justify-content:flex-end;margin:16px 0 4px;
+.welcome-logo{
+  width:90px;
+  height:auto;
+  object-fit:contain;
+  border-radius:14px;
+  /* CRITICAL: remove white bg */
+  mix-blend-mode:screen;
+  filter:brightness(1.05) contrast(1.05);
+  /* Subtle glow */
+  filter:brightness(1.05) drop-shadow(0 0 60px rgba(124,58,237,.12));
 }
-.bubble-user-inner{
-  max-width:72%;padding:12px 18px;font-size:14px;line-height:1.6;
-  background:var(--purple);color:#fff;
+
+/* 24px gap */
+.welcome-tagline{
+  margin-top:24px;
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:5px;
+  text-transform:uppercase;
+  color:rgba(255,255,255,.2);
+}
+
+/* 16px gap */
+.welcome-headline{
+  margin-top:16px;
+  font-size:30px;
+  font-weight:500;
+  color:rgba(255,255,255,.6);
+  line-height:1.3;
+}
+.welcome-headline .grad{
+  background:linear-gradient(90deg,#7c3aed,#2563eb);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  font-weight:600;
+}
+
+/* ═══════════════════════════════════════════
+   USER MESSAGE
+   ═══════════════════════════════════════════ */
+.row-user{
+  display:flex;
+  justify-content:flex-end;
+  margin:18px 0 6px;
+}
+.msg-user{
+  max-width:70%;
+  padding:12px 18px;
+  font-size:14px;
+  line-height:1.6;
+  color:#fff;
+  background:linear-gradient(135deg,#7c3aed,#6d28d9);
   border-radius:20px 20px 6px 20px;
   word-wrap:break-word;
 }
 
-/* ══ TOOL BLOCK ══ */
+/* ═══════════════════════════════════════════
+   TOOL BLOCK — Claude Code style
+   ═══════════════════════════════════════════ */
 .tool{
-  background:var(--bg2);border:1px solid var(--border);border-radius:10px;
-  margin:6px 0;overflow:hidden;transition:border-color .15s;
+  margin:6px 0;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:10px;
+  overflow:hidden;
+  transition:border-color .15s;
 }
-.tool:hover{border-color:var(--border2)}
-.tool-head{
-  display:flex;align-items:center;gap:10px;padding:9px 14px;
-  cursor:pointer;user-select:none;
+.tool:hover{border-color:rgba(255,255,255,.1)}
+.tool-h{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;cursor:pointer;user-select:none;
 }
-.tool-head:hover{background:rgba(255,255,255,.02)}
-.tool-chev{font-size:8px;color:var(--text4);transition:transform .2s;width:10px;text-align:center}
-.tool-chev.open{transform:rotate(90deg)}
+.tool-h:hover{background:rgba(255,255,255,.02)}
+.tool-chev{
+  font-size:8px;color:rgba(255,255,255,.2);
+  transition:transform .2s;width:10px;text-align:center;
+}
+.tool-chev.on{transform:rotate(90deg)}
 .tool-ico{
   width:20px;height:20px;border-radius:5px;
-  background:var(--purple-dim);display:flex;align-items:center;justify-content:center;
+  background:rgba(124,58,237,.08);
+  display:flex;align-items:center;justify-content:center;
   font-size:11px;flex-shrink:0;
 }
-.tool-name{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--purple2)}
-.tool-file{font-size:11px;color:var(--text4);margin-left:auto;font-family:var(--mono)}
-.tool-tag{
-  font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;letter-spacing:.2px;
-}
-.tool-tag.ok{background:rgba(34,197,94,.08);color:var(--green)}
-.tool-tag.err{background:rgba(239,68,68,.08);color:var(--red)}
-.tool-tag.run{background:rgba(99,102,241,.08);color:var(--blue)}
-.tool-detail{max-height:0;overflow:hidden;transition:max-height .2s ease}
-.tool-detail.open{max-height:400px;overflow-y:auto}
-.tool-detail-inner{
-  padding:10px 14px;border-top:1px solid var(--border);
-  font-family:var(--mono);font-size:11.5px;color:var(--text3);
-  white-space:pre-wrap;word-break:break-all;line-height:1.55;
+.tool-nm{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#a78bfa}
+.tool-fl{font-size:11px;color:rgba(255,255,255,.2);margin-left:auto;font-family:'JetBrains Mono',monospace}
+.tool-st{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
+.tool-st.r{background:rgba(99,102,241,.08);color:#818cf8}
+.tool-st.g{background:rgba(34,197,94,.07);color:#4ade80}
+.tool-st.e{background:rgba(239,68,68,.07);color:#f87171}
+.tool-bd{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.tool-bd.on{max-height:400px;overflow-y:auto}
+.tool-bd-in{
+  padding:10px 14px;border-top:1px solid rgba(255,255,255,.05);
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:rgba(255,255,255,.3);white-space:pre-wrap;word-break:break-all;line-height:1.55;
 }
 
-/* ══ ASSISTANT MSG ══ */
+/* ═══════════════════════════════════════════
+   ASSISTANT REPLY
+   ═══════════════════════════════════════════ */
 .reply{
-  font-size:14.5px;line-height:1.75;color:var(--text);padding:10px 0 6px;
+  font-size:14.5px;line-height:1.75;
+  color:rgba(255,255,255,.88);
+  padding:10px 0 8px;
 }
-.reply strong{color:var(--purple2);font-weight:600}
-.reply em{color:var(--text2)}
+.reply p{margin-bottom:8px}
+.reply strong{color:#c4b5fd;font-weight:600}
+.reply em{color:rgba(255,255,255,.5)}
 .reply pre{
-  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
-  padding:14px 16px;overflow-x:auto;margin:10px 0;font-size:13px;line-height:1.55;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:8px;padding:14px 16px;
+  overflow-x:auto;margin:10px 0;
+  font-size:13px;line-height:1.55;
 }
-.reply code{font-family:var(--mono);font-size:13px}
+.reply code{font-family:'JetBrains Mono',monospace;font-size:13px}
 .reply :not(pre)>code{
-  background:var(--bg3);padding:1.5px 6px;border-radius:4px;font-size:12px;color:var(--purple2);
+  background:rgba(255,255,255,.06);padding:1px 6px;
+  border-radius:4px;font-size:12px;color:#c4b5fd;
 }
 .reply ul,.reply ol{margin:6px 0 6px 18px}
 .reply li{margin-bottom:3px}
 .reply h3,.reply h4{margin:12px 0 4px;font-weight:600;font-size:15px}
-.reply p{margin-bottom:8px}
-.reply a{color:var(--purple);text-decoration:none}
+.reply a{color:#a78bfa;text-decoration:none}
 
-/* ══ THINKING ══ */
-.think{display:flex;align-items:center;gap:10px;padding:14px 0;color:var(--text4);font-size:13px}
-.think-dots{display:flex;gap:3px}
-.think-dots i{
-  width:5px;height:5px;border-radius:50%;background:var(--purple);opacity:.2;
-  animation:pulse 1.4s ease-in-out infinite;display:block;
+/* ═══════════════════════════════════════════
+   THINKING DOTS
+   ═══════════════════════════════════════════ */
+.think{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 0;color:rgba(255,255,255,.2);font-size:13px;
 }
-.think-dots i:nth-child(2){animation-delay:.15s}
-.think-dots i:nth-child(3){animation-delay:.3s}
-@keyframes pulse{0%,80%,100%{opacity:.2}40%{opacity:.9}}
+.dots{display:flex;gap:3px}
+.dots i{
+  display:block;width:5px;height:5px;border-radius:50%;
+  background:#7c3aed;opacity:.15;
+  animation:bk 1.4s ease-in-out infinite;
+}
+.dots i:nth-child(2){animation-delay:.15s}
+.dots i:nth-child(3){animation-delay:.3s}
+@keyframes bk{0%,80%,100%{opacity:.15}40%{opacity:.85}}
 
-/* ══ INPUT ══ */
-.input-wrap{
-  background:rgba(9,9,11,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0;
+/* ═══════════════════════════════════════════
+   INPUT — FIXED BOTTOM, ChatGPT clone
+   ═══════════════════════════════════════════ */
+.input-dock{
+  position:fixed;
+  bottom:24px;
+  left:50%;
+  transform:translateX(-50%);
+  width:calc(100% - 48px);
+  max-width:820px;
+  z-index:100;
 }
-.input-box{
-  max-width:var(--max-w);margin:0 auto;display:flex;align-items:flex-end;gap:8px;
-  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-  padding:4px 4px 4px 16px;transition:all .2s;
+.input-shell{
+  display:flex;
+  align-items:flex-end;
+  gap:8px;
+  background:#0b0b15;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:6px 6px 6px 18px;
+  transition:box-shadow .2s,border-color .2s;
 }
-.input-box:focus-within{border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-dim)}
+.input-shell:focus-within{
+  border-color:rgba(124,58,237,.35);
+  box-shadow:0 0 0 2px rgba(124,58,237,.15);
+}
 #msg{
-  flex:1;background:none;border:none;color:var(--text);padding:10px 0;
-  font-size:14px;outline:none;resize:none;font-family:var(--font);
-  min-height:20px;max-height:120px;line-height:1.5;caret-color:var(--purple);
+  flex:1;background:none;border:none;
+  color:#f4f4f5;
+  padding:8px 0;
+  font-size:14px;font-family:inherit;
+  outline:none;resize:none;
+  min-height:20px;max-height:120px;
+  line-height:1.5;
+  caret-color:#7c3aed;
 }
-#msg::placeholder{color:var(--text4)}
-.send-btn{
-  width:36px;height:36px;border-radius:10px;border:none;
-  background:var(--purple);color:#fff;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  transition:all .15s;
-}
-.send-btn:hover{background:#7c3aed;transform:scale(1.03)}
-.send-btn:active{transform:scale(.95)}
-.send-btn:disabled{opacity:.15;cursor:default;transform:none}
-.send-btn svg{width:16px;height:16px}
+#msg::placeholder{color:rgba(255,255,255,.18)}
 
-/* ══ RESPONSIVE ══ */
-@media(max-width:600px){
-  .feed{padding:16px 14px}
-  .bubble-user-inner{max-width:85%}
-  .welcome-title{font-size:22px}
-  .welcome-logo{width:64px;height:64px;border-radius:12px}
-  .header{padding:0 14px}
+.send{
+  width:38px;height:38px;
+  border-radius:50%;
+  border:none;
+  background:linear-gradient(135deg,#7c3aed,#2563eb);
+  color:#fff;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:transform .15s,opacity .15s;
+}
+.send:hover{transform:scale(1.05)}
+.send:active{transform:scale(.93)}
+.send:disabled{opacity:.12;cursor:default;transform:none}
+.send svg{width:16px;height:16px}
+
+/* ═══════════════════════════════════════════
+   MOBILE
+   ═══════════════════════════════════════════ */
+@media(max-width:640px){
+  .feed{padding:20px 16px}
+  .msg-user{max-width:85%}
+  .welcome-headline{font-size:24px}
+  .welcome-logo{width:72px;border-radius:12px}
+  .header{padding:0 16px;height:56px}
+  .input-dock{bottom:16px;width:calc(100% - 32px)}
 }
 </style>
 </head>
 <body>
 
+<!-- ═══ HEADER ═══ -->
 <div class="header">
-  <img src="/assets/logo.jpg" class="header-logo" alt="">
-  <div class="header-sep"></div>
-  <span class="header-label">CLOW</span>
+  <div class="header-left">
+    <img src="/assets/logo.jpg" class="header-logo" alt="">
+    <span class="header-wordmark">CLOW</span>
+  </div>
   <div class="header-right">
-    <button class="btn-ghost" onclick="reset()">Nova conversa</button>
+    <button class="btn-new" onclick="reset()">Nova conversa</button>
   </div>
 </div>
 
+<!-- ═══ CHAT ═══ -->
 <div id="chat">
   <div class="feed" id="feed">
+
     <div class="welcome" id="wel">
       <img src="/assets/logo.jpg" class="welcome-logo" alt="Clow">
-      <span class="welcome-tagline">inteligência infinita · possibilidades premium</span>
-      <div class="welcome-title">Como posso <b>ajudar</b>?</div>
+      <div class="welcome-tagline">inteligência infinita · possibilidades premium</div>
+      <div class="welcome-headline">Como posso <span class="grad">ajudar</span>?</div>
     </div>
+
   </div>
 </div>
 
-<div class="input-wrap">
-  <div class="input-box">
+<!-- ═══ INPUT (FIXED BOTTOM) ═══ -->
+<div class="input-dock">
+  <div class="input-shell">
     <textarea id="msg" placeholder="Mensagem para o Clow..." rows="1"></textarea>
-    <button class="send-btn" id="btn" onclick="go()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+    <button class="send" id="btn" onclick="go()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 2L11 13"/>
+        <path d="M22 2l-7 20-4-9-9-4z"/>
+      </svg>
     </button>
   </div>
 </div>
 
+<!-- ═══ LOGIC ═══ -->
 <script>
 const U=location.origin,K='clow_live_BjrOCY2elZ5A2TWGEWMxkiyQgDVAWtZs';
 let S=null;
-const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
+const F=document.getElementById('feed'),I=document.getElementById('msg'),
+      B=document.getElementById('btn'),W=document.getElementById('wel');
 
 I.addEventListener('input',()=>{I.style.height='auto';I.style.height=Math.min(I.scrollHeight,120)+'px'});
 I.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}});
 
-const IC={Read:'📄',FileRead:'📄',Bash:'⚡',Edit:'✏️',FileEdit:'✏️',Write:'📝',FileWrite:'📝',Glob:'🔍',Grep:'🔎',Agent:'🤖',WebFetch:'🌐',WebSearch:'🔎',TodoWrite:'📋'};
+const IC={Read:'📄',FileRead:'📄',Bash:'⚡',Edit:'✏️',FileEdit:'✏️',Write:'📝',
+  FileWrite:'📝',Glob:'🔍',Grep:'🔎',Agent:'🤖',WebFetch:'🌐',WebSearch:'🔎',TodoWrite:'📋'};
 const ico=n=>n.startsWith('mcp__')?'🔌':(IC[n]||'🔧');
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -231,80 +394,77 @@ function md(t){
     .replace(/\n/g,'<br>');
 }
 
-function scroll(){document.getElementById('chat').scrollTop=1e6}
+function scr(){document.getElementById('chat').scrollTop=1e6}
 
-function addUser(t){
+function addU(t){
   W.classList.add('hide');
-  const d=document.createElement('div');d.className='bubble-user';
-  d.innerHTML=`<div class="bubble-user-inner">${esc(t)}</div>`;
-  F.appendChild(d);scroll();
+  const d=document.createElement('div');d.className='row-user';
+  d.innerHTML=`<div class="msg-user">${esc(t)}</div>`;
+  F.appendChild(d);scr();
 }
 
-function addTool(name,inp){
+function addT(nm,inp){
   const s=typeof inp==='object'?JSON.stringify(inp,null,2):String(inp||'');
-  let file='';
+  let fl='';
   if(inp&&typeof inp==='object'){
-    file=inp.command?.slice(0,55)||inp.file_path?.split(/[/\\]/).pop()||inp.path?.split(/[/\\]/).pop()||inp.pattern||inp.query?.slice(0,35)||'';
+    fl=inp.command?.slice(0,50)||inp.file_path?.split(/[/\\]/).pop()||
+       inp.path?.split(/[/\\]/).pop()||inp.pattern||inp.query?.slice(0,35)||'';
   }
   const d=document.createElement('div');d.className='tool';
-  d.innerHTML=`<div class="tool-head" onclick="this.querySelector('.tool-chev').classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-    <span class="tool-chev">▶</span>
-    <div class="tool-ico">${ico(name)}</div>
-    <span class="tool-name">${name}</span>
-    ${file?`<span class="tool-file">${esc(file)}</span>`:''}
-    <span class="tool-tag run">executando</span>
-  </div><div class="tool-detail"><div class="tool-detail-inner">${esc(s)}</div></div>`;
-  F.appendChild(d);scroll();return d;
+  d.innerHTML=`<div class="tool-h" onclick="this.querySelector('.tool-chev').classList.toggle('on');this.nextElementSibling.classList.toggle('on')">
+    <span class="tool-chev">▶</span><div class="tool-ico">${ico(nm)}</div>
+    <span class="tool-nm">${nm}</span>${fl?`<span class="tool-fl">${esc(fl)}</span>`:''}
+    <span class="tool-st r">executando</span>
+  </div><div class="tool-bd"><div class="tool-bd-in">${esc(s)}</div></div>`;
+  F.appendChild(d);scr();return d;
 }
 
-function doneTool(el,ok){
-  const t=el.querySelector('.tool-tag');
-  t.className=`tool-tag ${ok?'ok':'err'}`;
+function doneT(el,ok){
+  const t=el.querySelector('.tool-st');
+  t.className=`tool-st ${ok?'g':'e'}`;
   t.textContent=ok?'concluído':'erro';
 }
 
-function addReply(html){
-  const d=document.createElement('div');d.className='reply';d.innerHTML='<p>'+html+'</p>';
-  F.appendChild(d);scroll();
+function addR(html){
+  const d=document.createElement('div');d.className='reply';
+  d.innerHTML='<p>'+html+'</p>';F.appendChild(d);scr();
 }
 
-function addThink(){
+function addTh(){
   const d=document.createElement('div');d.className='think';d.id='thk';
-  d.innerHTML='<div class="think-dots"><i></i><i></i><i></i></div>Processando...';
-  F.appendChild(d);scroll();
+  d.innerHTML='<div class="dots"><i></i><i></i><i></i></div>Processando...';
+  F.appendChild(d);scr();
 }
 
 async function go(){
   const t=I.value.trim();if(!t||!S)return;
   I.value='';I.style.height='auto';B.disabled=true;
-  addUser(t);addThink();
-
+  addU(t);addTh();
   try{
     const r=await fetch(`${U}/v1/sessions/${S}/messages`,{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},
       body:JSON.stringify({message:t}),
     });
     const body=await r.text();
     document.getElementById('thk')?.remove();
-
-    let txt='',ev='';const tools=[];
-
+    let txt='',ev='';const tls=[];
     for(const ln of body.split('\n')){
       if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}
       if(!ln.startsWith('data: '))continue;
       try{
         const d=JSON.parse(ln.slice(6));
-        if(ev==='tool_use')tools.push(addTool(d.tool_name||'Tool',d.tool_input));
-        else if(ev==='tool_result'&&tools.length)doneTool(tools[tools.length-1],!d.is_error);
+        if(ev==='tool_use')tls.push(addT(d.tool_name||'Tool',d.tool_input));
+        else if(ev==='tool_result'&&tls.length)doneT(tls[tls.length-1],!d.is_error);
         else if(ev==='text_delta')txt+=d.text||'';
         else if(ev==='result'&&d.content)txt=d.content;
       }catch{}
       ev='';
     }
-    if(txt)addReply(md(txt));
+    if(txt)addR(md(txt));
   }catch(e){
     document.getElementById('thk')?.remove();
-    addReply(`<span style="color:var(--red)">Erro de conexão</span>`);
+    addR(`<span style="color:#f87171">Erro de conexão</span>`);
   }
   B.disabled=false;I.focus();
 }
@@ -317,7 +477,9 @@ async function reset(){
 async function init(){
   try{
     const r=await fetch(`${U}/v1/sessions`,{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:'{}',
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},
+      body:'{}',
     });
     S=(await r.json()).session_id;
   }catch{}
