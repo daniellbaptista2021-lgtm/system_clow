@@ -376,11 +376,7 @@ export async function* callModel(
     };
     const metrics = calculateCost(cfg.model, dsUsage);
 
-    // Log cache metrics with savings percentage
-    const hitPct = (metrics.cacheHitRate * 100).toFixed(1);
-    if (metrics.cachedTokens > 0) {
-      console.error(`  [cache] hit: ${hitPct}% | cost: $${metrics.costActual.toFixed(6)} | saved: $${metrics.costSaved.toFixed(6)} (${metrics.savedPercent.toFixed(1)}%)`);
-    }
+    // Cache metrics tracked internally (not displayed to user)
 
     // Accumulate session-level metrics
     sessionCacheMetrics.totalCachedTokens += metrics.cachedTokens;

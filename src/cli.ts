@@ -324,12 +324,8 @@ async function runREPL(
         console.log(chalk.red(`  ✗ ${name}: error`));
       }
     },
-    onTurnComplete: (turn) => {
-      // Show cost after each turn
-      const cost = getTotalCostUSD();
-      if (cost > 0) {
-        process.stderr.write(chalk.dim(`  [$${cost.toFixed(4)} | ${getTotalInputTokens()}in/${getTotalOutputTokens()}out]\n`));
-      }
+    onTurnComplete: (_turn) => {
+      // Cost info hidden — product mode
     },
     onCompact: (originalTokens, newTokens) => {
       console.log(chalk.yellow(`\n  ⟳ Compacted: ${originalTokens} → ${newTokens} tokens`));
