@@ -40,8 +40,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 .login-e{color:var(--red);font-size:13px;margin-top:10px;min-height:20px}
 
 /* HEADER */
-.hd{height:56px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;background:var(--card);border-bottom:1px solid var(--card-border);z-index:100}
-.hd-logo{height:40px;margin-right:0}
+.hd{height:60px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;background:var(--card);border-bottom:1px solid var(--card-border);z-index:100}
+.hd-logo{height:42px;margin-right:0;transition:all .4s ease}
+.hd-logo.big{height:42px}
 .hd-r{margin-left:auto;display:flex;gap:8px}
 .hd-btn{background:none;border:1px solid var(--card-border);color:var(--text2);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:500;font-family:var(--font);cursor:pointer;transition:all .15s}
 .hd-btn:hover{border-color:var(--gold);color:var(--gold)}
@@ -61,9 +62,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 .wel-h{font-size:26px;font-weight:400;color:var(--text2)}
 .wel-h b{color:var(--gold);font-weight:600}
 
-/* USER MSG */
-.u-block{margin:24px 0 8px;padding:14px 18px;background:var(--card);border:1px solid var(--card-border);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.u-block .ut{color:var(--text);font-size:15px;line-height:1.6;white-space:pre-wrap}
+/* USER MSG — right aligned */
+.u-row{display:flex;justify-content:flex-end;margin:20px 0 8px}
+.u-block{max-width:75%;padding:14px 18px;background:var(--gold);border-radius:16px 16px 4px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.u-block .ut{color:#fff;font-size:15px;line-height:1.6;white-space:pre-wrap}
+
+/* CLOW REPLY — left aligned */
+.rp-row{display:flex;justify-content:flex-start;margin:8px 0 20px}
 
 /* TOOL BLOCK */
 .tl-block{margin:6px 0;border:1px solid var(--tool-border);border-radius:10px;overflow:hidden;background:var(--tool-bg);transition:border-color .15s}
@@ -77,7 +82,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 .tl-bdi{padding:10px 14px;background:var(--bg2);border-top:1px solid var(--tool-border);font-family:var(--mono);font-size:12px;color:var(--text2);white-space:pre-wrap;word-break:break-all;line-height:1.5}
 
 /* REPLY */
-.rp{margin:6px 0 20px;font-size:15px;line-height:1.7;color:var(--text)}
+.rp{max-width:80%;font-size:15px;line-height:1.7;color:var(--text);background:var(--bg2);padding:14px 18px;border-radius:4px 16px 16px 16px;border:1px solid var(--card-border)}
 .rp p{margin-bottom:8px}.rp strong{color:var(--gold2);font-weight:600}.rp em{color:var(--text2)}
 .rp pre{background:var(--bg2);border:1px solid var(--card-border);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:8px 0;font-size:13px;line-height:1.5}
 .rp code{font-family:var(--mono);font-size:13px}
@@ -92,12 +97,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 @keyframes bk{0%,100%{opacity:1}50%{opacity:.2}}
 
 /* INPUT */
-.inp-dock{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 24px 28px;background:linear-gradient(transparent,var(--bg) 40%);pointer-events:none}
-.inp-sh{max-width:780px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:6px 6px 6px 16px;pointer-events:all;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-.inp-sh:focus-within{border-color:var(--gold);box-shadow:0 2px 12px rgba(212,160,67,.12)}
-#msg{flex:1;background:none;border:none;color:var(--text);padding:10px 0;font-size:14px;font-family:var(--font);outline:none;resize:none;min-height:20px;max-height:120px;line-height:1.5}
+.inp-dock{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 24px 36px;background:linear-gradient(transparent,var(--bg) 35%);pointer-events:none}
+.inp-sh{max-width:780px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:8px 8px 8px 18px;pointer-events:all;box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.inp-sh:focus-within{border-color:var(--gold);box-shadow:0 4px 20px rgba(212,160,67,.12)}
+#msg{flex:1;background:none;border:none;color:var(--text);padding:12px 0;font-size:15px;font-family:var(--font);outline:none;resize:none;min-height:24px;max-height:140px;line-height:1.5}
 #msg::placeholder{color:var(--text3)}
-.snd{width:38px;height:38px;border-radius:10px;border:none;background:var(--gold);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.snd{width:42px;height:42px;border-radius:12px;border:none;background:var(--gold);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
 .snd:hover{background:var(--gold2)}.snd:active{transform:scale(.95)}.snd:disabled{opacity:.2;cursor:default;transform:none}
 .snd svg{width:16px;height:16px}
 /* Stop button replaces send while processing */
@@ -105,7 +110,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex
 .snd.stop:hover{background:#a33}
 .snd.stop svg{width:14px;height:14px}
 
-@media(max-width:640px){.feed{padding:20px 14px 160px}.wel-logo{width:300px}.login-logo{width:240px}.wel-h{font-size:22px}.hd{padding:0 14px;height:50px}.hd-logo{height:34px}.inp-dock{padding:0 14px 20px}}
+@media(max-width:640px){.feed{padding:20px 14px 170px}.wel-logo{width:280px}.login-logo{width:240px}.wel-h{font-size:22px}.hd{padding:0 14px;height:54px}.hd-logo{height:36px}.inp-dock{padding:0 14px 24px}.u-block{max-width:85%}.rp{max-width:90%}}
 </style>
 </head>
 <body>
@@ -174,7 +179,17 @@ function handleBtn(){
   go();
 }
 
-function addU(t){W.classList.add('hide');const d=document.createElement('div');d.className='u-block';d.innerHTML=`<div class="ut">${esc(t)}</div>`;F.appendChild(d);scr()}
+function addU(t){
+  // Hide welcome, show logo in header
+  if(!W.classList.contains('hide')){
+    W.classList.add('hide');
+    document.querySelector('.hd-logo').classList.add('big');
+  }
+  const row=document.createElement('div');row.className='u-row';
+  const d=document.createElement('div');d.className='u-block';
+  d.innerHTML=`<div class="ut">${esc(t)}</div>`;
+  row.appendChild(d);F.appendChild(row);scr();
+}
 function addT(nm,inp){const s=typeof inp==='object'?JSON.stringify(inp,null,2):String(inp||'');let fl='';if(inp&&typeof inp==='object'){fl=inp.file_path?.split(/[/\\]/).pop()||inp.path?.split(/[/\\]/).pop()||inp.command?.slice(0,55)||inp.pattern||inp.query?.slice(0,35)||''}const d=document.createElement('div');d.className='tl-block';d.innerHTML=`<div class="tl-h" onclick="this.querySelector('.tl-chv').classList.toggle('op');this.nextElementSibling.classList.toggle('op')"><span class="tl-chv">›</span><span class="tl-lbl">${tl(nm)}</span>${fl?`<span class="tl-fl">${esc(fl)}</span>`:''}</div><div class="tl-bd"><div class="tl-bdi">${esc(s)}</div></div>`;F.appendChild(d);scr();return d}
 function addP(){const d=document.createElement('div');d.className='proc';d.id='proc';d.innerHTML='<div class="proc-dot"></div>Processando...';F.appendChild(d);scr()}
 
@@ -197,8 +212,8 @@ async function go(){
         if(!ln.startsWith('data: '))continue;
         try{const d=JSON.parse(ln.slice(6));
           if(ev==='tool_use'){addT(d.tool_name||'Tool',d.tool_input)}
-          else if(ev==='text_delta'){txt+=d.text||'';if(!replyEl){replyEl=document.createElement('div');replyEl.className='rp';F.appendChild(replyEl)}replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}
-          else if(ev==='result'&&d.content){txt=d.content;if(!replyEl){replyEl=document.createElement('div');replyEl.className='rp';F.appendChild(replyEl)}replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}
+          else if(ev==='text_delta'){txt+=d.text||'';if(!replyEl){const row=document.createElement('div');row.className='rp-row';replyEl=document.createElement('div');replyEl.className='rp';row.appendChild(replyEl);F.appendChild(row)}replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}
+          else if(ev==='result'&&d.content){txt=d.content;if(!replyEl){const row=document.createElement('div');row.className='rp-row';replyEl=document.createElement('div');replyEl.className='rp';row.appendChild(replyEl);F.appendChild(row)}replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}
         }catch{}ev='';
       }
     }
