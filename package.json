@@ -20,6 +20,7 @@
     "chalk": "^5.4.0",
     "commander": "^13.1.0",
     "dotenv": "^16.4.0",
+    "exceljs": "^4.4.0",
     "glob": "^11.0.0",
     "hono": "^4.12.12",
     "json-schema-to-zod": "^2.8.1",
