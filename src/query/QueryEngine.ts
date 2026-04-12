@@ -338,7 +338,7 @@ export class QueryEngine {
 
         // Permission check
         const permResult = await this.config.canUseTool(tool, validInput, toolCall.id);
-        if (permResult.behavior === 'deny') {
+        if (permResult.behavior === 'deny' || permResult.behavior === 'ask') {
           this.pushToolResult(toolCall.id, `Permission denied: ${permResult.message || 'Tool use denied'}`, true);
           yield { type: 'system', subtype: 'permission_denied', content: `${tool.name}: ${permResult.message || 'denied'}` };
           continue;
