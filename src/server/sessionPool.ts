@@ -81,8 +81,8 @@ export class SessionPool {
     const engine = new QueryEngine({
       tools,
       systemPrompt,
-      maxTurns: options.maxTurns || 100,
-      maxBudgetUsd: options.maxBudgetUsd || 10,
+      maxTurns: options.maxTurns || 30,
+      maxBudgetUsd: options.maxBudgetUsd || 1,
       canUseTool,
       depth: 0,
       dynamicContext: `<environment>\nWorking directory: ${cwd}\nPlatform: ${process.platform}\nNode: ${process.version}\n</environment>`,

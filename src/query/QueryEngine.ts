@@ -139,8 +139,15 @@ export class QueryEngine {
   private async *queryLoop(): AsyncGenerator<SDKMessage> {
     let attemptWithFallback = false;
     let maxOutputRetries = 0;
+    let toolRounds = 0;
+    const MAX_TOOL_ROUNDS = 15;
 
     while (true) {
+      // ── Guard: max tool rounds to prevent infinite loops ──────────
+      if (toolRounds >= MAX_TOOL_ROUNDS) {
+        yield { type: 'result', subtype: 'error_max_turns' as any, content: `Limite de ${MAX_TOOL_ROUNDS} rodadas de ferramentas atingido. Encerrando para evitar custo excessivo.` };
+        return;
+      }
       // ── Pre-processing: tool result budget ──────────────────────────
       const budgetResult = ToolResultBudget.apply(this.state.snapshot() as Message[]);
       if (budgetResult.truncatedCount > 0) {
@@ -386,6 +393,7 @@ export class QueryEngine {
         yield { type: 'tool_result', toolName: tool.name, toolUseId: toolCall.id, isError: toolResult.isError || false };
       }
 
+      toolRounds++;
       this.budget.recordTurn(0);
       this.instanceTurns = this.budget.getTurnCount();
       this.config.onTurnComplete?.(this.budget.getTurnCount());
