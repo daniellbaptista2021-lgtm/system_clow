@@ -4,556 +4,344 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Clow — Inteligência Infinita</title>
+  <link rel="icon" type="image/jpeg" href="/assets/logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0a0f;
-      --bg-secondary: #12121a;
-      --bg-tertiary: #1a1a2e;
-      --bg-tool: #161625;
-      --border: #2a2a3e;
-      --border-hover: #3d3d5c;
-      --text-primary: #e8e8f0;
-      --text-secondary: #9090a8;
-      --text-muted: #606078;
-      --accent-purple: #8b5cf6;
-      --accent-blue: #3b82f6;
-      --accent-gradient: linear-gradient(135deg, #8b5cf6, #3b82f6);
-      --user-bg: linear-gradient(135deg, #7c3aed, #4f46e5);
-      --tool-icon: #a78bfa;
+      --bg-primary: #08080f;
+      --bg-secondary: #0e0e18;
+      --bg-tertiary: #151524;
+      --bg-tool: #111120;
+      --bg-tool-hover: #16162a;
+      --border: #1e1e35;
+      --border-hover: #2d2d4a;
+      --text-primary: #e4e4ee;
+      --text-secondary: #8888a4;
+      --text-muted: #55556e;
+      --accent: #8b5cf6;
+      --accent-blue: #6366f1;
+      --accent-glow: rgba(139,92,246,0.12);
+      --user-bg: linear-gradient(135deg, #7c3aed, #5b21b6);
+      --tool-accent: #a78bfa;
       --success: #34d399;
-      --error: #f87171;
-      --warning: #fbbf24;
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+      --error: #fb7185;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', monospace;
     }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
-      font-family: var(--font-sans);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      height: 100vh; height: 100dvh;
-      display: flex; flex-direction: column;
-      overflow: hidden;
+      font-family: var(--font); background: var(--bg-primary); color: var(--text-primary);
+      height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
     /* ═══ Header ═══ */
     header {
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 20px;
-      display: flex; align-items: center; gap: 12px;
-      flex-shrink: 0;
-      backdrop-filter: blur(20px);
+      background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+      padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
     }
-    .logo-container { display: flex; align-items: center; gap: 10px; }
-    .logo-icon {
-      width: 32px; height: 32px;
-      background: var(--accent-gradient);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 700; color: white;
+    .logo { height: 30px; border-radius: 6px; }
+    .logo-text { font-size: 15px; font-weight: 700; letter-spacing: 3px; color: var(--text-primary); }
+    .header-right { margin-left: auto; }
+    .new-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+      font-family: var(--font); transition: all 0.2s; letter-spacing: 0.5px;
     }
-    .logo-text { font-size: 16px; font-weight: 700; letter-spacing: 2px; color: var(--text-primary); }
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--success); margin-left: 4px;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    .status-dot.offline { background: var(--error); animation: none; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
-    .cost-badge {
-      font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
-      background: var(--bg-tertiary); padding: 4px 10px; border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-    .new-chat-btn {
-      background: none; border: 1px solid var(--border); color: var(--text-secondary);
-      padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
-      font-family: var(--font-sans); transition: all 0.2s;
-    }
-    .new-chat-btn:hover { border-color: var(--accent-purple); color: var(--accent-purple); }
+    .new-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    /* ═══ Chat Area ═══ */
+    /* ═══ Chat ═══ */
     #chat {
-      flex: 1; overflow-y: auto; padding: 24px 20px;
-      display: flex; flex-direction: column; gap: 2px;
+      flex: 1; overflow-y: auto; padding: 0; display: flex; flex-direction: column;
       scroll-behavior: smooth;
     }
-    #chat::-webkit-scrollbar { width: 4px; }
-    #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    #chat::-webkit-scrollbar { width: 3px; }
+    #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    /* ═══ Messages ═══ */
-    .msg-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
-
-    .msg {
-      max-width: 92%; padding: 14px 18px; line-height: 1.65;
-      word-wrap: break-word; font-size: 14px; position: relative;
-    }
-    .msg.user {
-      align-self: flex-end; background: var(--user-bg);
-      border-radius: 16px 16px 4px 16px; color: white;
-      font-weight: 400;
-    }
-    .msg.assistant {
-      align-self: flex-start; background: transparent;
-      border-radius: 0; color: var(--text-primary);
-      max-width: 100%; padding: 14px 4px;
-    }
-    .msg.assistant p { margin-bottom: 8px; }
-    .msg.assistant strong { color: #c4b5fd; font-weight: 600; }
-    .msg.assistant em { color: var(--text-secondary); }
-    .msg.assistant ul, .msg.assistant ol { margin: 8px 0 8px 20px; }
-    .msg.assistant li { margin-bottom: 4px; }
-    .msg.assistant a { color: var(--accent-purple); text-decoration: none; }
-    .msg.assistant a:hover { text-decoration: underline; }
-
-    /* ═══ Code Blocks ═══ */
-    .msg.assistant pre {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px; padding: 14px 16px;
-      overflow-x: auto; margin: 10px 0;
-      font-size: 13px; line-height: 1.5;
-    }
-    .msg.assistant code {
-      font-family: var(--font-mono); font-size: 13px;
-    }
-    .msg.assistant :not(pre) > code {
-      background: var(--bg-tertiary); padding: 2px 6px;
-      border-radius: 4px; font-size: 12.5px; color: #c4b5fd;
-    }
-
-    /* ═══ Tool Use (Claude Code style) ═══ */
-    .tool-block {
-      background: var(--bg-tool);
-      border: 1px solid var(--border);
-      border-radius: 8px; margin: 6px 0;
-      overflow: hidden; font-size: 13px;
-    }
-    .tool-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer; user-select: none;
-    }
-    .tool-header:hover { background: rgba(139,92,246,0.05); }
-    .tool-icon {
-      width: 20px; height: 20px; border-radius: 4px;
-      background: rgba(139,92,246,0.15);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; color: var(--tool-icon); flex-shrink: 0;
-    }
-    .tool-name { font-family: var(--font-mono); font-weight: 500; color: var(--tool-icon); font-size: 13px; }
-    .tool-desc { color: var(--text-muted); font-size: 12px; margin-left: auto; }
-    .tool-status {
-      font-size: 11px; padding: 2px 8px; border-radius: 10px;
-      font-weight: 500; margin-left: 8px;
-    }
-    .tool-status.running { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
-    .tool-status.done { background: rgba(52,211,153,0.15); color: var(--success); }
-    .tool-status.error { background: rgba(248,113,113,0.15); color: var(--error); }
-    .tool-body {
-      padding: 0; max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
-    }
-    .tool-body.open { max-height: 400px; padding: 12px 14px; overflow-y: auto; }
-    .tool-body pre {
-      margin: 0; font-family: var(--font-mono); font-size: 12px;
-      color: var(--text-secondary); white-space: pre-wrap; word-break: break-all;
-    }
-    .tool-arrow { color: var(--text-muted); font-size: 10px; transition: transform 0.2s; }
-    .tool-arrow.open { transform: rotate(90deg); }
-
-    /* ═══ System Messages ═══ */
-    .msg.system-info {
-      align-self: center; color: var(--text-muted); font-size: 12px;
-      padding: 6px 14px; background: var(--bg-tertiary);
-      border-radius: 20px; border: 1px solid var(--border);
-    }
-
-    /* ═══ Thinking Indicator ═══ */
-    .thinking {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 4px; color: var(--text-muted); font-size: 13px;
-    }
-    .thinking-dots { display: flex; gap: 4px; }
-    .thinking-dots span {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent-purple); opacity: 0.3;
-      animation: dot 1.4s ease-in-out infinite;
-    }
-    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes dot { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
-
-    /* ═══ Input Area ═══ */
-    #input-area {
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border);
-      padding: 16px 20px; flex-shrink: 0;
-    }
-    .input-container {
-      display: flex; align-items: flex-end; gap: 10px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border);
-      border-radius: 12px; padding: 4px 4px 4px 16px;
-      transition: border-color 0.2s;
-    }
-    .input-container:focus-within { border-color: var(--accent-purple); }
-    #input {
-      flex: 1; background: transparent; border: none;
-      color: var(--text-primary); padding: 10px 0;
-      font-size: 14px; outline: none; resize: none;
-      font-family: var(--font-sans);
-      min-height: 20px; max-height: 120px; line-height: 1.5;
-    }
-    #input::placeholder { color: var(--text-muted); }
-    #send {
-      background: var(--accent-gradient);
-      color: white; border: none; border-radius: 8px;
-      width: 36px; height: 36px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: opacity 0.2s;
-    }
-    #send:hover { opacity: 0.85; }
-    #send:disabled { opacity: 0.3; cursor: not-allowed; }
-    #send svg { width: 18px; height: 18px; }
-    .input-hint {
-      text-align: center; margin-top: 8px;
-      font-size: 11px; color: var(--text-muted);
-    }
+    .messages-container { max-width: 760px; width: 100%; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 4px; }
 
     /* ═══ Welcome ═══ */
     .welcome {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 16px;
-      opacity: 1; transition: opacity 0.3s;
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 20px; min-height: 400px;
     }
     .welcome.hidden { display: none; }
-    .welcome-logo { width: 64px; height: 64px; }
-    .welcome-title {
-      font-size: 28px; font-weight: 300; color: var(--text-primary);
-    }
-    .welcome-title span { color: var(--accent-purple); font-weight: 600; }
-    .welcome-sub {
-      font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
-      color: var(--text-muted);
+    .welcome-logo { width: 80px; height: 80px; border-radius: 16px; }
+    .welcome-sub { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--text-muted); }
+    .welcome-title { font-size: 26px; font-weight: 300; color: var(--text-secondary); }
+    .welcome-title span { color: var(--accent); font-weight: 500; }
+
+    /* ═══ User Message ═══ */
+    .msg-user {
+      align-self: flex-end; background: var(--user-bg); padding: 12px 18px;
+      border-radius: 18px 18px 4px 18px; max-width: 75%; font-size: 14px;
+      line-height: 1.6; color: white; margin: 8px 0;
     }
 
-    /* ═══ Responsive ═══ */
-    @media (max-width: 640px) {
-      header { padding: 10px 14px; }
-      #chat { padding: 16px 12px; }
-      #input-area { padding: 12px; }
-      .msg { font-size: 14px; }
-      .msg.user { max-width: 88%; }
-      .welcome-title { font-size: 22px; }
+    /* ═══ Assistant Block ═══ */
+    .assistant-block { margin: 12px 0; }
+
+    /* ═══ Tool Use — Claude Code Style ═══ */
+    .tool-block {
+      background: var(--bg-tool); border: 1px solid var(--border); border-radius: 10px;
+      margin: 4px 0; overflow: hidden; transition: border-color 0.2s;
+    }
+    .tool-block:hover { border-color: var(--border-hover); }
+    .tool-header {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      cursor: pointer; user-select: none; transition: background 0.15s;
+    }
+    .tool-header:hover { background: var(--bg-tool-hover); }
+    .tool-chevron { color: var(--text-muted); font-size: 9px; transition: transform 0.2s; width: 12px; }
+    .tool-chevron.open { transform: rotate(90deg); }
+    .tool-icon-box {
+      width: 22px; height: 22px; border-radius: 5px; background: var(--accent-glow);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; flex-shrink: 0;
+    }
+    .tool-label { font-family: var(--mono); font-size: 12.5px; font-weight: 500; color: var(--tool-accent); }
+    .tool-file { font-size: 12px; color: var(--text-muted); margin-left: auto; font-family: var(--mono); }
+    .tool-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; letter-spacing: 0.3px;
+    }
+    .tool-badge.ok { background: rgba(52,211,153,0.1); color: var(--success); }
+    .tool-badge.err { background: rgba(251,113,133,0.1); color: var(--error); }
+    .tool-badge.run { background: rgba(99,102,241,0.12); color: var(--accent-blue); }
+    .tool-body { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
+    .tool-body.open { max-height: 500px; overflow-y: auto; }
+    .tool-body-inner {
+      padding: 12px 14px; border-top: 1px solid var(--border);
+      font-family: var(--mono); font-size: 12px; color: var(--text-secondary);
+      white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+    }
+
+    /* ═══ Assistant Text ═══ */
+    .msg-assistant {
+      font-size: 14.5px; line-height: 1.7; color: var(--text-primary); padding: 8px 0;
+    }
+    .msg-assistant p { margin-bottom: 10px; }
+    .msg-assistant strong { color: #c4b5fd; }
+    .msg-assistant pre {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 10px 0;
+      font-size: 13px; line-height: 1.5;
+    }
+    .msg-assistant code { font-family: var(--mono); font-size: 13px; }
+    .msg-assistant :not(pre)>code {
+      background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;
+      font-size: 12.5px; color: #c4b5fd;
+    }
+    .msg-assistant ul,.msg-assistant ol { margin: 8px 0 8px 20px; }
+    .msg-assistant li { margin-bottom: 4px; }
+    .msg-assistant h2,.msg-assistant h3,.msg-assistant h4 { margin: 14px 0 6px; color: var(--text-primary); }
+
+    /* ═══ Thinking ═══ */
+    .thinking { display: flex; align-items: center; gap: 10px; padding: 14px 0; color: var(--text-muted); font-size: 13px; }
+    .dots { display: flex; gap: 4px; }
+    .dots span {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.25;
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:0.25}40%{opacity:1} }
+
+    /* ═══ Input ═══ */
+    #input-wrap {
+      background: var(--bg-secondary); border-top: 1px solid var(--border);
+      padding: 14px 20px; flex-shrink: 0;
+    }
+    .input-box {
+      max-width: 760px; margin: 0 auto; display: flex; align-items: flex-end; gap: 10px;
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 14px; padding: 4px 4px 4px 16px; transition: border-color 0.2s;
+    }
+    .input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+    #input {
+      flex: 1; background: transparent; border: none; color: var(--text-primary);
+      padding: 10px 0; font-size: 14px; outline: none; resize: none;
+      font-family: var(--font); min-height: 20px; max-height: 120px; line-height: 1.5;
+    }
+    #input::placeholder { color: var(--text-muted); }
+    #send {
+      background: var(--accent); color: white; border: none; border-radius: 10px;
+      width: 38px; height: 38px; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; transition: all 0.2s;
+    }
+    #send:hover { background: #7c3aed; }
+    #send:disabled { opacity: 0.2; cursor: not-allowed; }
+    #send svg { width: 18px; height: 18px; }
+
+    @media(max-width:640px) {
+      .messages-container { padding: 16px 12px; }
+      .msg-user { max-width: 88%; }
+      .welcome-title { font-size: 20px; }
+      .welcome-logo { width: 60px; height: 60px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo-container">
-      <div class="logo-icon">∞</div>
-      <span class="logo-text">CLOW</span>
-      <div class="status-dot" id="statusDot"></div>
-    </div>
+    <img src="/assets/logo.jpg" class="logo" alt="Clow">
+    <span class="logo-text">CLOW</span>
     <div class="header-right">
-      <span class="cost-badge" id="cost">$0.0000</span>
-      <button class="new-chat-btn" onclick="newChat()">+ Nova conversa</button>
+      <button class="new-btn" onclick="newChat()">+ Nova conversa</button>
     </div>
   </header>
 
   <div id="chat">
-    <div class="welcome" id="welcome">
-      <svg class="welcome-logo" viewBox="0 0 64 64" fill="none">
-        <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="64" y2="64">
-            <stop offset="0%" stop-color="#8b5cf6"/>
-            <stop offset="100%" stop-color="#3b82f6"/>
-          </linearGradient>
-        </defs>
-        <path d="M32 12c-8 0-14 6-14 12s6 12 14 12c-8 0-14 6-14 12s6 12 14 12c8 0 14-6 14-12s-6-12-14-12c8 0 14-6 14-12s-6-12-14-12z" stroke="url(#g)" stroke-width="2.5" fill="none"/>
-      </svg>
-      <div class="welcome-sub">INTELIGÊNCIA INFINITA • POSSIBILIDADES PREMIUM</div>
-      <div class="welcome-title">Como posso <span>ajudar</span>?</div>
+    <div class="messages-container" id="messages">
+      <div class="welcome" id="welcome">
+        <img src="/assets/logo.jpg" class="welcome-logo" alt="Clow">
+        <div class="welcome-sub">inteligência infinita • possibilidades premium</div>
+        <div class="welcome-title">Como posso <span>ajudar</span>?</div>
+      </div>
     </div>
   </div>
 
-  <div id="input-area">
-    <div class="input-container">
+  <div id="input-wrap">
+    <div class="input-box">
       <textarea id="input" placeholder="Mensagem para o Clow..." rows="1"></textarea>
-      <button id="send" onclick="sendMessage()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-        </svg>
+      <button id="send" onclick="send()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
       </button>
     </div>
-    <div class="input-hint">Clow usa ferramentas para ler, editar e executar código no seu ambiente</div>
   </div>
 
   <script>
-    const API = window.location.origin;
-    const API_KEY = 'clow_live_BjrOCY2elZ5A2TWGEWMxkiyQgDVAWtZs';
-    let sessionId = null;
-    let totalCost = 0;
-    const chat = document.getElementById('chat');
-    const input = document.getElementById('input');
-    const sendBtn = document.getElementById('send');
-    const statusDot = document.getElementById('statusDot');
-    const costEl = document.getElementById('cost');
-    const welcome = document.getElementById('welcome');
+    const API=location.origin,KEY='clow_live_BjrOCY2elZ5A2TWGEWMxkiyQgDVAWtZs';
+    let sid=null;
+    const msgs=document.getElementById('messages'),inp=document.getElementById('input'),
+          btn=document.getElementById('send'),wel=document.getElementById('welcome');
 
-    // Auto-resize
-    input.addEventListener('input', () => {
-      input.style.height = 'auto';
-      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
+    inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,120)+'px';});
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
 
-    // ─── Tool Icon Map ───
-    const TOOL_ICONS = {
-      Read: '📄', FileRead: '📄', Bash: '⚡', Edit: '✏️', FileEdit: '✏️',
-      Write: '📝', FileWrite: '📝', Glob: '🔍', Grep: '🔎', Agent: '🤖',
-      WebFetch: '🌐', WebSearch: '🔎', TodoWrite: '📋',
-      mcp: '🔌', default: '🔧'
-    };
-    function getToolIcon(name) {
-      if (name.startsWith('mcp__')) return TOOL_ICONS.mcp;
-      return TOOL_ICONS[name] || TOOL_ICONS.default;
+    const ICONS={Read:'📄',FileRead:'📄',Bash:'⚡',Edit:'✏️',FileEdit:'✏️',Write:'📝',FileWrite:'📝',
+      Glob:'🔍',Grep:'🔎',Agent:'🤖',WebFetch:'🌐',WebSearch:'🔎',TodoWrite:'📋'};
+    const icon=n=>n.startsWith('mcp__')?'🔌':(ICONS[n]||'🔧');
+
+    function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+    function md(t){
+      return t
+        .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
+        .replace(/`([^`]+)`/g,'<code>$1</code>')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,'<em>$1</em>')
+        .replace(/^### (.+)$/gm,'<h4>$1</h4>')
+        .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+        .replace(/^- (.+)$/gm,'• $1')
+        .replace(/\n/g,'<br>');
     }
 
-    // ─── Create Tool Block (Claude Code style) ───
-    function addToolBlock(toolName, toolInput, status = 'running') {
-      const block = document.createElement('div');
-      block.className = 'tool-block';
-      block.dataset.tool = toolName;
+    function addUser(text){
+      wel.classList.add('hidden');
+      const d=document.createElement('div');d.className='msg-user';d.textContent=text;
+      msgs.appendChild(d);scroll();
+    }
 
-      const inputStr = typeof toolInput === 'string' ? toolInput :
-        JSON.stringify(toolInput, null, 2)?.slice(0, 500) || '';
-
-      // Short description from input
-      let desc = '';
-      if (toolInput) {
-        const inp = typeof toolInput === 'object' ? toolInput : {};
-        if (inp.command) desc = inp.command.slice(0, 60);
-        else if (inp.file_path || inp.path) desc = (inp.file_path || inp.path).split(/[/\\]/).pop();
-        else if (inp.pattern) desc = inp.pattern;
-        else if (inp.query) desc = inp.query.slice(0, 40);
+    function addTool(name,input,status='run'){
+      const inp2=typeof input==='object'?JSON.stringify(input,null,2):String(input||'');
+      let desc='';
+      if(input&&typeof input==='object'){
+        const o=input;
+        desc=o.command?.slice(0,50)||o.file_path?.split(/[/\\]/).pop()||o.path?.split(/[/\\]/).pop()||o.pattern||o.query?.slice(0,40)||'';
       }
-
-      block.innerHTML = `
-        <div class="tool-header" onclick="toggleTool(this)">
-          <span class="tool-arrow">▶</span>
-          <div class="tool-icon">${getToolIcon(toolName)}</div>
-          <span class="tool-name">${toolName}</span>
-          ${desc ? `<span class="tool-desc">${desc}</span>` : ''}
-          <span class="tool-status ${status}">${status === 'running' ? '⟳ running' : status === 'done' ? '✓ done' : '✗ error'}</span>
-        </div>
-        <div class="tool-body"><pre>${escapeHtml(inputStr)}</pre></div>
-      `;
-      chat.appendChild(block);
-      chat.scrollTop = chat.scrollHeight;
-      return block;
+      const d=document.createElement('div');d.className='tool-block';
+      d.innerHTML=`<div class="tool-header" onclick="tog(this)">
+        <span class="tool-chevron">▶</span>
+        <div class="tool-icon-box">${icon(name)}</div>
+        <span class="tool-label">${name}</span>
+        ${desc?`<span class="tool-file">${esc(desc)}</span>`:''}
+        <span class="tool-badge ${status}">${status==='run'?'executando':status==='ok'?'concluído':'erro'}</span>
+      </div><div class="tool-body"><div class="tool-body-inner">${esc(inp2)}</div></div>`;
+      msgs.appendChild(d);scroll();return d;
     }
 
-    function updateToolStatus(block, status, result) {
-      const statusEl = block.querySelector('.tool-status');
-      statusEl.className = `tool-status ${status}`;
-      statusEl.textContent = status === 'done' ? '✓ done' : '✗ error';
-
-      if (result) {
-        const body = block.querySelector('.tool-body pre');
-        body.textContent += '\n\n─── Result ───\n' + result.slice(0, 1000);
-      }
+    function markTool(block,ok){
+      const b=block.querySelector('.tool-badge');
+      b.className=`tool-badge ${ok?'ok':'err'}`;
+      b.textContent=ok?'concluído':'erro';
     }
 
-    function toggleTool(header) {
-      const body = header.nextElementSibling;
-      const arrow = header.querySelector('.tool-arrow');
-      body.classList.toggle('open');
-      arrow.classList.toggle('open');
+    function tog(h){
+      h.querySelector('.tool-chevron').classList.toggle('open');
+      h.nextElementSibling.classList.toggle('open');
     }
 
-    // ─── Messages ───
-    function addMessage(role, text) {
-      if (welcome && !welcome.classList.contains('hidden')) {
-        welcome.classList.add('hidden');
-      }
-
-      const div = document.createElement('div');
-      div.className = `msg ${role}`;
-
-      if (role === 'assistant') {
-        div.innerHTML = renderMarkdown(text);
-      } else if (role === 'system-info') {
-        div.textContent = text;
-      } else {
-        div.textContent = text;
-      }
-
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-      return div;
+    function addAssistant(html){
+      const d=document.createElement('div');d.className='msg-assistant';d.innerHTML=html;
+      msgs.appendChild(d);scroll();
     }
 
-    function addThinking() {
-      const div = document.createElement('div');
-      div.className = 'thinking';
-      div.id = 'thinking';
-      div.innerHTML = '<div class="thinking-dots"><span></span><span></span><span></span></div><span>Pensando...</span>';
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-      return div;
-    }
-    function removeThinking() {
-      document.getElementById('thinking')?.remove();
+    function addThinking(){
+      const d=document.createElement('div');d.className='thinking';d.id='think';
+      d.innerHTML='<div class="dots"><span></span><span></span><span></span></div>Processando...';
+      msgs.appendChild(d);scroll();
     }
 
-    // ─── Markdown Renderer ───
-    function renderMarkdown(text) {
-      return text
-        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="lang-$1">$2</code></pre>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-        .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-        .replace(/\n/g, '<br>');
-    }
+    function scroll(){document.getElementById('chat').scrollTop=999999;}
 
-    function escapeHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
+    async function send(){
+      const t=inp.value.trim();if(!t||!sid)return;
+      inp.value='';inp.style.height='auto';btn.disabled=true;
+      addUser(t);addThinking();
 
-    // ─── Send Message ───
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text || !sessionId) return;
-
-      input.value = ''; input.style.height = 'auto';
-      sendBtn.disabled = true;
-
-      addMessage('user', text);
-      const thinkingEl = addThinking();
-
-      try {
-        const res = await fetch(`${API}/v1/sessions/${sessionId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-          body: JSON.stringify({ message: text }),
+      try{
+        const r=await fetch(`${API}/v1/sessions/${sid}/messages`,{
+          method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${KEY}`},
+          body:JSON.stringify({message:t}),
         });
+        const body=await r.text();
+        document.getElementById('think')?.remove();
 
-        const body = await res.text();
-        removeThinking();
+        let text='',ev='';
+        const toolBlocks=[];
 
-        // Parse SSE events in order (tools first, then final response)
-        let fullText = '';
-        let cost = 0;
-        const lines = body.split('\n');
-        let currentEvent = '';
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim();
-            continue;
-          }
-
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (currentEvent === 'tool_use') {
-                // Show tool block
-                const block = addToolBlock(data.tool_name || 'Tool', data.tool_input, 'running');
-                // Mark as done after a moment
-                setTimeout(() => updateToolStatus(block, 'done'), 300);
-              }
-              else if (currentEvent === 'tool_result') {
-                // Update last tool block
-                const blocks = chat.querySelectorAll('.tool-block');
-                if (blocks.length > 0) {
-                  updateToolStatus(blocks[blocks.length - 1], data.is_error ? 'error' : 'done');
-                }
-              }
-              else if (currentEvent === 'text_delta') {
-                fullText += data.text || '';
-              }
-              else if (currentEvent === 'result') {
-                if (data.content) fullText = data.content;
-                if (data.cost_usd) cost = data.cost_usd;
-              }
-              else if (currentEvent === 'done') {
-                if (data.cost_usd) cost = data.cost_usd;
-              }
-              else if (currentEvent === 'system') {
-                if (data.content && data.subtype) {
-                  addMessage('system-info', `${data.subtype}: ${data.content.slice(0, 100)}`);
-                }
-              }
-            } catch {}
-            currentEvent = '';
-          }
+        for(const line of body.split('\n')){
+          if(line.startsWith('event: ')){ev=line.slice(7).trim();continue;}
+          if(!line.startsWith('data: '))continue;
+          try{
+            const d=JSON.parse(line.slice(6));
+            if(ev==='tool_use'){
+              toolBlocks.push(addTool(d.tool_name||'Tool',d.tool_input));
+            }else if(ev==='tool_result'){
+              if(toolBlocks.length)markTool(toolBlocks[toolBlocks.length-1],!d.is_error);
+            }else if(ev==='text_delta'){
+              text+=d.text||'';
+            }else if(ev==='result'){
+              if(d.content)text=d.content;
+            }
+          }catch{}
+          ev='';
         }
 
-        // Final assistant response AFTER tools
-        if (fullText) {
-          addMessage('assistant', fullText);
-          totalCost += cost;
-          costEl.textContent = `$${totalCost.toFixed(4)}`;
-        }
-
-      } catch (e) {
-        removeThinking();
-        addMessage('system-info', `Erro: ${e.message}`);
+        if(text)addAssistant(md(text));
+      }catch(e){
+        document.getElementById('think')?.remove();
+        addAssistant(`<span style="color:var(--error)">Erro: ${e.message}</span>`);
       }
-
-      sendBtn.disabled = false;
-      input.focus();
+      btn.disabled=false;inp.focus();
     }
 
-    // ─── New Chat ───
-    async function newChat() {
-      // Clear UI
-      chat.innerHTML = '';
-      welcome.classList.remove('hidden');
-      chat.appendChild(welcome);
-      totalCost = 0;
-      costEl.textContent = '$0.0000';
-      await createSession();
+    async function newChat(){
+      msgs.innerHTML='';wel.classList.remove('hidden');msgs.appendChild(wel);
+      await init();
     }
 
-    // ─── Init ───
-    async function createSession() {
-      try {
-        const res = await fetch(`${API}/v1/sessions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-          body: JSON.stringify({}),
+    async function init(){
+      try{
+        const r=await fetch(`${API}/v1/sessions`,{
+          method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${KEY}`},
+          body:'{}',
         });
-        const data = await res.json();
-        sessionId = data.session_id;
-        statusDot.classList.remove('offline');
-      } catch (e) {
-        statusDot.classList.add('offline');
-        addMessage('system-info', 'Erro ao conectar ao servidor');
-      }
+        sid=(await r.json()).session_id;
+      }catch{}
     }
 
-    createSession();
-    input.focus();
+    init();inp.focus();
   </script>
 </body>
 </html>

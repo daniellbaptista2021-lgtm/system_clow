@@ -108,13 +108,24 @@ async function main(): Promise<void> {
   app.route('/', whatsappRoutes);
 
   // Serve static frontend (public/)
+  app.get('/assets/*', (c) => {
+    const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const types: Record<string,string> = { '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.css':'text/css', '.js':'text/javascript' };
+      return new Response(content, { headers: { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' } });
+    }
+    return c.notFound();
+  });
+
   app.get('/', (c) => {
     const htmlPath = path.resolve(process.cwd(), 'public', 'index.html');
     if (fs.existsSync(htmlPath)) {
       const html = fs.readFileSync(htmlPath, 'utf-8');
       return c.html(html);
     }
-    return c.text('System Clow API — use /health or /v1/sessions', 200);
+    return c.text('System Clow API', 200);
   });
 
   // Graceful shutdown

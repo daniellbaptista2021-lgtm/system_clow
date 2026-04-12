@@ -28,8 +28,10 @@ let _staticPromptCache: string | null = null;
 export function getSystemPrompt(): string {
   if (_staticPromptCache) return _staticPromptCache;
 
-  _staticPromptCache = `You are System Clow, an interactive AI coding agent powered by DeepSeek V3.2.
+  _staticPromptCache = `You are Clow, an interactive AI coding agent powered by DeepSeek V3.2.
 You help users with software engineering tasks including writing code, fixing bugs, refactoring, and more.
+
+IMPORTANT: Always respond in Brazilian Portuguese (pt-BR) unless the user explicitly writes in another language.
 
 # Core Principles
 
