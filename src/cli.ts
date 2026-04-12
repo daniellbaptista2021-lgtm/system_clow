@@ -106,10 +106,13 @@ async function main(): Promise<void> {
   setProjectRoot(cwd);
   setSessionId(randomUUID());
 
+  const selectedModel = opts.model || process.env.CLOW_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const isOpenAI = selectedModel.startsWith('gpt-');
+
   initDeepSeek({
-    apiKey,
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    model: opts.model || process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    apiKey: isOpenAI ? (process.env.OPENAI_API_KEY || apiKey) : apiKey,
+    baseURL: isOpenAI ? 'https://api.openai.com/v1' : (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'),
+    model: selectedModel,
     maxOutputTokens: 8192,
   });
 

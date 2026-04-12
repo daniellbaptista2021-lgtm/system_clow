@@ -27,10 +27,18 @@ let config: DeepSeekConfig | null = null;
 
 export function initDeepSeek(cfg: DeepSeekConfig): void {
   config = cfg;
+
+  // Auto-detect provider from model name
+  const isOpenAI = cfg.model.startsWith('gpt-');
+  const baseURL = isOpenAI ? 'https://api.openai.com/v1' : cfg.baseURL;
+  const apiKey = isOpenAI ? (process.env.OPENAI_API_KEY || cfg.apiKey) : cfg.apiKey;
+
   client = new OpenAI({
-    apiKey: cfg.apiKey,
-    baseURL: cfg.baseURL,
+    apiKey,
+    baseURL,
   });
+
+  console.log(`  ✓ Model: ${cfg.model} (${isOpenAI ? 'OpenAI' : 'DeepSeek'})`);
 }
 
 export function getDeepSeekClient(): OpenAI {
@@ -50,14 +58,34 @@ export function getDeepSeekConfig(): DeepSeekConfig {
 
 const PRICING: Record<string, { input_miss: number; input_hit: number; output: number }> = {
   'deepseek-chat': {
-    input_miss: 0.28  / 1_000_000,   // $0.28 / 1M tokens
-    input_hit:  0.028 / 1_000_000,   // $0.028 / 1M tokens — 10x cheaper
-    output:     0.42  / 1_000_000,   // $0.42 / 1M tokens
+    input_miss: 0.28  / 1_000_000,
+    input_hit:  0.028 / 1_000_000,
+    output:     0.42  / 1_000_000,
   },
   'deepseek-reasoner': {
     input_miss: 0.55  / 1_000_000,
     input_hit:  0.14  / 1_000_000,
     output:     2.19  / 1_000_000,
+  },
+  'gpt-4o': {
+    input_miss: 2.50  / 1_000_000,
+    input_hit:  1.25  / 1_000_000,
+    output:     10.0  / 1_000_000,
+  },
+  'gpt-4o-mini': {
+    input_miss: 0.15  / 1_000_000,
+    input_hit:  0.075 / 1_000_000,
+    output:     0.60  / 1_000_000,
+  },
+  'gpt-4.1': {
+    input_miss: 2.00  / 1_000_000,
+    input_hit:  0.50  / 1_000_000,
+    output:     8.00  / 1_000_000,
+  },
+  'gpt-4.1-mini': {
+    input_miss: 0.40  / 1_000_000,
+    input_hit:  0.10  / 1_000_000,
+    output:     1.60  / 1_000_000,
   },
 };
 

@@ -43,14 +43,15 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  initDeepSeek({
-    apiKey,
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-    maxOutputTokens: 8192,
-  });
+  const selectedModel = process.env.CLOW_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const isOpenAI = selectedModel.startsWith('gpt-');
 
-  console.log('  ✓ DeepSeek initialized');
+  initDeepSeek({
+    apiKey: isOpenAI ? (process.env.OPENAI_API_KEY || apiKey) : apiKey,
+    baseURL: isOpenAI ? 'https://api.openai.com/v1' : (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'),
+    model: selectedModel,
+    maxOutputTokens: isOpenAI ? 16384 : 8192,
+  });
 
   // Init session storage
   await initSessionStorage();
