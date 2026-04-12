@@ -143,18 +143,42 @@ async function go(){
   try{
     const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),300000);
     const r=await fetch(`${U}/v1/sessions/${S}/messages`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:JSON.stringify({message:t}),signal:ac.signal});
-    clearTimeout(tm);const body=await r.text();document.getElementById('proc')?.remove();
-    let txt='',ev='';
-    for(const ln of body.split('\n')){
-      if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}
-      if(!ln.startsWith('data: '))continue;
-      try{const d=JSON.parse(ln.slice(6));
-        if(ev==='tool_use')addT(d.tool_name||'Tool',d.tool_input);
-        else if(ev==='text_delta')txt+=d.text||'';
-        else if(ev==='result'&&d.content)txt=d.content;
-      }catch{}ev='';
+    clearTimeout(tm);
+    document.getElementById('proc')?.remove();
+
+    // Stream SSE in real-time
+    const reader=r.body.getReader();const decoder=new TextDecoder();
+    let buf='',txt='',ev='',replyEl=null;
+
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=decoder.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop()||'';
+
+      for(const ln of lines){
+        if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}
+        if(!ln.startsWith('data: '))continue;
+        try{
+          const d=JSON.parse(ln.slice(6));
+          if(ev==='tool_use'){
+            addT(d.tool_name||'Tool',d.tool_input);
+          }else if(ev==='text_delta'){
+            txt+=d.text||'';
+            if(!replyEl){replyEl=document.createElement('div');replyEl.className='rp';F.appendChild(replyEl)}
+            replyEl.innerHTML='<p>'+md(txt)+'</p>';
+            scr();
+          }else if(ev==='result'&&d.content){
+            txt=d.content;
+            if(!replyEl){replyEl=document.createElement('div');replyEl.className='rp';F.appendChild(replyEl)}
+            replyEl.innerHTML='<p>'+md(txt)+'</p>';
+            scr();
+          }
+        }catch{}
+        ev='';
+      }
     }
-    if(txt)addR(md(txt));
   }catch(e){document.getElementById('proc')?.remove();addR(`<span style="color:var(--red)">Erro de conexão</span>`)}
   B.disabled=false;I.focus();
 }
