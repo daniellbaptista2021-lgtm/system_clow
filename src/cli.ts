@@ -146,9 +146,13 @@ async function main(): Promise<void> {
   // Auto-allow MCP tools that are read-only-ish (by name convention)
   const mcpToolNames = mcpManager.getAllTools().map(t => `mcp__${t.serverName}__${t.tool.name}`);
 
+  // In --print mode, auto-approve ALL tools (non-interactive)
+  const allToolNames = tools.map(t => t.name);
   const permContext: LegacyPermissionContext = {
     denyRules: [],
-    allowRules: ['Read', 'Glob', 'Grep', 'TodoWrite', 'WebFetch', 'WebSearch', 'Agent', 'EnterPlanMode', 'ExitPlanMode', ...mcpToolNames],
+    allowRules: opts.print
+      ? allToolNames  // Auto-approve everything in non-interactive mode
+      : ['Read', 'Glob', 'Grep', 'TodoWrite', 'WebFetch', 'WebSearch', 'Agent', 'EnterPlanMode', 'ExitPlanMode', ...mcpToolNames],
     askRules: [],
   };
 
