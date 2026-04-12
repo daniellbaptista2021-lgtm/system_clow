@@ -1,12 +1,12 @@
 {
-  "name": "Clow — Inteligência Infinita",
-  "short_name": "Clow",
-  "description": "Agente de código AI premium",
+  "name": "System Clow — Inteligência Infinita",
+  "short_name": "System Clow",
+  "description": "Agente AI premium para negócios",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#050510",
-  "theme_color": "#7c3aed",
+  "background_color": "#f5f0e8",
+  "theme_color": "#d4a043",
   "icons": [
     { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
