@@ -132,6 +132,19 @@ async function main(): Promise<void> {
   });
 
   // Serve static frontend (public/)
+  // Serve manifest, sw.js, and static assets
+  app.get('/manifest.json', (c) => {
+    const fp = path.resolve(process.cwd(), 'public', 'manifest.json');
+    if (fs.existsSync(fp)) return new Response(fs.readFileSync(fp), { headers: { 'Content-Type': 'application/manifest+json' } });
+    return c.notFound();
+  });
+
+  app.get('/sw.js', (c) => {
+    const fp = path.resolve(process.cwd(), 'public', 'sw.js');
+    if (fs.existsSync(fp)) return new Response(fs.readFileSync(fp), { headers: { 'Content-Type': 'application/javascript', 'Service-Worker-Allowed': '/' } });
+    return c.notFound();
+  });
+
   app.get('/assets/*', (c) => {
     const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));
     if (fs.existsSync(filePath)) {
