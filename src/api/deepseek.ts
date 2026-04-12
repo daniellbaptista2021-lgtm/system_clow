@@ -294,8 +294,29 @@ export async function* callModel(
   systemPrompt: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamChunk> {
-  const api = getDeepSeekClient();
   const cfg = getDeepSeekConfig();
+
+  // ── Smart Router: DeepSeek for chat, GPT-4o for tools ──
+  const hasTools = tools.length > 0;
+  const smartRouting = process.env.CLOW_SMART_ROUTING === '1';
+  let api = getDeepSeekClient();
+  let activeModel = cfg.model;
+
+  if (smartRouting && hasTools && !cfg.model.startsWith('gpt-')) {
+    // Switch to GPT-4o for tool-heavy requests
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (openaiKey) {
+      api = new OpenAI({ apiKey: openaiKey, baseURL: 'https://api.openai.com/v1' });
+      activeModel = process.env.CLOW_TOOLS_MODEL || 'gpt-4o';
+    }
+  } else if (smartRouting && !hasTools && cfg.model.startsWith('gpt-')) {
+    // Switch to DeepSeek for plain chat (cheaper)
+    const dsKey = process.env.DEEPSEEK_API_KEY;
+    if (dsKey) {
+      api = new OpenAI({ apiKey: dsKey, baseURL: 'https://api.deepseek.com' });
+      activeModel = process.env.CLOW_CHAT_MODEL || 'deepseek-chat';
+    }
+  }
 
   // Build messages for OpenAI format
   const apiMessages: ChatCompletionMessageParam[] = [
@@ -314,14 +335,14 @@ export async function* callModel(
     // without retry (mid-stream recovery is a separate concern).
     const stream = await withRetry(
       () => api.chat.completions.create({
-        model: cfg.model,
+        model: activeModel,
         messages: apiMessages,
         tools: openaiTools,
         tool_choice: openaiTools ? 'auto' : undefined,
-        max_tokens: cfg.maxOutputTokens || 8192,
+        max_tokens: activeModel.startsWith('gpt-') ? 16384 : (cfg.maxOutputTokens || 8192),
         temperature: 0,
-        frequency_penalty: 0.3,
-        presence_penalty: 0.1,
+        frequency_penalty: activeModel.startsWith('gpt-') ? 0 : 0.3,
+        presence_penalty: activeModel.startsWith('gpt-') ? 0 : 0.1,
         stream: true,
         stream_options: { include_usage: true },
       }, { signal }),
@@ -405,7 +426,7 @@ export async function* callModel(
       prompt_cache_hit_tokens: usage.cachedTokens,
       prompt_cache_miss_tokens: usage.uncachedTokens,
     };
-    const metrics = calculateCost(cfg.model, dsUsage);
+    const metrics = calculateCost(activeModel, dsUsage);
 
     // Cache metrics tracked internally (not displayed to user)
 
