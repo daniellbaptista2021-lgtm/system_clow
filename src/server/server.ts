@@ -131,6 +131,44 @@ async function main(): Promise<void> {
     return c.json({ ok: false }, 401);
   });
 
+  // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
+  app.get('/downloads/*', (c) => {
+    const reqPath = c.req.path.replace('/downloads/', '');
+    const safePath = reqPath.replace(/\.\./g, '');
+    // Search in multiple locations
+    const candidates = [
+      path.resolve(process.cwd(), safePath),
+      path.resolve('/tmp', safePath),
+      path.resolve(os.homedir(), safePath),
+      path.resolve(process.cwd(), 'output', safePath),
+    ];
+    for (const fp of candidates) {
+      if (fs.existsSync(fp) && !fs.statSync(fp).isDirectory()) {
+        const content = fs.readFileSync(fp);
+        const ext = path.extname(fp).toLowerCase();
+        const mimeTypes: Record<string,string> = {
+          '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          '.xls': 'application/vnd.ms-excel',
+          '.csv': 'text/csv',
+          '.pdf': 'application/pdf',
+          '.json': 'application/json',
+          '.txt': 'text/plain',
+          '.zip': 'application/zip',
+        };
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        const fileName = path.basename(fp);
+        return new Response(content, {
+          headers: {
+            'Content-Type': contentType,
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+            'Content-Length': String(content.length),
+          },
+        });
+      }
+    }
+    return c.json({ error: 'File not found' }, 404);
+  });
+
   // Serve static frontend (public/)
   // Serve manifest, sw.js, and static assets
   app.get('/manifest.json', (c) => {
