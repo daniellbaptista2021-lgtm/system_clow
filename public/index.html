@@ -7,293 +7,161 @@
 <link rel="icon" type="image/png" href="/assets/icon-192.png">
 <link rel="apple-touch-icon" href="/assets/icon-192.png">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#7c3aed">
+<meta name="theme-color" content="#1a1a1a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Clow">
-<meta name="mobile-web-app-capable" content="yes">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <style>
+:root{--bg:#1a1a1a;--bg2:#232323;--bg3:#2a2a2a;--border:#333;--text:#e3e3e3;--text2:#999;--text3:#666;--accent:#c96;--accent2:#e8a84c;--blue:#6ba3e8;--green:#5bb98b;--red:#e06c75;--font:'Source Sans 3',system-ui,sans-serif;--mono:'Fira Code','Cascadia Code',monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden}
-body{font-family:'Inter',system-ui,sans-serif;background:#050510;color:#f4f4f5;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);background:var(--bg);color:var(--text);display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.6}
 
-/* ═══ LOGIN ═══ */
-.login-overlay{
-  position:fixed;inset:0;z-index:9999;
-  background:#050510;
-  display:flex;align-items:center;justify-content:center;
-  transition:opacity .3s;
-}
-.login-overlay.hide{opacity:0;pointer-events:none}
-.login-box{
-  width:100%;max-width:380px;padding:0 24px;text-align:center;
-}
-.login-logo{width:120px;height:auto;margin-bottom:32px}
-.login-title{font-size:22px;font-weight:500;color:rgba(255,255,255,.7);margin-bottom:8px}
-.login-sub{font-size:13px;color:rgba(255,255,255,.25);margin-bottom:32px}
-.login-field{
-  width:100%;padding:14px 18px;margin-bottom:14px;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-  border-radius:12px;color:#f4f4f5;font-size:14px;font-family:inherit;
-  outline:none;transition:border-color .2s;
-}
-.login-field:focus{border-color:rgba(124,58,237,.4)}
-.login-field::placeholder{color:rgba(255,255,255,.2)}
-.login-btn{
-  width:100%;padding:14px;margin-top:8px;
-  background:linear-gradient(135deg,#7c3aed,#2563eb);
-  border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:600;
-  font-family:inherit;cursor:pointer;transition:transform .15s,opacity .15s;
-}
-.login-btn:hover{opacity:.9}
-.login-btn:active{transform:scale(.97)}
-.login-btn:disabled{opacity:.3;cursor:default;transform:none}
-.login-error{color:#f87171;font-size:13px;margin-top:12px;min-height:20px}
+.login-ov{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s}
+.login-ov.hide{opacity:0;pointer-events:none}
+.login-box{width:100%;max-width:360px;padding:0 24px;text-align:center}
+.login-logo{width:100px;height:auto;margin-bottom:28px;border-radius:12px}
+.login-t{font-size:18px;font-weight:600;color:var(--text);margin-bottom:6px}
+.login-s{font-size:13px;color:var(--text3);margin-bottom:28px}
+.login-f{width:100%;padding:12px 16px;margin-bottom:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--font);outline:none}
+.login-f:focus{border-color:var(--accent)}.login-f::placeholder{color:var(--text3)}
+.login-b{width:100%;padding:12px;margin-top:6px;background:var(--accent);border:none;border-radius:8px;color:#000;font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer}
+.login-b:hover{background:var(--accent2)}.login-e{color:var(--red);font-size:13px;margin-top:10px;min-height:20px}
 
-/* ═══ HEADER ═══ */
-.hd{height:64px;flex-shrink:0;display:flex;align-items:center;padding:0 24px;background:rgba(5,5,16,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.06);z-index:100}
-.hd-logo{width:36px;height:36px;object-fit:contain;border-radius:6px}
-.hd-name{font-size:14px;font-weight:600;letter-spacing:3px;color:rgba(255,255,255,.65);margin-left:14px}
+.hd{height:48px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:100}
+.hd-logo{height:24px;border-radius:4px;margin-right:10px}.hd-name{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:1px}
 .hd-r{margin-left:auto;display:flex;gap:8px}
-.hd-btn{background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:8px 18px;border-radius:10px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
-.hd-btn:hover{border-color:rgba(124,58,237,.5);color:rgba(124,58,237,.85)}
-.hd-btn:active{transform:scale(.97)}
-.hd-btn.logout{border-color:rgba(239,68,68,.3);color:rgba(239,68,68,.6)}
-.hd-btn.logout:hover{border-color:rgba(239,68,68,.6);color:rgba(239,68,68,.9)}
+.hd-btn{background:none;border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;font-size:12px;font-family:var(--font);cursor:pointer}
+.hd-btn:hover{border-color:var(--text2);color:var(--text)}
+.hd-btn.out{color:var(--red);border-color:rgba(224,108,117,.3)}.hd-btn.out:hover{border-color:var(--red)}
 
-/* ═══ CHAT ═══ */
 #chat{flex:1;overflow-y:auto;overflow-x:hidden}
-#chat::-webkit-scrollbar{width:3px}
-#chat::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:3px}
-.feed{max-width:820px;width:100%;margin:0 auto;padding:32px 24px 200px}
-.wel{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 64px - 200px);text-align:center;user-select:none}
-.wel.hide{display:none}
-.wel-logo{width:260px;height:auto;object-fit:contain;filter:drop-shadow(0 0 80px rgba(124,58,237,.1))}
-.wel-tag{margin-top:28px;font-size:11px;font-weight:500;letter-spacing:5px;text-transform:uppercase;color:rgba(255,255,255,.18)}
-.wel-h{margin-top:16px;font-size:30px;font-weight:500;color:rgba(255,255,255,.55);line-height:1.3}
-.wel-h b{background:linear-gradient(90deg,#7c3aed,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600}
+#chat::-webkit-scrollbar{width:6px}#chat::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.feed{max-width:820px;width:100%;margin:0 auto;padding:24px 20px 160px}
 
-/* ═══ INPUT ═══ */
-.inp-dock{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 24px 40px;background:linear-gradient(transparent,#050510 40%);pointer-events:none}
-.inp-box{max-width:820px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;background:rgba(11,11,21,.95);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:6px 6px 6px 18px;transition:box-shadow .2s,border-color .2s;pointer-events:all;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.inp-box:focus-within{border-color:rgba(124,58,237,.35);box-shadow:0 0 0 2px rgba(124,58,237,.12)}
-#msg{flex:1;background:none;border:none;color:#f4f4f5;padding:10px 0;font-size:14px;font-family:inherit;outline:none;resize:none;min-height:20px;max-height:120px;line-height:1.5;caret-color:#7c3aed}
-#msg::placeholder{color:rgba(255,255,255,.16)}
-.snd{width:38px;height:38px;border-radius:50%;border:none;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,opacity .15s}
-.snd:hover{transform:scale(1.05)}.snd:active{transform:scale(.93)}.snd:disabled{opacity:.1;cursor:default;transform:none}
+.wel{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 48px - 160px);text-align:center}
+.wel.hide{display:none}
+.wel-logo{width:200px;height:auto;border-radius:16px;margin-bottom:24px}
+.wel-tag{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+.wel-h{font-size:24px;font-weight:400;color:var(--text2)}.wel-h b{color:var(--accent);font-weight:600}
+
+/* Claude Code style blocks */
+.user-block{margin:20px 0 4px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px}
+.user-block .ut{color:var(--text);font-size:15px;line-height:1.6;white-space:pre-wrap}
+
+.tool-block{margin:4px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg)}
+.tool-h{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;font-size:13px;color:var(--text2)}
+.tool-h:hover{background:var(--bg2)}
+.tool-chv{font-size:10px;color:var(--text3);transition:transform .15s;display:inline-block}.tool-chv.op{transform:rotate(90deg)}
+.tool-lbl{font-weight:600;color:var(--text)}
+.tool-fl{color:var(--text3);font-family:var(--mono);font-size:12px;margin-left:auto}
+.tool-bd{max-height:0;overflow:hidden;transition:max-height .2s}.tool-bd.op{max-height:600px;overflow-y:auto}
+.tool-bdi{padding:10px 12px;background:var(--bg2);border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text2);white-space:pre-wrap;word-break:break-all;line-height:1.5}
+
+.rp{margin:4px 0 16px}.rp p{margin-bottom:8px}.rp strong{color:var(--accent);font-weight:600}.rp em{color:var(--text2)}
+.rp pre{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:8px 0;font-size:13px;line-height:1.5}
+.rp code{font-family:var(--mono);font-size:13px}.rp :not(pre)>code{background:var(--bg3);padding:1px 5px;border-radius:3px;font-size:12px;color:var(--blue)}
+.rp ul,.rp ol{margin:6px 0 6px 20px}.rp li{margin-bottom:4px}.rp h3,.rp h4{margin:10px 0 4px;font-weight:600;font-size:15px;color:var(--text)}
+.rp a{color:var(--blue);text-decoration:underline;text-underline-offset:2px}.rp a:hover{color:var(--accent)}
+
+.proc{display:flex;align-items:center;gap:8px;padding:10px 0;color:var(--accent);font-size:13px}
+.proc-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:bk 1.2s ease-in-out infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.2}}
+
+.inp-dock{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 20px 24px;background:linear-gradient(transparent,var(--bg) 30%);pointer-events:none}
+.inp-sh{max-width:820px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:4px 4px 4px 14px;pointer-events:all}
+.inp-sh:focus-within{border-color:var(--accent)}
+#msg{flex:1;background:none;border:none;color:var(--text);padding:10px 0;font-size:14px;font-family:var(--font);outline:none;resize:none;min-height:20px;max-height:120px;line-height:1.5}
+#msg::placeholder{color:var(--text3)}
+.snd{width:36px;height:36px;border-radius:8px;border:none;background:var(--accent);color:#000;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.snd:hover{background:var(--accent2)}.snd:active{transform:scale(.95)}.snd:disabled{opacity:.15;cursor:default;transform:none}
 .snd svg{width:16px;height:16px}
 
-/* ═══ USER/TOOL/REPLY/THINK ═══ */
-.u-row{display:flex;justify-content:flex-end;margin:18px 0 6px}
-.u-msg{max-width:70%;padding:12px 18px;font-size:14px;line-height:1.6;color:#fff;background:linear-gradient(135deg,#7c3aed,#6d28d9);border-radius:20px 20px 6px 20px;word-wrap:break-word}
-.tl{margin:6px 0;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:10px;overflow:hidden;transition:border-color .15s}
-.tl:hover{border-color:rgba(255,255,255,.1)}
-.tl-h{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none}
-.tl-h:hover{background:rgba(255,255,255,.015)}
-.tl-c{font-size:8px;color:rgba(255,255,255,.18);transition:transform .2s;width:10px;text-align:center}
-.tl-c.on{transform:rotate(90deg)}
-.tl-i{width:20px;height:20px;border-radius:5px;background:rgba(124,58,237,.07);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
-.tl-n{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#a78bfa}
-.tl-f{font-size:11px;color:rgba(255,255,255,.18);margin-left:auto;font-family:'JetBrains Mono',monospace}
-.tl-s{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
-.tl-s.r{background:rgba(99,102,241,.07);color:#818cf8}
-.tl-s.g{background:rgba(34,197,94,.06);color:#4ade80}
-.tl-s.e{background:rgba(239,68,68,.06);color:#f87171}
-.tl-b{max-height:0;overflow:hidden;transition:max-height .25s}
-.tl-b.on{max-height:400px;overflow-y:auto}
-.tl-bi{padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,.25);white-space:pre-wrap;word-break:break-all;line-height:1.55}
-.rp{font-size:14.5px;line-height:1.75;color:rgba(255,255,255,.85);padding:10px 0 8px}
-.rp p{margin-bottom:8px}.rp strong{color:#c4b5fd;font-weight:600}
-.rp pre{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0;font-size:13px;line-height:1.55}
-.rp code{font-family:'JetBrains Mono',monospace;font-size:13px}
-.rp :not(pre)>code{background:rgba(255,255,255,.05);padding:1px 6px;border-radius:4px;font-size:12px;color:#c4b5fd}
-.rp ul,.rp ol{margin:6px 0 6px 18px}.rp li{margin-bottom:3px}
-.rp h3,.rp h4{margin:12px 0 4px;font-weight:600;font-size:15px}
-.rp a{color:#a78bfa;text-decoration:underline;text-underline-offset:3px;transition:color .15s}
-.rp a:hover{color:#c4b5fd}
-.thk{display:flex;align-items:center;gap:10px;padding:14px 0;color:rgba(255,255,255,.18);font-size:13px}
-.dt{display:flex;gap:3px}.dt i{display:block;width:5px;height:5px;border-radius:50%;background:#7c3aed;opacity:.15;animation:p 1.4s ease-in-out infinite}
-.dt i:nth-child(2){animation-delay:.15s}.dt i:nth-child(3){animation-delay:.3s}
-@keyframes p{0%,80%,100%{opacity:.15}40%{opacity:.85}}
-
-@media(max-width:640px){.feed{padding:20px 16px 180px}.u-msg{max-width:85%}.wel-h{font-size:24px}.wel-logo{width:180px}.hd{padding:0 16px;height:56px}.inp-dock{padding:0 16px 28px}.login-box{padding:0 20px}}
+@media(max-width:640px){.feed{padding:16px 12px 140px}.wel-logo{width:140px}.wel-h{font-size:20px}.hd{padding:0 12px}.inp-dock{padding:0 12px 16px}}
 </style>
 </head>
 <body>
 
-<!-- ═══ LOGIN SCREEN ═══ -->
-<div class="login-overlay" id="loginScreen">
+<div class="login-ov" id="loginScreen">
   <div class="login-box">
     <img src="/assets/logo.png" class="login-logo" alt="Clow">
-    <div class="login-title">Acesso Restrito</div>
-    <div class="login-sub">Área exclusiva do administrador</div>
-    <input class="login-field" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus>
-    <input class="login-field" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password">
-    <button class="login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
-    <div class="login-error" id="loginError"></div>
+    <div class="login-t">Acesso Restrito</div>
+    <div class="login-s">Área exclusiva do administrador</div>
+    <input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus>
+    <input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password">
+    <button class="login-b" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="login-e" id="loginError"></div>
   </div>
 </div>
 
-<!-- ═══ APP (hidden until login) ═══ -->
 <div id="app" style="display:none;flex:1;flex-direction:column;height:100%">
-
-  <div class="hd">
-    <img src="/assets/logo.png" class="hd-logo" alt="">
-    <span class="hd-name">CLOW</span>
-    <div class="hd-r">
-      <button class="hd-btn" onclick="reset()">Nova conversa</button>
-      <button class="hd-btn logout" onclick="logout()">Sair</button>
-    </div>
+<div class="hd">
+  <img src="/assets/logo.png" class="hd-logo" alt="">
+  <span class="hd-name">CLOW</span>
+  <div class="hd-r"><button class="hd-btn" onclick="reset()">Nova conversa</button><button class="hd-btn out" onclick="logout()">Sair</button></div>
+</div>
+<div id="chat"><div class="feed" id="feed">
+  <div class="wel" id="wel">
+    <img src="/assets/logo.png" class="wel-logo" alt="Clow">
+    <div class="wel-tag">inteligência infinita · possibilidades premium</div>
+    <div class="wel-h">Como posso <b>ajudar</b>?</div>
   </div>
-
-  <div id="chat">
-    <div class="feed" id="feed">
-      <div class="wel" id="wel">
-        <img src="/assets/logo.png" class="wel-logo" alt="Clow">
-        <div class="wel-tag">inteligência infinita · possibilidades premium</div>
-        <div class="wel-h">Como posso <b>ajudar</b>?</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="inp-dock">
-    <div class="inp-box">
-      <textarea id="msg" placeholder="Mensagem para o Clow..." rows="1"></textarea>
-      <button class="snd" id="btn" onclick="go()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-      </button>
-    </div>
-  </div>
-
+</div></div>
+<div class="inp-dock"><div class="inp-sh">
+  <textarea id="msg" placeholder="Responder..." rows="1"></textarea>
+  <button class="snd" id="btn" onclick="go()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+</div></div>
 </div>
 
 <script>
 const U=location.origin,K='clow_live_BjrOCY2elZ5A2TWGEWMxkiyQgDVAWtZs';
 let S=null,authToken=null;
+const LS=document.getElementById('loginScreen'),AP=document.getElementById('app'),LU=document.getElementById('loginUser'),LP=document.getElementById('loginPass'),LE=document.getElementById('loginError');
+const sv=localStorage.getItem('clow_token');if(sv){authToken=sv;showApp()}
+LP.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});LU.addEventListener('keydown',e=>{if(e.key==='Enter')LP.focus()});
+async function doLogin(){const u=LU.value.trim(),p=LP.value.trim();if(!u||!p){LE.textContent='Preencha todos os campos';return}document.getElementById('loginBtn').disabled=true;LE.textContent='';try{const r=await fetch(`${U}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(d.ok){authToken=d.token;localStorage.setItem('clow_token',d.token);showApp()}else{LE.textContent=d.error||'Credenciais inválidas'}}catch(e){LE.textContent='Erro de conexão'}document.getElementById('loginBtn').disabled=false}
+function showApp(){LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},300);AP.style.display='flex';init();document.getElementById('msg')?.focus()}
+function logout(){localStorage.removeItem('clow_token');location.reload()}
 
-// ═══ LOGIN ═══
-const loginScreen=document.getElementById('loginScreen');
-const appEl=document.getElementById('app');
-const loginUser=document.getElementById('loginUser');
-const loginPass=document.getElementById('loginPass');
-const loginErr=document.getElementById('loginError');
-
-// Check saved session
-const saved=localStorage.getItem('clow_token');
-if(saved){authToken=saved;showApp()}
-
-loginPass.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-loginUser.addEventListener('keydown',e=>{if(e.key==='Enter')loginPass.focus()});
-
-async function doLogin(){
-  const u=loginUser.value.trim(),p=loginPass.value.trim();
-  if(!u||!p){loginErr.textContent='Preencha todos os campos';return}
-  document.getElementById('loginBtn').disabled=true;
-  loginErr.textContent='';
-  try{
-    const r=await fetch(`${U}/auth/login`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username:u,password:p}),
-    });
-    const d=await r.json();
-    if(d.ok){
-      authToken=d.token;
-      localStorage.setItem('clow_token',d.token);
-      showApp();
-    }else{
-      loginErr.textContent=d.error||'Credenciais inválidas';
-    }
-  }catch(e){loginErr.textContent='Erro de conexão'}
-  document.getElementById('loginBtn').disabled=false;
-}
-
-function showApp(){
-  loginScreen.classList.add('hide');
-  setTimeout(()=>{loginScreen.style.display='none'},300);
-  appEl.style.display='flex';
-  init();
-  document.getElementById('msg')?.focus();
-}
-
-function logout(){
-  localStorage.removeItem('clow_token');
-  authToken=null;
-  location.reload();
-}
-
-// ═══ CHAT LOGIC ═══
 const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
 I?.addEventListener('input',()=>{I.style.height='auto';I.style.height=Math.min(I.scrollHeight,120)+'px'});
 I?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}});
 
-const IC={Read:'📄',FileRead:'📄',Bash:'⚡',Edit:'✏️',FileEdit:'✏️',Write:'📝',FileWrite:'📝',Glob:'🔍',Grep:'🔎',Agent:'🤖',WebFetch:'🌐',WebSearch:'🔎',TodoWrite:'📋'};
-const ico=n=>n.startsWith('mcp__')?'🔌':(IC[n]||'🔧');
+const TL={Read:'Leu um arquivo',FileRead:'Leu um arquivo',Bash:'Executou comando',Edit:'Editou um arquivo',FileEdit:'Editou um arquivo',Write:'Escreveu um arquivo',FileWrite:'Escreveu um arquivo',Glob:'Buscou arquivos',Grep:'Pesquisou no código',Agent:'Iniciou sub-agente',WebFetch:'Acessou URL',WebSearch:'Pesquisou na web',TodoWrite:'Atualizou tarefas'};
+function tl(n){return n.startsWith('mcp__')?'Usou integração':TL[n]||`Usou ${n}`}
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function md(t){return t
-  .replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
-  .replace(/`([^`]+)`/g,'<code>$1</code>')
-  .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-  .replace(/\*(.+?)\*/g,'<em>$1</em>')
-  .replace(/^### (.+)$/gm,'<h4>$1</h4>')
-  .replace(/^## (.+)$/gm,'<h3>$1</h3>')
-  .replace(/^- (.+)$/gm,'• $1')
-  .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:underline">$1</a>')
-  .replace(/(https?:\/\/[^\s<"'\)]+)/g,(m,u)=>m.includes('href=')?m:`<a href="${u}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:underline">${u}</a>`)
-  .replace(/\n{2,}/g,'</p><p>')
-  .replace(/\n/g,'<br>')}
+function md(t){return t.replace(/```(\w*)\n([\s\S]*?)```/g,'<pre><code>$2</code></pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/^### (.+)$/gm,'<h4>$1</h4>').replace(/^## (.+)$/gm,'<h3>$1</h3>').replace(/^- (.+)$/gm,'• $1').replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" target="_blank">$1</a>').replace(/(https?:\/\/[^\s<"'\)]+)/g,(m,u)=>m.includes('href=')?m:`<a href="${u}" target="_blank">${u}</a>`).replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')}
 function scr(){document.getElementById('chat').scrollTop=1e6}
-function addU(t){W.classList.add('hide');const d=document.createElement('div');d.className='u-row';d.innerHTML=`<div class="u-msg">${esc(t)}</div>`;F.appendChild(d);scr()}
-function addT(nm,inp){const s=typeof inp==='object'?JSON.stringify(inp,null,2):String(inp||'');let fl='';if(inp&&typeof inp==='object'){fl=inp.command?.slice(0,50)||inp.file_path?.split(/[/\\]/).pop()||inp.path?.split(/[/\\]/).pop()||inp.pattern||inp.query?.slice(0,35)||''}const d=document.createElement('div');d.className='tl';d.innerHTML=`<div class="tl-h" onclick="this.querySelector('.tl-c').classList.toggle('on');this.nextElementSibling.classList.toggle('on')"><span class="tl-c">▶</span><div class="tl-i">${ico(nm)}</div><span class="tl-n">${nm}</span>${fl?`<span class="tl-f">${esc(fl)}</span>`:''}<span class="tl-s r">executando</span></div><div class="tl-b"><div class="tl-bi">${esc(s)}</div></div>`;F.appendChild(d);scr();return d}
-function doneT(el,ok){const t=el.querySelector('.tl-s');t.className=`tl-s ${ok?'g':'e'}`;t.textContent=ok?'concluído':'erro'}
-function addR(html){const d=document.createElement('div');d.className='rp';d.innerHTML='<p>'+html+'</p>';F.appendChild(d);scr()}
-function addTh(){const d=document.createElement('div');d.className='thk';d.id='thk';d.innerHTML='<div class="dt"><i></i><i></i><i></i></div>Processando...';F.appendChild(d);scr()}
+function addU(t){W.classList.add('hide');const d=document.createElement('div');d.className='user-block';d.innerHTML=`<div class="ut">${esc(t)}</div>`;F.appendChild(d);scr()}
+function addT(nm,inp){const s=typeof inp==='object'?JSON.stringify(inp,null,2):String(inp||'');let fl='';if(inp&&typeof inp==='object'){fl=inp.file_path?.split(/[/\\]/).pop()||inp.path?.split(/[/\\]/).pop()||inp.command?.slice(0,55)||inp.pattern||inp.query?.slice(0,35)||''}const d=document.createElement('div');d.className='tool-block';d.innerHTML=`<div class="tool-h" onclick="this.querySelector('.tool-chv').classList.toggle('op');this.nextElementSibling.classList.toggle('op')"><span class="tool-chv">›</span><span class="tool-lbl">${tl(nm)}</span>${fl?`<span class="tool-fl">${esc(fl)}</span>`:''}</div><div class="tool-bd"><div class="tool-bdi">${esc(s)}</div></div>`;F.appendChild(d);scr();return d}
+function addR(h){const d=document.createElement('div');d.className='rp';d.innerHTML='<p>'+h+'</p>';F.appendChild(d);scr()}
+function addP(){const d=document.createElement('div');d.className='proc';d.id='proc';d.innerHTML='<div class="proc-dot"></div>Processing...';F.appendChild(d);scr()}
 
 async function go(){
-  const t=I.value.trim();if(!t||!S)return;
-  I.value='';I.style.height='auto';B.disabled=true;
-  addU(t);addTh();
+  const t=I.value.trim();if(!t||!S)return;I.value='';I.style.height='auto';B.disabled=true;
+  addU(t);addP();
   try{
-    const ac=new AbortController();
-    const tm=setTimeout(()=>ac.abort(),300000);
-    const r=await fetch(`${U}/v1/sessions/${S}/messages`,{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},
-      body:JSON.stringify({message:t}),signal:ac.signal,
-    });
-    clearTimeout(tm);
-    const body=await r.text();document.getElementById('thk')?.remove();
-    let txt='',ev='';const tls=[];
+    const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),300000);
+    const r=await fetch(`${U}/v1/sessions/${S}/messages`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:JSON.stringify({message:t}),signal:ac.signal});
+    clearTimeout(tm);const body=await r.text();document.getElementById('proc')?.remove();
+    let txt='',ev='';
     for(const ln of body.split('\n')){
       if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}
       if(!ln.startsWith('data: '))continue;
       try{const d=JSON.parse(ln.slice(6));
-        if(ev==='tool_use')tls.push(addT(d.tool_name||'Tool',d.tool_input));
-        else if(ev==='tool_result'&&tls.length)doneT(tls[tls.length-1],!d.is_error);
+        if(ev==='tool_use')addT(d.tool_name||'Tool',d.tool_input);
         else if(ev==='text_delta')txt+=d.text||'';
         else if(ev==='result'&&d.content)txt=d.content;
       }catch{}ev='';
     }
     if(txt)addR(md(txt));
-  }catch(e){document.getElementById('thk')?.remove();addR(`<span style="color:#f87171">Erro de conexão</span>`)}
+  }catch(e){document.getElementById('proc')?.remove();addR(`<span style="color:var(--red)">Erro de conexão</span>`)}
   B.disabled=false;I.focus();
 }
 
 async function reset(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W);await init()}
-
-async function init(){
-  try{
-    const r=await fetch(`${U}/v1/sessions`,{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:'{}',
-    });
-    S=(await r.json()).session_id;
-  }catch{}
-}
-
-// ═══ PWA Service Worker ═══
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sw.js').catch(()=>{});
-}
+async function init(){try{const r=await fetch(`${U}/v1/sessions`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:'{}'});S=(await r.json()).session_id}catch{}}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
 </script>
 </body>
 </html>
