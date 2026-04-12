@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult } from '../Tool.js';
+import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { glob } from 'glob';
@@ -39,13 +39,18 @@ const BINARY_EXTENSIONS = new Set([
 export const GrepTool = buildTool<GrepInput>({
   name: 'Grep',
   aliases: ['GrepTool'],
+  searchHint: 'search code content regex find text',
   description: `Search file contents using regex patterns.
 Output modes: "files_with_matches" (default, shows file paths), "content" (shows matching lines), "count" (shows match counts).
 Filter with glob parameter (e.g., "*.ts").`,
   inputSchema: GrepInputSchema,
 
+  userFacingName(input?: GrepInput) { return input ? `Grep(${input.pattern})` : 'Grep'; },
   isReadOnly() { return true; },
   isConcurrencySafe() { return true; },
+  isDestructive() { return false; },
+  toAutoClassifierInput(input: GrepInput) { return input.pattern; },
+  renderToolUseMessage(input: GrepInput, _opts: RenderOptions) { return `Grep: /${input.pattern}/`; },
 
   async checkPermissions() {
     return { behavior: 'allow' as const };

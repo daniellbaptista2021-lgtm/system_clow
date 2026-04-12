@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult } from '../Tool.js';
+import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
 
 const TodoItemSchema = z.object({
   content: z.string().min(1),
@@ -33,14 +33,22 @@ export function clearTodos() {
 export const TodoWriteTool = buildTool<TodoWriteInput>({
   name: 'TodoWrite',
   aliases: ['TodoWriteTool'],
+  searchHint: 'task todo list track progress',
   description: `Create and manage a structured task list for the current session.
 Use this to track progress on complex multi-step tasks.
 Task states: pending, in_progress, completed.
 Only one task should be in_progress at a time.`,
   inputSchema: TodoWriteInputSchema,
 
+  userFacingName() { return 'TodoWrite'; },
   isReadOnly() { return false; },
   isConcurrencySafe() { return false; },
+  isDestructive() { return false; },
+  renderToolUseMessage(input: TodoWriteInput, _opts: RenderOptions) {
+    const counts = { pending: 0, in_progress: 0, completed: 0 };
+    for (const t of input.todos) counts[t.status]++;
+    return `TodoWrite: ${counts.completed}✓ ${counts.in_progress}▸ ${counts.pending}○`;
+  },
 
   async checkPermissions() {
     return { behavior: 'allow' as const };

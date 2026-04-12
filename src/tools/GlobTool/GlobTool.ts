@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult } from '../Tool.js';
+import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
 import { glob } from 'glob';
 import * as path from 'path';
 import { getCwd } from '../../bootstrap/state.js';
@@ -22,13 +22,18 @@ type GlobInput = z.infer<typeof GlobInputSchema>;
 export const GlobTool = buildTool<GlobInput>({
   name: 'Glob',
   aliases: ['GlobTool'],
+  searchHint: 'find files pattern glob match',
   description: `Fast file pattern matching. Supports glob patterns like "**/*.ts".
 Returns matching file paths sorted by modification time.
 Use this when you need to find files by name patterns.`,
   inputSchema: GlobInputSchema,
 
+  userFacingName(input?: GlobInput) { return input ? `Glob(${input.pattern})` : 'Glob'; },
   isReadOnly() { return true; },
   isConcurrencySafe() { return true; },
+  isDestructive() { return false; },
+  toAutoClassifierInput(input: GlobInput) { return input.pattern; },
+  renderToolUseMessage(input: GlobInput, _opts: RenderOptions) { return `Glob: ${input.pattern}`; },
 
   async checkPermissions() {
     return { behavior: 'allow' as const };

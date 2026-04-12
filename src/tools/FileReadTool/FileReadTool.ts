@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult } from '../Tool.js';
+import { buildTool, type ToolResult, type ToolUseContext, type ValidationResult, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getCwd } from '../../bootstrap/state.js';
@@ -25,13 +25,26 @@ type FileReadInput = z.infer<typeof FileReadInputSchema>;
 export const FileReadTool = buildTool<FileReadInput>({
   name: 'Read',
   aliases: ['FileRead', 'FileReadTool'],
+  searchHint: 'file read cat view contents',
   description: `Read a file from the local filesystem. Results returned in cat -n format with line numbers.
 By default reads up to ${MAX_LINES} lines from the beginning.
 Use offset and limit for large files to read specific sections.`,
   inputSchema: FileReadInputSchema,
 
+  userFacingName(input?: FileReadInput) {
+    if (!input) return 'Read';
+    return `Read(${path.basename(input.file_path)})`;
+  },
   isReadOnly() { return true; },
   isConcurrencySafe() { return true; },
+  isDestructive() { return false; },
+  interruptBehavior() { return 'cancel' as const; },
+
+  toAutoClassifierInput(input: FileReadInput) { return input.file_path; },
+
+  renderToolUseMessage(input: FileReadInput, options: RenderOptions) {
+    return options.verbose ? `Read ${input.file_path}` : `Read ${path.basename(input.file_path)}`;
+  },
 
   async checkPermissions() {
     return { behavior: 'allow' as const };

@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult } from '../Tool.js';
+import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getCwd } from '../../bootstrap/state.js';
@@ -24,14 +24,25 @@ type FileEditInput = z.infer<typeof FileEditInputSchema>;
 export const FileEditTool = buildTool<FileEditInput>({
   name: 'Edit',
   aliases: ['FileEdit', 'FileEditTool'],
+  searchHint: 'file edit replace modify',
   description: `Performs exact string replacements in files.
 The edit will FAIL if old_string is not unique in the file (unless replace_all=true).
 You must Read the file first before editing.
 old_string and new_string must be different.`,
   inputSchema: FileEditInputSchema,
 
+  userFacingName(input?: FileEditInput) {
+    return input ? `Edit(${path.basename(input.file_path)})` : 'Edit';
+  },
   isReadOnly() { return false; },
   isConcurrencySafe() { return false; },
+  isDestructive() { return false; }, // Edits are reversible
+  interruptBehavior() { return 'block' as const; },
+  toAutoClassifierInput(input: FileEditInput) { return `${input.file_path}: "${input.old_string}" → "${input.new_string}"`; },
+  renderToolUseMessage(input: FileEditInput, options: RenderOptions) {
+    const name = options.verbose ? input.file_path : path.basename(input.file_path);
+    return `Edit ${name}`;
+  },
 
   async checkPermissions(input: FileEditInput) {
     return { behavior: 'ask' as const, message: `Edit file: ${input.file_path}` };

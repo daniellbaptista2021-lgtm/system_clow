@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Clow</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117; color: #e6edf3; height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      background: #161b22; padding: 12px 20px; border-bottom: 1px solid #30363d;
+      display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 18px; color: #58a6ff; }
+    header .status { font-size: 12px; color: #3fb950; }
+    header .cost { font-size: 12px; color: #8b949e; margin-left: auto; }
+    #chat {
+      flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .msg { max-width: 85%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; word-wrap: break-word; }
+    .msg.user { background: #1f6feb; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .msg.assistant { background: #21262d; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #30363d; }
+    .msg.assistant pre { background: #161b22; padding: 8px 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; font-size: 13px; }
+    .msg.assistant code { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; }
+    .msg.system { background: #1a1e24; color: #8b949e; align-self: center; font-size: 13px; font-style: italic; }
+    .msg .time { font-size: 11px; color: #8b949e; margin-top: 4px; }
+    #input-area {
+      background: #161b22; padding: 16px 20px; border-top: 1px solid #30363d;
+      display: flex; gap: 10px;
+    }
+    #input {
+      flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+      color: #e6edf3; padding: 12px 16px; font-size: 15px; outline: none; resize: none;
+      font-family: inherit; min-height: 44px; max-height: 120px;
+    }
+    #input:focus { border-color: #58a6ff; }
+    #input::placeholder { color: #484f58; }
+    #send {
+      background: #238636; color: white; border: none; border-radius: 8px;
+      padding: 0 20px; font-size: 15px; cursor: pointer; font-weight: 600;
+      min-width: 80px;
+    }
+    #send:hover { background: #2ea043; }
+    #send:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+    .typing { color: #8b949e; font-style: italic; padding: 8px 16px; }
+    @media (max-width: 600px) {
+      .msg { max-width: 95%; }
+      #input-area { padding: 10px; }
+      header { padding: 10px 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ System Clow</h1>
+    <span class="status" id="status">● Conectando...</span>
+    <span class="cost" id="cost"></span>
+  </header>
+
+  <div id="chat">
+    <div class="msg system">System Clow v1.0 — Powered by DeepSeek V3.2</div>
+  </div>
+
+  <div id="input-area">
+    <textarea id="input" placeholder="Digite sua mensagem..." rows="1"></textarea>
+    <button id="send" onclick="sendMessage()">Enviar</button>
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    const API_KEY = 'clow_live_oDr8CJM8OdWmf0TloHZ6tUTn_9Feh9ax';
+    let sessionId = null;
+    let totalCost = 0;
+
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+    const costEl = document.getElementById('cost');
+
+    // Auto-resize textarea
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Enter to send (Shift+Enter for newline)
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    async function createSession() {
+      try {
+        const res = await fetch(`${API}/v1/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        sessionId = data.session_id;
+        statusEl.textContent = '● Online';
+        statusEl.style.color = '#3fb950';
+      } catch (e) {
+        statusEl.textContent = '● Offline';
+        statusEl.style.color = '#f85149';
+        addMessage('system', 'Erro ao conectar. Verifique se o servidor está rodando.');
+      }
+    }
+
+    function addMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+
+      if (role === 'assistant') {
+        // Simple markdown: code blocks, bold, inline code
+        let html = text
+          .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n/g, '<br>');
+        div.innerHTML = html;
+      } else {
+        div.textContent = text;
+      }
+
+      const time = document.createElement('div');
+      time.className = 'time';
+      time.textContent = new Date().toLocaleTimeString('pt-BR');
+      div.appendChild(time);
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text || !sessionId) return;
+
+      input.value = '';
+      input.style.height = 'auto';
+      sendBtn.disabled = true;
+
+      addMessage('user', text);
+      const typingDiv = addMessage('system', 'Pensando...');
+
+      try {
+        const res = await fetch(`${API}/v1/sessions/${sessionId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+          body: JSON.stringify({ message: text }),
+        });
+
+        const body = await res.text();
+        chat.removeChild(typingDiv);
+
+        // Parse SSE response
+        let fullText = '';
+        let cost = 0;
+        const toolsUsed = [];
+        for (const line of body.split('\n')) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) fullText += data.text;
+              if (data.content && !data.text) fullText = data.content;
+              if (data.cost_usd) cost = data.cost_usd;
+              if (data.tool_name) toolsUsed.push(data.tool_name);
+            } catch {}
+          }
+          if (line.startsWith('event: tool_use')) {
+            // Next data line has tool info
+          }
+          if (line.startsWith('event: system')) {
+            const nextLine = body.split('\n')[body.split('\n').indexOf(line) + 1];
+            if (nextLine?.startsWith('data: ')) {
+              try {
+                const sysData = JSON.parse(nextLine.slice(6));
+                if (sysData.content && sysData.subtype !== 'compact_complete') {
+                  addMessage('system', `[${sysData.subtype}] ${sysData.content}`);
+                }
+              } catch {}
+            }
+          }
+        }
+
+        // Show tools used
+        if (toolsUsed.length > 0) {
+          addMessage('system', `🔧 Tools: ${toolsUsed.join(', ')}`);
+        }
+
+        if (fullText) {
+          addMessage('assistant', fullText);
+          totalCost += cost;
+          costEl.textContent = `$${totalCost.toFixed(4)}`;
+        } else if (body.includes('error')) {
+          addMessage('system', 'Erro: ' + body.slice(0, 200));
+        } else {
+          addMessage('system', 'Sem resposta.');
+        }
+      } catch (e) {
+        chat.removeChild(typingDiv);
+        addMessage('system', `Erro: ${e.message}`);
+      }
+
+      sendBtn.disabled = false;
+      input.focus();
+    }
+
+    // Init
+    createSession();
+    input.focus();
+  </script>
+</body>
+</html>

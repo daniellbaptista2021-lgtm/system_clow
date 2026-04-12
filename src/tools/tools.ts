@@ -17,38 +17,64 @@ import { FileWriteTool } from './FileWriteTool/FileWriteTool.js';
 import { GlobTool } from './GlobTool/GlobTool.js';
 import { GrepTool } from './GrepTool/GrepTool.js';
 import { TodoWriteTool } from './TodoWriteTool/TodoWriteTool.js';
+import { WebFetchTool } from './WebFetchTool/WebFetchTool.js';
+import { WebSearchTool } from './WebSearchTool/WebSearchTool.js';
+import { AgentTool } from './AgentTool/AgentTool.js';
+import { EnterPlanModeTool } from './EnterPlanModeTool/EnterPlanModeTool.js';
+import { ExitPlanModeTool } from './ExitPlanModeTool/ExitPlanModeTool.js';
+import type { MCPManager } from '../mcp/MCPManager.js';
+import { adaptAllMCPTools } from '../mcp/mcpToolAdapter.js';
 
 // ─── The Registry ───────────────────────────────────────────────────────────
 
 export function getAllBaseTools(): Tools {
   return [
+    AgentTool,
     BashTool,
+    EnterPlanModeTool,
+    ExitPlanModeTool,
     FileReadTool,
     FileEditTool,
     FileWriteTool,
     GlobTool,
     GrepTool,
     TodoWriteTool,
+    WebFetchTool,
+    WebSearchTool,
   ];
 }
 
 // ─── Assembly Pipeline ──────────────────────────────────────────────────────
 
-export function getTools(denyList?: string[]): Tools {
-  let tools = getAllBaseTools();
+/**
+ * assembleToolPool — Built-in prefix + MCP suffix (cache stability pattern from doc 02)
+ * Adding/removing an MCP server doesn't invalidate cache for built-in tools.
+ */
+export function getTools(denyList?: string[], mcpManager?: MCPManager): Tools {
+  let builtIn = getAllBaseTools();
 
   // Stage 1: Deny rules
   if (denyList && denyList.length > 0) {
-    tools = filterToolsByDenyRules(tools, denyList);
+    builtIn = filterToolsByDenyRules(builtIn, denyList);
   }
 
   // Stage 2: isEnabled() check
-  tools = tools.filter((tool) => tool.isEnabled());
+  builtIn = builtIn.filter((tool) => tool.isEnabled());
 
-  // Stage 3: Sort for cache stability (built-in prefix)
-  tools.sort((a, b) => a.name.localeCompare(b.name));
+  // Stage 3: Sort built-in for cache stability
+  builtIn.sort((a, b) => a.name.localeCompare(b.name));
 
-  return tools;
+  // Stage 4: Merge MCP tools as suffix
+  if (mcpManager && mcpManager.serverCount > 0) {
+    let mcpTools = adaptAllMCPTools(mcpManager);
+    if (denyList && denyList.length > 0) {
+      mcpTools = filterToolsByDenyRules(mcpTools, denyList);
+    }
+    mcpTools.sort((a, b) => a.name.localeCompare(b.name));
+    return [...builtIn, ...mcpTools];
+  }
+
+  return builtIn;
 }
 
 export function filterToolsByDenyRules(tools: Tools, denyList: string[]): Tools {

@@ -17,10 +17,18 @@ import * as os from 'os';
 import { execSync } from 'child_process';
 import { getCwd, getIsGitRepo, getGitBranch, setIsGitRepo, setGitBranch } from '../../bootstrap/state.js';
 
-// ─── System Prompt ──────────────────────────────────────────────────────────
+// ─── System Prompt — STATIC (cache-stable prefix) ───────────────────────────
+// Everything here MUST be byte-identical between requests.
+// NO timestamps, NO git status, NO CWD, NO cost — those go in getDynamicContext().
+// DeepSeek caches prefixes automatically. Changing even 1 char here busts cache
+// for the ENTIRE conversation.
+
+let _staticPromptCache: string | null = null;
 
 export function getSystemPrompt(): string {
-  return `You are System Clow, an interactive AI coding agent powered by DeepSeek V3.2.
+  if (_staticPromptCache) return _staticPromptCache;
+
+  _staticPromptCache = `You are System Clow, an interactive AI coding agent powered by DeepSeek V3.2.
 You help users with software engineering tasks including writing code, fixing bugs, refactoring, and more.
 
 # Core Principles
@@ -43,21 +51,85 @@ You help users with software engineering tasks including writing code, fixing bu
 
 Call multiple tools in parallel when there are no dependencies between them.
 
+# Web Access
+
+You have access to WebFetch and WebSearch tools. Use WebSearch when you need
+current information beyond your training data (post-2024 docs, recent library
+versions, current best practices, changelogs, Stack Overflow solutions).
+Use WebFetch when you have a specific URL to read. Prefer official documentation sources.
+WebSearch requires BRAVE_SEARCH_API_KEY — if unavailable, tell the user.
+
+# Sub-Agents
+
+You have access to the Agent tool to spawn isolated sub-agents. Use it when:
+- A task requires extensive exploration that would clutter your context
+- You need to research multiple things in parallel (spawn multiple agents at once)
+- A specific, well-defined subtask can be delegated
+
+When spawning an agent, the prompt MUST be self-contained — the sub-agent cannot
+see your conversation. Include all necessary context: file paths, what "done"
+looks like, constraints, expected output format.
+
+Subagent types:
+- researcher: read-only, for investigation and analysis
+- implementer: full tools, for executing a defined coding task
+- general: full tools, for mixed work
+
+Do NOT use Agent for trivial tasks — the overhead isn't worth it for things
+you can do in 1-2 tool calls yourself.
+
+# MCP Integrations
+
+You may have MCP (Model Context Protocol) tools available, prefixed with
+mcp__<server>__<toolname>. These are external integrations like databases,
+APIs, and services. Use them when the task requires data or actions outside
+the local filesystem. Treat them with the same care as built-in tools — read
+the description carefully and validate inputs.
+
+# Plan Mode
+
+You have a Plan Mode for complex tasks. When the user asks for something
+involving multiple file changes, refactoring, or significant modifications,
+consider entering plan mode first:
+
+1. Call EnterPlanMode to activate (restricted to read-only tools)
+2. Investigate thoroughly: read files, search, understand the codebase
+3. Call ExitPlanMode with a detailed markdown plan
+4. Wait for user approval
+5. Execute the approved plan
+
+Use plan mode when: task affects 3+ files, involves architectural decisions,
+user says "plan first" or "show me what you'll do", or you're uncertain.
+Don't use plan mode for trivial single-file edits or quick fixes.
+
+# Tier Note
+
+Depending on your account tier, some tools may not be available. If a tool
+returns 'tier_restricted' or permission denied, try an alternative approach.
+
 # Output Style
 
 - Be concise and direct
 - Lead with the answer, not the reasoning
 - No emojis unless the user requests them
 - Reference code locations as file_path:line_number
-
-# Environment
-
-- Working directory: ${getCwd()}
-- Platform: ${process.platform}
-- Node: ${process.version}
-${getIsGitRepo() ? `- Git branch: ${getGitBranch() || 'unknown'}` : '- Not a git repository'}
-- Current date: ${new Date().toISOString().split('T')[0]}
 `;
+
+  return _staticPromptCache;
+}
+
+// ─── Dynamic Context — injected as prefix of first user message ─────────────
+// This changes per session/turn. Kept OUTSIDE the system prompt so
+// the static system prompt prefix stays cached.
+
+export function getDynamicContext(): string {
+  return `<environment>
+Working directory: ${getCwd()}
+Platform: ${process.platform}
+Node: ${process.version}
+${getIsGitRepo() ? `Git branch: ${getGitBranch() || 'unknown'}` : 'Not a git repository'}
+Date: ${new Date().toISOString().split('T')[0]}
+</environment>`;
 }
 
 // ─── Memory Files (CLOW.md System) ──────────────────────────────────────────
@@ -178,19 +250,20 @@ export async function getGitStatus(): Promise<string> {
 
 // ─── Full Context Assembly ──────────────────────────────────────────────────
 
+/**
+ * assembleFullContext — returns STATIC system prompt (cacheable)
+ * Memory files are appended because they're stable within a session.
+ * Dynamic context (date, CWD, git) is NOT included — use getDynamicContext()
+ * and prepend it to the first user message instead.
+ */
 export async function assembleFullContext(): Promise<string> {
   const systemPrompt = getSystemPrompt();
   const memoryPrompt = await getMemoryPrompt();
-  const gitStatus = await getGitStatus();
 
   let fullPrompt = systemPrompt;
 
   if (memoryPrompt) {
     fullPrompt += '\n\n' + memoryPrompt;
-  }
-
-  if (gitStatus && gitStatus !== 'Not a git repository') {
-    fullPrompt += `\n\n# Git Status\n${gitStatus}`;
   }
 
   return fullPrompt;
@@ -221,3 +294,14 @@ function getDirectoryChain(startDir: string): string[] {
   // Reverse: process from root to CWD (closer = higher priority)
   return dirs.reverse();
 }
+
+// ─── Re-exports from new context assembly system ────────────────────────────
+
+export { ContextAssembler } from './ContextAssembler.js';
+export { MemoryFileWalker } from './memoryFileWalker.js';
+export { UserContextBuilder } from './userContextBuilder.js';
+export { DiscoveredSkillsTracker } from './discoveredSkillsTracker.js';
+export { AdditionalDirectoriesManager } from './additionalDirectories.js';
+export { ContextCache } from './contextCache.js';
+export { ReinjectedAttachments } from './reinjectedAttachments.js';
+export type { SystemPromptParts, UserContextBlock, AssembledContext, ContextAssemblyOptions, MemoryFileResult } from './types.js';
