@@ -36,14 +36,14 @@ async function main(): Promise<void> {
   const PORT = parseInt(process.env.PORT || '3001', 10);
   const API_KEY = process.env.CLOW_API_KEY;
 
-  // Init DeepSeek
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  // Init API
+  const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    console.error('FATAL: DEEPSEEK_API_KEY not set');
+    console.error('FATAL: Set OPENAI_API_KEY or DEEPSEEK_API_KEY in .env');
     process.exit(1);
   }
 
-  const selectedModel = process.env.CLOW_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const selectedModel = process.env.CLOW_MODEL || 'gpt-4o';
   const isOpenAI = selectedModel.startsWith('gpt-');
 
   initDeepSeek({

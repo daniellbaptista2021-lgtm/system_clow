@@ -92,10 +92,10 @@ async function main(): Promise<void> {
   loadEnv({ path: path.resolve(process.cwd(), '.env') });
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    console.error(chalk.red('Error: DEEPSEEK_API_KEY not found.'));
-    console.error(chalk.dim('Set it in .env file or as environment variable.'));
+    console.error(chalk.red('Error: API key not found.'));
+    console.error(chalk.dim('Set OPENAI_API_KEY or DEEPSEEK_API_KEY in .env'));
     process.exit(1);
   }
 
