@@ -107,6 +107,30 @@ async function main(): Promise<void> {
   const whatsappRoutes = buildWhatsAppRoutes(pool);
   app.route('/', whatsappRoutes);
 
+  // ─── Login Auth ─────────────────────────────────────────────────
+  const ADMIN_USER = process.env.CLOW_ADMIN_USER || 'daniellbaptistta';
+  const ADMIN_PASS = process.env.CLOW_ADMIN_PASS || '248513';
+
+  app.post('/auth/login', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const { username, password } = body as { username?: string; password?: string };
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+      const token = Buffer.from(`${username}:${Date.now()}`).toString('base64');
+      return c.json({ ok: true, token });
+    }
+    return c.json({ ok: false, error: 'Credenciais inválidas' }, 401);
+  });
+
+  app.get('/auth/verify', (c) => {
+    const token = c.req.header('X-Auth-Token');
+    if (!token) return c.json({ ok: false }, 401);
+    try {
+      const decoded = Buffer.from(token, 'base64').toString();
+      if (decoded.startsWith(ADMIN_USER + ':')) return c.json({ ok: true });
+    } catch {}
+    return c.json({ ok: false }, 401);
+  });
+
   // Serve static frontend (public/)
   app.get('/assets/*', (c) => {
     const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));

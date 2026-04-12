@@ -10,122 +10,84 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden}
-body{
-  font-family:'Inter',system-ui,sans-serif;
-  background:#050510;
-  color:#f4f4f5;
-  display:flex;flex-direction:column;
-  -webkit-font-smoothing:antialiased;
-}
+body{font-family:'Inter',system-ui,sans-serif;background:#050510;color:#f4f4f5;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 
-/* ═══ HEADER 64px ═══ */
-.hd{
-  height:64px;flex-shrink:0;display:flex;align-items:center;padding:0 24px;
-  background:rgba(5,5,16,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border-bottom:1px solid rgba(255,255,255,.06);z-index:100;
+/* ═══ LOGIN ═══ */
+.login-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:#050510;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .3s;
 }
+.login-overlay.hide{opacity:0;pointer-events:none}
+.login-box{
+  width:100%;max-width:380px;padding:0 24px;text-align:center;
+}
+.login-logo{width:120px;height:auto;margin-bottom:32px}
+.login-title{font-size:22px;font-weight:500;color:rgba(255,255,255,.7);margin-bottom:8px}
+.login-sub{font-size:13px;color:rgba(255,255,255,.25);margin-bottom:32px}
+.login-field{
+  width:100%;padding:14px 18px;margin-bottom:14px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;color:#f4f4f5;font-size:14px;font-family:inherit;
+  outline:none;transition:border-color .2s;
+}
+.login-field:focus{border-color:rgba(124,58,237,.4)}
+.login-field::placeholder{color:rgba(255,255,255,.2)}
+.login-btn{
+  width:100%;padding:14px;margin-top:8px;
+  background:linear-gradient(135deg,#7c3aed,#2563eb);
+  border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:transform .15s,opacity .15s;
+}
+.login-btn:hover{opacity:.9}
+.login-btn:active{transform:scale(.97)}
+.login-btn:disabled{opacity:.3;cursor:default;transform:none}
+.login-error{color:#f87171;font-size:13px;margin-top:12px;min-height:20px}
+
+/* ═══ HEADER ═══ */
+.hd{height:64px;flex-shrink:0;display:flex;align-items:center;padding:0 24px;background:rgba(5,5,16,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.06);z-index:100}
 .hd-logo{width:36px;height:36px;object-fit:contain;border-radius:6px}
 .hd-name{font-size:14px;font-weight:600;letter-spacing:3px;color:rgba(255,255,255,.65);margin-left:14px}
-.hd-r{margin-left:auto}
-.hd-btn{
-  background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);
-  padding:8px 18px;border-radius:10px;font-size:13px;font-weight:500;
-  font-family:inherit;cursor:pointer;transition:all .15s;
-}
+.hd-r{margin-left:auto;display:flex;gap:8px}
+.hd-btn{background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:8px 18px;border-radius:10px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
 .hd-btn:hover{border-color:rgba(124,58,237,.5);color:rgba(124,58,237,.85)}
 .hd-btn:active{transform:scale(.97)}
+.hd-btn.logout{border-color:rgba(239,68,68,.3);color:rgba(239,68,68,.6)}
+.hd-btn.logout:hover{border-color:rgba(239,68,68,.6);color:rgba(239,68,68,.9)}
 
-/* ═══ CHAT SCROLL ═══ */
+/* ═══ CHAT ═══ */
 #chat{flex:1;overflow-y:auto;overflow-x:hidden}
 #chat::-webkit-scrollbar{width:3px}
 #chat::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:3px}
 .feed{max-width:820px;width:100%;margin:0 auto;padding:32px 24px 200px}
-
-/* ═══ WELCOME ═══ */
-.wel{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:calc(100vh - 64px - 200px);text-align:center;user-select:none;
-}
+.wel{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 64px - 200px);text-align:center;user-select:none}
 .wel.hide{display:none}
-.wel-logo{
-  width:260px;height:auto;object-fit:contain;
-  filter:drop-shadow(0 0 80px rgba(124,58,237,.1));
-}
-.wel-tag{
-  margin-top:28px;font-size:11px;font-weight:500;
-  letter-spacing:5px;text-transform:uppercase;color:rgba(255,255,255,.18);
-}
-.wel-h{
-  margin-top:16px;font-size:30px;font-weight:500;color:rgba(255,255,255,.55);line-height:1.3;
-}
-.wel-h b{
-  background:linear-gradient(90deg,#7c3aed,#2563eb);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;font-weight:600;
-}
+.wel-logo{width:260px;height:auto;object-fit:contain;filter:drop-shadow(0 0 80px rgba(124,58,237,.1))}
+.wel-tag{margin-top:28px;font-size:11px;font-weight:500;letter-spacing:5px;text-transform:uppercase;color:rgba(255,255,255,.18)}
+.wel-h{margin-top:16px;font-size:30px;font-weight:500;color:rgba(255,255,255,.55);line-height:1.3}
+.wel-h b{background:linear-gradient(90deg,#7c3aed,#2563eb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:600}
 
-/* ═══ INPUT — Claude style (above bottom) ═══ */
-.inp-dock{
-  position:fixed;bottom:0;left:0;right:0;z-index:100;
-  padding:0 24px 40px;
-  background:linear-gradient(transparent,#050510 40%);
-  pointer-events:none;
-}
-.inp-box{
-  max-width:820px;margin:0 auto;
-  display:flex;align-items:flex-end;gap:8px;
-  background:rgba(11,11,21,.95);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:16px;padding:6px 6px 6px 18px;
-  transition:box-shadow .2s,border-color .2s;
-  pointer-events:all;
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-}
-.inp-box:focus-within{
-  border-color:rgba(124,58,237,.35);
-  box-shadow:0 0 0 2px rgba(124,58,237,.12);
-}
-#msg{
-  flex:1;background:none;border:none;color:#f4f4f5;
-  padding:10px 0;font-size:14px;font-family:inherit;
-  outline:none;resize:none;min-height:20px;max-height:120px;
-  line-height:1.5;caret-color:#7c3aed;
-}
+/* ═══ INPUT ═══ */
+.inp-dock{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 24px 40px;background:linear-gradient(transparent,#050510 40%);pointer-events:none}
+.inp-box{max-width:820px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;background:rgba(11,11,21,.95);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:6px 6px 6px 18px;transition:box-shadow .2s,border-color .2s;pointer-events:all;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.inp-box:focus-within{border-color:rgba(124,58,237,.35);box-shadow:0 0 0 2px rgba(124,58,237,.12)}
+#msg{flex:1;background:none;border:none;color:#f4f4f5;padding:10px 0;font-size:14px;font-family:inherit;outline:none;resize:none;min-height:20px;max-height:120px;line-height:1.5;caret-color:#7c3aed}
 #msg::placeholder{color:rgba(255,255,255,.16)}
-.snd{
-  width:38px;height:38px;border-radius:50%;border:none;
-  background:linear-gradient(135deg,#7c3aed,#2563eb);
-  color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;transition:transform .15s,opacity .15s;
-}
-.snd:hover{transform:scale(1.05)}
-.snd:active{transform:scale(.93)}
-.snd:disabled{opacity:.1;cursor:default;transform:none}
+.snd{width:38px;height:38px;border-radius:50%;border:none;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s,opacity .15s}
+.snd:hover{transform:scale(1.05)}.snd:active{transform:scale(.93)}.snd:disabled{opacity:.1;cursor:default;transform:none}
 .snd svg{width:16px;height:16px}
 
-/* ═══ USER MSG ═══ */
+/* ═══ USER/TOOL/REPLY/THINK ═══ */
 .u-row{display:flex;justify-content:flex-end;margin:18px 0 6px}
-.u-msg{
-  max-width:70%;padding:12px 18px;font-size:14px;line-height:1.6;color:#fff;
-  background:linear-gradient(135deg,#7c3aed,#6d28d9);
-  border-radius:20px 20px 6px 20px;word-wrap:break-word;
-}
-
-/* ═══ TOOL BLOCK ═══ */
-.tl{
-  margin:6px 0;background:rgba(255,255,255,.015);
-  border:1px solid rgba(255,255,255,.06);border-radius:10px;
-  overflow:hidden;transition:border-color .15s;
-}
+.u-msg{max-width:70%;padding:12px 18px;font-size:14px;line-height:1.6;color:#fff;background:linear-gradient(135deg,#7c3aed,#6d28d9);border-radius:20px 20px 6px 20px;word-wrap:break-word}
+.tl{margin:6px 0;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:10px;overflow:hidden;transition:border-color .15s}
 .tl:hover{border-color:rgba(255,255,255,.1)}
 .tl-h{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none}
 .tl-h:hover{background:rgba(255,255,255,.015)}
 .tl-c{font-size:8px;color:rgba(255,255,255,.18);transition:transform .2s;width:10px;text-align:center}
 .tl-c.on{transform:rotate(90deg)}
-.tl-i{
-  width:20px;height:20px;border-radius:5px;background:rgba(124,58,237,.07);
-  display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;
-}
+.tl-i{width:20px;height:20px;border-radius:5px;background:rgba(124,58,237,.07);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
 .tl-n{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#a78bfa}
 .tl-f{font-size:11px;color:rgba(255,255,255,.18);margin-left:auto;font-family:'JetBrains Mono',monospace}
 .tl-s{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
@@ -134,77 +96,129 @@ body{
 .tl-s.e{background:rgba(239,68,68,.06);color:#f87171}
 .tl-b{max-height:0;overflow:hidden;transition:max-height .25s}
 .tl-b.on{max-height:400px;overflow-y:auto}
-.tl-bi{
-  padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);
-  font-family:'JetBrains Mono',monospace;font-size:11px;
-  color:rgba(255,255,255,.25);white-space:pre-wrap;word-break:break-all;line-height:1.55;
-}
-
-/* ═══ ASSISTANT ═══ */
+.tl-bi{padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,.25);white-space:pre-wrap;word-break:break-all;line-height:1.55}
 .rp{font-size:14.5px;line-height:1.75;color:rgba(255,255,255,.85);padding:10px 0 8px}
-.rp p{margin-bottom:8px}
-.rp strong{color:#c4b5fd;font-weight:600}
-.rp pre{
-  background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);
-  border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0;font-size:13px;line-height:1.55;
-}
+.rp p{margin-bottom:8px}.rp strong{color:#c4b5fd;font-weight:600}
+.rp pre{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0;font-size:13px;line-height:1.55}
 .rp code{font-family:'JetBrains Mono',monospace;font-size:13px}
 .rp :not(pre)>code{background:rgba(255,255,255,.05);padding:1px 6px;border-radius:4px;font-size:12px;color:#c4b5fd}
-.rp ul,.rp ol{margin:6px 0 6px 18px}
-.rp li{margin-bottom:3px}
+.rp ul,.rp ol{margin:6px 0 6px 18px}.rp li{margin-bottom:3px}
 .rp h3,.rp h4{margin:12px 0 4px;font-weight:600;font-size:15px}
-
-/* ═══ THINKING ═══ */
 .thk{display:flex;align-items:center;gap:10px;padding:14px 0;color:rgba(255,255,255,.18);font-size:13px}
-.dt{display:flex;gap:3px}
-.dt i{display:block;width:5px;height:5px;border-radius:50%;background:#7c3aed;opacity:.15;animation:p 1.4s ease-in-out infinite}
+.dt{display:flex;gap:3px}.dt i{display:block;width:5px;height:5px;border-radius:50%;background:#7c3aed;opacity:.15;animation:p 1.4s ease-in-out infinite}
 .dt i:nth-child(2){animation-delay:.15s}.dt i:nth-child(3){animation-delay:.3s}
 @keyframes p{0%,80%,100%{opacity:.15}40%{opacity:.85}}
 
-@media(max-width:640px){
-  .feed{padding:20px 16px 180px}
-  .u-msg{max-width:85%}
-  .wel-h{font-size:24px}
-  .wel-logo{width:180px}
-  .hd{padding:0 16px;height:56px}
-  .inp-dock{padding:0 16px 28px}
-}
+@media(max-width:640px){.feed{padding:20px 16px 180px}.u-msg{max-width:85%}.wel-h{font-size:24px}.wel-logo{width:180px}.hd{padding:0 16px;height:56px}.inp-dock{padding:0 16px 28px}.login-box{padding:0 20px}}
 </style>
 </head>
 <body>
 
-<div class="hd">
-  <img src="/assets/logo.png" class="hd-logo" alt="">
-  <span class="hd-name">CLOW</span>
-  <div class="hd-r"><button class="hd-btn" onclick="reset()">Nova conversa</button></div>
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div class="login-overlay" id="loginScreen">
+  <div class="login-box">
+    <img src="/assets/logo.png" class="login-logo" alt="Clow">
+    <div class="login-title">Acesso Restrito</div>
+    <div class="login-sub">Área exclusiva do administrador</div>
+    <input class="login-field" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus>
+    <input class="login-field" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password">
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
 </div>
 
-<div id="chat">
-  <div class="feed" id="feed">
-    <div class="wel" id="wel">
-      <img src="/assets/logo.png" class="wel-logo" alt="Clow">
-      <div class="wel-tag">inteligência infinita · possibilidades premium</div>
-      <div class="wel-h">Como posso <b>ajudar</b>?</div>
+<!-- ═══ APP (hidden until login) ═══ -->
+<div id="app" style="display:none;flex:1;flex-direction:column;height:100%">
+
+  <div class="hd">
+    <img src="/assets/logo.png" class="hd-logo" alt="">
+    <span class="hd-name">CLOW</span>
+    <div class="hd-r">
+      <button class="hd-btn" onclick="reset()">Nova conversa</button>
+      <button class="hd-btn logout" onclick="logout()">Sair</button>
     </div>
   </div>
-</div>
 
-<div class="inp-dock">
-  <div class="inp-box">
-    <textarea id="msg" placeholder="Mensagem para o Clow..." rows="1"></textarea>
-    <button class="snd" id="btn" onclick="go()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>
-      </svg>
-    </button>
+  <div id="chat">
+    <div class="feed" id="feed">
+      <div class="wel" id="wel">
+        <img src="/assets/logo.png" class="wel-logo" alt="Clow">
+        <div class="wel-tag">inteligência infinita · possibilidades premium</div>
+        <div class="wel-h">Como posso <b>ajudar</b>?</div>
+      </div>
+    </div>
   </div>
+
+  <div class="inp-dock">
+    <div class="inp-box">
+      <textarea id="msg" placeholder="Mensagem para o Clow..." rows="1"></textarea>
+      <button class="snd" id="btn" onclick="go()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <script>
 const U=location.origin,K='clow_live_BjrOCY2elZ5A2TWGEWMxkiyQgDVAWtZs';
-let S=null;const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
-I.addEventListener('input',()=>{I.style.height='auto';I.style.height=Math.min(I.scrollHeight,120)+'px'});
-I.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}});
+let S=null,authToken=null;
+
+// ═══ LOGIN ═══
+const loginScreen=document.getElementById('loginScreen');
+const appEl=document.getElementById('app');
+const loginUser=document.getElementById('loginUser');
+const loginPass=document.getElementById('loginPass');
+const loginErr=document.getElementById('loginError');
+
+// Check saved session
+const saved=localStorage.getItem('clow_token');
+if(saved){authToken=saved;showApp()}
+
+loginPass.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+loginUser.addEventListener('keydown',e=>{if(e.key==='Enter')loginPass.focus()});
+
+async function doLogin(){
+  const u=loginUser.value.trim(),p=loginPass.value.trim();
+  if(!u||!p){loginErr.textContent='Preencha todos os campos';return}
+  document.getElementById('loginBtn').disabled=true;
+  loginErr.textContent='';
+  try{
+    const r=await fetch(`${U}/auth/login`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:u,password:p}),
+    });
+    const d=await r.json();
+    if(d.ok){
+      authToken=d.token;
+      localStorage.setItem('clow_token',d.token);
+      showApp();
+    }else{
+      loginErr.textContent=d.error||'Credenciais inválidas';
+    }
+  }catch(e){loginErr.textContent='Erro de conexão'}
+  document.getElementById('loginBtn').disabled=false;
+}
+
+function showApp(){
+  loginScreen.classList.add('hide');
+  setTimeout(()=>{loginScreen.style.display='none'},300);
+  appEl.style.display='flex';
+  init();
+  document.getElementById('msg')?.focus();
+}
+
+function logout(){
+  localStorage.removeItem('clow_token');
+  authToken=null;
+  location.reload();
+}
+
+// ═══ CHAT LOGIC ═══
+const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
+I?.addEventListener('input',()=>{I.style.height='auto';I.style.height=Math.min(I.scrollHeight,120)+'px'});
+I?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();go()}});
+
 const IC={Read:'📄',FileRead:'📄',Bash:'⚡',Edit:'✏️',FileEdit:'✏️',Write:'📝',FileWrite:'📝',Glob:'🔍',Grep:'🔎',Agent:'🤖',WebFetch:'🌐',WebSearch:'🔎',TodoWrite:'📋'};
 const ico=n=>n.startsWith('mcp__')?'🔌':(IC[n]||'🔧');
 const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -215,10 +229,43 @@ function addT(nm,inp){const s=typeof inp==='object'?JSON.stringify(inp,null,2):S
 function doneT(el,ok){const t=el.querySelector('.tl-s');t.className=`tl-s ${ok?'g':'e'}`;t.textContent=ok?'concluído':'erro'}
 function addR(html){const d=document.createElement('div');d.className='rp';d.innerHTML='<p>'+html+'</p>';F.appendChild(d);scr()}
 function addTh(){const d=document.createElement('div');d.className='thk';d.id='thk';d.innerHTML='<div class="dt"><i></i><i></i><i></i></div>Processando...';F.appendChild(d);scr()}
-async function go(){const t=I.value.trim();if(!t||!S)return;I.value='';I.style.height='auto';B.disabled=true;addU(t);addTh();try{const r=await fetch(`${U}/v1/sessions/${S}/messages`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:JSON.stringify({message:t})});const body=await r.text();document.getElementById('thk')?.remove();let txt='',ev='';const tls=[];for(const ln of body.split('\n')){if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}if(!ln.startsWith('data: '))continue;try{const d=JSON.parse(ln.slice(6));if(ev==='tool_use')tls.push(addT(d.tool_name||'Tool',d.tool_input));else if(ev==='tool_result'&&tls.length)doneT(tls[tls.length-1],!d.is_error);else if(ev==='text_delta')txt+=d.text||'';else if(ev==='result'&&d.content)txt=d.content}catch{}ev=''}if(txt)addR(md(txt))}catch(e){document.getElementById('thk')?.remove();addR(`<span style="color:#f87171">Erro de conexão</span>`)}B.disabled=false;I.focus()}
+
+async function go(){
+  const t=I.value.trim();if(!t||!S)return;
+  I.value='';I.style.height='auto';B.disabled=true;
+  addU(t);addTh();
+  try{
+    const r=await fetch(`${U}/v1/sessions/${S}/messages`,{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},
+      body:JSON.stringify({message:t}),
+    });
+    const body=await r.text();document.getElementById('thk')?.remove();
+    let txt='',ev='';const tls=[];
+    for(const ln of body.split('\n')){
+      if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}
+      if(!ln.startsWith('data: '))continue;
+      try{const d=JSON.parse(ln.slice(6));
+        if(ev==='tool_use')tls.push(addT(d.tool_name||'Tool',d.tool_input));
+        else if(ev==='tool_result'&&tls.length)doneT(tls[tls.length-1],!d.is_error);
+        else if(ev==='text_delta')txt+=d.text||'';
+        else if(ev==='result'&&d.content)txt=d.content;
+      }catch{}ev='';
+    }
+    if(txt)addR(md(txt));
+  }catch(e){document.getElementById('thk')?.remove();addR(`<span style="color:#f87171">Erro de conexão</span>`)}
+  B.disabled=false;I.focus();
+}
+
 async function reset(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W);await init()}
-async function init(){try{const r=await fetch(`${U}/v1/sessions`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:'{}'});S=(await r.json()).session_id}catch{}}
-init();I.focus();
+
+async function init(){
+  try{
+    const r=await fetch(`${U}/v1/sessions`,{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${K}`},body:'{}',
+    });
+    S=(await r.json()).session_id;
+  }catch{}
+}
 </script>
 </body>
 </html>
