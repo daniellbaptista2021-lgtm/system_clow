@@ -685,58 +685,89 @@ async function runREPL(
     }
   }
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: chalk.cyan('\n❯ '),
-  });
+  let isProcessingInput = false;
+  let suppressCloseHandler = false;
 
-  // Handle initial prompt
-  if (initialPrompt) {
-    await processInput(engine, initialPrompt);
-  }
+  const createRepl = (): readline.Interface => {
+    const repl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: chalk.cyan('\n? '),
+    });
 
-  rl.prompt();
+    repl.on('line', async (line) => {
+      const input = line.trim();
 
-  rl.on('line', async (line) => {
-    const input = line.trim();
-
-    if (!input) {
-      rl.prompt();
-      return;
-    }
-
-    // Slash commands
-    if (input.startsWith('/')) {
-      const handled = await handleSlashCommand(input, engine, pluginCommands);
-      if (handled === 'exit') {
-        if (remoteControlBridge) {
-          await remoteControlBridge.stop();
-          remoteControlBridge = null;
-        }
-        await engine.gracefulShutdown('cli_exit');
-        await flushSession();
-        rl.close();
-        process.exit(0);
+      if (!input) {
+        repl.prompt();
+        return;
       }
-      rl.prompt();
+
+      await runWithExclusiveInput(async () => {
+        if (input.startsWith('/')) {
+          const handled = await handleSlashCommand(input, engine, pluginCommands);
+          if (handled === 'exit') {
+            if (remoteControlBridge) {
+              await remoteControlBridge.stop();
+              remoteControlBridge = null;
+            }
+            await engine.gracefulShutdown('cli_exit');
+            await flushSession();
+            process.exit(0);
+          }
+          return;
+        }
+
+        await processInput(engine, input);
+      });
+    });
+
+    repl.on('close', async () => {
+      if (suppressCloseHandler) {
+        return;
+      }
+      if (remoteControlBridge) {
+        await remoteControlBridge.stop();
+        remoteControlBridge = null;
+      }
+      await engine.gracefulShutdown('cli_close');
+      await flushSession();
+      console.log(chalk.dim('\nGoodbye!'));
+      process.exit(0);
+    });
+
+    return repl;
+  };
+
+  let rl = createRepl();
+
+  const runWithExclusiveInput = async (task: () => Promise<void>): Promise<void> => {
+    if (isProcessingInput) {
       return;
     }
 
-    await processInput(engine, input);
-    rl.prompt();
-  });
+    isProcessingInput = true;
+    suppressCloseHandler = true;
+    rl.removeAllListeners('line');
+    rl.close();
+    suppressCloseHandler = false;
 
-  rl.on('close', async () => {
-    if (remoteControlBridge) {
-      await remoteControlBridge.stop();
-      remoteControlBridge = null;
+    try {
+      await task();
+    } finally {
+      rl = createRepl();
+      isProcessingInput = false;
+      rl.prompt();
     }
-    await engine.gracefulShutdown('cli_close');
-    await flushSession();
-    console.log(chalk.dim('\nGoodbye!'));
-    process.exit(0);
-  });
+  };
+
+  if (initialPrompt) {
+    await runWithExclusiveInput(async () => {
+      await processInput(engine, initialPrompt);
+    });
+  } else {
+    rl.prompt();
+  }
 
   // Handle Ctrl+C gracefully
   process.on('SIGINT', async () => {
