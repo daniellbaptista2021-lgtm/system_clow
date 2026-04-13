@@ -1,71 +1,71 @@
 # System Clow
 
-English | [README em Portugu?s](README.pt-BR.md)
+Portugu?s | [English README](README.en.md)
 
-System Clow is a TypeScript/Node.js coding agent with CLI, HTTP server, MCP support, plugin runtime, coordinator mode, bridge transport, and swarm tooling.
+System Clow ? um agente de c?digo em TypeScript/Node.js com CLI, servidor HTTP, suporte a MCP, runtime de plugins, modo coordinator, bridge e ferramentas de swarm.
 
-The project is designed to run as a practical coding assistant with a smaller, more modular codebase than larger agent runtimes, while still supporting real execution flows such as tool use, subagents, remote control, and multi-tenant server operation.
+O projeto foi desenhado para funcionar como um assistente de c?digo pr?tico, com uma base mais modular e mais compacta do que runtimes maiores, sem abrir m?o de fluxos reais como uso de ferramentas, subagentes, controle remoto e opera??o multi-tenant.
 
-## Current Status
+## Estado Atual
 
-System Clow is operational.
+O System Clow est? operante.
 
-Validated in runtime:
-- CLI and `--print` execution
-- HTTP server and session persistence
-- Resume and session rehydration
-- Tool execution: `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `WebFetch`, `TodoWrite`
-- `Agent` subagent tool
-- `Coordinator` mode in CLI and server
-- Plugin runtime: commands, hooks, skills, MCP servers, tools, output styles
-- Bridge API and `clow bridge`
-- Remote control via REPL bridge
-- Swarm runtime tools and permission prompts
-- Multi-tenant quota enforcement and workspace isolation
+Validado em runtime:
+- execu??o via CLI e `--print`
+- servidor HTTP e persist?ncia de sess?o
+- resume e reidrata??o de sess?o
+- execu??o de tools: `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `WebFetch`, `TodoWrite`
+- tool de subagente `Agent`
+- modo `Coordinator` no CLI e no servidor
+- runtime de plugins: commands, hooks, skills, servidores MCP, tools e output styles
+- Bridge API e `clow bridge`
+- controle remoto via REPL bridge
+- tools de swarm e prompts de permiss?o
+- enforcement de quota multi-tenant e isolamento de workspace
 
-## Main Capabilities
+## Principais Capacidades
 
-- Interactive CLI coding agent
-- HTTP server for session-based execution
-- MCP integration with runtime tool adaptation
-- Plugin system with runtime-loaded commands, hooks, skills, tools, styles, and MCP servers
-- Coordinator mode for structured delegation flows
-- Swarm tools for team-style multi-agent workflows
-- Bridge transport for remote execution and event streaming
-- JSONL-based session persistence and transcript recovery
-- Permission pipeline with interactive approvals
-- Multi-tenant auth, quotas, and workspace path guards
-- Sandboxed multi-tenant `Bash` using `bubblewrap` when available
+- agente de c?digo interativo via CLI
+- servidor HTTP para execu??o baseada em sess?o
+- integra??o MCP com adapta??o din?mica de tools
+- sistema de plugins com commands, hooks, skills, tools, styles e servidores MCP
+- modo coordinator para fluxos estruturados de delega??o
+- tools de swarm para fluxos multiagente em equipe
+- bridge para execu??o remota e streaming de eventos
+- persist?ncia de sess?o em JSONL e recupera??o de transcript
+- pipeline de permiss?o com aprova??es interativas
+- autentica??o multi-tenant, quotas e path guards por workspace
+- `Bash` multi-tenant sandboxado com `bubblewrap` quando dispon?vel
 
-## Project Structure
+## Estrutura do Projeto
 
 ```text
 src/
-  adapters/      External adapters
-  api/           Model clients and streaming
-  bootstrap/     Runtime global/bootstrap state
-  bridge/        Bridge runtime, session runner, remote control
-  coordinator/   Coordinator mode and worker orchestration
-  hooks/         Hook engine and dispatcher
-  mcp/           MCP manager, client, adapters
-  plugins/       Plugin discovery, loading, runtime components
-  query/         Core QueryEngine and message state
-  server/        HTTP API, session pool, middleware
-  skills/        Skill engine and built-in skill support
-  swarm/         Team, mailbox, runtime tools, spawning
-  tenancy/       Path guards, tiers, quotas, tenant store
-  tools/         Built-in tools and tool registry
-  utils/         Context, compact, retry, permissions, sessions
+  adapters/      Adaptadores externos
+  api/           Clientes de modelo e streaming
+  bootstrap/     Estado global de bootstrap/runtime
+  bridge/        Runtime de bridge, session runner e controle remoto
+  coordinator/   Modo coordinator e orquestra??o de workers
+  hooks/         Hook engine e dispatcher
+  mcp/           MCP manager, client e adapters
+  plugins/       Descoberta, carregamento e runtime de plugins
+  query/         QueryEngine central e estado de mensagens
+  server/        API HTTP, session pool e middlewares
+  skills/        Skill engine e suporte a skills embutidas
+  swarm/         Team, mailbox, runtime tools e spawning
+  tenancy/       Path guards, tiers, quotas e tenant store
+  tools/         Tools nativas e registry de tools
+  utils/         Contexto, compacta??o, retry, permiss?es e sess?es
 ```
 
-## Requirements
+## Requisitos
 
 - Node.js 20+
 - npm 10+
-- Linux recommended for production
-- `bubblewrap` recommended for sandboxed multi-tenant shell execution
+- Linux recomendado para produ??o
+- `bubblewrap` recomendado para shell multi-tenant sandboxado
 
-## Installation
+## Instala??o
 
 ```bash
 npm install
@@ -73,7 +73,7 @@ npm run typecheck
 npm run build
 ```
 
-## Running
+## Execu??o
 
 ### CLI
 
@@ -81,25 +81,25 @@ npm run build
 npm run start
 ```
 
-Development CLI:
+CLI em desenvolvimento:
 
 ```bash
 npm run dev
 ```
 
-Print mode:
+Modo print:
 
 ```bash
 node dist/cli.js --print "Say exactly OK"
 ```
 
-### HTTP Server
+### Servidor HTTP
 
 ```bash
 npm run server
 ```
 
-Development server:
+Servidor em desenvolvimento:
 
 ```bash
 npm run dev:server
@@ -114,12 +114,12 @@ curl http://127.0.0.1:3001/health
 ### Bridge
 
 ```bash
-node dist/cli.js bridge --endpoint http://127.0.0.1:3001 --api-key YOUR_KEY
+node dist/cli.js bridge --endpoint http://127.0.0.1:3001 --api-key SUA_CHAVE
 ```
 
-## Environment
+## Ambiente
 
-Common environment variables used by the project:
+Vari?veis de ambiente principais usadas pelo projeto:
 
 ```bash
 OPENAI_API_KEY=
@@ -129,11 +129,11 @@ CLOW_ADMIN_KEY=
 JWT_SECRET=
 ```
 
-Depending on the features you enable, you may also need tenant, billing, or external adapter configuration.
+Dependendo dos recursos ativados, voc? tamb?m pode precisar de configura??o de tenant, billing ou adaptadores externos.
 
-## Built-in Tools
+## Tools Nativas
 
-Core tools available in the main runtime include:
+As tools principais dispon?veis no runtime incluem:
 
 - `Read`
 - `Write`
@@ -147,78 +147,77 @@ Core tools available in the main runtime include:
 - `Agent`
 - `EnterPlanMode`
 - `ExitPlanMode`
-- Swarm runtime tools: `TeamCreate`, `TeamDelete`, `ListPeers`, `SendMessage`, `TeammateIdle`
+- tools de swarm: `TeamCreate`, `TeamDelete`, `ListPeers`, `SendMessage`, `TeammateIdle`
 
-Tool availability may be filtered by permission mode, tier, tenant, runtime mode, or server configuration.
+A disponibilidade das tools pode ser filtrada por modo de permiss?o, tier, tenant, modo de runtime ou configura??o do servidor.
 
-## Permissions and Safety
+## Permiss?es e Seguran?a
 
-System Clow includes:
+O System Clow inclui:
 
-- interactive permission prompts
-- allow/deny session rules
-- plan mode restrictions
-- tier-based tool filtering
-- workspace path guards
-- multi-tenant quota enforcement
-- sandboxed shell execution for multi-tenant server flows
+- prompts interativos de permiss?o
+- regras allow/deny por sess?o
+- restri??es de plan mode
+- filtragem de tools por tier
+- path guards por workspace
+- enforcement de quota multi-tenant
+- execu??o de shell sandboxada para fluxos multi-tenant no servidor
 
-## Plugins and MCP
+## Plugins e MCP
 
-The plugin runtime supports:
+O runtime de plugins suporta:
 
 - commands
 - hooks
 - skills
 - tools
 - output styles
-- MCP server registration
+- registro de servidores MCP
 
-MCP tools are adapted into the runtime tool pool and can be filtered by tier or deny rules.
+As tools MCP s?o adaptadas para o pool principal de tools e podem ser filtradas por tier ou regras de deny.
 
-## Coordinator, Bridge, and Swarm
+## Coordinator, Bridge e Swarm
 
 ### Coordinator
 
-Coordinator mode narrows the toolset and routes structured delegation through the `Agent` tool and task notifications.
+O modo coordinator reduz o toolset dispon?vel e encaminha delega??o estruturada por meio da tool `Agent` e de task notifications.
 
 ### Bridge
 
-The bridge stack supports:
-- environment registration
-- work polling
-- event streaming
-- env-less session creation
-- remote prompt delivery
+A stack de bridge suporta:
+- registro de environment
+- polling de work
+- streaming de eventos
+- cria??o de sess?o env-less
+- entrega de prompt remoto
 
 ### Swarm
 
-Swarm provides runtime tools for team creation, peer lookup, direct messaging, and teammate state handling.
+O swarm fornece tools de runtime para cria??o de times, lookup de peers, envio direto de mensagens e controle de estado de teammates.
 
-## Known Rough Edges
+## Pontos Ainda ?speros
 
-The project is operational, but still has some non-blocking rough edges:
+O projeto est? operante, mas ainda tem alguns pontos n?o bloqueadores:
 
-- noisy bootstrap logs in some flows
-- deprecation warning around `punycode`
-- plugin discovery warnings may appear depending on local plugin state
-- some advanced paths still need more test coverage than the core runtime
+- logs de bootstrap ruidosos em alguns fluxos
+- warning de deprecia??o relacionado a `punycode`
+- warnings de plugin discovery podem aparecer dependendo do estado local dos plugins
+- alguns caminhos avan?ados ainda precisam de mais cobertura de testes do que o core
 
-## Development Workflow
+## Fluxo de Desenvolvimento
 
 ```bash
 npm run typecheck
 npm run build
 ```
 
-Recommended smoke checks:
+Smoke checks recomendados:
 
 ```bash
 node dist/cli.js --print "Say exactly OK"
 curl http://127.0.0.1:3001/health
 ```
 
-## License
+## Licen?a
 
-No license file is currently present in this repository.
-
+Ainda n?o existe arquivo de licen?a neste reposit?rio.
