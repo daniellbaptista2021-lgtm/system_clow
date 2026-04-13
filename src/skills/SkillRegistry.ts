@@ -106,7 +106,7 @@ export class SkillRegistry {
     });
   }
 
-  // ─── Invocation Tracking ─────────────────────────────────────────
+  // ─── Invocation Tracking and Statistics ──────────────────────────
 
   markInvoked(name: string): void {
     this.invoked.add(name);

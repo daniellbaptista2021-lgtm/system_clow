@@ -33,8 +33,22 @@ interface BridgeSessionRecord {
   updatedAt: number;
 }
 
+interface PendingWorkRecord {
+  environmentId: string;
+  workId: string;
+  sessionId: string;
+  sdkUrl: string;
+  workSecret: string;
+  workerJwt: string;
+  prompt: string;
+  cwd?: string;
+  createdAt: number;
+  expiresAt: string;
+}
+
 const bridgeEnvironments = new Map<string, BridgeEnvironmentRecord>();
 const bridgeSessions = new Map<string, BridgeSessionRecord>();
+const bridgePendingWork = new Map<string, PendingWorkRecord[]>();
 
 function base64UrlEncode(value: string): string {
   return Buffer.from(value, 'utf-8').toString('base64url');
@@ -144,7 +158,29 @@ export function buildBridgeRoutes(): Hono {
   app.get('/environments/:id/work', (c) => {
     const env = bridgeEnvironments.get(c.req.param('id'));
     if (!env) return c.json({ error: 'environment_not_found' }, 404);
-    return c.json({ work: null });
+    const queue = bridgePendingWork.get(env.environmentId) || [];
+    const next = queue.shift() || null;
+    bridgePendingWork.set(env.environmentId, queue);
+    if (!next) return c.json({ work: null });
+    return c.json({
+      work: {
+        workId: next.workId,
+        sessionId: next.sessionId,
+        sdkUrl: next.sdkUrl,
+        workSecret: next.workSecret,
+        workerJwt: next.workerJwt,
+        prompt: next.prompt,
+        cwd: next.cwd,
+        capabilities: {
+          canUseTools: true,
+          canUseMcp: true,
+          canSpawnSubagents: false,
+          maxCostUsd: 1,
+          maxTurns: 30,
+        },
+        expiresAt: next.expiresAt,
+      },
+    });
   });
 
   app.post('/environments/:id/heartbeat', async (c) => {
@@ -183,6 +219,59 @@ export function buildBridgeRoutes(): Hono {
   app.delete('/environments/:id', (c) => {
     const existed = bridgeEnvironments.delete(c.req.param('id'));
     return c.json({ ok: existed });
+  });
+
+
+  app.post('/bridge/work', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const environmentId = typeof body.environmentId === 'string' ? body.environmentId : undefined;
+    const prompt = typeof body.prompt === 'string' ? body.prompt : undefined;
+    if (!environmentId || !prompt) {
+      return c.json({ error: 'environmentId and prompt are required' }, 400);
+    }
+    const env = bridgeEnvironments.get(environmentId);
+    if (!env) return c.json({ error: 'environment_not_found' }, 404);
+
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId : `bridge_session_${randomUUID().slice(0, 12)}`;
+    const existing = bridgeSessions.get(sessionId);
+    const workSecret = existing?.workSecret ?? `v2:${randomUUID()}`;
+    const workerJwtExpiresAt = existing?.workerJwtExpiresAt ?? (Date.now() + 60 * 60_000);
+    const workerJwt = existing?.workerJwt ?? createWorkerJwt(sessionId, workerJwtExpiresAt);
+    const sdkUrl = existing?.sdkUrl ?? buildSdkUrl(c, sessionId);
+    const record: BridgeSessionRecord = {
+      sessionId,
+      source: existing?.source ?? 'bridge-work',
+      sdkUrl,
+      workSecret,
+      workerJwt,
+      workerJwtExpiresAt,
+      epoch: existing?.epoch ?? 1,
+      environmentId,
+      transportHandle: existing?.transportHandle,
+      events: existing?.events ?? [],
+      createdAt: existing?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    };
+    bridgeSessions.set(sessionId, record);
+
+    const work: PendingWorkRecord = {
+      environmentId,
+      workId: `work_${randomUUID().slice(0, 12)}`,
+      sessionId,
+      sdkUrl,
+      workSecret,
+      workerJwt,
+      prompt,
+      cwd: typeof body.cwd === 'string' ? body.cwd : undefined,
+      createdAt: Date.now(),
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+    };
+
+    const queue = bridgePendingWork.get(environmentId) || [];
+    queue.push(work);
+    bridgePendingWork.set(environmentId, queue);
+
+    return c.json({ queued: true, workId: work.workId, sessionId, environmentId }, 201);
   });
 
   app.post('/sessions/env-less', async (c) => {
@@ -282,6 +371,19 @@ export function buildBridgeRoutes(): Hono {
     }
     const body = await c.req.json().catch(() => ({}));
     session.events.push(typeof body === 'object' && body !== null ? body as Record<string, unknown> : { payload: body });
+    session.updatedAt = Date.now();
+    return c.json({ ok: true, received: session.events.length });
+  });
+
+  app.post('/v1/code/sessions/:id/inbound', async (c) => {
+    if (!requireBridgeApiKey(c.req.header('Authorization'))) {
+      return c.json({ error: 'bridge_unauthorized' }, 401);
+    }
+    const session = bridgeSessions.get(c.req.param('id'));
+    if (!session) return c.json({ error: 'session_not_found' }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const event = typeof body === 'object' && body !== null ? body as Record<string, unknown> : { payload: body };
+    session.events.push(event);
     session.updatedAt = Date.now();
     return c.json({ ok: true, received: session.events.length });
   });

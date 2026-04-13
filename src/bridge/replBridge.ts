@@ -1,17 +1,15 @@
 /**
- * replBridge.ts — In-REPL bridge mode (/remote-control command)
+ * replBridge.ts ? In-REPL bridge mode (/remote-control command)
  *
- * When the user types /remote-control in the REPL, this module
- * starts a bridge that allows remote control of the current session.
- * Unlike standalone mode, this runs alongside the REPL.
+ * Starts a server-backed bridge session for the current CLI session.
+ * Outbound events are posted to the bridge server and inbound events
+ * are polled back from the session event stream.
  */
 
-import * as crypto from 'crypto';
-import type { BridgeConfig, BridgeSession, Transport, InboundMessage, OutboundMessage } from './types.js';
+import type { BridgeConfig, InboundMessage, OutboundMessage } from './types.js';
 import { BridgeUI } from './ui/bridgeUI.js';
 import { displayPairingInfo } from './ui/QRCodeDisplay.js';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
+import { BridgeApiClient } from './api/bridgeApi.js';
 
 interface ReplBridgeOptions {
   config: BridgeConfig;
@@ -20,34 +18,49 @@ interface ReplBridgeOptions {
   onDisconnect?: () => void;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// ReplBridge
-// ════════════════════════════════════════════════════════════════════════════
+interface ReplSessionBinding {
+  bridgeSessionId: string;
+  sdkUrl: string;
+  workerJwt: string;
+}
 
 export class ReplBridge {
   private running = false;
-  private transport?: Transport;
   private ui = new BridgeUI();
   private startedAt = 0;
   private messagesSent = 0;
   private messagesReceived = 0;
+  private api: BridgeApiClient;
+  private session?: ReplSessionBinding;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private seenEventIds = new Set<string>();
+  private sentEventIds = new Set<string>();
 
-  constructor(private readonly options: ReplBridgeOptions) {}
+  constructor(private readonly options: ReplBridgeOptions) {
+    this.api = new BridgeApiClient(options.config);
+  }
 
-  /**
-   * Start the bridge (non-blocking).
-   * Returns pairing info for the user.
-   */
   async start(): Promise<{ pairingInfo: string }> {
     if (this.running) throw new Error('Bridge already running');
+    if (!this.options.config.apiKey) throw new Error('REPL bridge requires apiKey in config');
+
+    const created = await this.api.createSessionEnvLess({
+      source: this.options.sessionId,
+      metadata: { mode: 'repl' },
+    });
+
+    this.session = {
+      bridgeSessionId: created.sessionId,
+      sdkUrl: created.sdkUrl,
+      workerJwt: created.workerJwt,
+    };
 
     this.running = true;
     this.startedAt = Date.now();
 
-    // Display pairing info
     const pairingInfo = displayPairingInfo({
       endpointUrl: this.options.config.endpointUrl,
-      environmentId: this.options.sessionId,
+      environmentId: this.session.bridgeSessionId,
       showQR: true,
     });
 
@@ -59,49 +72,71 @@ export class ReplBridge {
       capacity: 1,
     });
 
+    this.startPolling();
     return { pairingInfo };
   }
 
-  /**
-   * Stop the bridge.
-   */
   async stop(): Promise<void> {
     if (!this.running) return;
     this.running = false;
 
-    if (this.transport) {
-      await this.transport.disconnect();
-      this.transport = undefined;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     }
 
+    this.session = undefined;
     this.options.onDisconnect?.();
   }
 
-  /**
-   * Send a message to the remote client.
-   */
   async send(message: OutboundMessage): Promise<void> {
-    if (!this.running) return;
+    if (!this.running || !this.session) return;
     this.messagesSent++;
     this.ui.update({ messagesSent: this.messagesSent });
+    this.sentEventIds.add(message.uuid);
 
-    if (this.transport) {
-      await this.transport.send(message);
+    const response = await fetch(`${this.session.sdkUrl}/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.session.workerJwt}`,
+      },
+      body: JSON.stringify(message),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`Failed to send REPL bridge event: ${response.status} ${body}`.trim());
     }
   }
 
-  /**
-   * Handle an inbound message from remote.
-   */
-  private handleInbound(msg: InboundMessage): void {
-    this.messagesReceived++;
-    this.ui.update({ messagesReceived: this.messagesReceived });
-    this.options.onInboundMessage(msg);
+  private startPolling(): void {
+    void this.pollInbound();
+    this.pollTimer = setInterval(() => {
+      void this.pollInbound();
+    }, 1000);
   }
 
-  /**
-   * Get status info.
-   */
+  private async pollInbound(): Promise<void> {
+    if (!this.running || !this.session) return;
+
+    const response = await fetch(`${this.session.sdkUrl}/events`);
+    if (!response.ok) return;
+
+    const payload = await response.json().catch(() => ({ events: [] as unknown[] })) as { events?: unknown[] };
+    const events = Array.isArray(payload.events) ? payload.events as InboundMessage[] : [];
+
+    for (const event of events) {
+      if (!event?.uuid || this.seenEventIds.has(event.uuid)) continue;
+      this.seenEventIds.add(event.uuid);
+      if (this.sentEventIds.has(event.uuid)) continue;
+      if (!event.type || !event.payload) continue;
+      this.messagesReceived++;
+      this.ui.update({ messagesReceived: this.messagesReceived });
+      this.options.onInboundMessage(event);
+    }
+  }
+
   getStatus(): string {
     this.ui.update({ uptime: Date.now() - this.startedAt });
     return this.ui.formatStatusLine();
@@ -110,6 +145,10 @@ export class ReplBridge {
   getDetailedStatus(): string {
     this.ui.update({ uptime: Date.now() - this.startedAt });
     return this.ui.formatDetailedStatus();
+  }
+
+  getBridgeSessionId(): string | undefined {
+    return this.session?.bridgeSessionId;
   }
 
   isRunning(): boolean { return this.running; }

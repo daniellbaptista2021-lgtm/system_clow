@@ -67,6 +67,7 @@ export function buildEnvVars(
   const env: Record<string, string> = {
     CLOW_TEAM: request.teamName,
     CLOW_AGENT_ID: `${request.memberName}@${request.teamName}`,
+    CLOW_QUIET_BOOTSTRAP: '1',
   };
 
   if (options?.inboxDir) {
@@ -75,6 +76,10 @@ export function buildEnvVars(
 
   if (options?.paneColor) {
     env['CLOW_PANE_COLOR'] = options.paneColor;
+  }
+
+  if (request.prompt) {
+    env['CLOW_INITIAL_PROMPT'] = request.prompt;
   }
 
   return env;

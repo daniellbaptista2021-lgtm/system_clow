@@ -217,6 +217,7 @@ export async function getGitStatus(): Promise<string> {
       cwd: getCwd(),
       encoding: 'utf-8',
       timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
 
     setIsGitRepo(true);
@@ -226,6 +227,7 @@ export async function getGitStatus(): Promise<string> {
       cwd: getCwd(),
       encoding: 'utf-8',
       timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
 
     const log = execSync('git log --oneline -5', {

@@ -56,7 +56,7 @@ interface ManifestSizeAnalysis {
   warningFields: string[];
 }
 
-// ─── Read Operations ────────────────────────────────────────────────────────
+// ─── Read and Validation Operations ────────────────────────────────────────
 
 /**
  * Read and validate a plugin manifest from disk.

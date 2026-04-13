@@ -26,6 +26,8 @@ export interface RunningSession {
   transport: Transport;
   stdoutBuffer: string;
   stderrBuffer: string;
+  rawStdout: string;
+  rawStderr: string;
   status: BridgeSessionStatus;
 }
 
@@ -93,6 +95,8 @@ export class SessionRunner {
       transport,
       stdoutBuffer: '',
       stderrBuffer: '',
+      rawStdout: '',
+      rawStderr: '',
       status: 'creating',
     };
 
@@ -217,6 +221,8 @@ export class SessionRunner {
     session.stdoutBuffer = lines.pop() ?? '';
 
     for (const raw of lines) {
+      session.rawStdout += `${raw}\n`;
+      session.rawStderr += `${raw}\n`;
       const line = raw.trim();
       if (line.length === 0) continue;
 
@@ -279,6 +285,21 @@ export class SessionRunner {
       this.processStdoutBuffer(session);
     }
 
+    if (session.rawStdout.trim().length > 0) {
+      const resultMsg: OutboundMessage = {
+        type: 'session_result',
+        payload: {
+          workId: session.workId,
+          sessionId: session.sessionId,
+          content: session.rawStdout.trim(),
+          stderr: session.rawStderr.trim() || undefined,
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: Date.now(),
+      };
+      session.transport.send(resultMsg).catch(() => {});
+    }
+
     const msg: OutboundMessage = {
       type: 'session_exit',
       payload: {
@@ -320,11 +341,13 @@ export class SessionRunner {
 
   private buildArgs(work: WorkResponse): string[] {
     const args: string[] = [
+      ...this.extraArgs,
       '--print',
-      '--output-format', 'json',
-      '--sdk-url', work.sdkUrl,
     ];
-    args.push(...this.extraArgs);
+    if (work.cwd) {
+      args.push('--cwd', work.cwd);
+    }
+    args.push(work.prompt || `Bridge work ${work.workId}`);
     return args;
   }
 
@@ -333,6 +356,7 @@ export class SessionRunner {
     base['WORK_SECRET'] = work.workSecret;
     base['WORK_ID'] = work.workId;
     base['SESSION_ID'] = work.sessionId;
+    base['CLOW_QUIET_BOOTSTRAP'] = '1';
     for (const [key, value] of Object.entries(this.extraEnv)) {
       base[key] = value;
     }

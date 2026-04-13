@@ -68,7 +68,7 @@ interface StoreData {
 
 const STORE_PATH = path.join(os.homedir(), '.clow', 'tenants.json');
 
-// ─── Read / Write ───────────────────────────────────────────────────────────
+// ─── Read / Write Operations ────────────────────────────────────────────────
 
 function readStore(): StoreData {
   try {

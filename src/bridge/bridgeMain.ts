@@ -31,8 +31,8 @@ interface BridgeApiLike {
   registerEnvironment(params: { capacity: number; reuseEnvironmentId?: string }): Promise<BridgeEnvironment>;
   pollForWork(envId: string, secret: string): Promise<WorkResponse | null>;
   heartbeat(envId: string, secret: string, payload: { activeSessionCount: number; capacity: number; status: string }): Promise<void>;
-  ackWork(workId: string, secret: string): Promise<void>;
-  stopWork(workId: string, secret: string, reason: string): Promise<void>;
+  ackWork(envId: string, secret: string, payload: { workId: string; sessionId: string }): Promise<void>;
+  stopWork(envId: string, secret: string, payload: { workId: string; sessionId: string; reason: string }): Promise<void>;
   deregisterEnvironment(envId: string, secret: string): Promise<void>;
 }
 
@@ -203,7 +203,10 @@ export class BridgeStandalone {
     this.workHandled++;
 
     // ACK
-    await this.api.ackWork(work.workId, this.environment!.secret);
+    await this.api.ackWork(this.environment!.environmentId, this.environment!.secret, {
+      workId: work.workId,
+      sessionId: work.sessionId,
+    });
 
     // Create a simple transport wrapper
     const transport: Transport = {
@@ -211,8 +214,19 @@ export class BridgeStandalone {
       connect: async () => {},
       disconnect: async () => {},
       send: async (msg: OutboundMessage) => {
-        // In standalone mode, forward via API
-        // This is simplified — real impl uses SSE/CCR
+        const response = await fetch(`${work.sdkUrl}/events`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(work.workerJwt ? { Authorization: `Bearer ${work.workerJwt}` } : {}),
+          },
+          body: JSON.stringify(msg),
+        });
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => '');
+          throw new Error(`Bridge event post failed: ${response.status} ${body}`.trim());
+        }
       },
       onMessage: (handler) => {
         // Register handler for inbound

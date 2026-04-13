@@ -35,6 +35,10 @@ import { buildPluginRuntimeTools } from './plugins/components/PluginRuntimeTools
 import { buildPluginRuntimeOutputStyles } from './plugins/components/PluginRuntimeOutputStyles.js';
 import { AgentTool } from './tools/AgentTool/AgentTool.js';
 import { CoordinatorMode } from './coordinator/CoordinatorMode.js';
+import { BridgeSystem } from './bridge/BridgeSystem.js';
+import { BridgeApiClient } from './bridge/api/bridgeApi.js';
+import { SessionRunner } from './bridge/session/sessionRunner.js';
+import { SwarmSystem } from './swarm/SwarmSystem.js';
 import { DEFAULT_COORDINATOR_CONFIG } from './coordinator/types.js';
 import { isCoordinatorModeEnabled, setCoordinatorMode } from './coordinator/modeDetection.js';
 import { assembleFullContext, getGitStatus, getDynamicContext } from './utils/context/context.js';
@@ -83,6 +87,34 @@ function printBanner(): void {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 
+function extractPrintPrompt(argv: string[]): { argvForCommander: string[]; prompt?: string } {
+  const rawArgs = argv.slice(2);
+  if (rawArgs[0] === 'bridge') return { argvForCommander: argv };
+
+  const printIndex = rawArgs.findIndex((arg) => arg === '--print' || arg === '-p');
+  if (printIndex === -1) return { argvForCommander: argv };
+
+  const trailingArgs = rawArgs.slice(printIndex + 1).filter((arg) => arg !== '--');
+  if (trailingArgs.length === 0) return { argvForCommander: argv };
+
+  return {
+    argvForCommander: [...argv.slice(0, 2), ...rawArgs.slice(0, printIndex + 1)],
+    prompt: trailingArgs.join(' '),
+  };
+}
+
+let remoteControlBridge: BridgeSystem | null = null;
+
+async function sendRemoteBridgeEvent(type: string, payload: unknown): Promise<void> {
+  if (!remoteControlBridge) return;
+  await remoteControlBridge.send({
+    type,
+    payload,
+    uuid: randomUUID(),
+    timestamp: Date.now(),
+  });
+}
+
 async function main(): Promise<void> {
   // Phase 0: Fast paths
   const program = new Command();
@@ -99,11 +131,40 @@ async function main(): Promise<void> {
     .option('--continue', 'Resume the last session for the current directory')
     .option('--list-sessions', 'List recent sessions for the current directory')
     .option('--coordinator', 'Enable coordinator mode (orchestration-first)')
-    .argument('[prompt]', 'Initial prompt (non-interactive mode)');
+    .option('--agent-id <id>', 'Internal: swarm agent id')
+    .option('--team-name <name>', 'Internal: swarm team name')
+    .option('--permission-mode <mode>', 'Internal: permission mode override')
+    .option('--prompt <text>', 'Internal: initial prompt override')
+    .argument('[prompt]', 'Initial prompt (non-interactive mode)')
+    .action(() => {});
 
-  program.parse(process.argv);
+  program
+    .command('bridge')
+    .description('Run bridge standalone mode against a bridge-enabled server')
+    .requiredOption('--endpoint <url>', 'Bridge endpoint URL')
+    .requiredOption('--api-key <key>', 'Bridge API key (tenant/admin/global)')
+    .option('--capacity <n>', 'Max concurrent bridge sessions', '1')
+    .option('--transport <version>', 'Bridge transport version', 'v2')
+    .option('--spawn-mode <mode>', 'Bridge spawn mode', 'single-session')
+    .option('--workdir <dir>', 'Workdir root for bridge-spawned sessions')
+    .option('--test-seconds <n>', 'Exit automatically after N seconds (useful for validation)');
+
+  const printPrompt = extractPrintPrompt(process.argv);
+  program.parse(printPrompt.argvForCommander);
   const opts = program.opts();
   const args = program.args;
+  const resolvedPrompt = opts.prompt || process.env.CLOW_INITIAL_PROMPT || printPrompt.prompt || args[0];
+  const bridgeCommand = program.commands.find((cmd) => cmd.name() === 'bridge');
+  const bridgeOpts = bridgeCommand?.opts();
+
+  if (process.argv[2] === 'bridge' && bridgeOpts) {
+    await runBridgeCommand(bridgeOpts as { endpoint: string; apiKey: string; capacity?: string; transport?: string; spawnMode?: string; workdir?: string; testSeconds?: string; });
+    return;
+  }
+
+  if (opts.permissionMode && ['default','acceptEdits','bypassPermissions','dontAsk','auto','plan'].includes(opts.permissionMode)) {
+    setPermissionMode(opts.permissionMode as any);
+  }
 
   if (opts.coordinator) {
     setCoordinatorMode(true);
@@ -381,12 +442,18 @@ async function main(): Promise<void> {
     });
   }
 
+  const swarmAgentId = opts.agentId || process.env.CLOW_AGENT_ID;
+  let swarmRuntime: SwarmSystem | undefined;
+  if (swarmAgentId) {
+    swarmRuntime = await startSwarmInboxPolling(swarmAgentId);
+  }
+
   // Phase 3: Execute
-  if (opts.print && args[0]) {
-    await runSinglePrompt(args[0], tools, systemPrompt, canUseTool, maxTurns, hookDispatcher, skillEngine);
-  } else if (args[0]) {
+  if (opts.print && resolvedPrompt) {
+    await runSinglePrompt(resolvedPrompt, tools, systemPrompt, canUseTool, maxTurns, hookDispatcher, skillEngine);
+  } else if (resolvedPrompt) {
     printBanner();
-    await runREPL(tools, systemPrompt, canUseTool, maxTurns, pluginCommands, hookDispatcher, skillEngine, args[0], resumedMessages);
+    await runREPL(tools, systemPrompt, canUseTool, maxTurns, pluginCommands, hookDispatcher, skillEngine, resolvedPrompt, resumedMessages);
   } else {
     printBanner();
     console.log(chalk.dim(`  Session: ${getSessionId().slice(0, 8)}`));
@@ -414,6 +481,117 @@ function formatTimeAgo(date: Date): string {
 }
 
 // ─── Single Prompt (--print mode) ───────────────────────────────────────────
+
+async function runBridgeCommand(opts: {
+  endpoint: string;
+  apiKey: string;
+  capacity?: string;
+  transport?: string;
+  spawnMode?: string;
+  workdir?: string;
+  testSeconds?: string;
+}): Promise<void> {
+  loadEnv({ path: path.resolve(process.cwd(), '.env') });
+  loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
+
+  const bridge = new BridgeSystem({
+    endpointUrl: opts.endpoint,
+    apiKey: opts.apiKey,
+    mode: 'standalone',
+    transportVersion: (opts.transport as any) || 'v2',
+    capacity: parseInt(opts.capacity || '1', 10) || 1,
+    spawnMode: (opts.spawnMode as any) || 'single-session',
+    worktree: opts.workdir ? { baseDir: path.resolve(opts.workdir) } : undefined,
+  });
+
+  const apiClient = new BridgeApiClient({
+    endpointUrl: opts.endpoint,
+    apiKey: opts.apiKey,
+    mode: 'standalone',
+    transportVersion: (opts.transport as any) || 'v2',
+    capacity: parseInt(opts.capacity || '1', 10) || 1,
+    spawnMode: (opts.spawnMode as any) || 'single-session',
+  });
+
+  const apiAdapter = {
+    registerEnvironment: async (params: { capacity: number; reuseEnvironmentId?: string }) => {
+      return apiClient.registerEnvironment({
+        capacity: params.capacity,
+        metadata: params.reuseEnvironmentId ? { reuseEnvironmentId: params.reuseEnvironmentId } : undefined,
+      });
+    },
+    pollForWork: async (envId: string, _secret: string) => {
+      const response = await apiClient.pollForWork(envId);
+      return response.work;
+    },
+    heartbeat: async (envId: string, _secret: string, payload: { activeSessionCount: number; capacity: number; status: string }) => {
+      await apiClient.heartbeat({
+        environmentId: envId,
+        activeSessions: payload.activeSessionCount > 0 ? [`active:${payload.activeSessionCount}`] : [],
+      });
+    },
+    ackWork: async (envId: string, _secret: string, payload: { workId: string; sessionId: string }) => {
+      await apiClient.ackWork(envId, payload);
+    },
+    stopWork: async (envId: string, _secret: string, payload: { workId: string; sessionId: string; reason: string }) => {
+      await apiClient.stopWork(envId, payload);
+    },
+    deregisterEnvironment: async (envId: string, _secret: string) => {
+      await apiClient.deregisterEnvironment(envId);
+    },
+  };
+
+  const sessionRunner = new SessionRunner(
+    process.execPath,
+    (opts.spawnMode as any) || 'single-session',
+    opts.workdir ? { baseDir: path.resolve(opts.workdir) } : undefined,
+    { extraArgs: [path.resolve(process.argv[1])] },
+  );
+
+  const autoExitSeconds = parseInt(opts.testSeconds || process.env.CLOW_BRIDGE_TEST_SECONDS || '0', 10) || 0;
+  if (autoExitSeconds > 0) {
+    setTimeout(() => {
+      void bridge.stop();
+      process.exit(0);
+    }, autoExitSeconds * 1000);
+  }
+
+  console.log(chalk.cyan(`Starting bridge against ${opts.endpoint}`));
+  await bridge.start({ api: apiAdapter, sessionRunner });
+}
+
+
+async function startSwarmInboxPolling(agentId: string): Promise<SwarmSystem> {
+  const swarm = new SwarmSystem();
+  await swarm.initialize();
+  swarm.startInboxPolling(agentId, {
+    direct_message: (msg) => {
+      const payload = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : {};
+      const text = typeof payload.text === 'string' ? payload.text : JSON.stringify(msg.content);
+      process.stdout.write(`
+[swarm:${msg.from}] ${text}
+`);
+    },
+    broadcast: (msg) => {
+      const payload = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : {};
+      const text = typeof payload.text === 'string' ? payload.text : JSON.stringify(msg.content);
+      process.stdout.write(`
+[swarm:broadcast:${msg.from}] ${text}
+`);
+    },
+    task_assignment: (msg) => {
+      process.stdout.write(`
+[swarm:task] ${JSON.stringify(msg.content)}
+`);
+    },
+    shutdown_request: (msg) => {
+      process.stdout.write(`
+[swarm:shutdown] ${JSON.stringify(msg.content)}
+`);
+    },
+  });
+  return swarm;
+}
 
 async function runSinglePrompt(
   prompt: string,
@@ -532,6 +710,10 @@ async function runREPL(
     if (input.startsWith('/')) {
       const handled = await handleSlashCommand(input, engine, pluginCommands);
       if (handled === 'exit') {
+        if (remoteControlBridge) {
+          await remoteControlBridge.stop();
+          remoteControlBridge = null;
+        }
         await engine.gracefulShutdown('cli_exit');
         await flushSession();
         rl.close();
@@ -546,6 +728,10 @@ async function runREPL(
   });
 
   rl.on('close', async () => {
+    if (remoteControlBridge) {
+      await remoteControlBridge.stop();
+      remoteControlBridge = null;
+    }
     await engine.gracefulShutdown('cli_close');
     await flushSession();
     console.log(chalk.dim('\nGoodbye!'));
@@ -576,12 +762,16 @@ async function processInput(engine: QueryEngine, input: string): Promise<void> {
             await recordTranscript('assistant', msg.content);
             assistantRecorded = true;
           }
+          if (msg.content) {
+            await sendRemoteBridgeEvent('assistant_result', { subtype: msg.subtype, content: msg.content });
+          }
           break;
 
         case 'assistant':
           if (msg.content) {
             await recordTranscript('assistant', msg.content);
             assistantRecorded = true;
+            await sendRemoteBridgeEvent('assistant_message', { content: msg.content });
           }
           break;
 
@@ -623,6 +813,7 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
       console.log('  /plan        Toggle plan mode (read-only)');
       console.log('  /compact     Compact conversation (free context)');
       console.log('  /context     Show context info');
+      console.log('  /remote-control start|stop|status');
       if (pluginCommands.length > 0) {
         console.log('');
         console.log(chalk.bold('  Plugin Commands:'));
@@ -667,6 +858,70 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
       console.log(`  Messages: ${engine.getMessageCount()}`);
       console.log('');
       break;
+
+    case 'remote-control':
+    case 'remote': {
+      const subcmd = (args[0] || 'status').toLowerCase();
+
+      if (subcmd === 'start') {
+        if (remoteControlBridge) {
+          console.log(chalk.yellow('  Remote control already active.'));
+          break;
+        }
+
+        const endpoint = process.env.CLOW_BRIDGE_ENDPOINT || process.env.CLOW_ENDPOINT || 'http://127.0.0.1:3001';
+        const apiKey = process.env.CLOW_ADMIN_KEY || process.env.CLOW_API_KEY;
+        if (!apiKey) {
+          console.log(chalk.red('  CLOW_ADMIN_KEY or CLOW_API_KEY is required.'));
+          break;
+        }
+
+        const bridge = new BridgeSystem({
+          mode: 'repl',
+          endpointUrl: endpoint,
+          apiKey,
+          transportVersion: 'v2',
+        });
+
+        await bridge.start({
+          sessionId: getSessionId(),
+          onInboundMessage: (msg) => {
+            const payload = typeof msg.payload === 'object' && msg.payload !== null ? msg.payload as Record<string, unknown> : {};
+            if (msg.type === 'remote_prompt') {
+              const remoteText = typeof payload.text === 'string' ? payload.text : '';
+              if (remoteText) {
+                process.stdout.write(`\n[remote] ${remoteText}\n`);
+                void processInput(engine, remoteText);
+              }
+            }
+          },
+        });
+
+        remoteControlBridge = bridge;
+        console.log(chalk.green('  ? Remote control activated.'));
+        console.log(bridge.getDetailedStatus());
+        break;
+      }
+
+      if (subcmd === 'stop') {
+        if (!remoteControlBridge) {
+          console.log(chalk.yellow('  Remote control is not active.'));
+          break;
+        }
+
+        await remoteControlBridge.stop();
+        remoteControlBridge = null;
+        console.log(chalk.green('  ? Remote control stopped.'));
+        break;
+      }
+
+      if (!remoteControlBridge) {
+        console.log(chalk.dim('  Remote control is inactive. Use /remote-control start'));
+      } else {
+        console.log(remoteControlBridge.getDetailedStatus());
+      }
+      break;
+    }
 
     default: {
       const pluginCommand = findPluginCommand(cmd.toLowerCase(), pluginCommands);

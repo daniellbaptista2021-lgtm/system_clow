@@ -173,6 +173,9 @@ export interface WorkResponse {
   workSecret: string;
   capabilities: WorkCapabilities;
   expiresAt: string;
+  prompt?: string;
+  cwd?: string;
+  workerJwt?: string;
 }
 
 // ---------------------------------------------------------------------------

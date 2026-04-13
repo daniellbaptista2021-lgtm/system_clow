@@ -76,7 +76,7 @@ export class SkillEngine {
     this.stats.totalSkills = skills.length;
     this.stats.discoveryTimeMs = Date.now() - startTime;
 
-    if (skills.length > 0) {
+    if (skills.length > 0 && process.env.CLOW_QUIET_BOOTSTRAP !== '1') {
       console.log(`[SkillEngine] Discovered ${skills.length} skills in ${this.stats.discoveryTimeMs}ms`);
     }
   }

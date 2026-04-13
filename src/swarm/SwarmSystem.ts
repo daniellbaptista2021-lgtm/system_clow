@@ -61,7 +61,7 @@ export class SwarmSystem {
     this.planApproval = new PlanApproval(this.mailbox);
   }
 
-  // ─── Initialization ──────────────────────────────────────────────
+  // ─── Initialization and Backend Management ───────────────────────
 
   /**
    * Initialize the swarm system.
@@ -162,6 +162,8 @@ export class SwarmSystem {
           CLOW_TEAM: request.teamName,
           CLOW_AGENT_ID: agentId,
           CLOW_INBOX_DIR: path.join(this.clowHome, TEAMS_DIR_NAME, request.teamName, 'inboxes'),
+          CLOW_QUIET_BOOTSTRAP: '1',
+          ...(request.prompt ? { CLOW_INITIAL_PROMPT: request.prompt } : {}),
         },
         memberName: request.memberName,
       });
@@ -355,9 +357,6 @@ export class SwarmSystem {
   private buildMemberCommand(request: SpawnRequest, agentId: string): string[] {
     const args = ['node', 'dist/cli.js'];
 
-    if (request.prompt) {
-      args.push('--prompt', request.prompt);
-    }
     if (request.model) {
       args.push('--model', request.model);
     }
