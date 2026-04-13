@@ -20,6 +20,7 @@ import { TodoWriteTool } from './TodoWriteTool/TodoWriteTool.js';
 import { WebFetchTool } from './WebFetchTool/WebFetchTool.js';
 import { WebSearchTool } from './WebSearchTool/WebSearchTool.js';
 import { AgentTool } from './AgentTool/AgentTool.js';
+import { DownloadTool } from './DownloadTool/DownloadTool.js';
 import { EnterPlanModeTool } from './EnterPlanModeTool/EnterPlanModeTool.js';
 import { ExitPlanModeTool } from './ExitPlanModeTool/ExitPlanModeTool.js';
 import { getSwarmRuntimeTools } from '../swarm/tools/runtimeTools.js';
@@ -31,6 +32,7 @@ import { adaptAllMCPTools } from '../mcp/mcpToolAdapter.js';
 export function getAllBaseTools(): Tools {
   return [
     AgentTool,
+    DownloadTool,
     BashTool,
     EnterPlanModeTool,
     ExitPlanModeTool,
