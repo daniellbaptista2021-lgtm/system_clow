@@ -1,5 +1,7 @@
 # System Clow
 
+English | [README em Portugu?s](README.pt-BR.md)
+
 System Clow is a TypeScript/Node.js coding agent with CLI, HTTP server, MCP support, plugin runtime, coordinator mode, bridge transport, and swarm tooling.
 
 The project is designed to run as a practical coding assistant with a smaller, more modular codebase than larger agent runtimes, while still supporting real execution flows such as tool use, subagents, remote control, and multi-tenant server operation.
