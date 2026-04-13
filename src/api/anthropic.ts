@@ -362,7 +362,13 @@ export async function* callModel(
       { signal },
     );
 
-    const toolCalls = new Map<number, { id: string; name: string; args: string }>();
+    const toolCalls = new Map<number, {
+      id: string;
+      name: string;
+      args: string;
+      sawDelta: boolean;
+      initialInput?: unknown;
+    }>();
     let finishReason = 'stop';
     let usage: ModelUsage = { prompt_tokens: 0, completion_tokens: 0 };
 
@@ -375,22 +381,27 @@ export async function* callModel(
 
       if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
         const idx = event.index ?? 0;
-        const args = JSON.stringify(event.content_block.input ?? {});
+        const initialInput = event.content_block.input;
+        const initialArgs = initialInput && typeof initialInput === 'object'
+          ? JSON.stringify(initialInput)
+          : '';
         toolCalls.set(idx, {
           id: event.content_block.id,
           name: event.content_block.name,
-          args,
+          args: '',
+          sawDelta: false,
+          initialInput,
         });
         yield {
           type: 'tool_call_start',
           toolCallId: event.content_block.id,
           toolName: event.content_block.name,
         };
-        if (args !== '{}') {
+        if (initialArgs) {
           yield {
             type: 'tool_call_delta',
             toolCallId: event.content_block.id,
-            toolArgs: args,
+            toolArgs: initialArgs,
           };
         }
         continue;
@@ -407,6 +418,7 @@ export async function* callModel(
         const idx = event.index ?? 0;
         const current = toolCalls.get(idx);
         if (current && event.delta.partial_json) {
+          current.sawDelta = true;
           current.args += event.delta.partial_json;
           yield {
             type: 'tool_call_delta',
@@ -420,11 +432,14 @@ export async function* callModel(
       if (event.type === 'content_block_stop') {
         const current = toolCalls.get(event.index ?? 0);
         if (current) {
+          const toolArgs = current.sawDelta
+            ? current.args
+            : JSON.stringify(current.initialInput ?? {});
           yield {
             type: 'tool_call_end',
             toolCallId: current.id,
             toolName: current.name,
-            toolArgs: current.args,
+            toolArgs,
           };
         }
         continue;
