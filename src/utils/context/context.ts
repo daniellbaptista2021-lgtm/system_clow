@@ -20,7 +20,7 @@ import { getCwd, getIsGitRepo, getGitBranch, setIsGitRepo, setGitBranch } from '
 // ─── System Prompt — STATIC (cache-stable prefix) ───────────────────────────
 // Everything here MUST be byte-identical between requests.
 // NO timestamps, NO git status, NO CWD, NO cost — those go in getDynamicContext().
-// DeepSeek caches prefixes automatically. Changing even 1 char here busts cache
+// Prompt caches depend on stable prefixes. Changing even 1 char here can bust cache.
 // for the ENTIRE conversation.
 
 let _staticPromptCache: string | null = null;

@@ -122,8 +122,10 @@ node dist/cli.js bridge --endpoint http://127.0.0.1:3001 --api-key YOUR_KEY
 Common environment variables used by the project:
 
 ```bash
-OPENAI_API_KEY=
-DEEPSEEK_API_KEY=
+ANTHROPIC_API_KEY=
+CLOW_MODEL=claude-sonnet-4-6
+ANTHROPIC_API_KEY=
+CLOW_MODEL=claude-sonnet-4-6
 PORT=3001
 CLOW_ADMIN_KEY=
 JWT_SECRET=

@@ -3,7 +3,7 @@
  *
  * Controls when the time-based (non-cached) MicroCompact path fires.
  * The idea: if enough time has passed since the last assistant response,
- * the DeepSeek prompt cache is likely cold anyway, so we can safely
+ * the prompt cache is likely cold anyway, so we can safely
  * mutate tool results in place without worrying about cache invalidation.
  *
  * Features:
@@ -13,7 +13,7 @@
  *   - Gap analysis utilities
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

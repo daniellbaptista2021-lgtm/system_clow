@@ -2,7 +2,7 @@
  * ContextAssembler.ts — Orchestrates system prompt + dynamic context assembly.
  *
  * KEY: system prompt is STATIC (cacheable). Dynamic context goes as first user message.
- * This preserves DeepSeek's automatic prompt cache (97%+ hit rate on turns 3+).
+ * This preserves prefix stability for prompt caching across repeated turns.
  */
 
 import * as crypto from 'crypto';

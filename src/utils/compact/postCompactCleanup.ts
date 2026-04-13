@@ -88,7 +88,7 @@ export function estimateCostSaving(tokensSaved: number): {
   inputCostSaved: number;
   description: string;
 } {
-  // DeepSeek V3.2 pricing: $0.28/1M input (cache miss)
+  // Claude Sonnet pricing: $3.00/1M input (cache miss)
   const inputCostSaved = (tokensSaved / 1_000_000) * 0.28;
 
   return {

@@ -11,7 +11,7 @@
  *   - Grouping statistics (round count, avg size, etc.)
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
 
 // ─── Message Grouping ──────────────────────────────────────────────────────
 

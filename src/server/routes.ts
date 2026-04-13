@@ -16,7 +16,7 @@
 
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { getSessionCacheMetrics } from '../api/deepseek.js';
+import { getSessionCacheMetrics } from '../api/anthropic.js';
 import { randomUUID } from 'crypto';
 import { SessionPool, type CreateSessionOptions } from './sessionPool.js';
 import { checkQuota } from '../tenancy/quotaGuard.js';

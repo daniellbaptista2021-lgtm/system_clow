@@ -3,7 +3,7 @@
 /**
  * server.ts — System Clow HTTP API Server
  *
- * Bootstrap: env → DeepSeek → MCP → SessionPool → Routes → Listen
+ * Bootstrap: env → Anthropic → MCP → SessionPool → Routes → Listen
  * Auth: Bearer token via CLOW_API_KEY
  * CORS: open for v1, restrict later
  */
@@ -16,7 +16,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 
-import { initDeepSeek } from '../api/deepseek.js';
+import { initAnthropic } from '../api/anthropic.js';
 import { MCPManager } from '../mcp/MCPManager.js';
 import { SessionPool } from './sessionPool.js';
 import { PluginSystem } from '../plugins/PluginSystem.js';
@@ -25,9 +25,43 @@ import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
 import { buildWhatsAppRoutes } from '../adapters/whatsapp.js';
 import { buildBridgeRoutes } from './bridgeRoutes.js';
-import { tenantAuth } from './middleware/tenantAuth.js';
+import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
+
+function getAllowedCorsOrigins(): string[] {
+  return (process.env.CLOW_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function isOriginAllowed(origin: string | undefined, allowedOrigins: string[]): boolean {
+  if (!origin) return true;
+  if (allowedOrigins.length === 0) return false;
+  return allowedOrigins.includes(origin);
+}
+
+function resolveDownloadRootCandidates(): string[] {
+  const configured = (process.env.CLOW_DOWNLOADS_DIR || '')
+    .split(path.delimiter)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => path.resolve(value));
+
+  return Array.from(new Set([
+    ...configured,
+    path.resolve(process.cwd(), 'output'),
+    path.resolve(process.cwd(), 'tmp'),
+    path.resolve(os.tmpdir(), 'clow-downloads'),
+  ]));
+}
+
+function isSafeDownloadName(requested: string): boolean {
+  if (!requested || requested.includes('/') || requested.includes('\\')) return false;
+  if (requested === '.' || requested === '..') return false;
+  return !/[\x00-\x1f]/.test(requested);
+}
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 
@@ -37,23 +71,23 @@ async function main(): Promise<void> {
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
   const PORT = parseInt(process.env.PORT || '3001', 10);
-  const API_KEY = process.env.CLOW_API_KEY;
+  const allowedCorsOrigins = getAllowedCorsOrigins();
+  const downloadRoots = resolveDownloadRootCandidates();
 
   // Init API
-  const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error('FATAL: Set OPENAI_API_KEY or DEEPSEEK_API_KEY in .env');
+    console.error('FATAL: Set ANTHROPIC_API_KEY in .env');
     process.exit(1);
   }
 
-  const selectedModel = process.env.CLOW_MODEL || 'gpt-4o';
-  const isOpenAI = selectedModel.startsWith('gpt-');
+  const selectedModel = process.env.CLOW_MODEL
+    || 'claude-sonnet-4-6';
 
-  initDeepSeek({
-    apiKey: isOpenAI ? (process.env.OPENAI_API_KEY || apiKey) : apiKey,
-    baseURL: isOpenAI ? 'https://api.openai.com/v1' : (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'),
+  initAnthropic({
+    apiKey,
     model: selectedModel,
-    maxOutputTokens: isOpenAI ? 16384 : 8192,
+    maxOutputTokens: 8192,
   });
 
   // Init session storage
@@ -100,12 +134,14 @@ async function main(): Promise<void> {
   // Build Hono app
   const app = new Hono();
 
-  // CORS
-  app.use('*', cors({
-    origin: '*',
-    allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  }));
+  // CORS is opt-in via allowlist. Same-origin requests work without these headers.
+  if (allowedCorsOrigins.length > 0) {
+    app.use('*', cors({
+      origin: (origin) => isOriginAllowed(origin, allowedCorsOrigins) ? (origin || '') : '',
+      allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+    }));
+  }
 
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);
@@ -133,40 +169,39 @@ async function main(): Promise<void> {
   app.route('/', whatsappRoutes);
 
   // ─── Login Auth ─────────────────────────────────────────────────
-  const ADMIN_USER = process.env.CLOW_ADMIN_USER || 'daniellbaptistta';
-  const ADMIN_PASS = process.env.CLOW_ADMIN_PASS || '248513';
+  const ADMIN_USER = process.env.CLOW_ADMIN_USER;
+  const ADMIN_PASS = process.env.CLOW_ADMIN_PASS;
 
   app.post('/auth/login', async (c) => {
+    if (!ADMIN_USER || !ADMIN_PASS) {
+      return c.json({ ok: false, error: 'Login admin não configurado no servidor' }, 503);
+    }
     const body = await c.req.json().catch(() => ({}));
     const { username, password } = body as { username?: string; password?: string };
     if (username === ADMIN_USER && password === ADMIN_PASS) {
-      const token = Buffer.from(`${username}:${Date.now()}`).toString('base64');
+      const token = createAdminSessionToken(username);
       return c.json({ ok: true, token });
     }
     return c.json({ ok: false, error: 'Credenciais inválidas' }, 401);
   });
 
   app.get('/auth/verify', (c) => {
-    const token = c.req.header('X-Auth-Token');
+    if (!ADMIN_USER || !ADMIN_PASS) return c.json({ ok: false }, 503);
+    const token = c.req.header('X-Auth-Token')
+      || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
     if (!token) return c.json({ ok: false }, 401);
-    try {
-      const decoded = Buffer.from(token, 'base64').toString();
-      if (decoded.startsWith(ADMIN_USER + ':')) return c.json({ ok: true });
-    } catch {}
+    const verified = verifyAdminSessionToken(token);
+    if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true });
     return c.json({ ok: false }, 401);
   });
 
   // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
   app.get('/downloads/*', (c) => {
-    const reqPath = c.req.path.replace('/downloads/', '');
-    const safePath = reqPath.replace(/\.\./g, '');
-    // Search in multiple locations
-    const candidates = [
-      path.resolve(process.cwd(), safePath),
-      path.resolve('/tmp', safePath),
-      path.resolve(os.homedir(), safePath),
-      path.resolve(process.cwd(), 'output', safePath),
-    ];
+    const requestedName = decodeURIComponent(c.req.path.replace('/downloads/', '').trim());
+    if (!isSafeDownloadName(requestedName)) {
+      return c.json({ error: 'invalid_file_name' }, 400);
+    }
+    const candidates = downloadRoots.map((root) => path.resolve(root, requestedName));
     for (const fp of candidates) {
       if (fs.existsSync(fp) && !fs.statSync(fp).isDirectory()) {
         const content = fs.readFileSync(fp);

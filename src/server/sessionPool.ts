@@ -27,7 +27,7 @@ import {
   getSessionFilePath,
   saveSessionMetadataForSession,
 } from '../utils/session/sessionStorage.js';
-import type { ClovMessage } from '../api/deepseek.js';
+import type { ClovMessage } from '../api/anthropic.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import * as fs from 'fs';
 
@@ -123,9 +123,14 @@ export class SessionPool {
     const tenantId = options.tenantId;
     const tenantTier = options.tenantTier;
     const mode = options.mode || 'server';
-    const baseTools = tenantTier
+    const baseToolPool = tenantTier
       ? filterToolsForTier(getTools(undefined, this.mcpManager || undefined), tenantTier)
       : getTools(undefined, this.mcpManager || undefined);
+    // Plan-mode approval depends on interactive stdin/stdout, which does not exist
+    // for HTTP/SSE sessions. Excluding these tools prevents dead-end loops in the web UI.
+    const baseTools = baseToolPool.filter((tool) => (
+      tool.name !== 'EnterPlanMode' && tool.name !== 'ExitPlanMode'
+    ));
     const pluginSystem = new PluginSystem();
     await pluginSystem.initialize(workspaceRoot);
     const pluginRuntimeTools = await buildPluginRuntimeTools(pluginSystem);

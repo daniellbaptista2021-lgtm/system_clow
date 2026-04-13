@@ -56,8 +56,6 @@ const RESTRICTED_LIMITS: SandboxLimits = {
 // ─── Sensitive Environment Variables ────────────────────────────────────────
 
 const HIDDEN_ENV_VARS = new Set([
-  'DEEPSEEK_API_KEY',
-  'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
   'CLOW_API_KEY',
   'CLOW_ADMIN_KEY',

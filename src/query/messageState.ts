@@ -358,7 +358,7 @@ export class MessageState {
   }
 
   /**
-   * Get messages formatted for the DeepSeek API.
+   * Get messages formatted for the active model API.
    */
   toApiFormat(): Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }> {
     return this.snapshot().map(msg => {

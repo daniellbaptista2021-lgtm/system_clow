@@ -7,7 +7,7 @@
  *   ---
  *   description: Code reviewer agent
  *   allowed_tools: [Read, Grep, Glob]
- *   model: deepseek-chat
+ *   model: claude-sonnet-4-6
  *   category: development
  *   ---
  *   You are a code reviewer. Analyze code for...

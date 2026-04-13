@@ -88,7 +88,6 @@ export const DEFAULT_SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/ba
 export const SANITIZED_ENV_VARS = new Set([
   'AWS_SECRET_ACCESS_KEY',
   'GITHUB_TOKEN',
-  'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
   'DATABASE_URL',
   'PRIVATE_KEY',

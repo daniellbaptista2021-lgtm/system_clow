@@ -131,7 +131,7 @@ export interface CompactionConfig {
 
 /**
  * Default compaction configuration.
- * Based on Claude Code's defaults optimized for DeepSeek V3.2.
+ * Based on Claude Code's defaults optimized for Claude Sonnet.
  */
 export const DEFAULT_CONFIG: CompactionConfig = {
   autoCompactBufferTokens: 13_000,

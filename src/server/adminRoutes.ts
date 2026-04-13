@@ -23,6 +23,16 @@ import {
 import { adminAuth } from './middleware/tenantAuth.js';
 import type { TierName } from '../tenancy/tiers.js';
 
+function normalizeTierName(input: unknown): TierName | null {
+  if (typeof input !== 'string') return null;
+  const value = input.trim().toLowerCase();
+  if (value === 'one') return 'one';
+  if (value === 'smart') return 'smart';
+  if (value === 'business' || value === 'empresa') return 'business';
+  if (value === 'profissional' || value === 'professional' || value === 'pro') return 'profissional';
+  return null;
+}
+
 export function buildAdminRoutes(): Hono {
   const app = new Hono();
 
@@ -33,7 +43,9 @@ export function buildAdminRoutes(): Hono {
   app.post('/v1/admin/tenants', async (c) => {
     const body = await c.req.json();
 
-    if (!body.email || !body.tier) {
+    const normalizedTier = normalizeTierName(body.tier);
+
+    if (!body.email || !normalizedTier) {
       return c.json({ error: 'email and tier are required' }, 400);
     }
 
@@ -41,7 +53,7 @@ export function buildAdminRoutes(): Hono {
       const { tenant, apiKey } = createTenant({
         email: body.email,
         name: body.name || body.email,
-        tier: body.tier as TierName,
+        tier: normalizedTier,
         trial_days: body.trial_days,
       });
 

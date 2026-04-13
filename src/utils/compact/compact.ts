@@ -6,7 +6,7 @@
  *   2. Strip images → [image] markers
  *   3. Strip reinjected attachments (skill_discovery, etc)
  *   4. Strategy selection (standard vs aggressive based on token pressure)
- *   5. Call DeepSeek for summary (with PTL retry up to 3x, progressive drop)
+ *   5. Call Claude for summary (with retry up to 3x, progressive drop)
  *   6. Format: strip <analysis>, keep <summary>
  *   7. Build new messages: boundary + summary + restored files
  *   8. Post-compact hooks (persist result, reset caches)
@@ -23,8 +23,8 @@
  *   via getCompactHistory().
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
-import { callModelSync } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
+import { callModelSync } from '../../api/anthropic.js';
 import { estimateMessageTokens, estimateSingleMessageTokens } from './microCompact.js';
 import { COMPACT_SYSTEM_PROMPT, formatCompactSummary, buildDynamicPrompt } from './prompt.js';
 import { groupMessagesByApiRound, getGroupingStats } from './grouping.js';

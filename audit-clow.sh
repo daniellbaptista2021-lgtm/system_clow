@@ -88,7 +88,7 @@ CLOW_TENANT=$(count_lines_dir "$SRC_DIR/tenancy")
 echo "| Multi-Tenant | 0 | $CLOW_TENANT | N/A |" >> $REPORT
 
 CLOW_API=$(count_lines_dir "$SRC_DIR/api")
-echo "| DeepSeek Client | 0 | $CLOW_API | N/A |" >> $REPORT
+echo "| Anthropic Client | 0 | $CLOW_API | N/A |" >> $REPORT
 
 CLOW_BOOT=$(count_lines_dir "$SRC_DIR/bootstrap")
 echo "| Bootstrap State | 1759 | $CLOW_BOOT | $(ratio $CLOW_BOOT 1759) |" >> $REPORT
@@ -279,7 +279,7 @@ check_feature "DAG.*leaf\|bootstrap.*isolation" "DAG leaf pattern"
 
 echo "" >> $REPORT
 echo "### Clow Additions (not in Claude Code)" >> $REPORT
-check_feature "DeepSeekConfig\|initDeepSeek" "DeepSeek V3.2 integration"
+check_feature "AnthropicConfig\|initAnthropic" "Anthropic Claude integration"
 check_feature "PRICING\|input_hit\|input_miss" "Cache-aware pricing"
 check_feature "CacheMetrics\|cacheHitRate" "Cache metrics tracking"
 check_feature "getSessionCacheMetrics" "Session cache aggregation"

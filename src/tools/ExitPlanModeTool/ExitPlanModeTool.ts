@@ -94,13 +94,25 @@ Your plan MUST include: what changes, which files, expected outcome, and any ris
     return { behavior: 'allow' as const };
   },
 
-  async call(input: ExitPlanModeInput): Promise<ToolResult> {
+  async call(input: ExitPlanModeInput, context): Promise<ToolResult> {
     const currentMode = getPermissionMode();
 
     if (currentMode !== 'plan') {
       return {
         output: { error: 'not_in_plan_mode' },
         outputText: 'Error: Not in plan mode. Call EnterPlanMode first.',
+        isError: true,
+      };
+    }
+
+    if (!process.stdin.isTTY || !process.stderr.isTTY) {
+      return {
+        output: {
+          error: 'plan_approval_unavailable',
+          sessionId: context.sessionId,
+          permissionMode: context.permissionMode,
+        },
+        outputText: 'Error: ExitPlanMode requires an interactive terminal for plan approval. This runtime cannot approve plans via stdin/stdout.',
         isError: true,
       };
     }

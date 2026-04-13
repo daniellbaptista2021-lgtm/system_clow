@@ -14,7 +14,7 @@
  * History tracking: records every compaction event for diagnostics
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
 import { estimateMessageTokens } from './microCompact.js';
 import type { CompactionConfig, CompactType, CompactTrigger } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
@@ -23,36 +23,24 @@ import { DEFAULT_CONFIG } from './types.js';
 
 /** Known context window sizes for supported models. */
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  'deepseek-chat': 128_000,
-  'deepseek-v3': 128_000,
-  'deepseek-v3.2': 128_000,
-  'deepseek-reasoner': 64_000,
-  'deepseek-r1': 64_000,
+  'claude-sonnet-4-6': 200_000,
+  'claude-sonnet-4-5': 200_000,
+  'claude-3-7-sonnet-latest': 200_000,
   'claude-3-opus': 200_000,
   'claude-3-sonnet': 200_000,
   'claude-3-haiku': 200_000,
   'claude-3.5-sonnet': 200_000,
-  'gpt-4-turbo': 128_000,
-  'gpt-4o': 128_000,
-  'gpt-4o-mini': 128_000,
-  'gpt-4': 8_192,
 };
 
 /** Known max output token limits for supported models. */
 const MODEL_MAX_OUTPUT: Record<string, number> = {
-  'deepseek-chat': 8_192,
-  'deepseek-v3': 8_192,
-  'deepseek-v3.2': 8_192,
-  'deepseek-reasoner': 16_384,
-  'deepseek-r1': 16_384,
+  'claude-sonnet-4-6': 8_192,
+  'claude-sonnet-4-5': 8_192,
+  'claude-3-7-sonnet-latest': 8_192,
   'claude-3-opus': 4_096,
   'claude-3-sonnet': 4_096,
   'claude-3-haiku': 4_096,
   'claude-3.5-sonnet': 8_192,
-  'gpt-4-turbo': 4_096,
-  'gpt-4o': 16_384,
-  'gpt-4o-mini': 16_384,
-  'gpt-4': 8_192,
 };
 
 export function getContextWindowForModel(model: string): number {
@@ -100,7 +88,7 @@ export interface TokenWarningState {
 
 export function getTokenWarningState(
   messages: ClovMessage[],
-  model: string = 'deepseek-chat',
+  model: string = 'claude-sonnet-4-6',
   config: CompactionConfig = DEFAULT_CONFIG,
 ): TokenWarningState {
   const tokens = estimateMessageTokens(messages);
@@ -160,7 +148,7 @@ export interface TierSelectionResult {
  */
 export function selectCompactionTier(
   messages: ClovMessage[],
-  model: string = 'deepseek-chat',
+  model: string = 'claude-sonnet-4-6',
   hasSessionMemory: boolean = false,
   config: CompactionConfig = DEFAULT_CONFIG,
 ): TierSelectionResult {
@@ -368,7 +356,7 @@ export function clearCompactHistory(sessionId: string = 'default'): void {
 export function calculateAdaptiveThreshold(
   messages: ClovMessage[],
   baseBufferTokens: number = DEFAULT_CONFIG.autoCompactBufferTokens,
-  model: string = 'deepseek-chat',
+  model: string = 'claude-sonnet-4-6',
 ): number {
   const effective = getEffectiveWindow(model);
 
@@ -406,7 +394,7 @@ export interface AutoCompactResult {
 
 export function shouldAutoCompact(
   messages: ClovMessage[],
-  model: string = 'deepseek-chat',
+  model: string = 'claude-sonnet-4-6',
   sessionId: string = 'default',
   querySource: string = 'user',
   config: CompactionConfig = DEFAULT_CONFIG,

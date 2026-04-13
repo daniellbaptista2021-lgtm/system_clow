@@ -422,7 +422,7 @@ export function resetAllState(): void {
   turnNumber = 0;
   sessionStartTime = Date.now();
   maxBudgetUsd = undefined;
-  model = 'deepseek-chat';
+  model = process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   agentDepth = 0;
   parentSessionId = undefined;
   tenantId = undefined;
@@ -443,7 +443,7 @@ export function resetAllState(): void {
 let turnNumber: number = 0;
 let sessionStartTime: number = Date.now();
 let maxBudgetUsd: number | undefined;
-let model: string = 'deepseek-chat';
+let model: string = process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 let agentDepth: number = 0;
 let parentSessionId: string | undefined;
 let tenantId: string | undefined;
@@ -727,7 +727,7 @@ export function setClowVersion(version: string): void { clowVersion = version; }
 // Context Window State
 // ════════════════════════════════════════════════════════════════════════════
 
-let maxContextTokens: number = 128_000; // DeepSeek V3.2 default
+let maxContextTokens: number = 200_000; // Claude Sonnet default
 let currentContextUsage: number = 0;
 let systemPromptTokens: number = 0;
 let dynamicContextTokens: number = 0;
@@ -863,12 +863,11 @@ export function getIdleDurationMs(): number {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DeepSeek API Configuration
+// Model API Configuration
 // ════════════════════════════════════════════════════════════════════════════
 
-interface DeepSeekConfig {
+interface ModelConfig {
   apiKey: string;
-  baseUrl: string;
   model: string;
   maxOutputTokens: number;
   temperature: number;
@@ -877,10 +876,9 @@ interface DeepSeekConfig {
   presencePenalty: number;
 }
 
-let deepseekConfig: DeepSeekConfig = {
-  apiKey: process.env.DEEPSEEK_API_KEY ?? '',
-  baseUrl: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
-  model: 'deepseek-chat',
+let modelConfig: ModelConfig = {
+  apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+  model: process.env.CLOW_MODEL || 'claude-sonnet-4-6',
   maxOutputTokens: 8192,
   temperature: 0,
   topP: 1,
@@ -888,25 +886,26 @@ let deepseekConfig: DeepSeekConfig = {
   presencePenalty: 0,
 };
 
-export function getDeepSeekConfig(): Readonly<DeepSeekConfig> { return { ...deepseekConfig }; }
-export function setDeepSeekConfig(config: Partial<DeepSeekConfig>): void { deepseekConfig = { ...deepseekConfig, ...config }; }
+export function getModelConfig(): Readonly<ModelConfig> { return { ...modelConfig }; }
+export function setModelConfig(config: Partial<ModelConfig>): void { modelConfig = { ...modelConfig, ...config }; }
 
-export function getApiKey(): string { return deepseekConfig.apiKey; }
-export function getBaseUrl(): string { return deepseekConfig.baseUrl; }
-export function getMaxOutputTokens(): number { return deepseekConfig.maxOutputTokens; }
-export function getTemperature(): number { return deepseekConfig.temperature; }
+export function getApiKey(): string {
+  return modelConfig.apiKey || process.env.ANTHROPIC_API_KEY || '';
+}
+export function getMaxOutputTokens(): number { return modelConfig.maxOutputTokens; }
+export function getTemperature(): number { return modelConfig.temperature; }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Pricing (DeepSeek V3.2)
+// Pricing (Claude Sonnet)
 // ════════════════════════════════════════════════════════════════════════════
 
 export const PRICING = {
-  /** Input token price (cache miss) — $0.28 per 1M tokens */
-  inputCacheMissPerToken: 0.28 / 1_000_000,
-  /** Input token price (cache hit) — $0.028 per 1M tokens */
-  inputCacheHitPerToken: 0.028 / 1_000_000,
-  /** Output token price — $0.42 per 1M tokens */
-  outputPerToken: 0.42 / 1_000_000,
+  /** Input token price (cache miss) — $3.00 per 1M tokens */
+  inputCacheMissPerToken: 3.0 / 1_000_000,
+  /** Input token price (cache hit) — $0.30 per 1M tokens */
+  inputCacheHitPerToken: 0.3 / 1_000_000,
+  /** Output token price — $15.00 per 1M tokens */
+  outputPerToken: 15.0 / 1_000_000,
 } as const;
 
 /**
@@ -1508,7 +1507,7 @@ export function getClowEnvVars(): Record<string, string> {
  * Get the effective API key (from env or config).
  */
 export function getEffectiveApiKey(): string {
-  return deepseekConfig.apiKey || process.env.DEEPSEEK_API_KEY || '';
+  return modelConfig.apiKey || process.env.ANTHROPIC_API_KEY || '';
 }
 
 /**

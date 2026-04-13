@@ -1,5 +1,5 @@
-const CACHE = 'clow-v1';
-const STATIC = ['/', '/assets/logo.png', '/manifest.json'];
+const CACHE = 'clow-v2';
+const STATIC = ['/', '/assets/logo.png', '/assets/favicon.png', '/assets/icon-192.png', '/assets/icon-512.png', '/assets/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));

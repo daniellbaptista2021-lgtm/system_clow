@@ -6,13 +6,13 @@
  * - JSON → formatted JSON
  * - SSRF protection: blocks private IPs, localhost, file://, ftp://
  * - Truncation at 100,000 chars (~25k tokens)
- * - Optional prompt: pre-filters content via DeepSeek side query
+ * - Optional prompt: pre-filters content via a Claude side query
  */
 
 import { z } from 'zod';
 import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
 import TurndownService from 'turndown';
-import { callModelSync, type ClovMessage } from '../../api/deepseek.js';
+import { callModelSync, type ClovMessage } from '../../api/anthropic.js';
 import * as dns from 'dns/promises';
 import * as url from 'url';
 
@@ -213,7 +213,7 @@ export const WebFetchTool = buildTool<WebFetchInput>({
         `\n\n[Content truncated. Original was ${originalLength.toLocaleString()} characters, showing first ${MAX_CONTENT_CHARS.toLocaleString()}]`;
     }
 
-    // ── Optional prompt (pre-filter via DeepSeek side query) ────────────
+    // ── Optional prompt (pre-filter via Claude side query) ─────────────
     if (input.prompt) {
       try {
         const sideMessages: ClovMessage[] = [

@@ -16,8 +16,8 @@
 
 import { randomUUID } from 'crypto';
 import type { Tool, ToolResult, CanUseToolFn, ToolUseContext } from '../tools/Tool.js';
-import type { ClovMessage, StreamChunk } from '../api/deepseek.js';
-import { callModel } from '../api/deepseek.js';
+import type { ClovMessage, StreamChunk } from '../api/anthropic.js';
+import { callModel } from '../api/anthropic.js';
 import { findToolByName } from '../tools/tools.js';
 import {
   getCwd, getSessionId, getPermissionMode, getTotalCostUSD,
@@ -56,7 +56,7 @@ export class QueryEngine {
   private fallback: FallbackHandler;
   private watermark: ErrorWatermark;
   private abortController: AbortController = new AbortController();
-  private currentModel: string = 'deepseek-chat';
+  private currentModel: string = process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   private sessionStarted = false;
 
   // Legacy compat: mutableMessages alias
@@ -84,7 +84,7 @@ export class QueryEngine {
       config.maxTokensPerTurn,
     );
     this.fallback = new FallbackHandler(
-      'deepseek-chat',
+      process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
       config.fallbackModel,
     );
     this.watermark = new ErrorWatermark();
@@ -334,7 +334,7 @@ export class QueryEngine {
         timestamp: Date.now(),
         stopReason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
         usage: { input_tokens: turnUsage.inputTokens, output_tokens: turnUsage.outputTokens },
-        model: 'deepseek-chat',
+        model: this.currentModel,
       };
       this.state.push(assistantMsg);
 
@@ -644,7 +644,7 @@ export class QueryEngine {
           toolCalls: m.tool_calls?.map((tc) => ({ id: tc.id, name: tc.function.name, arguments: tc.function.arguments })),
           turnNumber: i,
           timestamp: Date.now(),
-          model: 'deepseek-chat',
+          model: this.currentModel,
         };
       }
       if (m.role === 'tool') {
@@ -766,7 +766,7 @@ export class QueryEngine {
    * Get the current model being used.
    */
   getModel(): string {
-    return this.currentModel ?? 'deepseek-chat';
+    return this.currentModel ?? 'claude-sonnet-4-6';
   }
 
   /**
@@ -830,7 +830,7 @@ export class QueryEngine {
     remaining: number;
     inWarningZone: boolean;
   } {
-    const maxContext = 128_000; // DeepSeek V3.2 context window
+    const maxContext = 200_000; // Claude Sonnet context window
     const estimated = this.estimateCurrentTokens();
     const remaining = Math.max(0, maxContext - estimated);
     const usagePercent = (estimated / maxContext) * 100;

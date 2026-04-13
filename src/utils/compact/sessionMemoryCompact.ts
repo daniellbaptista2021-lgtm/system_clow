@@ -10,7 +10,7 @@
  *   - Summary quality validation (reject bad summaries)
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
 import { estimateMessageTokens } from './microCompact.js';
 import type { CompactionConfig, CompactionResult } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';

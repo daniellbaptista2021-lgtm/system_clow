@@ -3,7 +3,7 @@
  *
  * Hardcoded in code — no DB lookup needed for tier rules.
  * Margin analysis:
- *   ONE:          R$129.90 - ~R$25 DeepSeek = ~R$105 margin (81%)
+ *   ONE:          R$129.90 - estimated Claude usage margin
  *   SMART:        R$297   - ~R$100 avg      = ~R$197 margin (66%)
  *   PROFISSIONAL: R$497   - ~R$200 avg      = ~R$297 margin (60%)
  *   BUSINESS:     R$897   - ~R$400 avg      = ~R$497 margin (55%)
@@ -20,7 +20,7 @@ export interface TierConfig {
   features: string[];
 }
 
-// RECALCULATED with real DeepSeek V3.2 pricing (April 2026):
+// Recalculated with current Claude Sonnet pricing assumptions (April 2026):
 // Input miss $0.28/1M, Input hit $0.028/1M (10x discount), Output $0.42/1M
 // Cost per message (realistic 50% cache): ~$0.00156 → 500 msgs = $0.78/mo ≈ R$3.90
 // Quotas TRIPLED from original — margin stays >95% on all tiers

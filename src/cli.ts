@@ -21,7 +21,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
 
-import { initDeepSeek, type ClovMessage } from './api/deepseek.js';
+import { initAnthropic, type ClovMessage } from './api/anthropic.js';
 import { QueryEngine } from './query/QueryEngine.js';
 import { getTools } from './tools/tools.js';
 import { MCPManager } from './mcp/MCPManager.js';
@@ -80,7 +80,7 @@ function printBanner(): void {
   console.log('');
   console.log(chalk.bold.cyan('  ╔═══════════════════════════════════════╗'));
   console.log(chalk.bold.cyan('  ║') + chalk.bold.white('       System Clow v' + VERSION + '            ') + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('  ║') + chalk.dim('    AI Coding Agent • DeepSeek V3.2   ') + chalk.bold.cyan('║'));
+  console.log(chalk.bold.cyan('  ║') + chalk.dim('  AI Coding Agent • Claude Sonnet 4.6 ') + chalk.bold.cyan('║'));
   console.log(chalk.bold.cyan('  ╚═══════════════════════════════════════╝'));
   console.log('');
 }
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
     .version(VERSION, '-v, --version')
     .option('-p, --print', 'Non-interactive: process single prompt and exit')
     .option('--cwd <dir>', 'Set working directory')
-    .option('--model <model>', 'Override DeepSeek model')
+    .option('--model <model>', 'Override Claude model')
     .option('--max-turns <n>', 'Maximum conversation turns', '50')
     .option('--plan-mode', 'Start in plan mode (read-only until plan approved)')
     .option('--resume <id>', 'Resume a previous session by ID (supports partial match)')
@@ -176,10 +176,10 @@ async function main(): Promise<void> {
   loadEnv({ path: path.resolve(process.cwd(), '.env') });
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error(chalk.red('Error: API key not found.'));
-    console.error(chalk.dim('Set OPENAI_API_KEY or DEEPSEEK_API_KEY in .env'));
+    console.error(chalk.dim('Set ANTHROPIC_API_KEY in .env'));
     process.exit(1);
   }
 
@@ -190,12 +190,12 @@ async function main(): Promise<void> {
   setProjectRoot(cwd);
   setSessionId(randomUUID());
 
-  const selectedModel = opts.model || process.env.CLOW_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
-  const isOpenAI = selectedModel.startsWith('gpt-');
+  const selectedModel = opts.model
+    || process.env.CLOW_MODEL
+    || 'claude-sonnet-4-6';
 
-  initDeepSeek({
-    apiKey: isOpenAI ? (process.env.OPENAI_API_KEY || apiKey) : apiKey,
-    baseURL: isOpenAI ? 'https://api.openai.com/v1' : (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'),
+  initAnthropic({
+    apiKey,
     model: selectedModel,
     maxOutputTokens: 8192,
   });

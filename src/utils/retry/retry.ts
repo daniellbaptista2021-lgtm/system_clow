@@ -8,7 +8,7 @@
  *   calculateBackoff()    — exponential with 0-30% jitter
  *   withRetry(fn, opts)   — wraps any async fn with retry logic
  *
- * Error classification for DeepSeek API:
+ * Error classification for the model API:
  *   429                        → rate_limit  (60s wait, retry 3x)
  *   500, 502, 503, 504         → retryable   (exp backoff, retry 3x)
  *   ECONNRESET, ETIMEDOUT, etc → retryable   (exp backoff, retry 3x)
@@ -35,11 +35,11 @@ export function classifyError(error: unknown): ErrorType {
 
   const err = error as Record<string, any>;
 
-  // Extract status code — OpenAI SDK puts it in error.status
+  // Extract status code from SDK or fetch-style errors
   const status: number | undefined =
     err.status ?? err.statusCode ?? err.response?.status;
 
-  // Extract message — DeepSeek puts context_length_exceeded inside JSON body
+  // Extract message from the most common SDK error shapes
   const message: string =
     err.message ?? err.error?.message ?? String(err);
 
@@ -49,7 +49,7 @@ export function classifyError(error: unknown): ErrorType {
   }
 
   // ── Context overflow (400 + specific message) ─────────────────────────
-  // DeepSeek V3.2 returns this inside the error JSON, not as a header
+  // Context overflow usually arrives as a structured API error message
   if (isContextOverflow(err)) {
     return 'context_overflow';
   }
@@ -95,7 +95,7 @@ export function classifyError(error: unknown): ErrorType {
 }
 
 // ─── isContextOverflow ──────────────────────────────────────────────────────
-// Generous regex because DeepSeek's exact message varies between API versions
+// Generous regex because provider error wording varies across API versions
 
 export function isContextOverflow(error: any): boolean {
   const msg: string =
@@ -105,7 +105,7 @@ export function isContextOverflow(error: any): boolean {
 
 // ─── calculateBackoff ───────────────────────────────────────────────────────
 // Exponential with 0-30% jitter — essential so all Clow instances don't
-// slam DeepSeek at the same millisecond after a shared outage.
+// slam the provider at the same millisecond after a shared outage.
 
 export function calculateBackoff(attempt: number, baseMs: number): number {
   const exp = Math.min(baseMs * Math.pow(2, attempt), MAX_BACKOFF_MS);

@@ -27,7 +27,7 @@ export interface UserMessage {
   turnNumber: number;
   timestamp: number;
   source: 'user' | 'tool_result' | 'hook' | 'rewake' | 'compaction';
-  toolCallId?: string; // for tool_result messages in OpenAI format
+  toolCallId?: string; // for tool_result messages in API format
 }
 
 export interface AssistantMessage {
@@ -391,8 +391,8 @@ export const DEFAULT_MAX_BUDGET_USD = 5.0;
 /** Max tokens per turn (output limit) */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
-/** Context window size for DeepSeek V3.2 */
-export const DEEPSEEK_CONTEXT_WINDOW = 128_000;
+/** Context window size for Claude Sonnet */
+export const CLAUDE_CONTEXT_WINDOW = 200_000;
 
 /** Tokens reserved for output in each turn */
 export const OUTPUT_TOKEN_RESERVATION = 8192;
@@ -486,10 +486,10 @@ export interface ContextWindowConfig {
 }
 
 /**
- * Default context window configuration for DeepSeek V3.2.
+ * Default context window configuration for Claude Sonnet.
  */
 export const DEFAULT_CONTEXT_WINDOW_CONFIG: ContextWindowConfig = {
-  maxTokens: DEEPSEEK_CONTEXT_WINDOW,
+  maxTokens: CLAUDE_CONTEXT_WINDOW,
   warningThresholdPercent: 75,
   autoCompactThresholdPercent: 90,
   criticalThresholdPercent: 95,

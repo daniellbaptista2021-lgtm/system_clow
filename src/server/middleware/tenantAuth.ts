@@ -7,7 +7,78 @@
  */
 
 import type { Context, Next } from 'hono';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { hashApiKey, findTenantByApiKeyHash, touchApiKey, type Tenant } from '../../tenancy/tenantStore.js';
+
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+function getAdminSessionSecret(): string | null {
+  return process.env.CLOW_ADMIN_SESSION_SECRET || process.env.JWT_SECRET || process.env.CLOW_ADMIN_KEY || null;
+}
+
+function base64UrlEncode(value: string): string {
+  return Buffer.from(value, 'utf-8').toString('base64url');
+}
+
+function base64UrlDecode(value: string): string {
+  return Buffer.from(value, 'base64url').toString('utf-8');
+}
+
+function signAdminSessionPayload(payload: string, secret: string): string {
+  return createHmac('sha256', secret).update(payload).digest('base64url');
+}
+
+export function createAdminSessionToken(username: string): string {
+  const secret = getAdminSessionSecret();
+  if (!secret) {
+    throw new Error('admin_session_secret_not_configured');
+  }
+
+  const payload = JSON.stringify({
+    sub: username,
+    iat: Date.now(),
+    exp: Date.now() + ADMIN_SESSION_TTL_MS,
+    type: 'admin_session',
+  });
+  const encodedPayload = base64UrlEncode(payload);
+  const signature = signAdminSessionPayload(encodedPayload, secret);
+  return `${encodedPayload}.${signature}`;
+}
+
+export function verifyAdminSessionToken(token: string | undefined): { ok: boolean; username?: string } {
+  const secret = getAdminSessionSecret();
+  if (!secret || !token) return { ok: false };
+
+  const parts = token.split('.');
+  if (parts.length !== 2) return { ok: false };
+
+  const [encodedPayload, signature] = parts;
+  const expected = signAdminSessionPayload(encodedPayload, secret);
+  const expectedBuf = Buffer.from(expected, 'utf-8');
+  const receivedBuf = Buffer.from(signature, 'utf-8');
+
+  if (expectedBuf.length !== receivedBuf.length) return { ok: false };
+  if (!timingSafeEqual(expectedBuf, receivedBuf)) return { ok: false };
+
+  try {
+    const parsed = JSON.parse(base64UrlDecode(encodedPayload)) as {
+      sub?: string;
+      exp?: number;
+      type?: string;
+    };
+    if (parsed.type !== 'admin_session') return { ok: false };
+    if (typeof parsed.exp !== 'number' || parsed.exp < Date.now()) return { ok: false };
+    if (typeof parsed.sub !== 'string' || !parsed.sub) return { ok: false };
+    return { ok: true, username: parsed.sub };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function extractBearerToken(authHeader: string | undefined): string | undefined {
+  if (!authHeader?.startsWith('Bearer ')) return undefined;
+  return authHeader.slice(7);
+}
 
 // ─── Tenant Auth Middleware ─────────────────────────────────────────────────
 
@@ -21,11 +92,19 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
 
   // Extract API key
   const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer ')) {
+  const bearerToken = extractBearerToken(auth);
+  if (!bearerToken) {
     return c.json({ error: 'missing_api_key', message: 'Authorization: Bearer <api_key> required' }, 401);
   }
 
-  const apiKey = auth.slice(7);
+  const adminSession = verifyAdminSessionToken(bearerToken);
+  if (adminSession.ok) {
+    c.set('adminUser', adminSession.username);
+    c.set('authMode', 'admin_session');
+    return next();
+  }
+
+  const apiKey = bearerToken;
 
   // Validate prefix
   if (!apiKey.startsWith('clow_')) {
@@ -91,6 +170,13 @@ export async function adminAuth(c: Context, next: Next): Promise<Response | void
   }
 
   const auth = c.req.header('Authorization');
+  const bearerToken = extractBearerToken(auth);
+  const adminSession = verifyAdminSessionToken(bearerToken);
+  if (adminSession.ok) {
+    c.set('adminUser', adminSession.username);
+    return next();
+  }
+
   if (auth !== `Bearer ${adminKey}`) {
     return c.json({ error: 'unauthorized' }, 401);
   }

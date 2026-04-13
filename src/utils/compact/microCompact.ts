@@ -15,7 +15,7 @@
  * Only targets high-volume reproducible tools. AgentTool, MCP tools preserved.
  */
 
-import type { ClovMessage } from '../../api/deepseek.js';
+import type { ClovMessage } from '../../api/anthropic.js';
 import type { MicroCompactResult, CompactionConfig } from './types.js';
 import { DEFAULT_CONFIG } from './types.js';
 import { suppressWarnings } from './compactWarningState.js';
