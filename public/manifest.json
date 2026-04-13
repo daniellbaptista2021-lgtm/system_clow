@@ -1,12 +1,12 @@
 {
-  "name": "System Clow — Inteligência Infinita",
+  "name": "System Clow Workspace",
   "short_name": "System Clow",
-  "description": "Agente AI premium para negócios",
+  "description": "Workspace premium do System Clow para chat, automações e execução assistida.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f7f2e8",
-  "theme_color": "#c99432",
+  "background_color": "#1f1d1a",
+  "theme_color": "#1f1d1a",
   "icons": [
     { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
