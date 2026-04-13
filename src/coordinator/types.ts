@@ -45,13 +45,13 @@ export const DEFAULT_COORDINATOR_CONFIG: CoordinatorConfig = {
   defaultWorkerBudgetUsd: 1.0,
   defaultWorkerMaxTurns: 30,
   forbidCoordinatorTools: [
-    'Bash', 'FileRead', 'FileWrite', 'FileEdit', 'Glob', 'Grep',
-    'NotebookEdit', 'WebFetch', 'WebSearch',
+    'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
+    'WebFetch', 'WebSearch',
   ],
   workerToolWhitelist: {
-    researcher: ['FileRead', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Bash', 'TodoWrite'],
-    implementer: ['FileRead', 'FileWrite', 'FileEdit', 'Glob', 'Grep', 'Bash', 'TodoWrite', 'WebFetch'],
-    verifier: ['FileRead', 'Glob', 'Grep', 'Bash', 'TodoWrite'],
+    researcher: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Bash', 'TodoWrite'],
+    implementer: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'TodoWrite', 'WebFetch'],
+    verifier: ['Read', 'Glob', 'Grep', 'Bash', 'TodoWrite'],
     general: ['*'],  // all except Agent (prevent recursion)
   },
 };

@@ -162,15 +162,22 @@ function getDedup(sessionId: string): BoundedUUIDSet {
 }
 
 export async function appendEntry(entry: { type: string; uuid: string; timestamp: number; [k: string]: unknown }): Promise<void> {
+  await appendEntryForSession(getSessionId(), entry);
+}
+
+export async function appendEntryForSession(sessionId: string, entry: { type: string; uuid: string; timestamp: number; [k: string]: unknown }): Promise<void> {
   await initSessionStorage();
-  const sid = getSessionId();
-  const w = await getWriter(sid);
+  const w = await getWriter(sessionId);
   w.write({ v: SESSION_SCHEMA_VERSION, uuid: entry.uuid, type: entry.type as any, ts: entry.timestamp, data: entry });
 }
 
 export async function recordTranscript(role: string, content: string, parentUuid?: string, extra?: Record<string, unknown>): Promise<string> {
+  return recordTranscriptForSession(getSessionId(), role, content, parentUuid, extra);
+}
+
+export async function recordTranscriptForSession(sessionId: string, role: string, content: string, parentUuid?: string, extra?: Record<string, unknown>): Promise<string> {
   const uuid = crypto.randomUUID();
-  await appendEntry({ type: role, uuid, timestamp: Date.now(), role, content, parentUuid, ...extra });
+  await appendEntryForSession(sessionId, { type: role, uuid, timestamp: Date.now(), role, content, parentUuid, ...extra });
   return uuid;
 }
 
@@ -204,6 +211,29 @@ export async function loadTranscriptFile(sessionIdOrPath?: string): Promise<any[
   });
 }
 
+export function getSessionCwdFromEntries(entries: any[], fallback = 'unknown'): string {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+
+    if (entry?.type === 'session_start' && entry.value && typeof entry.value === 'object') {
+      const cwd = (entry.value as Record<string, unknown>).cwd;
+      if (typeof cwd === 'string' && cwd.trim()) {
+        return cwd;
+      }
+    }
+
+    if (entry?.type === 'cwd' && typeof entry.value === 'string' && entry.value.trim()) {
+      return entry.value;
+    }
+
+    if (typeof entry?.cwd === 'string' && entry.cwd.trim()) {
+      return entry.cwd;
+    }
+  }
+
+  return fallback;
+}
+
 // ─── List ───────────────────────────────────────────────────────────────────
 
 export async function listSessions(limit = 20): Promise<Array<{ sessionId: string; cwd: string; mtime: Date; filePath: string }>> {
@@ -217,7 +247,9 @@ export async function listSessions(limit = 20): Promise<Array<{ sessionId: strin
       const fp = path.join(sessionsDir(), f);
       try {
         const st = fs.statSync(fp);
-        results.push({ sessionId: f.replace('.jsonl', ''), cwd: getCwd(), mtime: st.mtime, filePath: fp });
+        const entries = await loadTranscriptFile(fp).catch(() => []);
+        const cwd = getSessionCwdFromEntries(entries, 'unknown');
+        results.push({ sessionId: f.replace('.jsonl', ''), cwd, mtime: st.mtime, filePath: fp });
       } catch {}
     }
   } catch {}
@@ -229,7 +261,11 @@ export async function listSessions(limit = 20): Promise<Array<{ sessionId: strin
 // ─── Metadata ───────────────────────────────────────────────────────────────
 
 export async function saveSessionMetadata(key: string, value: unknown): Promise<void> {
-  await appendEntry({ type: key, uuid: crypto.randomUUID(), timestamp: Date.now(), value });
+  await saveSessionMetadataForSession(getSessionId(), key, value);
+}
+
+export async function saveSessionMetadataForSession(sessionId: string, key: string, value: unknown): Promise<void> {
+  await appendEntryForSession(sessionId, { type: key, uuid: crypto.randomUUID(), timestamp: Date.now(), value });
 }
 
 // ─── Lock ───────────────────────────────────────────────────────────────────

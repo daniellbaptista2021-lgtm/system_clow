@@ -5,6 +5,8 @@
 
 import type { Tool, CanUseToolFn, ToolUseContext } from '../tools/Tool.js';
 import type { PermissionContext } from '../utils/permissions/PermissionContext.js';
+import type { HookEventDispatcher } from '../hooks/HookEventDispatcher.js';
+import type { SkillEngine } from '../skills/SkillEngine.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Message Types (internal — discriminated union)
@@ -68,6 +70,7 @@ export type SystemMessageSubtype =
   | 'budget_warning'
   | 'permission_denied'
   | 'hook_message'
+  | 'skill_message'
   | 'session_resumed'
   | 'tool_result_truncated'
   | 'compacting'
@@ -140,6 +143,7 @@ export interface QueryEngineConfig {
   depth?: number;
   dynamicContext?: string;
   fallbackModel?: string;
+  getExecutionContext?: () => Pick<ToolUseContext, 'cwd' | 'sessionId' | 'permissionMode' | 'tenantId' | 'workspaceRoot'>;
   features?: {
     HISTORY_SNIP?: boolean;
     REACTIVE_COMPACT?: boolean;
@@ -156,6 +160,8 @@ export interface QueryEngineConfig {
   onError?: (error: Error) => void;
   onSessionStart?: () => void;
   onSessionEnd?: (reason: string) => void;
+  hookDispatcher?: HookEventDispatcher;
+  skillEngine?: SkillEngine;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -7,10 +7,10 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
+import { buildTool, type ToolResult, type ToolUseContext, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { getCwd } from '../../bootstrap/state.js';
+import { formatPathAccessError, resolvePathFromContext } from '../pathing.js';
 
 const FileEditInputSchema = z.object({
   file_path: z.string().describe('The absolute path to the file to modify'),
@@ -48,10 +48,8 @@ old_string and new_string must be different.`,
     return { behavior: 'ask' as const, message: `Edit file: ${input.file_path}` };
   },
 
-  async call(input: FileEditInput): Promise<ToolResult> {
-    const filePath = path.isAbsolute(input.file_path)
-      ? input.file_path
-      : path.resolve(getCwd(), input.file_path);
+  async call(input: FileEditInput, context: ToolUseContext): Promise<ToolResult> {
+    let filePath = input.file_path;
 
     if (input.old_string === input.new_string) {
       return {
@@ -62,6 +60,7 @@ old_string and new_string must be different.`,
     }
 
     try {
+      filePath = resolvePathFromContext(input.file_path, context);
       const content = await fs.readFile(filePath, 'utf-8');
 
       if (!content.includes(input.old_string)) {
@@ -115,7 +114,7 @@ old_string and new_string must be different.`,
       }
       return {
         output: null,
-        outputText: `Error editing file: ${err.message}`,
+        outputText: formatPathAccessError(err, 'Error editing file'),
         isError: true,
       };
     }

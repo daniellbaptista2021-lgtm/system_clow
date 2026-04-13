@@ -7,11 +7,11 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
+import { buildTool, type ToolResult, type ToolUseContext, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { glob } from 'glob';
-import { getCwd } from '../../bootstrap/state.js';
+import { formatPathAccessError, resolveSearchPathFromContext } from '../pathing.js';
 
 const GrepInputSchema = z.object({
   pattern: z.string().describe('The regex pattern to search for in file contents'),
@@ -56,12 +56,9 @@ Filter with glob parameter (e.g., "*.ts").`,
     return { behavior: 'allow' as const };
   },
 
-  async call(input: GrepInput): Promise<ToolResult> {
-    const searchPath = input.path
-      ? (path.isAbsolute(input.path) ? input.path : path.resolve(getCwd(), input.path))
-      : getCwd();
-
+  async call(input: GrepInput, context: ToolUseContext): Promise<ToolResult> {
     try {
+      const searchPath = resolveSearchPathFromContext(input.path, context);
       const regex = new RegExp(input.pattern, input.case_insensitive ? 'gi' : 'g');
 
       // Find files
@@ -147,7 +144,7 @@ Filter with glob parameter (e.g., "*.ts").`,
     } catch (err: any) {
       return {
         output: null,
-        outputText: `Error: ${err.message}`,
+        outputText: formatPathAccessError(err, 'Error: unable to search file contents'),
         isError: true,
       };
     }

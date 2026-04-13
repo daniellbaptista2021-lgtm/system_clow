@@ -20,12 +20,13 @@ import type { ClovMessage, StreamChunk } from '../api/deepseek.js';
 import { callModel } from '../api/deepseek.js';
 import { findToolByName } from '../tools/tools.js';
 import {
-  getCwd, getSessionId, getTotalCostUSD,
+  getCwd, getSessionId, getPermissionMode, getTotalCostUSD,
   resetTurnMetrics, incrementToolUseCount, addToolDuration,
 } from '../bootstrap/state.js';
 import { shouldAutoCompact, getTokenWarningState } from '../utils/compact/autoCompact.js';
 import { compactConversation } from '../utils/compact/compact.js';
 import { classifyError, type ErrorType } from '../utils/retry/retry.js';
+import type { AggregatedHookResult } from '../hooks/types.js';
 
 // New modular subsystems
 import { MessageState, BoundedUUIDSet } from './messageState.js';
@@ -56,6 +57,7 @@ export class QueryEngine {
   private watermark: ErrorWatermark;
   private abortController: AbortController = new AbortController();
   private currentModel: string = 'deepseek-chat';
+  private sessionStarted = false;
 
   // Legacy compat: mutableMessages alias
   private get mutableMessages(): ClovMessage[] {
@@ -101,34 +103,71 @@ export class QueryEngine {
     this.instanceOutputTokens += outputTokens;
   }
 
+  private getExecutionContext(): Pick<ToolUseContext, 'cwd' | 'sessionId' | 'permissionMode' | 'tenantId' | 'workspaceRoot'> {
+    return this.config.getExecutionContext?.() || {
+      cwd: getCwd(),
+      sessionId: getSessionId(),
+      permissionMode: getPermissionMode(),
+    };
+  }
+
   // ════════════════════════════════════════════════════════════════════
   // submitMessage — Main entry point per user message
   // ════════════════════════════════════════════════════════════════════
 
   async *submitMessage(prompt: string): AsyncGenerator<SDKMessage> {
-    // Push user message
     const isFirstMessage = this.state.size() === 0;
-    const messageContent = isFirstMessage && this.config.dynamicContext
+    const baseMessageContent = isFirstMessage && this.config.dynamicContext
       ? `${this.config.dynamicContext}\n\n${prompt}`
       : prompt;
 
     const userMsg: UserMessage = {
       type: 'user',
       uuid: randomUUID(),
-      content: messageContent,
+      content: baseMessageContent,
       turnNumber: this.budget.getTurnCount(),
       timestamp: Date.now(),
       source: 'user',
     };
 
-    // Dedup
+    if (this.config.hookDispatcher) {
+      if (!this.sessionStarted) {
+        this.sessionStarted = true;
+        this.config.onSessionStart?.();
+        for (const event of this.applyHookResult(await this.config.hookDispatcher.fireSessionStart())) {
+          yield event;
+        }
+        for (const event of this.applyHookResult(await this.config.hookDispatcher.fireSetup())) {
+          yield event;
+        }
+      }
+
+      for (const event of this.applyHookResult(await this.config.hookDispatcher.fireUserPromptSubmit(prompt, userMsg.uuid))) {
+        yield event;
+      }
+    }
+
+    if (this.config.skillEngine) {
+      const execCtx = this.getExecutionContext();
+      const skillResult = await this.config.skillEngine.matchForMessage({
+        message: prompt,
+        sessionId: execCtx.sessionId,
+        cwd: execCtx.cwd,
+        workspaceRoot: execCtx.workspaceRoot || execCtx.cwd,
+        isFirstMessage,
+        tier: undefined,
+      });
+      for (const event of this.applySkillResult(skillResult.systemMessageAddition)) {
+        yield event;
+      }
+    }
+
     if (this.state.isDuplicate(userMsg.uuid)) return;
     this.state.markSeen(userMsg.uuid);
     this.state.push(userMsg);
 
     yield { type: 'user', content: prompt, uuid: userMsg.uuid };
 
-    // Run query loop
     yield* this.queryLoop();
   }
 
@@ -341,20 +380,56 @@ export class QueryEngine {
           this.pushToolResult(toolCall.id, `Error: Invalid input: ${parseResult.error.message}`, true);
           continue;
         }
-        const validInput = parseResult.data;
+        let validInput = parseResult.data;
 
-        // Permission check
+        if (this.config.hookDispatcher) {
+          const preToolResult = await this.config.hookDispatcher.firePreToolUse(
+            tool.name,
+            validInput,
+            toolCall.id,
+            this.getExecutionContext().permissionMode,
+          );
+          if (preToolResult.updatedInput !== undefined) {
+            const reparsed = tool.inputSchema.safeParse(preToolResult.updatedInput);
+            if (!reparsed.success) {
+              this.pushToolResult(toolCall.id, `Error: Hook produced invalid input: ${reparsed.error.message}`, true);
+              continue;
+            }
+            validInput = reparsed.data;
+          }
+          for (const event of this.applyHookResult(preToolResult)) {
+            yield event;
+          }
+          if (preToolResult.blocked || preToolResult.finalDecision === 'deny' || preToolResult.finalDecision === 'ask' || preToolResult.preventContinuation) {
+            this.pushToolResult(toolCall.id, `Permission denied: ${preToolResult.reasons.join('; ') || 'Blocked by hook'}`, true);
+            yield { type: 'system', subtype: 'permission_denied', content: `${tool.name}: blocked by hook` };
+            continue;
+          }
+        }
+
         const permResult = await this.config.canUseTool(tool, validInput, toolCall.id);
         if (permResult.behavior === 'deny' || permResult.behavior === 'ask') {
+          if (this.config.hookDispatcher) {
+            const permissionHookResult = permResult.behavior === 'deny'
+              ? await this.config.hookDispatcher.firePermissionDenied(tool.name, validInput, permResult.message || 'denied')
+              : await this.config.hookDispatcher.firePermissionRequest(tool.name, validInput, permResult.behavior);
+            for (const event of this.applyHookResult(permissionHookResult)) {
+              yield event;
+            }
+          }
           this.pushToolResult(toolCall.id, `Permission denied: ${permResult.message || 'Tool use denied'}`, true);
           yield { type: 'system', subtype: 'permission_denied', content: `${tool.name}: ${permResult.message || 'denied'}` };
           continue;
         }
 
-        // Validate input (new: stage 1 of permission pipeline)
         if (tool.validateInput) {
+          const execCtx = this.getExecutionContext();
           const ctx: ToolUseContext = {
-            cwd: getCwd(), sessionId: getSessionId(), permissionMode: 'default',
+            cwd: execCtx.cwd,
+            sessionId: execCtx.sessionId,
+            tenantId: execCtx.tenantId,
+            workspaceRoot: execCtx.workspaceRoot,
+            permissionMode: execCtx.permissionMode,
             options: { tools: this.config.tools },
           };
           const validation = await tool.validateInput(validInput, ctx);
@@ -373,10 +448,14 @@ export class QueryEngine {
 
         let toolResult: ToolResult;
         try {
+          const execCtx = this.getExecutionContext();
           const ctx: ToolUseContext & { depth: number } = {
-            cwd: getCwd(), sessionId: getSessionId(),
+            cwd: execCtx.cwd,
+            sessionId: execCtx.sessionId,
+            tenantId: execCtx.tenantId,
+            workspaceRoot: execCtx.workspaceRoot,
             abortSignal: this.abortController.signal,
-            permissionMode: 'default',
+            permissionMode: execCtx.permissionMode,
             options: { tools: this.config.tools },
             depth: this.depth,
           };
@@ -386,8 +465,33 @@ export class QueryEngine {
           toolResult = { output: null, outputText: `Tool error: ${error.message}`, isError: true };
         }
 
-        addToolDuration(Date.now() - toolStartTime);
+        const toolDurationMs = Date.now() - toolStartTime;
+        addToolDuration(toolDurationMs);
         this.config.onToolResult?.(tool.name, toolResult);
+
+        if (this.config.hookDispatcher) {
+          const postToolResult = toolResult.isError
+            ? await this.config.hookDispatcher.firePostToolUseFailure(tool.name, validInput, toolResult.outputText, toolCall.id)
+            : await this.config.hookDispatcher.firePostToolUse(tool.name, validInput, toolResult.output, toolCall.id, toolDurationMs);
+          for (const event of this.applyHookResult(postToolResult)) {
+            yield event;
+          }
+        }
+
+        if (this.config.skillEngine) {
+          const execCtx = this.getExecutionContext();
+          const skillResult = await this.config.skillEngine.matchForToolUse({
+            toolName: tool.name,
+            toolInput: validInput,
+            sessionId: execCtx.sessionId,
+            cwd: execCtx.cwd,
+            workspaceRoot: execCtx.workspaceRoot || execCtx.cwd,
+            tier: undefined,
+          });
+          for (const event of this.applySkillResult(skillResult.systemMessageAddition)) {
+            yield event;
+          }
+        }
 
         this.pushToolResult(toolCall.id, toolResult.outputText, toolResult.isError);
         yield { type: 'tool_result', toolName: tool.name, toolUseId: toolCall.id, isError: toolResult.isError || false };
@@ -417,6 +521,44 @@ export class QueryEngine {
       toolCallId,
     };
     this.state.push(msg);
+  }
+
+  private applyHookResult(result: AggregatedHookResult): SDKMessage[] {
+    const events: SDKMessage[] = [];
+
+    if (result.systemMessages) {
+      this.pushSystemMessage('hook_message', result.systemMessages);
+      events.push({ type: 'system', subtype: 'hook_message', content: result.systemMessages });
+    }
+
+    if (result.additionalContexts) {
+      const content = `[Hook Context] ${result.additionalContexts}`;
+      this.pushSystemMessage('hook_message', content);
+      events.push({ type: 'system', subtype: 'hook_message', content });
+    }
+
+    return events;
+  }
+
+
+  private applySkillResult(systemMessageAddition: string): SDKMessage[] {
+    if (!systemMessageAddition) {
+      return [];
+    }
+
+    this.pushSystemMessage('skill_message', systemMessageAddition);
+    return [{ type: 'system', subtype: 'skill_message', content: systemMessageAddition }];
+  }
+
+  private pushSystemMessage(subtype: SystemMessage['subtype'], content: string): void {
+    this.state.push({
+      type: 'system',
+      uuid: randomUUID(),
+      subtype,
+      content,
+      turnNumber: this.budget.getTurnCount(),
+      timestamp: Date.now(),
+    });
   }
 
   // ── Convert internal Message → ClovMessage (API format) ───────────
@@ -499,6 +641,11 @@ export class QueryEngine {
 
   getMessages(): readonly ClovMessage[] {
     return this.state.snapshot().map(this.toApiMessage);
+  }
+
+  hydrateFromApiMessages(apiMessages: readonly ClovMessage[]): void {
+    if (apiMessages.length === 0) return;
+    this.replaceMessagesFromApi(Array.from(apiMessages));
   }
 
   getMessageCount(): number {
@@ -931,6 +1078,10 @@ export class QueryEngine {
 
     // Abort any running query
     this.abortController.abort();
+
+    if (this.config.hookDispatcher) {
+      this.config.hookDispatcher.fireSessionEnd();
+    }
 
     // Fire session end callback
     this.config.onSessionEnd?.(reason);

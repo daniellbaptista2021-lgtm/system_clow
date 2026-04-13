@@ -7,10 +7,10 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
+import { buildTool, type ToolResult, type ToolUseContext, type RenderOptions } from '../Tool.js';
 import { glob } from 'glob';
 import * as path from 'path';
-import { getCwd } from '../../bootstrap/state.js';
+import { formatPathAccessError, resolveSearchPathFromContext } from '../pathing.js';
 
 const GlobInputSchema = z.object({
   pattern: z.string().describe('The glob pattern to match files against'),
@@ -39,12 +39,9 @@ Use this when you need to find files by name patterns.`,
     return { behavior: 'allow' as const };
   },
 
-  async call(input: GlobInput): Promise<ToolResult> {
-    const searchPath = input.path
-      ? (path.isAbsolute(input.path) ? input.path : path.resolve(getCwd(), input.path))
-      : getCwd();
-
+  async call(input: GlobInput, context: ToolUseContext): Promise<ToolResult> {
     try {
+      const searchPath = resolveSearchPathFromContext(input.path, context);
       const matches = await glob(input.pattern, {
         cwd: searchPath,
         nodir: false,
@@ -78,7 +75,7 @@ Use this when you need to find files by name patterns.`,
     } catch (err: any) {
       return {
         output: null,
-        outputText: `Error: ${err.message}`,
+        outputText: formatPathAccessError(err, 'Error: unable to search paths'),
         isError: true,
       };
     }

@@ -19,9 +19,12 @@ import * as fs from 'fs';
 import { initDeepSeek } from '../api/deepseek.js';
 import { MCPManager } from '../mcp/MCPManager.js';
 import { SessionPool } from './sessionPool.js';
+import { PluginSystem } from '../plugins/PluginSystem.js';
+import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
 import { buildWhatsAppRoutes } from '../adapters/whatsapp.js';
+import { buildBridgeRoutes } from './bridgeRoutes.js';
 import { tenantAuth } from './middleware/tenantAuth.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
@@ -56,19 +59,36 @@ async function main(): Promise<void> {
   // Init session storage
   await initSessionStorage();
 
+  const pluginSystem = new PluginSystem();
+  try {
+    await pluginSystem.initialize(process.cwd());
+    const pluginStats = pluginSystem.getStats();
+    if (pluginStats.pluginCount > 0) {
+      console.log(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`);
+    }
+  } catch (err: any) {
+    console.error(`  ? Plugins: ${err.message}`);
+  }
+
   // Init MCP
   const mcpManager = new MCPManager();
   const mcpConfigPath = path.join(os.homedir(), '.clow', 'mcp.json');
-  if (fs.existsSync(mcpConfigPath)) {
-    try {
+  try {
+    if (fs.existsSync(mcpConfigPath)) {
       await mcpManager.loadFromConfig(mcpConfigPath);
-      await mcpManager.connectAll();
-      if (mcpManager.serverCount > 0) {
-        console.log(`  ✓ MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
-      }
-    } catch (err: any) {
-      console.error(`  ⚠ MCP: ${err.message}`);
     }
+    const pluginMcpLoader = new PluginMcpLoader();
+    const pluginMcpConfigs: Record<string, { command: string; args?: string[]; env?: Record<string, string> }> = {};
+    for (const plugin of pluginSystem.registry.listEnabled()) {
+      Object.assign(pluginMcpConfigs, pluginMcpLoader.getServerConfigs(plugin.manifest, plugin.rootDir));
+    }
+    mcpManager.registerServers(pluginMcpConfigs);
+    await mcpManager.connectAll();
+    if (mcpManager.serverCount > 0) {
+      console.log(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
+    }
+  } catch (err: any) {
+    console.error(`  ? MCP: ${err.message}`);
   }
 
   // Populate git cache silently
@@ -103,6 +123,10 @@ async function main(): Promise<void> {
   // Mount billing webhooks
   const billingR = buildBillingRoutes();
   app.route('/', billingR);
+
+  // Mount bridge routes
+  const bridgeRoutes = buildBridgeRoutes();
+  app.route('/', bridgeRoutes);
 
   // Mount WhatsApp adapter
   const whatsappRoutes = buildWhatsAppRoutes(pool);

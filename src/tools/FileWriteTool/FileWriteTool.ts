@@ -6,11 +6,12 @@
  */
 
 import { z } from 'zod';
-import { buildTool, type ToolResult, type RenderOptions } from '../Tool.js';
+import { buildTool, type ToolResult, type ToolUseContext, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as fss from 'fs';
 import * as path from 'path';
 import { getCwd } from '../../bootstrap/state.js';
+import { formatPathAccessError, resolvePathFromContext } from '../pathing.js';
 
 const FileWriteInputSchema = z.object({
   file_path: z.string().describe('The absolute path to the file to write'),
@@ -49,12 +50,9 @@ You MUST Read the file first if it exists before using Write.`,
     return { behavior: 'ask' as const, message: `Write file: ${input.file_path}` };
   },
 
-  async call(input: FileWriteInput): Promise<ToolResult> {
-    const filePath = path.isAbsolute(input.file_path)
-      ? input.file_path
-      : path.resolve(getCwd(), input.file_path);
-
+  async call(input: FileWriteInput, context: ToolUseContext): Promise<ToolResult> {
     try {
+      const filePath = resolvePathFromContext(input.file_path, context);
       // Create parent directories
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(filePath, input.content, 'utf-8');
@@ -69,7 +67,7 @@ You MUST Read the file first if it exists before using Write.`,
     } catch (err: any) {
       return {
         output: null,
-        outputText: `Error writing file: ${err.message}`,
+        outputText: formatPathAccessError(err, 'Error writing file'),
         isError: true,
       };
     }

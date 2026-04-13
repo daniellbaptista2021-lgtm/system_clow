@@ -10,6 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,14 @@ export interface CostEntry {
   outputTokens: number;
   costUsd: number;
   timestamp: number;
+}
+
+interface ExecutionContext {
+  sessionId?: string;
+  cwd?: string;
+  originalCwd?: string;
+  projectRoot?: string;
+  tenantId?: string;
 }
 
 // ─── The State Singleton ────────────────────────────────────────────────────
@@ -104,23 +113,24 @@ let scrollDrainTimeout: ReturnType<typeof setTimeout> | undefined;
 
 // Abort controller for the current query
 let currentAbortController: AbortController | null = null;
+const executionContextStorage = new AsyncLocalStorage<ExecutionContext>();
 
 // ─── Getters ────────────────────────────────────────────────────────────────
 
 export function getSessionId(): string {
-  return sessionId;
+  return executionContextStorage.getStore()?.sessionId || sessionId;
 }
 
 export function getOriginalCwd(): string {
-  return originalCwd;
+  return executionContextStorage.getStore()?.originalCwd || originalCwd;
 }
 
 export function getCwd(): string {
-  return cwd;
+  return executionContextStorage.getStore()?.cwd || cwd;
 }
 
 export function getProjectRoot(): string {
-  return projectRoot;
+  return executionContextStorage.getStore()?.projectRoot || projectRoot;
 }
 
 export function getIsGitRepo(): boolean {
@@ -259,6 +269,14 @@ export function setAiTitle(title: string): void {
 
 export function setCurrentAbortController(controller: AbortController | null): void {
   currentAbortController = controller;
+}
+
+export function runWithExecutionContext<T>(
+  context: ExecutionContext,
+  fn: () => T,
+): T {
+  const current = executionContextStorage.getStore() || {};
+  return executionContextStorage.run({ ...current, ...context }, fn);
 }
 
 // ─── Cost Tracking ──────────────────────────────────────────────────────────

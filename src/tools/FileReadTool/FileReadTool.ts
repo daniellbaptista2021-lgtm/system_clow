@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { buildTool, type ToolResult, type ToolUseContext, type ValidationResult, type RenderOptions } from '../Tool.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { getCwd } from '../../bootstrap/state.js';
+import { formatPathAccessError, resolvePathFromContext } from '../pathing.js';
 
 const MAX_LINES = 2000;
 
@@ -50,12 +50,11 @@ Use offset and limit for large files to read specific sections.`,
     return { behavior: 'allow' as const };
   },
 
-  async call(input: FileReadInput): Promise<ToolResult> {
-    const filePath = path.isAbsolute(input.file_path)
-      ? input.file_path
-      : path.resolve(getCwd(), input.file_path);
+  async call(input: FileReadInput, context: ToolUseContext): Promise<ToolResult> {
+    let filePath = input.file_path;
 
     try {
+      filePath = resolvePathFromContext(input.file_path, context);
       const content = await fs.readFile(filePath, 'utf-8');
       const allLines = content.split('\n');
 
@@ -94,7 +93,7 @@ Use offset and limit for large files to read specific sections.`,
       }
       return {
         output: null,
-        outputText: `Error reading file: ${err.message}`,
+        outputText: formatPathAccessError(err, 'Error reading file'),
         isError: true,
       };
     }

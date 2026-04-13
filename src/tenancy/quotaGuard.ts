@@ -44,7 +44,7 @@ export function checkQuota(tenant: Tenant): QuotaError | null {
 
   // Concurrent sessions
   const activeSessions = countActiveSessions(tenant.id);
-  if (activeSessions > tenant.max_concurrent_sessions) {
+  if (activeSessions >= tenant.max_concurrent_sessions) {
     return {
       code: 'too_many_sessions',
       message: `Maximum concurrent sessions reached (${activeSessions}/${tenant.max_concurrent_sessions}). Close existing sessions or upgrade.`,
@@ -62,7 +62,7 @@ export function isToolAllowedForTier(toolName: string, tier: string): boolean {
   // Built-in tools available to everyone
   const ALWAYS_ALLOWED = new Set([
     'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'TodoWrite',
-    'EnterPlanMode', 'ExitPlanMode', 'WebFetch',
+    'WebFetch',
   ]);
 
   if (ALWAYS_ALLOWED.has(toolName)) return true;

@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { spawn } from 'child_process';
 import {
   buildTool, type ToolResult, type ToolUseContext,
   type ValidationResult, type RenderOptions,
@@ -17,7 +18,6 @@ import { CommandValidator } from './commandValidator.js';
 import { OutputProcessor } from './outputProcessor.js';
 import { SandboxRunner } from './sandboxRunner.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
-import { getCwd } from '../../bootstrap/state.js';
 
 // ─── Shared instances (per-session via registry) ────────────────────────────
 
@@ -41,6 +41,67 @@ function getBgManager(sessionId: string, cwd: string): BackgroundProcessManager 
     bgRegistry.set(sessionId, mgr);
   }
   return mgr;
+}
+
+async function runOneShotCommand(
+  command: string,
+  opts: { cwd: string; timeoutMs: number },
+): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  durationMs: number;
+  timedOut: boolean;
+}> {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const child = spawn('/usr/bin/bash', ['-lc', command], {
+      cwd: opts.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGKILL');
+      resolve({
+        stdout,
+        stderr: `${stderr}\n[timed out]`.trim(),
+        exitCode: 124,
+        durationMs: Date.now() - startedAt,
+        timedOut: true,
+      });
+    }, opts.timeoutMs);
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf-8');
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8');
+    });
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        stdout: stdout.replace(/\n$/, ''),
+        stderr: stderr.replace(/\n$/, ''),
+        exitCode: code ?? 1,
+        durationMs: Date.now() - startedAt,
+        timedOut: false,
+      });
+    });
+  });
 }
 
 // ─── Input Schema ───────────────────────────────────────────────────────────
@@ -92,6 +153,26 @@ Commands timeout after 120 seconds by default.`,
   async validateInput(input: BashInput, _ctx: ToolUseContext): Promise<ValidationResult> {
     const v = CommandValidator.validate(input.command);
     if (!v.valid) return { valid: false, message: v.reason, errorCode: v.code };
+
+    const isMultiTenantContext = Boolean(_ctx.tenantId && _ctx.workspaceRoot);
+    if (isMultiTenantContext) {
+      if (SandboxRunner.detect() === 'none') {
+        return {
+          valid: false,
+          message: 'Bash is disabled for multi-tenant sessions until an OS sandbox backend is installed on the server.',
+          errorCode: 'BASH_SANDBOX_UNAVAILABLE',
+        };
+      }
+
+      if (input.run_in_background) {
+        return {
+          valid: false,
+          message: 'Background Bash is disabled for multi-tenant sessions until sandboxed background execution is implemented.',
+          errorCode: 'BASH_BG_SANDBOX_UNAVAILABLE',
+        };
+      }
+    }
+
     return { valid: true };
   },
 
@@ -140,14 +221,24 @@ Commands timeout after 120 seconds by default.`,
     const command = input.command.trim();
     if (!command) return { output: '', outputText: 'Error: empty command', isError: true };
 
-    const cwd = context.cwd || getCwd();
+    const cwd = context.cwd;
+    const workspaceRoot = context.workspaceRoot || context.cwd;
     const sessionId = context.sessionId || 'default';
     const timeoutMs = input.timeout || DEFAULT_TIMEOUT_MS;
+    const isMultiTenantContext = Boolean(context.tenantId && context.workspaceRoot);
+    const sandboxBackend = isMultiTenantContext ? SandboxRunner.detect() : 'none';
+    const commandToRun = isMultiTenantContext
+      ? SandboxRunner.wrap(command, sandboxBackend, {
+        workspaceRoot,
+        allowNetwork: false,
+        timeoutMs,
+      })
+      : command;
 
     // ── Background mode ─────────────────────────────────────────────
     if (input.run_in_background) {
       const mgr = getBgManager(sessionId, cwd);
-      const bg = mgr.start(command, { cwd });
+      const bg = mgr.start(commandToRun, { cwd });
       return {
         output: { background: true, id: bg.id, pid: bg.pid },
         outputText: `Background process started: ${bg.id} (pid ${bg.pid})\nUse Bash to check: cat ${bg.stdoutFile}`,
@@ -155,6 +246,39 @@ Commands timeout after 120 seconds by default.`,
     }
 
     // ── Foreground via persistent shell ──────────────────────────────
+    if (isMultiTenantContext) {
+      try {
+        const result = await runOneShotCommand(commandToRun, { cwd, timeoutMs });
+        const processed = OutputProcessor.process(
+          result.stdout + (result.stderr ? '\n' + result.stderr : ''),
+        );
+
+        let outputText = processed.output;
+        if (result.timedOut) outputText += '\n[Command timed out]';
+        if (!outputText.trim() && result.exitCode === 0) outputText = '(No output)';
+        if (processed.truncated) {
+          outputText += `\n[Output truncated. Original: ${processed.originalLength} chars]`;
+        }
+
+        return {
+          output: {
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            durationMs: result.durationMs,
+          },
+          outputText: result.exitCode !== 0
+            ? `Exit code ${result.exitCode}\n${outputText}`
+            : outputText,
+          isError: result.exitCode !== 0,
+          metadata: { durationMs: result.durationMs },
+        };
+      } catch (err: any) {
+        return { output: null, outputText: `Shell error: ${err.message}`, isError: true };
+      }
+    }
+
     const shell = getShell(sessionId, cwd);
     if (!shell.isAlive()) {
       try {
@@ -165,7 +289,7 @@ Commands timeout after 120 seconds by default.`,
     }
 
     try {
-      const result = await shell.exec(command, { timeoutMs });
+      const result = await shell.exec(commandToRun, { timeoutMs });
       const processed = OutputProcessor.process(
         result.stdout + (result.stderr ? '\n' + result.stderr : ''),
       );

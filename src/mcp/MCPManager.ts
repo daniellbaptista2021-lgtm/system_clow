@@ -1,5 +1,5 @@
 /**
- * MCPManager.ts — Multi-Server MCP Manager
+ * MCPManager.ts ? Multi-Server MCP Manager
  *
  * Manages N MCPClient instances. Reads config from ~/.clow/mcp.json
  * (compatible with Claude Desktop format for community config reuse).
@@ -13,12 +13,11 @@
  */
 
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import { MCPClient, type MCPTool } from './MCPClient.js';
 
-// ─── Config Types ───────────────────────────────────────────────────────────
+// ??? Config Types ???????????????????????????????????????????????????????????
 
-interface MCPServerConfig {
+export interface MCPServerConfig {
   command: string;
   args?: string[];
   env?: Record<string, string>;
@@ -28,19 +27,19 @@ interface MCPConfig {
   mcpServers: Record<string, MCPServerConfig>;
 }
 
-// ─── MCPManager Class ───────────────────────────────────────────────────────
+// ??? MCPManager Class ???????????????????????????????????????????????????????
 
 export class MCPManager {
   private clients: Map<string, MCPClient> = new Map();
 
-  // ─── Config Loading ───────────────────────────────────────────────────
+  // ??? Config Loading ???????????????????????????????????????????????????
 
   async loadFromConfig(configPath: string): Promise<void> {
     let raw: string;
     try {
       raw = await fs.readFile(configPath, 'utf-8');
     } catch (err: any) {
-      if (err.code === 'ENOENT') return; // No config file — that's fine
+      if (err.code === 'ENOENT') return; // No config file ? that's fine
       throw new Error(`Failed to read MCP config at ${configPath}: ${err.message}`);
     }
 
@@ -55,45 +54,52 @@ export class MCPManager {
       return; // Empty config
     }
 
-    for (const [name, serverCfg] of Object.entries(config.mcpServers)) {
-      if (!serverCfg.command) {
-        console.error(`[mcp] Server "${name}" has no command — skipping`);
-        continue;
+    this.registerServers(config.mcpServers);
+  }
+
+  registerServer(name: string, serverCfg: MCPServerConfig): void {
+    if (!serverCfg.command) {
+      console.error(`[mcp] Server "${name}" has no command ? skipping`);
+      return;
+    }
+
+    const expandedEnv: Record<string, string> = {};
+    if (serverCfg.env) {
+      for (const [key, value] of Object.entries(serverCfg.env)) {
+        expandedEnv[key] = expandEnvVars(value);
       }
+    }
 
-      // Expand ${ENV_VAR} references in env values
-      const expandedEnv: Record<string, string> = {};
-      if (serverCfg.env) {
-        for (const [key, value] of Object.entries(serverCfg.env)) {
-          expandedEnv[key] = expandEnvVars(value);
-        }
-      }
+    const client = new MCPClient(
+      name,
+      serverCfg.command,
+      serverCfg.args || [],
+      expandedEnv,
+    );
 
-      const client = new MCPClient(
-        name,
-        serverCfg.command,
-        serverCfg.args || [],
-        expandedEnv,
-      );
+    this.clients.set(name, client);
+  }
 
-      this.clients.set(name, client);
+  registerServers(servers: Record<string, MCPServerConfig>): void {
+    for (const [name, serverCfg] of Object.entries(servers)) {
+      this.registerServer(name, serverCfg);
     }
   }
 
-  // ─── Connection Management ────────────────────────────────────────────
+  // ??? Connection Management ????????????????????????????????????????????
 
   async connectAll(): Promise<void> {
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       Array.from(this.clients.entries()).map(async ([name, client]) => {
         try {
           await client.connect();
           const info = client.getServerInfo();
           console.error(
-            `  [mcp] ✓ ${name}: ${client.toolCount} tools` +
+            `  [mcp] ? ${name}: ${client.toolCount} tools` +
             (info ? ` (${info.name} ${info.version})` : ''),
           );
         } catch (err: any) {
-          console.error(`  [mcp] ✗ ${name}: ${err.message}`);
+          console.error(`  [mcp] ? ${name}: ${err.message}`);
           this.clients.delete(name); // Remove failed server
         }
       }),
@@ -107,7 +113,7 @@ export class MCPManager {
     this.clients.clear();
   }
 
-  // ─── Tool Aggregation ─────────────────────────────────────────────────
+  // ??? Tool Aggregation ?????????????????????????????????????????????????
 
   getAllTools(): Array<{ serverName: string; tool: MCPTool }> {
     const result: Array<{ serverName: string; tool: MCPTool }> = [];
@@ -122,7 +128,7 @@ export class MCPManager {
     return result;
   }
 
-  // ─── Tool Execution ───────────────────────────────────────────────────
+  // ??? Tool Execution ???????????????????????????????????????????????????
 
   async callTool(
     serverName: string,
@@ -145,7 +151,6 @@ export class MCPManager {
 
     const result = await client.callTool(toolName, args);
 
-    // Flatten content array to text
     const text = result.content
       .map((c) => {
         if (c.type === 'text' && c.text) return c.text;
@@ -161,7 +166,7 @@ export class MCPManager {
     };
   }
 
-  // ─── Introspection ────────────────────────────────────────────────────
+  // ??? Introspection ????????????????????????????????????????????????????
 
   get serverCount(): number { return this.clients.size; }
 
@@ -174,9 +179,7 @@ export class MCPManager {
   }
 }
 
-// ─── Env Var Expansion ──────────────────────────────────────────────────────
-// Replaces ${VAR} with process.env.VAR. Without this, users would have to
-// hardcode secrets in the JSON config — unacceptable.
+// ??? Env Var Expansion ??????????????????????????????????????????????????????
 
 function expandEnvVars(value: string): string {
   return value.replace(/\$\{([^}]+)\}/g, (_match, varName) => {

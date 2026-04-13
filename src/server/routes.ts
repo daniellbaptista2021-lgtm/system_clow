@@ -19,16 +19,38 @@ import { streamSSE } from 'hono/streaming';
 import { getSessionCacheMetrics } from '../api/deepseek.js';
 import { randomUUID } from 'crypto';
 import { SessionPool, type CreateSessionOptions } from './sessionPool.js';
+import { checkQuota } from '../tenancy/quotaGuard.js';
+import { incrementUsage } from '../tenancy/tenantStore.js';
+import {
+  flushSession,
+  recordTranscriptForSession,
+} from '../utils/session/sessionStorage.js';
 import {
   getTotalCostUSD,
   getTotalInputTokens,
   getTotalOutputTokens,
+  runWithExecutionContext,
 } from '../bootstrap/state.js';
 
 // ─── Build Routes ───────────────────────────────────────────────────────────
 
 export function buildRoutes(pool: SessionPool): Hono {
   const app = new Hono();
+
+  function getTenantContext(c: unknown): {
+    tenant?: Record<string, unknown>;
+    tenantId?: string;
+    tenantTier?: string;
+  } {
+    const contextStore = c as { get?: (key: string) => unknown };
+    const tenant = contextStore.get?.('tenant') as Record<string, unknown> | undefined;
+    const tenantIdValue = contextStore.get?.('tenantId');
+    return {
+      tenant,
+      tenantId: typeof tenantIdValue === 'string' ? tenantIdValue : undefined,
+      tenantTier: typeof tenant?.tier === 'string' ? tenant.tier : undefined,
+    };
+  }
 
   // ── Health ──────────────────────────────────────────────────────────
   app.get('/health', (c) => {
@@ -45,19 +67,43 @@ export function buildRoutes(pool: SessionPool): Hono {
   app.post('/v1/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const sessionId = body.session_id || randomUUID();
+    const { tenant, tenantId, tenantTier } = getTenantContext(c);
+    const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
+    const tenantWorkspaceRoot =
+      typeof tenant?.workspaceRoot === 'string'
+        ? tenant.workspaceRoot
+        : typeof tenant?.workspace_root === 'string'
+          ? tenant.workspace_root
+          : undefined;
+    const quotaError = tenant ? checkQuota(tenant as any) : null;
+    if (quotaError) {
+      return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
+    }
+    const workspaceRoot =
+      typeof body.workspace_root === 'string'
+        ? body.workspace_root
+        : tenantWorkspaceRoot || requestedCwd;
+
+    const sessionMode = body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server';
 
     const options: CreateSessionOptions = {
-      cwd: body.cwd || process.cwd(),
+      cwd: requestedCwd,
+      workspaceRoot,
+      tenantId,
+      tenantTier,
+      mode: sessionMode,
       maxTurns: body.max_turns,
       maxBudgetUsd: body.max_budget_usd,
     };
 
     try {
       await pool.create(sessionId, options);
+      await flushSession();
       return c.json({
         session_id: sessionId,
         status: 'created',
         cwd: options.cwd,
+        mode: options.mode,
       }, 201);
     } catch (err: any) {
       return c.json({ error: err.message }, 500);
@@ -69,75 +115,128 @@ export function buildRoutes(pool: SessionPool): Hono {
     const sessionId = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
     const message = body.message || body.content || body.prompt;
+    const { tenant, tenantId: requestTenantId, tenantTier } = getTenantContext(c);
 
     if (!message || typeof message !== 'string') {
       return c.json({ error: 'message is required (string)' }, 400);
     }
 
+    const quotaError = tenant ? checkQuota(tenant as any) : null;
+    if (quotaError) {
+      return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
+    }
+
     let engine = await pool.get(sessionId);
     if (!engine) {
       // Auto-create session if it doesn't exist
-      engine = await pool.create(sessionId);
+      const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
+      const tenantWorkspaceRoot =
+        typeof tenant?.workspaceRoot === 'string'
+          ? tenant.workspaceRoot
+          : typeof tenant?.workspace_root === 'string'
+            ? tenant.workspace_root
+            : undefined;
+      engine = await pool.create(sessionId, {
+        cwd: requestedCwd,
+        workspaceRoot: typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || requestedCwd,
+        tenantId: requestTenantId,
+        tenantTier,
+        mode: body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server',
+      });
     }
 
+    const sessionMeta = pool.getMetadata(sessionId);
+    const requestCwd = sessionMeta?.cwd || process.cwd();
+    const workspaceRoot = sessionMeta?.workspaceRoot || requestCwd;
+    const tenantId = sessionMeta?.tenantId;
+
     return streamSSE(c, async (stream) => {
-      try {
-        for await (const event of engine!.submitMessage(message)) {
-          switch (event.type) {
-            case 'assistant':
-              await stream.writeSSE({
-                event: 'text_delta',
-                data: JSON.stringify({ text: event.content || '' }),
-              });
-              break;
+      await runWithExecutionContext({
+        sessionId,
+        cwd: requestCwd,
+        originalCwd: requestCwd,
+        projectRoot: workspaceRoot,
+        tenantId,
+      }, async () => {
+        let assistantRecorded = false;
+        const costBefore = engine!.getInstanceCostUsd();
 
-            case 'progress':
-              await stream.writeSSE({
-                event: 'tool_use',
-                data: JSON.stringify({
-                  tool_name: event.toolName,
-                  tool_input: event.toolInput,
-                }),
-              });
-              break;
+        try {
+          await recordTranscriptForSession(sessionId, 'user', message);
 
-            case 'system':
-              await stream.writeSSE({
-                event: 'system',
-                data: JSON.stringify({
-                  subtype: event.subtype,
-                  content: event.content,
-                }),
-              });
-              break;
+          for await (const event of engine!.submitMessage(message)) {
+            switch (event.type) {
+              case 'assistant':
+                if (event.content) {
+                  await recordTranscriptForSession(sessionId, 'assistant', event.content);
+                  assistantRecorded = true;
+                }
+                await stream.writeSSE({
+                  event: 'text_delta',
+                  data: JSON.stringify({ text: event.content || '' }),
+                });
+                break;
 
-            case 'result':
-              await stream.writeSSE({
-                event: event.subtype?.startsWith('error') ? 'error' : 'result',
-                data: JSON.stringify({
-                  subtype: event.subtype,
-                  content: event.content,
-                }),
-              });
-              break;
+              case 'progress':
+                await stream.writeSSE({
+                  event: 'tool_use',
+                  data: JSON.stringify({
+                    tool_name: event.toolName,
+                    tool_input: event.toolInput,
+                  }),
+                });
+                break;
+
+              case 'system':
+                await stream.writeSSE({
+                  event: 'system',
+                  data: JSON.stringify({
+                    subtype: event.subtype,
+                    content: event.content,
+                  }),
+                });
+                break;
+
+              case 'result':
+                if (!assistantRecorded && event.content) {
+                  await recordTranscriptForSession(sessionId, 'assistant', event.content);
+                  assistantRecorded = true;
+                }
+                await stream.writeSSE({
+                  event: event.subtype?.startsWith('error') ? 'error' : 'result',
+                  data: JSON.stringify({
+                    subtype: event.subtype,
+                    content: event.content,
+                  }),
+                });
+                break;
+            }
           }
+
+          pool.trackMessage(sessionId);
+          if (tenantId) {
+            incrementUsage(tenantId, {
+              messages: 1,
+              cost_usd: Math.max(0, engine!.getInstanceCostUsd() - costBefore),
+            });
+          }
+          await flushSession();
+
+          await stream.writeSSE({
+            event: 'done',
+            data: JSON.stringify({
+              session_id: sessionId,
+              cost_usd: getTotalCostUSD(),
+            }),
+          });
+        } catch (err: any) {
+          await flushSession().catch(() => undefined);
+          await stream.writeSSE({
+            event: 'error',
+            data: JSON.stringify({ message: err.message }),
+          });
         }
-
-        pool.trackMessage(sessionId);
-
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify({
-            session_id: sessionId,
-            cost_usd: getTotalCostUSD(),
-          }),
-        });
-      } catch (err: any) {
-        await stream.writeSSE({
-          event: 'error',
-          data: JSON.stringify({ message: err.message }),
-        });
-      }
+      });
     });
   });
 

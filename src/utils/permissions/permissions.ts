@@ -38,38 +38,48 @@ export interface LegacyPermissionContext {
 export function createCanUseTool(
   legacyCtx: LegacyPermissionContext,
   isInteractive: boolean = true,
+  getExecutionContext?: () => {
+    sessionId: string;
+    cwd: string;
+    permissionMode: string;
+  },
 ): CanUseToolFn {
   const pipeline = new PermissionPipeline();
-  const ctx = new PermissionContext(
-    getSessionId(),
-    undefined, // tenantId
-    getCwd(),
-    getPermissionMode() as any,
-    undefined, // tier
-    isInteractive,
-  );
-
-  // Seed session rules from legacy allow/deny lists
-  for (const toolName of legacyCtx.allowRules) {
-    ctx.addSessionRule(PermRulesHelper.create({
-      toolName,
-      decision: 'allow',
-      scope: 'session',
-      source: 'rule',
-      reason: 'Legacy allowRule',
-    }));
-  }
-  for (const toolName of legacyCtx.denyRules) {
-    ctx.addSessionRule(PermRulesHelper.create({
-      toolName,
-      decision: 'deny',
-      scope: 'session',
-      source: 'rule',
-      reason: 'Legacy denyRule',
-    }));
-  }
 
   return async (tool: Tool, input: unknown, _toolUseId: string) => {
+    const execCtx = getExecutionContext?.() || {
+      sessionId: getSessionId(),
+      cwd: getCwd(),
+      permissionMode: getPermissionMode(),
+    };
+    const ctx = new PermissionContext(
+      execCtx.sessionId,
+      undefined, // tenantId
+      execCtx.cwd,
+      execCtx.permissionMode as any,
+      undefined, // tier
+      isInteractive,
+    );
+
+    for (const toolName of legacyCtx.allowRules) {
+      ctx.addSessionRule(PermRulesHelper.create({
+        toolName,
+        decision: 'allow',
+        scope: 'session',
+        source: 'rule',
+        reason: 'Legacy allowRule',
+      }));
+    }
+    for (const toolName of legacyCtx.denyRules) {
+      ctx.addSessionRule(PermRulesHelper.create({
+        toolName,
+        decision: 'deny',
+        scope: 'session',
+        source: 'rule',
+        reason: 'Legacy denyRule',
+      }));
+    }
+
     const result = await pipeline.checkPermission(tool, input, ctx);
     // Convert to old PermissionResult format
     return {

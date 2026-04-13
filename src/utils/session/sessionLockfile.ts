@@ -17,6 +17,7 @@
 
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
+import * as os from 'os';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export class SessionLockfile {
         await fsp.writeFile(lockPath, JSON.stringify({
           pid: process.pid,
           acquiredAt: Date.now(),
-          hostname: require('os').hostname(),
+          hostname: os.hostname(),
         }), { flag: 'wx' });
 
         // Successfully created lock

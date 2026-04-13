@@ -127,14 +127,14 @@ export class WorkerToolFiltering {
     }
 
     // Implementer should have write tools
-    if (!config.workerToolWhitelist.implementer.includes('FileWrite') &&
-        !config.workerToolWhitelist.implementer.includes('FileEdit')) {
+    if (!config.workerToolWhitelist.implementer.includes('Write') &&
+        !config.workerToolWhitelist.implementer.includes('Edit')) {
       errors.push('Implementer worker has no write tools — cannot make changes');
     }
 
     // Verifier should not have write tools
-    if (config.workerToolWhitelist.verifier.includes('FileWrite') ||
-        config.workerToolWhitelist.verifier.includes('FileEdit')) {
+    if (config.workerToolWhitelist.verifier.includes('Write') ||
+        config.workerToolWhitelist.verifier.includes('Edit')) {
       errors.push('Verifier worker should not have write tools — verification must be read-only');
     }
 
