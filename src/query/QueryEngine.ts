@@ -359,6 +359,7 @@ export class QueryEngine {
       }
 
       // ── Execute tools ──────────────────────────────────────────────
+      const deferredSystemMessages: Array<{ subtype: SystemMessage['subtype']; content: string }> = [];
       for (const toolCall of toolCalls) {
         const tool = findToolByName(this.config.tools, toolCall.name);
 
@@ -397,7 +398,7 @@ export class QueryEngine {
             }
             validInput = reparsed.data;
           }
-          for (const event of this.applyHookResult(preToolResult)) {
+          for (const event of this.previewHookResult(preToolResult, deferredSystemMessages)) {
             yield event;
           }
           if (preToolResult.blocked || preToolResult.finalDecision === 'deny' || preToolResult.finalDecision === 'ask' || preToolResult.preventContinuation) {
@@ -413,7 +414,7 @@ export class QueryEngine {
             const permissionHookResult = permResult.behavior === 'deny'
               ? await this.config.hookDispatcher.firePermissionDenied(tool.name, validInput, permResult.message || 'denied')
               : await this.config.hookDispatcher.firePermissionRequest(tool.name, validInput, permResult.behavior);
-            for (const event of this.applyHookResult(permissionHookResult)) {
+            for (const event of this.previewHookResult(permissionHookResult, deferredSystemMessages)) {
               yield event;
             }
           }
@@ -473,7 +474,7 @@ export class QueryEngine {
           const postToolResult = toolResult.isError
             ? await this.config.hookDispatcher.firePostToolUseFailure(tool.name, validInput, toolResult.outputText, toolCall.id)
             : await this.config.hookDispatcher.firePostToolUse(tool.name, validInput, toolResult.output, toolCall.id, toolDurationMs);
-          for (const event of this.applyHookResult(postToolResult)) {
+          for (const event of this.previewHookResult(postToolResult, deferredSystemMessages)) {
             yield event;
           }
         }
@@ -495,6 +496,11 @@ export class QueryEngine {
 
         this.pushToolResult(toolCall.id, toolResult.outputText, toolResult.isError);
         yield { type: 'tool_result', toolName: tool.name, toolUseId: toolCall.id, isError: toolResult.isError || false };
+      }
+
+      for (const deferred of deferredSystemMessages) {
+        this.pushSystemMessage(deferred.subtype, deferred.content);
+        yield { type: 'system', subtype: deferred.subtype, content: deferred.content };
       }
 
       toolRounds++;
@@ -541,12 +547,44 @@ export class QueryEngine {
   }
 
 
+  private previewHookResult(
+    result: AggregatedHookResult,
+    deferred: Array<{ subtype: SystemMessage['subtype']; content: string }>,
+  ): SDKMessage[] {
+    const events: SDKMessage[] = [];
+
+    if (result.systemMessages) {
+      deferred.push({ subtype: 'hook_message', content: result.systemMessages });
+      events.push({ type: 'system', subtype: 'hook_message', content: result.systemMessages });
+    }
+
+    if (result.additionalContexts) {
+      const content = `[Hook Context] ${result.additionalContexts}`;
+      deferred.push({ subtype: 'hook_message', content });
+      events.push({ type: 'system', subtype: 'hook_message', content });
+    }
+
+    return events;
+  }
+
   private applySkillResult(systemMessageAddition: string): SDKMessage[] {
     if (!systemMessageAddition) {
       return [];
     }
 
     this.pushSystemMessage('skill_message', systemMessageAddition);
+    return [{ type: 'system', subtype: 'skill_message', content: systemMessageAddition }];
+  }
+
+  private previewSkillResult(
+    systemMessageAddition: string,
+    deferred: Array<{ subtype: SystemMessage['subtype']; content: string }>,
+  ): SDKMessage[] {
+    if (!systemMessageAddition) {
+      return [];
+    }
+
+    deferred.push({ subtype: 'skill_message', content: systemMessageAddition });
     return [{ type: 'system', subtype: 'skill_message', content: systemMessageAddition }];
   }
 
