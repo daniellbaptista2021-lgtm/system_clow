@@ -357,6 +357,7 @@ export class SessionRunner {
     base['WORK_ID'] = work.workId;
     base['SESSION_ID'] = work.sessionId;
     base['CLOW_QUIET_BOOTSTRAP'] = '1';
+    base['NODE_NO_WARNINGS'] = '1';
     for (const [key, value] of Object.entries(this.extraEnv)) {
       base[key] = value;
     }

@@ -163,6 +163,7 @@ export class SwarmSystem {
           CLOW_AGENT_ID: agentId,
           CLOW_INBOX_DIR: path.join(this.clowHome, TEAMS_DIR_NAME, request.teamName, 'inboxes'),
           CLOW_QUIET_BOOTSTRAP: '1',
+          NODE_NO_WARNINGS: '1',
           ...(request.prompt ? { CLOW_INITIAL_PROMPT: request.prompt } : {}),
         },
         memberName: request.memberName,

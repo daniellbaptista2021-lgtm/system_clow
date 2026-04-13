@@ -68,6 +68,7 @@ export function buildEnvVars(
     CLOW_TEAM: request.teamName,
     CLOW_AGENT_ID: `${request.memberName}@${request.teamName}`,
     CLOW_QUIET_BOOTSTRAP: '1',
+    NODE_NO_WARNINGS: '1',
   };
 
   if (options?.inboxDir) {
