@@ -96,7 +96,6 @@ export function initAnthropic(cfg: AnthropicConfig): void {
     apiKey: cfg.apiKey,
     maxRetries: 0,
   });
-  console.log(`  ✓ Model: ${cfg.model} (Anthropic)`);
 }
 
 function getAnthropicClient(): Anthropic {

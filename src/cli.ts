@@ -1,17 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * cli.ts — System Clow Entry Point
- *
- * Based on Claude Code's cli.tsx (303 lines) + main.tsx (4,500+ lines)
- *
- * Startup sequence:
- * Phase 0: Fast-path cascade (--version, --help)
- * Phase 1: Load config and env
- * Phase 2: Initialize API client
- * Phase 3: Start REPL loop
- */
-
 import { config as loadEnv } from 'dotenv';
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -44,18 +32,20 @@ import { isCoordinatorModeEnabled, setCoordinatorMode } from './coordinator/mode
 import { assembleFullContext, getGitStatus, getDynamicContext } from './utils/context/context.js';
 import { createCanUseTool, type LegacyPermissionContext } from './utils/permissions/permissions.js';
 import {
-  initSessionStorage, recordTranscript, flushSession,
-  listSessions, loadTranscriptFile, saveSessionMetadata,
-  getSessionFilePath, acquireSessionLock, releaseSessionLock,
+  initSessionStorage,
+  recordTranscript,
+  flushSession,
+  listSessions,
+  loadTranscriptFile,
+  saveSessionMetadata,
+  getSessionFilePath,
+  acquireSessionLock,
 } from './utils/session/sessionStorage.js';
 import {
   setSessionId,
   setCwd,
   setOriginalCwd,
   setProjectRoot,
-  getTotalCostUSD,
-  getTotalInputTokens,
-  getTotalOutputTokens,
   getSessionId,
   getCwd,
   setPermissionMode,
@@ -63,29 +53,37 @@ import {
   getPrePlanPermissionMode,
   setPrePlanPermissionMode,
 } from './bootstrap/state.js';
-
-// ─── Constants ──────────────────────────────────────────────────────────────
+import { renderHeader } from './cli/header.js';
+import { renderPrompt } from './cli/prompt.js';
+import { TerminalSessionRenderer } from './cli/renderer.js';
 
 const VERSION = '1.0.0';
 const PRODUCT_NAME = 'System Clow';
-
-// ─── Banner ─────────────────────────────────────────────────────────────────
 
 interface LoadedPluginCommand {
   plugin: string;
   command: PluginCommand;
 }
 
-function printBanner(): void {
-  console.log('');
-  console.log(chalk.bold.cyan('  ╔═══════════════════════════════════════╗'));
-  console.log(chalk.bold.cyan('  ║') + chalk.bold.white('       System Clow v' + VERSION + '            ') + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('  ║') + chalk.dim('  AI Coding Agent • Claude Sonnet 4.6 ') + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('  ╚═══════════════════════════════════════╝'));
-  console.log('');
+function buildCliHeader(
+  model: string,
+  tools: Array<{ name: string }>,
+  notices: string[],
+  coordinatorEnabled: boolean,
+): string {
+  return renderHeader({
+    productName: PRODUCT_NAME,
+    version: VERSION,
+    subtitle: 'Premium coding workspace with refined streaming, visible tool execution and elegant agent flow.',
+    model,
+    sessionId: getSessionId(),
+    cwd: getCwd(),
+    tools: tools.map((tool) => tool.name),
+    quickCommands: ['/help', '/exit', '/clear', '/cost', '/context'],
+    mode: coordinatorEnabled ? 'Coordinator' : getPermissionMode() === 'plan' ? 'Plan' : 'Workspace',
+    notices,
+  });
 }
-
-// ─── Main ───────────────────────────────────────────────────────────────────
 
 function extractPrintPrompt(argv: string[]): { argvForCommander: string[]; prompt?: string } {
   const rawArgs = argv.slice(2);
@@ -103,6 +101,16 @@ function extractPrintPrompt(argv: string[]): { argvForCommander: string[]; promp
   };
 }
 
+function formatTimeAgo(date: Date): string {
+  const ms = Date.now() - date.getTime();
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 let remoteControlBridge: BridgeSystem | null = null;
 
 async function sendRemoteBridgeEvent(type: string, payload: unknown): Promise<void> {
@@ -116,7 +124,7 @@ async function sendRemoteBridgeEvent(type: string, payload: unknown): Promise<vo
 }
 
 async function main(): Promise<void> {
-  // Phase 0: Fast paths
+  const startupNotices: string[] = [];
   const program = new Command();
   program
     .name('clow')
@@ -158,11 +166,19 @@ async function main(): Promise<void> {
   const bridgeOpts = bridgeCommand?.opts();
 
   if (process.argv[2] === 'bridge' && bridgeOpts) {
-    await runBridgeCommand(bridgeOpts as { endpoint: string; apiKey: string; capacity?: string; transport?: string; spawnMode?: string; workdir?: string; testSeconds?: string; });
+    await runBridgeCommand(bridgeOpts as {
+      endpoint: string;
+      apiKey: string;
+      capacity?: string;
+      transport?: string;
+      spawnMode?: string;
+      workdir?: string;
+      testSeconds?: string;
+    });
     return;
   }
 
-  if (opts.permissionMode && ['default','acceptEdits','bypassPermissions','dontAsk','auto','plan'].includes(opts.permissionMode)) {
+  if (opts.permissionMode && ['default', 'acceptEdits', 'bypassPermissions', 'dontAsk', 'auto', 'plan'].includes(opts.permissionMode)) {
     setPermissionMode(opts.permissionMode as any);
   }
 
@@ -171,8 +187,6 @@ async function main(): Promise<void> {
   }
   const coordinatorEnabled = opts.coordinator || isCoordinatorModeEnabled();
 
-  // Phase 1: Load environment
-  // Try multiple .env locations
   loadEnv({ path: path.resolve(process.cwd(), '.env') });
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
@@ -183,25 +197,22 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Phase 2: Initialize
   const cwd = opts.cwd ? path.resolve(opts.cwd) : process.cwd();
   setCwd(cwd);
   setOriginalCwd(cwd);
   setProjectRoot(cwd);
   setSessionId(randomUUID());
 
-  const selectedModel = opts.model
-    || process.env.CLOW_MODEL
-    || 'claude-sonnet-4-6';
-
+  const selectedModel = opts.model || process.env.CLOW_MODEL || 'claude-sonnet-4-6';
   initAnthropic({
     apiKey,
     model: selectedModel,
     maxOutputTokens: 8192,
   });
+  startupNotices.push(`Model ready: ${selectedModel}`);
 
   await initSessionStorage();
-  await getGitStatus(); // Populate git cache
+  await getGitStatus();
 
   const pluginSystem = new PluginSystem();
   let pluginCommands: LoadedPluginCommand[] = [];
@@ -210,13 +221,12 @@ async function main(): Promise<void> {
     pluginCommands = pluginSystem.getCommands();
     const pluginStats = pluginSystem.getStats();
     if (pluginStats.pluginCount > 0) {
-      console.log(chalk.green(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`));
+      startupNotices.push(`Plugins loaded: ${pluginStats.pluginCount} plugins, ${pluginStats.commandCount} commands`);
     }
   } catch (err: any) {
-    console.error(chalk.yellow(`  ? Plugin init error: ${err.message}`));
+    startupNotices.push(`Plugin init warning: ${err.message}`);
   }
 
-  // Phase 2b: MCP servers
   const mcpManager = new MCPManager();
   const mcpConfigPath = path.join(os.homedir(), '.clow', 'mcp.json');
   try {
@@ -231,23 +241,29 @@ async function main(): Promise<void> {
     mcpManager.registerServers(pluginMcpConfigs);
     await mcpManager.connectAll();
     if (mcpManager.serverCount > 0) {
-      const mcpToolCount = mcpManager.getAllTools().length;
-      console.log(chalk.green(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpToolCount} tool(s)`));
+      startupNotices.push(`MCP ready: ${mcpManager.serverCount} servers, ${mcpManager.getAllTools().length} tools`);
     }
   } catch (err: any) {
-    console.error(chalk.yellow(`  ? MCP init error: ${err.message}`));
+    startupNotices.push(`MCP init warning: ${err.message}`);
   }
 
-  // Cleanup MCP on exit
-  const cleanupMCP = async () => { await mcpManager.disconnectAll(); };
-  process.on('exit', () => { void cleanupMCP(); });
-  process.on('SIGTERM', async () => { await cleanupMCP(); process.exit(0); });
+  const cleanupMCP = async () => {
+    await mcpManager.disconnectAll();
+  };
+  process.on('exit', () => {
+    void cleanupMCP();
+  });
+  process.on('SIGTERM', async () => {
+    await cleanupMCP();
+    process.exit(0);
+  });
 
   const pluginRuntimeTools = await buildPluginRuntimeTools(pluginSystem);
   const pluginOutputStyles = await buildPluginRuntimeOutputStyles(pluginSystem);
   const fullTools = [...getTools(undefined, mcpManager), ...pluginRuntimeTools];
   let tools = fullTools;
   let coordinatorMode: CoordinatorMode | undefined;
+
   if (coordinatorEnabled) {
     const coordinatorExecutor = {
       execute: async (params: {
@@ -292,7 +308,9 @@ async function main(): Promise<void> {
     }, coordinatorExecutor);
     await coordinatorMode.initialize();
     tools = coordinatorMode.filterCoordinatorTools(fullTools) as typeof fullTools;
+    startupNotices.push('Coordinator mode enabled');
   }
+
   const toolRegistry = new Map(tools.map((tool) => [tool.name, tool]));
   const hookEngine = new HookEngine({
     toolRegistry,
@@ -302,6 +320,7 @@ async function main(): Promise<void> {
   for (const pluginHook of pluginSystem.getHooks()) {
     hookEngine.addHook(pluginHook);
   }
+
   const hookDispatcher = new HookEventDispatcher(hookEngine, {
     sessionId: getSessionId(),
     transcriptPath: getSessionFilePath(getSessionId()),
@@ -327,15 +346,12 @@ async function main(): Promise<void> {
     ? `${baseSystemPrompt}\n\n${pluginOutputStyles.systemPromptAddition}`
     : baseSystemPrompt;
 
-  // Auto-allow MCP tools that are read-only-ish (by name convention)
-  const mcpToolNames = mcpManager.getAllTools().map(t => `mcp__${t.serverName}__${t.tool.name}`);
-
-  // In --print mode, auto-approve ALL tools (non-interactive)
-  const allToolNames = tools.map(t => t.name);
+  const mcpToolNames = mcpManager.getAllTools().map((tool) => `mcp__${tool.serverName}__${tool.tool.name}`);
+  const allToolNames = tools.map((tool) => tool.name);
   const permContext: LegacyPermissionContext = {
     denyRules: [],
     allowRules: opts.print
-      ? allToolNames  // Auto-approve everything in non-interactive mode
+      ? allToolNames
       : ['Read', 'Glob', 'Grep', 'TodoWrite', 'WebFetch', 'WebSearch', 'Agent', 'EnterPlanMode', 'ExitPlanMode', ...mcpToolNames],
     askRules: [],
   };
@@ -345,15 +361,13 @@ async function main(): Promise<void> {
     cwd: getCwd(),
     permissionMode: getPermissionMode(),
   }));
-  const maxTurns = parseInt(opts.maxTurns) || 50;
+  const maxTurns = parseInt(opts.maxTurns, 10) || 50;
 
-  // ── Plan mode flag ────────────────────────────────────────────────
   if (opts.planMode) {
     setPermissionMode('plan');
-    console.log(chalk.yellow('  ✓ Plan mode active — read-only until plan approved'));
+    startupNotices.push('Plan mode active: read-only until the plan is approved');
   }
 
-  // ── --list-sessions ───────────────────────────────────────────────
   if (opts.listSessions) {
     const sessions = await listSessions(20);
     if (sessions.length === 0) {
@@ -361,9 +375,9 @@ async function main(): Promise<void> {
     } else {
       console.log(chalk.bold('\n  Recent sessions:\n'));
       for (let i = 0; i < sessions.length; i++) {
-        const s = sessions[i];
-        const ago = formatTimeAgo(s.mtime);
-        console.log(`  ${i + 1}. [${ago}] ${s.sessionId.slice(0, 8)} ${chalk.dim(`(${s.cwd})`)}`);
+        const session = sessions[i];
+        const ago = formatTimeAgo(session.mtime);
+        console.log(`  ${i + 1}. [${ago}] ${session.sessionId.slice(0, 8)} ${chalk.dim(`(${session.cwd})`)}`);
       }
       console.log('');
     }
@@ -371,7 +385,6 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // ── --resume / --continue ─────────────────────────────────────────
   let resumedMessages: Array<{ role: string; content: string }> | null = null;
   let resumeSessionId: string | null = null;
 
@@ -379,8 +392,7 @@ async function main(): Promise<void> {
     const sessions = await listSessions(50);
 
     if (opts.continue) {
-      // Find last session for current CWD
-      const match = sessions.find(s => s.cwd === getCwd());
+      const match = sessions.find((session) => session.cwd === getCwd());
       if (!match) {
         console.error(chalk.red('  No previous session found in this directory.'));
         await mcpManager.disconnectAll();
@@ -388,8 +400,7 @@ async function main(): Promise<void> {
       }
       resumeSessionId = match.sessionId;
     } else if (opts.resume) {
-      // Match by prefix
-      const match = sessions.find(s => s.sessionId.startsWith(opts.resume));
+      const match = sessions.find((session) => session.sessionId.startsWith(opts.resume));
       if (!match) {
         console.error(chalk.red(`  Session not found: ${opts.resume}`));
         await mcpManager.disconnectAll();
@@ -397,16 +408,12 @@ async function main(): Promise<void> {
       }
       resumeSessionId = match.sessionId;
 
-      // CWD check
       if (match.cwd !== getCwd()) {
-        console.log(chalk.yellow(`  ⚠ Session was started in a different directory`));
-        console.log(chalk.dim(`    Session CWD: ${match.cwd}`));
-        console.log(chalk.dim(`    Current CWD: ${getCwd()}`));
+        startupNotices.push(`Session cwd differs from current cwd: ${match.cwd}`);
       }
     }
 
     if (resumeSessionId) {
-      // Acquire lock
       const lockOk = await acquireSessionLock(resumeSessionId);
       if (!lockOk) {
         console.error(chalk.red(`  Session ${resumeSessionId.slice(0, 8)} is already open in another terminal.`));
@@ -414,23 +421,20 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
-      // Load transcript
       const entries = await loadTranscriptFile(resumeSessionId);
       resumedMessages = entries
-        .filter(e => e.role === 'user' || e.role === 'assistant' || e.role === 'tool')
-        .map(e => ({ role: e.role as string, content: String(e.content || '') }));
+        .filter((entry) => entry.role === 'user' || entry.role === 'assistant' || entry.role === 'tool')
+        .map((entry) => ({ role: entry.role as string, content: String(entry.content || '') }));
 
-      // Restore session ID
       setSessionId(resumeSessionId);
 
-      // Restore accumulated cost
-      const costEntries = entries.filter(e => e.type === 'cost');
       let resumedCost = 0;
-      for (const c of costEntries) {
-        resumedCost += (c as any).value?.costUsd || 0;
+      for (const costEntry of entries.filter((entry) => entry.type === 'cost')) {
+        resumedCost += (costEntry as any).value?.costUsd || 0;
       }
-
-      console.log(chalk.green(`  ✓ Resumed session ${resumeSessionId.slice(0, 8)} (${resumedMessages.length} messages${resumedCost > 0 ? `, $${resumedCost.toFixed(4)} prior cost` : ''})`));
+      startupNotices.push(
+        `Resumed session ${resumeSessionId.slice(0, 8)} with ${resumedMessages.length} messages${resumedCost > 0 ? ` and $${resumedCost.toFixed(4)} prior cost` : ''}`,
+      );
     }
   }
 
@@ -443,44 +447,30 @@ async function main(): Promise<void> {
   }
 
   const swarmAgentId = opts.agentId || process.env.CLOW_AGENT_ID;
-  let swarmRuntime: SwarmSystem | undefined;
   if (swarmAgentId) {
-    swarmRuntime = await startSwarmInboxPolling(swarmAgentId);
+    await startSwarmInboxPolling(swarmAgentId);
+    startupNotices.push(`Swarm inbox attached: ${swarmAgentId}`);
   }
 
-  // Phase 3: Execute
   if (opts.print && resolvedPrompt) {
     await runSinglePrompt(resolvedPrompt, tools, systemPrompt, canUseTool, maxTurns, hookDispatcher, skillEngine);
-  } else if (resolvedPrompt) {
-    printBanner();
-    await runREPL(tools, systemPrompt, canUseTool, maxTurns, pluginCommands, hookDispatcher, skillEngine, resolvedPrompt, resumedMessages);
-  } else {
-    printBanner();
-    console.log(chalk.dim(`  Session: ${getSessionId().slice(0, 8)}`));
-    console.log(chalk.dim(`  CWD: ${getCwd()}`));
-    console.log(chalk.dim(`  Tools: ${tools.map((t) => t.name).join(', ')}`));
-    if (coordinatorEnabled) {
-      console.log(chalk.cyan(`  Mode: COORDINATOR`));
-    }
-    if (getPermissionMode() === 'plan') {
-      console.log(chalk.yellow(`  Mode: PLAN (read-only)`));
-    }
-    console.log(chalk.dim(`  Type /help for commands, /exit to quit\n`));
-    await runREPL(tools, systemPrompt, canUseTool, maxTurns, pluginCommands, hookDispatcher, skillEngine, undefined, resumedMessages);
+    return;
   }
-}
 
-function formatTimeAgo(date: Date): string {
-  const ms = Date.now() - date.getTime();
-  const min = Math.floor(ms / 60_000);
-  if (min < 60) return `${min}m ago`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  const headerText = buildCliHeader(selectedModel, tools, startupNotices, coordinatorEnabled);
+  await runREPL(
+    tools,
+    systemPrompt,
+    canUseTool,
+    maxTurns,
+    pluginCommands,
+    hookDispatcher,
+    skillEngine,
+    headerText,
+    resolvedPrompt,
+    resumedMessages,
+  );
 }
-
-// ─── Single Prompt (--print mode) ───────────────────────────────────────────
 
 async function runBridgeCommand(opts: {
   endpoint: string;
@@ -514,16 +504,11 @@ async function runBridgeCommand(opts: {
   });
 
   const apiAdapter = {
-    registerEnvironment: async (params: { capacity: number; reuseEnvironmentId?: string }) => {
-      return apiClient.registerEnvironment({
-        capacity: params.capacity,
-        metadata: params.reuseEnvironmentId ? { reuseEnvironmentId: params.reuseEnvironmentId } : undefined,
-      });
-    },
-    pollForWork: async (envId: string, _secret: string) => {
-      const response = await apiClient.pollForWork(envId);
-      return response.work;
-    },
+    registerEnvironment: async (params: { capacity: number; reuseEnvironmentId?: string }) => apiClient.registerEnvironment({
+      capacity: params.capacity,
+      metadata: params.reuseEnvironmentId ? { reuseEnvironmentId: params.reuseEnvironmentId } : undefined,
+    }),
+    pollForWork: async (envId: string, _secret: string) => (await apiClient.pollForWork(envId)).work,
     heartbeat: async (envId: string, _secret: string, payload: { activeSessionCount: number; capacity: number; status: string }) => {
       await apiClient.heartbeat({
         environmentId: envId,
@@ -536,7 +521,7 @@ async function runBridgeCommand(opts: {
     stopWork: async (envId: string, _secret: string, payload: { workId: string; sessionId: string; reason: string }) => {
       await apiClient.stopWork(envId, payload);
     },
-    deregisterEnvironment: async (envId: string, _secret: string) => {
+    deregisterEnvironment: async (envId: string) => {
       await apiClient.deregisterEnvironment(envId);
     },
   };
@@ -560,7 +545,6 @@ async function runBridgeCommand(opts: {
   await bridge.start({ api: apiAdapter, sessionRunner });
 }
 
-
 async function startSwarmInboxPolling(agentId: string): Promise<SwarmSystem> {
   const swarm = new SwarmSystem();
   await swarm.initialize();
@@ -568,26 +552,18 @@ async function startSwarmInboxPolling(agentId: string): Promise<SwarmSystem> {
     direct_message: (msg) => {
       const payload = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : {};
       const text = typeof payload.text === 'string' ? payload.text : JSON.stringify(msg.content);
-      process.stdout.write(`
-[swarm:${msg.from}] ${text}
-`);
+      process.stdout.write(`\n[swarm:${msg.from}] ${text}\n`);
     },
     broadcast: (msg) => {
       const payload = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : {};
       const text = typeof payload.text === 'string' ? payload.text : JSON.stringify(msg.content);
-      process.stdout.write(`
-[swarm:broadcast:${msg.from}] ${text}
-`);
+      process.stdout.write(`\n[swarm:broadcast:${msg.from}] ${text}\n`);
     },
     task_assignment: (msg) => {
-      process.stdout.write(`
-[swarm:task] ${JSON.stringify(msg.content)}
-`);
+      process.stdout.write(`\n[swarm:task] ${JSON.stringify(msg.content)}\n`);
     },
     shutdown_request: (msg) => {
-      process.stdout.write(`
-[swarm:shutdown] ${JSON.stringify(msg.content)}
-`);
+      process.stdout.write(`\n[swarm:shutdown] ${JSON.stringify(msg.content)}\n`);
     },
   });
   return swarm;
@@ -629,10 +605,8 @@ async function runSinglePrompt(
   }
 
   await flushSession();
-  console.log('');
+  process.stdout.write('\n');
 }
-
-// ─── Interactive REPL ───────────────────────────────────────────────────────
 
 async function runREPL(
   tools: any[],
@@ -642,34 +616,26 @@ async function runREPL(
   pluginCommands: LoadedPluginCommand[],
   hookDispatcher: HookEventDispatcher,
   skillEngine: SkillEngine,
+  headerText: string,
   initialPrompt?: string,
   resumedMessages?: Array<{ role: string; content: string }> | null,
 ): Promise<void> {
+  const renderer = new TerminalSessionRenderer();
   const engine = new QueryEngine({
     tools,
     systemPrompt,
     canUseTool,
     maxTurns,
     dynamicContext: getDynamicContext(),
-    onText: (text) => process.stdout.write(text),
-    onToolUse: (name, input) => {
-      console.log(chalk.dim(`\n  ▸ ${name}`));
-    },
-    onToolResult: (name, result: any) => {
-      if (result?.isError) {
-        console.log(chalk.red(`  ✗ ${name}: error`));
-      }
-    },
-    onTurnComplete: (_turn) => {
-      // Cost info hidden — product mode
-    },
-    onCompact: (originalTokens, newTokens) => {
-      console.log(chalk.yellow(`\n  ⟳ Compacted: ${originalTokens} → ${newTokens} tokens`));
-    },
-    onContextWarning: (percentLeft) => {
-      console.log(chalk.yellow(`\n  ⚠ Context ${percentLeft.toFixed(0)}% remaining`));
-    },
+    onText: (text) => renderer.streamText(text),
+    onToolUse: (name, input) => renderer.toolStarted(name, input),
+    onToolResult: (name, result: any) => renderer.toolFinished(name, result),
+    onContextWarning: (percentLeft) => renderer.renderNotice(`Context remaining: ${percentLeft.toFixed(0)}%`, 'warning'),
+    hookDispatcher,
+    skillEngine,
   });
+
+  renderer.renderHeader(headerText);
 
   if (resumedMessages?.length) {
     const historyMessages: ClovMessage[] = resumedMessages
@@ -692,7 +658,7 @@ async function runREPL(
     const repl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: chalk.cyan('\n? '),
+      prompt: renderPrompt(),
     });
 
     repl.on('line', async (line) => {
@@ -705,7 +671,7 @@ async function runREPL(
 
       await runWithExclusiveInput(async () => {
         if (input.startsWith('/')) {
-          const handled = await handleSlashCommand(input, engine, pluginCommands);
+          const handled = await handleSlashCommand(input, engine, pluginCommands, renderer);
           if (handled === 'exit') {
             if (remoteControlBridge) {
               await remoteControlBridge.stop();
@@ -718,7 +684,7 @@ async function runREPL(
           return;
         }
 
-        await processInput(engine, input);
+        await processInput(engine, input, renderer);
       });
     });
 
@@ -732,7 +698,7 @@ async function runREPL(
       }
       await engine.gracefulShutdown('cli_close');
       await flushSession();
-      console.log(chalk.dim('\nGoodbye!'));
+      renderer.renderGoodbye();
       process.exit(0);
     });
 
@@ -742,9 +708,7 @@ async function runREPL(
   let rl = createRepl();
 
   const runWithExclusiveInput = async (task: () => Promise<void>): Promise<void> => {
-    if (isProcessingInput) {
-      return;
-    }
+    if (isProcessingInput) return;
 
     isProcessingInput = true;
     suppressCloseHandler = true;
@@ -763,31 +727,35 @@ async function runREPL(
 
   if (initialPrompt) {
     await runWithExclusiveInput(async () => {
-      await processInput(engine, initialPrompt);
+      await processInput(engine, initialPrompt, renderer);
     });
   } else {
     rl.prompt();
   }
 
-  // Handle Ctrl+C gracefully
   process.on('SIGINT', async () => {
     engine.abort();
-    console.log(chalk.yellow('\n  Interrupted'));
+    renderer.renderInterrupt();
     rl.prompt();
   });
 }
 
-async function processInput(engine: QueryEngine, input: string): Promise<void> {
-  console.log('');
+async function processInput(
+  engine: QueryEngine,
+  input: string,
+  renderer: TerminalSessionRenderer,
+): Promise<void> {
+  renderer.beginTurn(input);
   await recordTranscript('user', input);
   let assistantRecorded = false;
+  let turnFinished = false;
 
   try {
     for await (const msg of engine.submitMessage(input)) {
       switch (msg.type) {
         case 'result':
-          if (msg.subtype && msg.subtype.startsWith('error')) {
-            console.log(chalk.red(`\n  ${msg.content}`));
+          if (msg.subtype.startsWith('error')) {
+            renderer.renderSystem(msg.subtype, msg.content || 'Execution failed.');
           }
           if (!assistantRecorded && msg.content) {
             await recordTranscript('assistant', msg.content);
@@ -796,6 +764,8 @@ async function processInput(engine: QueryEngine, input: string): Promise<void> {
           if (msg.content) {
             await sendRemoteBridgeEvent('assistant_result', { subtype: msg.subtype, content: msg.content });
           }
+          renderer.finishTurn(engine, msg.subtype, msg.content);
+          turnFinished = true;
           break;
 
         case 'assistant':
@@ -807,26 +777,24 @@ async function processInput(engine: QueryEngine, input: string): Promise<void> {
           break;
 
         case 'system':
-          if (msg.subtype === 'compacting') {
-            console.log(chalk.yellow(`\n  ⟳ ${msg.content}`));
-          } else if (msg.subtype === 'compact_complete') {
-            console.log(chalk.green(`  ✓ ${msg.content}`));
-          } else if (msg.subtype === 'compact_failed') {
-            console.log(chalk.red(`  ✗ ${msg.content}`));
-          }
+          renderer.renderSystem(msg.subtype, msg.content);
           break;
       }
     }
   } catch (error: any) {
-    console.error(chalk.red(`\nError: ${error.message}`));
+    renderer.renderSystem('error_during_execution', error.message);
+    if (!turnFinished) {
+      renderer.finishTurn(engine, 'error_during_execution', error.message);
+    }
   }
-
-  console.log('');
 }
 
-// ─── Slash Commands ─────────────────────────────────────────────────────────
-
-async function handleSlashCommand(input: string, engine: QueryEngine, pluginCommands: LoadedPluginCommand[]): Promise<string | void> {
+async function handleSlashCommand(
+  input: string,
+  engine: QueryEngine,
+  pluginCommands: LoadedPluginCommand[],
+  renderer: TerminalSessionRenderer,
+): Promise<string | void> {
   const [cmd, ...args] = input.slice(1).split(/\s+/);
 
   switch (cmd.toLowerCase()) {
@@ -836,23 +804,7 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
       return 'exit';
 
     case 'help':
-      console.log(chalk.bold('\n  System Clow Commands:\n'));
-      console.log('  /help        Show this help');
-      console.log('  /exit        Exit System Clow');
-      console.log('  /clear       Clear conversation history');
-      console.log('  /cost        Show session cost');
-      console.log('  /plan        Toggle plan mode (read-only)');
-      console.log('  /compact     Compact conversation (free context)');
-      console.log('  /context     Show context info');
-      console.log('  /remote-control start|stop|status');
-      if (pluginCommands.length > 0) {
-        console.log('');
-        console.log(chalk.bold('  Plugin Commands:'));
-        for (const entry of pluginCommands) {
-          console.log(`  /${entry.command.name.padEnd(12)} ${entry.command.description} ${chalk.dim(`[${entry.plugin}]`)}`);
-        }
-      }
-      console.log('');
+      renderer.renderHelp(pluginCommands);
       break;
 
     case 'plan': {
@@ -860,34 +812,26 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
       if (current === 'plan') {
         setPermissionMode(getPrePlanPermissionMode() || 'default');
         setPrePlanPermissionMode(undefined);
-        console.log(chalk.green('  ✓ Plan mode deactivated. Normal operations resumed.'));
+        renderer.renderNotice('Plan mode deactivated. Normal operations resumed.', 'success');
       } else {
         setPrePlanPermissionMode(current);
         setPermissionMode('plan');
-        console.log(chalk.yellow('  ✓ Plan mode activated. Read-only until /plan again or ExitPlanMode.'));
+        renderer.renderNotice('Plan mode activated. Read-only until /plan again or ExitPlanMode.', 'warning');
       }
       break;
     }
 
     case 'clear':
-      console.log(chalk.dim('  Conversation cleared'));
+      engine.resetState();
+      renderer.renderNotice('Conversation state cleared.', 'success');
       break;
 
     case 'cost':
-      console.log(chalk.bold('\n  Session Cost:'));
-      console.log(`  Total: $${getTotalCostUSD().toFixed(4)}`);
-      console.log(`  Input tokens: ${getTotalInputTokens()}`);
-      console.log(`  Output tokens: ${getTotalOutputTokens()}`);
-      console.log(`  Messages: ${engine.getMessageCount()}`);
-      console.log('');
+      renderer.renderCost(engine);
       break;
 
     case 'context':
-      console.log(chalk.bold('\n  Context Info:'));
-      console.log(`  Session: ${getSessionId().slice(0, 8)}`);
-      console.log(`  CWD: ${getCwd()}`);
-      console.log(`  Messages: ${engine.getMessageCount()}`);
-      console.log('');
+      renderer.renderContext(engine, getSessionId(), getCwd());
       break;
 
     case 'remote-control':
@@ -896,14 +840,14 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
 
       if (subcmd === 'start') {
         if (remoteControlBridge) {
-          console.log(chalk.yellow('  Remote control already active.'));
+          renderer.renderNotice('Remote control already active.', 'warning');
           break;
         }
 
         const endpoint = process.env.CLOW_BRIDGE_ENDPOINT || process.env.CLOW_ENDPOINT || 'http://127.0.0.1:3001';
         const apiKey = process.env.CLOW_ADMIN_KEY || process.env.CLOW_API_KEY;
         if (!apiKey) {
-          console.log(chalk.red('  CLOW_ADMIN_KEY or CLOW_API_KEY is required.'));
+          renderer.renderNotice('CLOW_ADMIN_KEY or CLOW_API_KEY is required.', 'error');
           break;
         }
 
@@ -921,35 +865,35 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
             if (msg.type === 'remote_prompt') {
               const remoteText = typeof payload.text === 'string' ? payload.text : '';
               if (remoteText) {
-                process.stdout.write(`\n[remote] ${remoteText}\n`);
-                void processInput(engine, remoteText);
+                renderer.renderNotice(`Remote prompt received: ${remoteText}`, 'accent');
+                void processInput(engine, remoteText, renderer);
               }
             }
           },
         });
 
         remoteControlBridge = bridge;
-        console.log(chalk.green('  ? Remote control activated.'));
-        console.log(bridge.getDetailedStatus());
+        renderer.renderNotice('Remote control activated.', 'success');
+        renderer.renderNotice(bridge.getDetailedStatus(), 'muted');
         break;
       }
 
       if (subcmd === 'stop') {
         if (!remoteControlBridge) {
-          console.log(chalk.yellow('  Remote control is not active.'));
+          renderer.renderNotice('Remote control is not active.', 'warning');
           break;
         }
 
         await remoteControlBridge.stop();
         remoteControlBridge = null;
-        console.log(chalk.green('  ? Remote control stopped.'));
+        renderer.renderNotice('Remote control stopped.', 'success');
         break;
       }
 
       if (!remoteControlBridge) {
-        console.log(chalk.dim('  Remote control is inactive. Use /remote-control start'));
+        renderer.renderNotice('Remote control is inactive. Use /remote-control start.', 'muted');
       } else {
-        console.log(remoteControlBridge.getDetailedStatus());
+        renderer.renderNotice(remoteControlBridge.getDetailedStatus(), 'muted');
       }
       break;
     }
@@ -957,12 +901,12 @@ async function handleSlashCommand(input: string, engine: QueryEngine, pluginComm
     default: {
       const pluginCommand = findPluginCommand(cmd.toLowerCase(), pluginCommands);
       if (pluginCommand) {
-        console.log(chalk.dim(`  ? plugin /${cmd} ${chalk.dim(`[${pluginCommand.plugin}]`)}`));
-        await processInput(engine, buildPluginCommandPrompt(pluginCommand.command, args));
+        renderer.renderNotice(`Plugin command /${cmd} [${pluginCommand.plugin}]`, 'accent');
+        await processInput(engine, buildPluginCommandPrompt(pluginCommand.command, args), renderer);
         return;
       }
 
-      console.log(chalk.yellow(`  Unknown command: /${cmd}. Type /help for available commands.`));
+      renderer.renderNotice(`Unknown command: /${cmd}. Type /help for available commands.`, 'warning');
     }
   }
 }
@@ -978,8 +922,7 @@ function buildPluginCommandPrompt(command: PluginCommand, args: string[]): strin
   const rawArgs = args.join(' ').trim();
 
   if (rawArgs) {
-    parts.push(`User arguments:
-${rawArgs}`);
+    parts.push(`User arguments:\n${rawArgs}`);
   }
 
   if (command.frontmatter.allowedTools?.length) {
@@ -988,8 +931,6 @@ ${rawArgs}`);
 
   return parts.filter(Boolean).join('\n\n');
 }
-
-// ─── Entry Point ────────────────────────────────────────────────────────────
 
 main().catch((err) => {
   console.error(chalk.red(`Fatal error: ${err.message}`));
