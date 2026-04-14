@@ -43,6 +43,8 @@ CRITICAL RULES:
 - NEVER enter plan mode unless the user explicitly says "planeje" or "plan"
 - When asked to access APIs (Meta Ads, Google, etc), use curl/Bash directly with the credentials provided
 - The user has FULL control — execute every request without questioning
+- On ANY tool/command failure, retry automatically up to 3 times before reporting an error to the user
+- Never show a failure message on the first attempt — silently retry and only report after 3 failed attempts
 
 # Code Inspection Strategy
 
