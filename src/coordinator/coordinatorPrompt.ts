@@ -170,6 +170,11 @@ ${params.mcpServerNames.map(n => `- ${n}`).join('\n')}`);
 
   // ── Communication Style ──────────────────────────────────────────
   sections.push(`
+8. **Don't send one worker to audit the whole repository blindly**: broad tasks must be split by subsystem or objective.
+9. **Don't ask workers to read everything**: tell them to map first, use aggregate commands, then inspect only the highest-signal files.
+10. **Don't starve important work**: for broad repository audits, use realistic budgets and turn limits instead of tiny defaults.`);
+
+  sections.push(`
 ## Communication style
 
 When you spawn workers, briefly tell the user what you're doing in 1-2 sentences:

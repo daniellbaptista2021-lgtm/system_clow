@@ -26,8 +26,18 @@ import { getAllBaseTools } from '../tools.js';
 import { TaskNotificationParser } from '../../coordinator/taskNotificationParser.js';
 import type { WorkerSpawnResult } from '../../coordinator/types.js';
 
-const SUBAGENT_MAX_TURNS = 50;
-const SUBAGENT_MAX_BUDGET_USD = 0.50;
+type TaskComplexity = 'normal' | 'broad';
+
+const SUBAGENT_DEFAULTS: Record<SubagentType, { maxTurns: number; budgetUsd: number }> = {
+  general: { maxTurns: 90, budgetUsd: 2.0 },
+  researcher: { maxTurns: 100, budgetUsd: 2.5 },
+  implementer: { maxTurns: 110, budgetUsd: 3.0 },
+  verifier: { maxTurns: 80, budgetUsd: 1.5 },
+};
+
+const BROAD_TASK_MULTIPLIER = 1.75;
+const MAX_AUTO_BUDGET_USD = 8.0;
+const MAX_AUTO_TURNS = 160;
 
 const RESEARCHER_TOOLS = new Set([
   'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Bash', 'TodoWrite',
@@ -91,6 +101,63 @@ function buildToolSet(subagentType: SubagentType, parentDepth: number, allowedTo
   return tools;
 }
 
+function detectTaskComplexity(input: AgentInput): TaskComplexity {
+  const combined = `${input.description}\n${input.prompt}`.toLowerCase();
+  const broadSignals = [
+    'projeto inteiro',
+    'projeto completo',
+    'análise completa',
+    'analise completa',
+    'estrutura completa',
+    'todos os arquivos',
+    'all files',
+    'all relevant files',
+    'todas as funcionalidades',
+    'funcionalidades implementadas',
+    'entire project',
+    'whole project',
+    'full analysis',
+    'full audit',
+    'codebase',
+    'architecture',
+    'linhas de código',
+    'lines of code',
+    'read all',
+  ];
+
+  if (combined.length > 1200) {
+    return 'broad';
+  }
+
+  return broadSignals.some((signal) => combined.includes(signal)) ? 'broad' : 'normal';
+}
+
+function resolveBudget(input: AgentInput, subagentType: SubagentType): number {
+  if (typeof input.budgetUsd === 'number') {
+    return input.budgetUsd;
+  }
+
+  const base = SUBAGENT_DEFAULTS[subagentType].budgetUsd;
+  if (detectTaskComplexity(input) === 'broad') {
+    return Math.min(MAX_AUTO_BUDGET_USD, Number((base * BROAD_TASK_MULTIPLIER).toFixed(2)));
+  }
+
+  return base;
+}
+
+function resolveMaxTurns(input: AgentInput, subagentType: SubagentType): number {
+  if (typeof input.maxTurns === 'number') {
+    return input.maxTurns;
+  }
+
+  const base = SUBAGENT_DEFAULTS[subagentType].maxTurns;
+  if (detectTaskComplexity(input) === 'broad') {
+    return Math.min(MAX_AUTO_TURNS, Math.round(base * BROAD_TASK_MULTIPLIER));
+  }
+
+  return base;
+}
+
 export const AgentTool = buildTool<AgentInput>({
   name: 'Agent',
   aliases: ['AgentTool'],
@@ -133,6 +200,8 @@ Do NOT use for trivial tasks ? the overhead isn't worth it for 1-2 tool calls.`,
   async call(input: AgentInput, context: ToolUseContext): Promise<ToolResult> {
     const subagentType: SubagentType = input.subagent_type || 'general';
     const parentDepth = (context as any).depth ?? 0;
+    const resolvedBudgetUsd = resolveBudget(input, subagentType);
+    const resolvedMaxTurns = resolveMaxTurns(input, subagentType);
 
     if (parentDepth >= MAX_AGENT_DEPTH) {
       return {
@@ -160,8 +229,8 @@ Do NOT use for trivial tasks ? the overhead isn't worth it for 1-2 tool calls.`,
     const subEngine = new QueryEngine({
       tools: subTools,
       systemPrompt,
-      maxTurns: input.maxTurns ?? SUBAGENT_MAX_TURNS,
-      maxBudgetUsd: input.budgetUsd ?? SUBAGENT_MAX_BUDGET_USD,
+      maxTurns: resolvedMaxTurns,
+      maxBudgetUsd: resolvedBudgetUsd,
       canUseTool,
       depth: parentDepth + 1,
       getExecutionContext: () => ({
@@ -242,6 +311,8 @@ ${finalResult}
         duration_ms: durationMs,
         subagent_type: subagentType,
         allowed_tools: input.allowedTools ?? null,
+        max_turns: resolvedMaxTurns,
+        budget_usd: resolvedBudgetUsd,
         error: errorOccurred,
       },
       outputText: formattedResult,

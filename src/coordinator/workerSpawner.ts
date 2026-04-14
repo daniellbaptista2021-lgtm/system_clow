@@ -259,7 +259,7 @@ export class WorkerSpawner {
     switch (type) {
       case 'researcher': return 'researcher';
       case 'implementer': return 'implementer';
-      case 'verifier': return 'researcher';  // verifier uses read-only profile
+      case 'verifier': return 'verifier';
       case 'general': return 'general';
     }
   }

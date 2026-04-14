@@ -41,9 +41,9 @@ export interface CoordinatorConfig {
 
 export const DEFAULT_COORDINATOR_CONFIG: CoordinatorConfig = {
   enabled: false,
-  maxConcurrentWorkers: 5,
-  defaultWorkerBudgetUsd: 1.0,
-  defaultWorkerMaxTurns: 30,
+  maxConcurrentWorkers: 4,
+  defaultWorkerBudgetUsd: 3.0,
+  defaultWorkerMaxTurns: 80,
   forbidCoordinatorTools: [
     'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
     'WebFetch', 'WebSearch',
@@ -51,7 +51,7 @@ export const DEFAULT_COORDINATOR_CONFIG: CoordinatorConfig = {
   workerToolWhitelist: {
     researcher: ['Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Bash', 'TodoWrite'],
     implementer: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'TodoWrite', 'WebFetch'],
-    verifier: ['Read', 'Glob', 'Grep', 'Bash', 'TodoWrite'],
+    verifier: ['Read', 'Glob', 'Grep', 'Bash', 'TodoWrite', 'WebFetch', 'WebSearch'],
     general: ['*'],  // all except Agent (prevent recursion)
   },
 };
