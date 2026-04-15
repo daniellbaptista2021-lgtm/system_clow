@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import type { Tool, ToolResult, CanUseToolFn, ToolUseContext } from '../tools/Tool.js';
 import type { ClovMessage, StreamChunk } from '../api/anthropic.js';
 import { callModel } from '../api/anthropic.js';
+import { ToolResultCache } from '../tools/toolResultCache.js';
 import { findToolByName } from '../tools/tools.js';
 import {
   getCwd, getSessionId, getPermissionMode, getTotalCostUSD,
@@ -58,6 +59,7 @@ export class QueryEngine {
   private abortController: AbortController = new AbortController();
   private currentModel: string = process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   private sessionStarted = false;
+  private toolCache = new ToolResultCache();
 
   // Legacy compat: mutableMessages alias
   private get mutableMessages(): ClovMessage[] {
@@ -461,7 +463,17 @@ export class QueryEngine {
             options: { tools: this.config.tools },
             depth: this.depth,
           };
-          toolResult = await tool.call(validInput, ctx, this.config.canUseTool, toolCall.id);
+          // Check tool cache for read-only tools
+          const cached = this.toolCache.get(tool.name, validInput);
+          if (cached) {
+            toolResult = cached as ToolResult;
+          } else {
+            toolResult = await tool.call(validInput, ctx, this.config.canUseTool, toolCall.id);
+            // Cache the result for read-only tools
+            this.toolCache.set(tool.name, validInput, toolResult);
+          }
+          // Invalidate cache after write operations
+          this.toolCache.invalidate(tool.name, validInput);
         } catch (error: any) {
           recordError(error);
           toolResult = { output: null, outputText: `Tool error: ${error.message}`, isError: true };

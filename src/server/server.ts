@@ -34,6 +34,8 @@ import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
 import { buildDocsRoutes } from './openapi.js';
 import { getMetricsSummary } from '../utils/logger.js';
+import { buildDashboardRoutes } from './adminDashboard.js';
+import { apiQueue } from './requestQueue.js';
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -225,8 +227,16 @@ async function main(): Promise<void> {
   console.log('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
 
   // Metrics endpoint
-  app.get('/v1/metrics', (c) => c.json(getMetricsSummary()));
+  app.get('/v1/metrics', (c) => c.json({
+    ...getMetricsSummary(),
+    queue: apiQueue.getStats(),
+  }));
   console.log('  ✓ Metrics: /v1/metrics');
+
+  // Admin dashboard
+  const dashboardRoutes = buildDashboardRoutes(pool);
+  app.route('/', dashboardRoutes);
+  console.log('  ✓ Dashboard: /admin/dashboard + /health/deep');
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
