@@ -284,7 +284,7 @@ export async function getGitStatus(): Promise<string> {
  * Dynamic context (date, CWD, git) is NOT included — use getDynamicContext()
  * and prepend it to the first user message instead.
  */
-export async function assembleFullContext(): Promise<string> {
+export async function assembleFullContext(tenantId?: string): Promise<string> {
   const systemPrompt = getSystemPrompt();
   const memoryPrompt = await getMemoryPrompt();
 
@@ -292,6 +292,17 @@ export async function assembleFullContext(): Promise<string> {
 
   if (memoryPrompt) {
     fullPrompt += '\n\n' + memoryPrompt;
+  }
+
+  // Inject persistent memory from past sessions
+  try {
+    const { generateMemoryContext } = await import('../../memory/MemoryContextInjector.js');
+    const persistentMemory = generateMemoryContext(tenantId || 'default');
+    if (persistentMemory) {
+      fullPrompt += '\n\n' + persistentMemory;
+    }
+  } catch {
+    // Memory system not available — continue without it
   }
 
   return fullPrompt;
