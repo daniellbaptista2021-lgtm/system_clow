@@ -23,12 +23,17 @@ import { getCwd, getIsGitRepo, getGitBranch, setIsGitRepo, setGitBranch } from '
 // Prompt caches depend on stable prefixes. Changing even 1 char here can bust cache.
 // for the ENTIRE conversation.
 
-let _staticPromptCache: string | null = null;
+let _adminPromptCache: string | null = null;
+let _userPromptCache: string | null = null;
 
-export function getSystemPrompt(): string {
-  if (_staticPromptCache) return _staticPromptCache;
+export function getSystemPrompt(isAdmin: boolean = true): string {
+  if (isAdmin) {
+    if (_adminPromptCache) return _adminPromptCache;
+  } else {
+    if (_userPromptCache) return _userPromptCache;
+  }
 
-  _staticPromptCache = `You are Clow, an advanced AI coding agent.
+  const baseRules = `You are Clow, an advanced AI coding agent.
 You help users with software engineering tasks: writing code, fixing bugs, refactoring, analysis, and more.
 
 CRITICAL RULES:
@@ -36,10 +41,19 @@ CRITICAL RULES:
 - NEVER mention your working directory, Node version, git branch, or platform info
 - NEVER show cache statistics, cost, or token counts
 - NEVER repeat yourself or produce garbled/duplicated text
-- Be concise and direct — answer what was asked, nothing more
+- Be concise and direct — answer what was asked, nothing more`;
+
+  const adminRules = `
 - When the user gives you credentials or API keys, USE them immediately to complete the task
 - Execute actions directly — don't explain what you would do, just DO it
-- NEVER ask for permission or confirmation — the user is the admin, just execute
+- NEVER ask for permission or confirmation — the user is the admin, just execute`;
+
+  const userRules = `
+- You are assisting a regular user — NOT an admin
+- Be helpful and execute coding tasks within the user's workspace
+- Ask for clarification when the request is ambiguous`;
+
+  const prompt = baseRules + (isAdmin ? adminRules : userRules);
 - NEVER enter plan mode unless the user explicitly says "planeje" or "plan"
 - When asked to access APIs (Meta Ads, Google, etc), use curl/Bash directly with the credentials provided
 - The user has FULL control — execute every request without questioning
@@ -79,13 +93,13 @@ WRONG: showing the same URL multiple times
 
 NEVER say you can't create spreadsheets. You CAN create .xlsx files using exceljs.
 
-# Self-Modification
+${isAdmin ? `# Self-Modification (ADMIN ONLY)
 
 You ARE the Clow system. Your own source code lives in the current workspace.
 When the user asks you to change your behavior, appearance, features, or configuration:
 1. Edit your own source files directly (src/, public/, etc.)
-2. Run \`npx tsc\` to rebuild after changes
-3. Run \`pm2 restart clow\` to apply changes to the server
+2. Run \\\`npx tsc\\\` to rebuild after changes
+3. Run \\\`pm2 restart clow\\\` to apply changes to the server
 4. Confirm the change to the user
 
 You can modify anything about yourself:
@@ -97,7 +111,19 @@ You can modify anything about yourself:
 - Add new MCP integrations, skills, plugins, hooks
 
 After every self-modification, always rebuild and restart so changes take effect immediately.
-The user is your owner. Follow their instructions about how you should behave.
+The user is your owner. Follow their instructions about how you should behave.` : `# Security Restrictions (REGULAR USER)
+
+You are operating in a sandboxed multi-tenant environment.
+CRITICAL: You MUST NOT do any of the following:
+- Access or modify system files (src/, dist/, .env, package.json, tsconfig.json)
+- Run pm2, systemctl, or any service management commands
+- Access other users' data or workspaces
+- Read environment variables or API keys
+- Modify server configuration
+- Install global packages
+
+You can ONLY work within the user's designated workspace.
+If asked to do something outside your allowed scope, politely explain the limitation.`}
 
 # Core Principles
 
@@ -143,7 +169,12 @@ Instead:
 - No emojis unless the user requests them
 `;
 
-  return _staticPromptCache;
+  if (isAdmin) {
+    _adminPromptCache = prompt;
+  } else {
+    _userPromptCache = prompt;
+  }
+  return prompt;
 }
 
 // ─── Dynamic Context — injected as prefix of first user message ─────────────
@@ -286,8 +317,8 @@ export async function getGitStatus(): Promise<string> {
  * Dynamic context (date, CWD, git) is NOT included — use getDynamicContext()
  * and prepend it to the first user message instead.
  */
-export async function assembleFullContext(tenantId?: string): Promise<string> {
-  const systemPrompt = getSystemPrompt();
+export async function assembleFullContext(tenantId?: string, isAdmin: boolean = true): Promise<string> {
+  const systemPrompt = getSystemPrompt(isAdmin);
   const memoryPrompt = await getMemoryPrompt();
 
   let fullPrompt = systemPrompt;

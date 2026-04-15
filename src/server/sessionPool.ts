@@ -218,7 +218,7 @@ export class SessionPool {
             workspaceRoot,
             mcpServerNames: this.mcpManager?.getServerNames?.() || [],
           })
-        : await assembleFullContext()
+        : await assembleFullContext(tenantId, options.isAdmin ?? false)
     );
 
     const systemPrompt = pluginOutputStyles.systemPromptAddition
