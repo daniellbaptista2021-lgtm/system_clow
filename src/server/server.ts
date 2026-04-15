@@ -32,6 +32,8 @@ import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
+import { buildDocsRoutes } from './openapi.js';
+import { getMetricsSummary } from '../utils/logger.js';
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -216,6 +218,15 @@ async function main(): Promise<void> {
   const memoryRoutes = buildMemoryRoutes();
   app.route('/v1/memory', memoryRoutes);
   console.log('  ✓ Persistent Memory: API routes mounted');
+
+  // Mount OpenAPI docs (Swagger UI at /docs)
+  const docsRoutes = buildDocsRoutes();
+  app.route('/', docsRoutes);
+  console.log('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
+
+  // Metrics endpoint
+  app.get('/v1/metrics', (c) => c.json(getMetricsSummary()));
+  console.log('  ✓ Metrics: /v1/metrics');
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
