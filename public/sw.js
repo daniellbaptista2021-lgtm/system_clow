@@ -1,4 +1,4 @@
-const CACHE = 'clow-v2';
+const CACHE = 'clow-v99';
 const STATIC = ['/', '/assets/logo.png', '/assets/favicon.png', '/assets/icon-192.png', '/assets/icon-512.png', '/assets/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', e => {
