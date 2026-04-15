@@ -110,7 +110,7 @@ class MetricsCollector {
     // By tenant
     const byTenant: Record<string, { requests: number; totalMs: number }> = {};
     for (const [tid, data] of this.tenantRequests) {
-      byTenant[tid] = { ...data };
+      byTenant[tid] = { requests: data.count, totalMs: data.totalMs };
     }
 
     return {
