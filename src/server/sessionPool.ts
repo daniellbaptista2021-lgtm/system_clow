@@ -9,6 +9,7 @@
 import { QueryEngine } from '../query/QueryEngine.js';
 import { HookEngine } from '../hooks/HookEngine.js';
 import { HookEventDispatcher } from '../hooks/HookEventDispatcher.js';
+import { initMemorySystem } from '../memory/index.js';
 import { PluginSystem } from '../plugins/PluginSystem.js';
 import { SkillEngine } from '../skills/SkillEngine.js';
 import { buildPluginRuntimeTools } from '../plugins/components/PluginRuntimeTools.js';
@@ -195,6 +196,8 @@ export class SessionPool {
     for (const pluginHook of pluginSystem.getHooks()) {
       hookEngine.addHook(pluginHook);
     }
+    // Initialize persistent memory hooks (SQLite-backed)
+    await initMemorySystem(hookEngine, tenantId || 'default');
     const hookDispatcher = new HookEventDispatcher(hookEngine, {
       sessionId,
       transcriptPath: getSessionFilePath(sessionId),

@@ -178,8 +178,12 @@ async function generateLLMSummary(observations: import('../MemoryStore.js').Obse
   nextSteps?: string;
 }> {
   // Dynamic import to avoid circular deps
-  const { initAnthropic } = await import('../../api/anthropic.js');
-  const client = initAnthropic();
+  const anthropicModule = await import('../../api/anthropic.js');
+  // getAnthropicClient() returns the already-initialized client
+  const client = (anthropicModule as any).getAnthropicClient
+    ? (anthropicModule as any).getAnthropicClient()
+    : null;
+  if (!client) throw new Error('Anthropic client not available');
 
   const obsList = observations
     .map(o => `- [${o.tool_name}] ${o.title}${o.narrative ? ': ' + o.narrative : ''}`)
