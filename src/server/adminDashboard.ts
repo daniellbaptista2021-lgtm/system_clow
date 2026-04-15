@@ -25,33 +25,46 @@ async function checkAnthropicApi(): Promise<{ ok: boolean; latencyMs: number; er
 
   const start = Date.now();
   try {
-    const { getAnthropicClient } = await import('../api/anthropic.js');
-    const client = (getAnthropicClient as any)();
-    if (!client) return { ok: false, latencyMs: 0, error: 'Client not initialized' };
-
-    // Minimal API call to verify connectivity — count tokens of a tiny message
-    await client.messages.count_tokens({
-      model: process.env.CLOW_MODEL || 'claude-haiku-4-5-20250315',
-      messages: [{ role: 'user', content: 'ping' }],
-    });
-
-    const result = { ok: true, latencyMs: Date.now() - start };
-    lastApiCheck = { ...result, checkedAt: Date.now() };
-    return result;
-  } catch (err) {
-    // count_tokens might not be available — try a different approach
-    try {
-      // Just verify the client exists and has the API key configured
-      const apiKey = process.env.ANTHROPIC_API_KEY || '';
-      const ok = apiKey.length > 10 && apiKey.startsWith('sk-ant-');
-      const result = { ok, latencyMs: Date.now() - start, error: ok ? undefined : 'Invalid API key format' };
-      lastApiCheck = { ...result, checkedAt: Date.now() };
-      return result;
-    } catch {
-      const result = { ok: false, latencyMs: Date.now() - start, error: (err as Error).message };
+    // Verify API key format and connectivity
+    const apiKey = process.env.ANTHROPIC_API_KEY || '';
+    if (!apiKey || apiKey.length < 10) {
+      const result = { ok: false, latencyMs: 0, error: 'API key not configured' };
       lastApiCheck = { ...result, checkedAt: Date.now() };
       return result;
     }
+
+    // Quick connectivity check via HTTP HEAD to Anthropic API
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: process.env.CLOW_MODEL || 'claude-haiku-4-5-20250315',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    // 200 = works, 400/401 = key issue, but server reachable
+    const ok = response.status === 200;
+    const result = {
+      ok,
+      latencyMs: Date.now() - start,
+      error: ok ? undefined : `API returned ${response.status}`,
+    };
+    lastApiCheck = { ...result, checkedAt: Date.now() };
+    return result;
+  } catch (err) {
+    const result = { ok: false, latencyMs: Date.now() - start, error: (err as Error).message };
+    lastApiCheck = { ...result, checkedAt: Date.now() };
+    return result;
   }
 }
 
