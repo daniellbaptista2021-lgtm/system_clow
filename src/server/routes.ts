@@ -22,6 +22,9 @@ import { SessionPool, type CreateSessionOptions } from './sessionPool.js';
 import { checkQuota } from '../tenancy/quotaGuard.js';
 import { incrementUsage } from '../tenancy/tenantStore.js';
 import { apiQueue } from './requestQueue.js';
+import { rateLimiter } from './rateLimiter.js';
+import { audit } from '../tenancy/auditLog.js';
+import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
 import {
   flushSession,
   recordTranscriptForSession,
@@ -64,26 +67,54 @@ export function buildRoutes(pool: SessionPool): Hono {
     });
   });
 
+  // ── Helper: Check session ownership ──────────────────────────────
+  function checkSessionOwnership(sessionId: string, requestTenantId: string | undefined, isAdmin: boolean): string | null {
+    if (isAdmin) return null; // Admin can access everything
+    const meta = pool.getMetadata(sessionId);
+    if (!meta) return null; // Session not found — will 404 later
+    if (meta.tenantId && requestTenantId && meta.tenantId !== requestTenantId) {
+      return 'Acesso negado: esta sessao pertence a outro usuario';
+    }
+    return null;
+  }
+
   // ── Create Session ──────────────────────────────────────────────────
   app.post('/v1/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const sessionId = body.session_id || randomUUID();
     const { tenant, tenantId, tenantTier } = getTenantContext(c);
-    const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
-    const tenantWorkspaceRoot =
-      typeof tenant?.workspaceRoot === 'string'
-        ? tenant.workspaceRoot
-        : typeof tenant?.workspace_root === 'string'
-          ? tenant.workspace_root
-          : undefined;
+    const isAdmin = (c as any).get("authMode") === "admin_session";
+    const clientIp = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || '';
+
+    // Rate limiting (skip for admin)
+    if (!isAdmin && tenantId) {
+      const rl = rateLimiter.checkSessionCreate(tenantId);
+      if (!rl.allowed) {
+        audit('rate_limit_exceeded', tenantId || 'unknown', { endpoint: 'session_create', retryAfterMs: rl.retryAfterMs }, undefined, clientIp);
+        return c.json({ error: 'rate_limit', message: 'Limite de criacao de sessoes excedido. Tente novamente em breve.' }, 429);
+      }
+      rateLimiter.recordSessionCreate(tenantId);
+    }
+
     const quotaError = tenant ? checkQuota(tenant as any) : null;
     if (quotaError) {
+      audit('quota_exceeded', tenantId || 'unknown', { code: quotaError.code }, undefined, clientIp);
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
     }
-    const workspaceRoot =
-      typeof body.workspace_root === 'string'
-        ? body.workspace_root
-        : tenantWorkspaceRoot || requestedCwd;
+
+    // Workspace isolation: regular users get isolated workspace
+    let workspaceRoot: string;
+    let requestedCwd: string;
+    if (isAdmin) {
+      requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
+      const tenantWorkspaceRoot = typeof tenant?.workspaceRoot === 'string' ? tenant.workspaceRoot
+        : typeof tenant?.workspace_root === 'string' ? (tenant.workspace_root as string) : undefined;
+      workspaceRoot = typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || requestedCwd;
+    } else {
+      // Regular users: locked to their workspace
+      workspaceRoot = tenantId ? getTenantWorkspaceDir(tenantId) : process.cwd();
+      requestedCwd = workspaceRoot;
+    }
 
     const sessionMode = body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server';
 
@@ -95,8 +126,10 @@ export function buildRoutes(pool: SessionPool): Hono {
       mode: sessionMode,
       maxTurns: body.max_turns,
       maxBudgetUsd: body.max_budget_usd,
-      isAdmin: (c as any).get("authMode") === "admin_session",
+      isAdmin,
     };
+
+    audit('session_create', tenantId || 'admin', { sessionId, isAdmin, tier: tenantTier }, sessionId, clientIp);
 
     try {
       await pool.create(sessionId, options);
@@ -118,13 +151,32 @@ export function buildRoutes(pool: SessionPool): Hono {
     const body = await c.req.json().catch(() => ({}));
     const message = body.message || body.content || body.prompt;
     const { tenant, tenantId: requestTenantId, tenantTier } = getTenantContext(c);
+    const isAdmin = (c as any).get("authMode") === "admin_session";
 
     if (!message || typeof message !== 'string') {
       return c.json({ error: 'message is required (string)' }, 400);
     }
 
+    // Session ownership check
+    const ownershipError = checkSessionOwnership(sessionId, requestTenantId, isAdmin);
+    if (ownershipError) {
+      audit('security_violation', requestTenantId || 'unknown', { sessionId, reason: 'session_hijack_attempt' });
+      return c.json({ error: 'access_denied', message: ownershipError }, 403);
+    }
+
+    // Rate limiting
+    if (!isAdmin && requestTenantId) {
+      const rl = rateLimiter.checkRequest(requestTenantId, tenantTier || 'one');
+      if (!rl.allowed) {
+        audit('rate_limit_exceeded', requestTenantId, { endpoint: 'messages' });
+        return c.json({ error: 'rate_limit', message: 'Limite de requisicoes excedido. Tente novamente em breve.', retry_after_ms: rl.retryAfterMs }, 429);
+      }
+      rateLimiter.recordRequest(requestTenantId);
+    }
+
     const quotaError = tenant ? checkQuota(tenant as any) : null;
     if (quotaError) {
+      audit('quota_exceeded', requestTenantId || 'unknown', { code: quotaError.code });
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
     }
 
@@ -246,11 +298,14 @@ export function buildRoutes(pool: SessionPool): Hono {
   // ── Get Session Metadata ────────────────────────────────────────────
   app.get('/v1/sessions/:id', async (c) => {
     const sessionId = c.req.param('id');
-    const meta = pool.getMetadata(sessionId);
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get("authMode") === "admin_session";
 
-    if (!meta) {
-      return c.json({ error: 'session_not_found' }, 404);
-    }
+    const ownershipError = checkSessionOwnership(sessionId, reqTenantId, isAdmin);
+    if (ownershipError) return c.json({ error: 'access_denied', message: ownershipError }, 403);
+
+    const meta = pool.getMetadata(sessionId);
+    if (!meta) return c.json({ error: 'session_not_found' }, 404);
 
     return c.json({
       session_id: sessionId,
@@ -264,11 +319,14 @@ export function buildRoutes(pool: SessionPool): Hono {
   // ── Get Session History ─────────────────────────────────────────────
   app.get('/v1/sessions/:id/history', async (c) => {
     const sessionId = c.req.param('id');
-    const engine = await pool.get(sessionId);
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get("authMode") === "admin_session";
 
-    if (!engine) {
-      return c.json({ error: 'session_not_found' }, 404);
-    }
+    const ownershipError = checkSessionOwnership(sessionId, reqTenantId, isAdmin);
+    if (ownershipError) return c.json({ error: 'access_denied', message: ownershipError }, 403);
+
+    const engine = await pool.get(sessionId);
+    if (!engine) return c.json({ error: 'session_not_found' }, 404);
 
     const messages = engine.getMessages();
     return c.json({
@@ -285,21 +343,30 @@ export function buildRoutes(pool: SessionPool): Hono {
   // ── Delete Session ──────────────────────────────────────────────────
   app.delete('/v1/sessions/:id', async (c) => {
     const sessionId = c.req.param('id');
-    const existed = pool.delete(sessionId);
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get("authMode") === "admin_session";
 
-    return c.json({
-      session_id: sessionId,
-      deleted: existed,
-    });
+    const ownershipError = checkSessionOwnership(sessionId, reqTenantId, isAdmin);
+    if (ownershipError) return c.json({ error: 'access_denied', message: ownershipError }, 403);
+
+    const existed = pool.delete(sessionId);
+    audit('session_delete', reqTenantId || 'admin', { sessionId, deleted: existed }, sessionId);
+
+    return c.json({ session_id: sessionId, deleted: existed });
   });
 
   // ── List Active Sessions ────────────────────────────────────────────
   app.get('/v1/sessions', (c) => {
-    const sessions = pool.listActive();
-    return c.json({
-      count: sessions.length,
-      sessions,
-    });
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get("authMode") === "admin_session";
+
+    let sessions = pool.listActive();
+    // Regular users only see their own sessions
+    if (!isAdmin && reqTenantId) {
+      sessions = sessions.filter((s: any) => s.tenantId === reqTenantId);
+    }
+
+    return c.json({ count: sessions.length, sessions });
   });
 
   // ── Session Cache Metrics ───────────────────────────────────────────
