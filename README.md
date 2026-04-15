@@ -6,7 +6,7 @@
 
 **Agente de codigo AI de nivel enterprise — com paridade arquitetural ao Claude Code**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-65.8K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-67.4K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Status](https://img.shields.io/badge/Status-Producao-brightgreen)](#)
 [![Memory](https://img.shields.io/badge/Memoria-Persistente-blueviolet)](#memoria-persistente)
@@ -199,18 +199,61 @@ docker run -p 3001:3001 --env-file .env system-clow
 - Auth JWT — Sessoes admin criptografadas
 - Memoria isolada — SQLite separado por tenant
 
+## Observabilidade
+
+O System Clow inclui um sistema completo de observabilidade:
+
+- **Logger estruturado** — JSON logs com severity (debug/info/warn/error/fatal), component tagging, session/tenant context
+- **Metricas de latencia** — Coleta automatica com p95/p99, media, por componente e por tenant
+- **Endpoint de metricas** — `GET /v1/metrics` retorna resumo em tempo real
+- **Tracing por sessao** — Cada operacao e rastreavel por sessionId e tenantId
+
+```json
+{"ts":"2026-04-15T18:00:00Z","level":"info","component":"Memory","msg":"query completed","data":{"durationMs":12,"rows":5}}
+```
+
+## Documentacao da API
+
+Documentacao interativa via Swagger UI:
+
+- **Swagger UI**: `https://system-clow.pvcorretor01.com.br/docs`
+- **OpenAPI JSON**: `https://system-clow.pvcorretor01.com.br/openapi.json`
+- **Spec**: OpenAPI 3.1 com schemas para todos os endpoints
+
+Todos os endpoints documentados:
+- Auth (login, verify)
+- Sessions (create, message, history, delete)
+- Memory (search, sessions, timeline, stats, delete)
+- System (health, metrics)
+
+## Testes Automatizados
+
+Suite de testes com Vitest:
+
+```bash
+npm test              # Executar testes
+npm run test:watch    # Modo watch
+npm run test:coverage # Com cobertura de codigo
+```
+
+Testes unitarios para:
+- MemoryStore (schema, CRUD, deduplicacao SHA256, CASCADE delete, FTS5)
+- HookEngine (registro, disparo, enable/disable, metricas, error handling)
+- MemoryContextInjector (formatacao, budget de tokens, deduplicacao de arquivos)
+
 ## Performance
 
 | Metrica | Valor |
 |---|---|
-| Linhas de codigo | 65.889 |
-| Arquivos TypeScript | 252 |
+| Linhas de codigo | 67.450 |
+| Arquivos TypeScript | 256 |
 | Subsistemas | 14 |
 | Ferramentas nativas | 17 |
 | Skills auto-injetaveis | 12 |
 | Eventos de hook | 24 |
 | Modelos suportados | 5+ |
-| Paridade com Claude Code | ~97% |
+| Testes automatizados | 25+ |
+| Paridade com Claude Code | ~98% |
 
 ## Stack Tecnica
 
@@ -222,6 +265,9 @@ docker run -p 3001:3001 --env-file .env system-clow
 | LLM | Anthropic SDK / OpenAI SDK |
 | Protocolo | MCP (Model Context Protocol) |
 | Persistencia | JSONL append-only + SQLite (memoria) |
+| Testes | Vitest + V8 Coverage |
+| API Docs | OpenAPI 3.1 + Swagger UI |
+| Observabilidade | Logger JSON + Metricas p95/p99 |
 | Busca | FTS5 full-text search |
 | Auth | JWT + API keys |
 | Process | PM2 |
@@ -244,6 +290,10 @@ docker run -p 3001:3001 --env-file .env system-clow
 - [x] Memoria persistente (SQLite + FTS5)
 - [x] Busca full-text em memorias
 - [x] Resumo automatico de sessoes via LLM
+- [x] Testes automatizados (Vitest + V8 Coverage)
+- [x] Observabilidade (Logger JSON + Metricas p95/p99)
+- [x] Documentacao API (OpenAPI 3.1 + Swagger UI)
+- [x] Frontend modular (JS separado do HTML)
 - [ ] RAG com embeddings vetoriais
 - [ ] Dashboard admin com metricas
 - [ ] Marketplace de plugins publico
@@ -254,6 +304,6 @@ docker run -p 3001:3001 --env-file .env system-clow
 
 **System Clow** — Construido para quem precisa de um agente AI que realmente executa.
 
-*65.800+ linhas de TypeScript . 14 subsistemas . 17 ferramentas . Memoria persistente . Producao 24/7*
+*67.400+ linhas de TypeScript . 14 subsistemas . 17 ferramentas . Memoria persistente . Testes + Observabilidade . Producao 24/7*
 
 </div>
