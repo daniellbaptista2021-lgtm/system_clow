@@ -29,6 +29,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-3-opus': 200_000,
   'claude-3-sonnet': 200_000,
   'claude-3-haiku': 200_000,
+  'claude-haiku-4-5': 200_000,
   'claude-3.5-sonnet': 200_000,
 };
 
@@ -39,7 +40,8 @@ const MODEL_MAX_OUTPUT: Record<string, number> = {
   'claude-3-7-sonnet-latest': 8_192,
   'claude-3-opus': 4_096,
   'claude-3-sonnet': 4_096,
-  'claude-3-haiku': 4_096,
+  'claude-3-haiku': 8_192,
+  'claude-haiku-4-5': 8_192,
   'claude-3.5-sonnet': 8_192,
 };
 
