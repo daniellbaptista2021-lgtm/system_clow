@@ -31,6 +31,7 @@ import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
 import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
+import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -210,6 +211,20 @@ async function main(): Promise<void> {
   // Mount MCP Remote Server (for Claude Desktop integration)
   const mcpRemoteRoutes = buildMCPRemoteRoutes(pool, mcpManager);
   app.route('/', mcpRemoteRoutes);
+
+  // Mount persistent memory API routes
+  const memoryRoutes = buildMemoryRoutes();
+  app.route('/v1/memory', memoryRoutes);
+
+  // Initialize persistent memory system (hooks + SQLite)
+  try {
+    const { HookEngine } = await import('../hooks/HookEngine.js');
+    const hookEngine = (pool as any)._hookEngine || new HookEngine();
+    await initMemorySystem(hookEngine);
+    console.log('  ✓ Persistent Memory: SQLite + hooks initialized');
+  } catch (err) {
+    console.warn(`  ⚠ Persistent Memory: ${(err as Error).message}`);
+  }
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
