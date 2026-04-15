@@ -215,16 +215,7 @@ async function main(): Promise<void> {
   // Mount persistent memory API routes
   const memoryRoutes = buildMemoryRoutes();
   app.route('/v1/memory', memoryRoutes);
-
-  // Initialize persistent memory system (hooks + SQLite)
-  try {
-    const { HookEngine } = await import('../hooks/HookEngine.js');
-    const hookEngine = (pool as any)._hookEngine || new HookEngine();
-    await initMemorySystem(hookEngine);
-    console.log('  ✓ Persistent Memory: SQLite + hooks initialized');
-  } catch (err) {
-    console.warn(`  ⚠ Persistent Memory: ${(err as Error).message}`);
-  }
+  console.log('  ✓ Persistent Memory: API routes mounted');
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
