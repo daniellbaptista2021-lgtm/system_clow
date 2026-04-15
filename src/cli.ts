@@ -361,7 +361,7 @@ async function main(): Promise<void> {
     cwd: getCwd(),
     permissionMode: getPermissionMode(),
   }));
-  const maxTurns = parseInt(opts.maxTurns, 10) || 50;
+  const maxTurns = parseInt(opts.maxTurns, 10) || 9999; // CLI is always admin - unlimited
 
   if (opts.planMode) {
     setPermissionMode('plan');

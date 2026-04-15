@@ -54,6 +54,7 @@ export interface CreateSessionOptions {
   maxBudgetUsd?: number;
   systemPromptOverride?: string;
   persistSessionStart?: boolean;
+  isAdmin?: boolean;
 }
 
 function getSessionModeFromEntries(entries: any[], fallback: 'server' | 'coordinator' = 'server'): 'server' | 'coordinator' {
@@ -237,8 +238,8 @@ export class SessionPool {
     const engine = new QueryEngine({
       tools,
       systemPrompt,
-      maxTurns: options.maxTurns || 30,
-      maxBudgetUsd: options.maxBudgetUsd || 1,
+      maxTurns: options.maxTurns || (options.isAdmin ? 9999 : 30),
+      maxBudgetUsd: options.maxBudgetUsd || (options.isAdmin ? 999 : 1),
       canUseTool,
       getExecutionContext: () => ({
         cwd,

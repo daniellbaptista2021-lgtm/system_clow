@@ -15,6 +15,8 @@ import { config as loadEnv } from 'dotenv';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import * as https from 'https';
+import { execSync } from 'child_process';
 
 import { initAnthropic } from '../api/anthropic.js';
 import { MCPManager } from '../mcp/MCPManager.js';
@@ -25,6 +27,7 @@ import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
 import { buildWhatsAppRoutes } from '../adapters/whatsapp.js';
 import { buildBridgeRoutes } from './bridgeRoutes.js';
+import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
 import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
@@ -61,6 +64,42 @@ function isSafeDownloadName(requested: string): boolean {
   if (!requested || requested.includes('/') || requested.includes('\\')) return false;
   if (requested === '.' || requested === '..') return false;
   return !/[\x00-\x1f]/.test(requested);
+}
+
+function ensureSSLCertificates(): { key: string; cert: string } {
+  const certDir = path.join(os.homedir(), '.clow', 'ssl');
+  const keyPath = path.join(certDir, 'key.pem');
+  const certPath = path.join(certDir, 'cert.pem');
+
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(certDir)) {
+    fs.mkdirSync(certDir, { recursive: true });
+  }
+
+  // Check if certificates already exist
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    return {
+      key: fs.readFileSync(keyPath, 'utf-8'),
+      cert: fs.readFileSync(certPath, 'utf-8'),
+    };
+  }
+
+  // Generate self-signed certificate
+  console.log('  Generating self-signed SSL certificate...');
+  try {
+    execSync(
+      `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost"`,
+      { stdio: 'pipe' }
+    );
+    console.log('  ✓ SSL certificate generated');
+    return {
+      key: fs.readFileSync(keyPath, 'utf-8'),
+      cert: fs.readFileSync(certPath, 'utf-8'),
+    };
+  } catch (err: any) {
+    console.error('  ✗ Failed to generate SSL certificate:', err.message);
+    throw err;
+  }
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -167,6 +206,10 @@ async function main(): Promise<void> {
   // Mount WhatsApp adapter
   const whatsappRoutes = buildWhatsAppRoutes(pool);
   app.route('/', whatsappRoutes);
+
+  // Mount MCP Remote Server (for Claude Desktop integration)
+  const mcpRemoteRoutes = buildMCPRemoteRoutes(pool, mcpManager);
+  app.route('/', mcpRemoteRoutes);
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
@@ -278,11 +321,25 @@ async function main(): Promise<void> {
   console.log(`  ║   System Clow API — port ${PORT}         ║`);
   console.log(`  ╚═══════════════════════════════════════╝\n`);
 
-  serve({ fetch: app.fetch, port: PORT }, (info) => {
-    console.log(`  Listening on http://localhost:${info.port}`);
-    console.log(`  Health: http://localhost:${info.port}/health`);
-    console.log(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
-  });
+  // Use HTTPS with self-signed certificate
+  const useHttps = process.env.CLOW_USE_HTTPS !== 'false';
+  
+  if (useHttps) {
+    const { key, cert } = ensureSSLCertificates();
+    const httpsServer = https.createServer({ key, cert }, app.fetch as any);
+    httpsServer.listen(PORT, () => {
+      console.log(`  Listening on https://localhost:${PORT}`);
+      console.log(`  Health: https://localhost:${PORT}/health`);
+      console.log(`  MCP: https://localhost:${PORT}/mcp`);
+      console.log(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
+    });
+  } else {
+    serve({ fetch: app.fetch, port: PORT }, (info) => {
+      console.log(`  Listening on http://localhost:${info.port}`);
+      console.log(`  Health: http://localhost:${info.port}/health`);
+      console.log(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
+    });
+  }
 }
 
 main().catch((err) => {

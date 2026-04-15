@@ -19,9 +19,14 @@ export interface AnthropicConfig {
 let client: Anthropic | null = null;
 let config: AnthropicConfig | null = null;
 
-const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_MODEL = 'claude-3-haiku-20240307';
 
 const PRICING: Record<string, { input_miss: number; input_hit: number; output: number }> = {
+  'claude-3-haiku-20240307': {
+    input_miss: 0.25 / 1_000_000,
+    input_hit: 0.025 / 1_000_000,
+    output: 1.25 / 1_000_000,
+  },
   'claude-sonnet-4-6': {
     input_miss: 3.0 / 1_000_000,
     input_hit: 0.3 / 1_000_000,
@@ -274,6 +279,7 @@ function looksLikeToolError(content: string): boolean {
 
 function convertToAnthropicMessages(messages: ClovMessage[]): any[] {
   const converted: any[] = [];
+  const pendingToolUseIds = new Set<string>();
 
   for (const msg of messages) {
     if (msg.role === 'system') {
@@ -286,12 +292,23 @@ function convertToAnthropicMessages(messages: ClovMessage[]): any[] {
     }
 
     if (msg.role === 'tool') {
-      appendAnthropicMessage(converted, 'user', [{
+      // Ensure tool_result is added as a separate user message
+      const toolResultBlock = {
         type: 'tool_result',
         tool_use_id: msg.tool_call_id || '',
         content: msg.content,
         is_error: looksLikeToolError(msg.content),
-      }]);
+      };
+      
+      // Always create a new user message for tool results to ensure proper sequencing
+      converted.push({
+        role: 'user',
+        content: [toolResultBlock],
+      });
+      
+      if (msg.tool_call_id) {
+        pendingToolUseIds.delete(msg.tool_call_id);
+      }
       continue;
     }
 
@@ -306,10 +323,16 @@ function convertToAnthropicMessages(messages: ClovMessage[]): any[] {
         name: tc.function.name,
         input: normalizeToolInput(tc.function.arguments),
       });
+      pendingToolUseIds.add(tc.id);
     }
     if (blocks.length > 0) {
       appendAnthropicMessage(converted, 'assistant', blocks);
     }
+  }
+
+  // Validate: no pending tool_use without tool_result
+  if (pendingToolUseIds.size > 0) {
+    console.warn(`Warning: ${pendingToolUseIds.size} tool_use(s) without corresponding tool_result: ${Array.from(pendingToolUseIds).join(', ')}`);
   }
 
   return converted;

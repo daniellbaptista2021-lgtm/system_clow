@@ -94,6 +94,7 @@ export function buildRoutes(pool: SessionPool): Hono {
       mode: sessionMode,
       maxTurns: body.max_turns,
       maxBudgetUsd: body.max_budget_usd,
+      isAdmin: (c as any).get("authMode") === "admin_session",
     };
 
     try {
@@ -142,6 +143,7 @@ export function buildRoutes(pool: SessionPool): Hono {
         tenantId: requestTenantId,
         tenantTier,
         mode: body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server',
+        isAdmin: (c as any).get("authMode") === "admin_session",
       });
     }
 

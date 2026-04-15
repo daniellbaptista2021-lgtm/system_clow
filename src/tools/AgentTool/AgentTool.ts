@@ -29,15 +29,15 @@ import type { WorkerSpawnResult } from '../../coordinator/types.js';
 type TaskComplexity = 'normal' | 'broad';
 
 const SUBAGENT_DEFAULTS: Record<SubagentType, { maxTurns: number; budgetUsd: number }> = {
-  general: { maxTurns: 90, budgetUsd: 2.0 },
-  researcher: { maxTurns: 100, budgetUsd: 2.5 },
-  implementer: { maxTurns: 110, budgetUsd: 3.0 },
-  verifier: { maxTurns: 80, budgetUsd: 1.5 },
+  general: { maxTurns: 150, budgetUsd: 4.0 },
+  researcher: { maxTurns: 150, budgetUsd: 4.5 },
+  implementer: { maxTurns: 150, budgetUsd: 5.0 },
+  verifier: { maxTurns: 150, budgetUsd: 3.5 },
 };
 
-const BROAD_TASK_MULTIPLIER = 1.75;
-const MAX_AUTO_BUDGET_USD = 8.0;
-const MAX_AUTO_TURNS = 160;
+const BROAD_TASK_MULTIPLIER = 2.0;
+const MAX_AUTO_BUDGET_USD = 12.0;
+const MAX_AUTO_TURNS = 300;
 
 const RESEARCHER_TOOLS = new Set([
   'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Bash', 'TodoWrite',
