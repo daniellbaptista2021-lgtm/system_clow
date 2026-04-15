@@ -21,6 +21,7 @@ import { randomUUID } from 'crypto';
 import { SessionPool, type CreateSessionOptions } from './sessionPool.js';
 import { checkQuota } from '../tenancy/quotaGuard.js';
 import { incrementUsage } from '../tenancy/tenantStore.js';
+import { apiQueue } from './requestQueue.js';
 import {
   flushSession,
   recordTranscriptForSession,

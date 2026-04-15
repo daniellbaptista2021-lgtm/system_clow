@@ -371,10 +371,16 @@ export async function* callModel(
   setLastAPIRequestTimestamp(startTime);
 
   try {
+    // Prompt caching: mark system prompt blocks with cache_control
+    // The system prompt is stable within a session — caching saves ~90% on input tokens
+    const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
+      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+    ];
+
     const stream = await withRetry(
       () => api.messages.create({
         model: cfg.model,
-        system: systemPrompt,
+        system: systemBlocks as any,
         messages: anthropicMessages,
         tools: anthropicTools,
         max_tokens: cfg.maxOutputTokens || 8192,
