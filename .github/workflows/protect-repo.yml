@@ -1,0 +1,15 @@
+name: Protect Repository
+
+on: [push, pull_request]
+
+jobs:
+  check-visibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Repository Visibility
+        run: |
+          if [ "${{ github.event.repository.private }}" != "true" ]; then
+            echo "ERROR: Repository must be PRIVATE"
+            exit 1
+          fi
+          echo "Repository is private"

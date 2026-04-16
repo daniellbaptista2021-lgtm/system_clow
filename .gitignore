@@ -6,3 +6,8 @@ dist/
 output/
 tmp/
 public/downloads/
+
+# License keys (NEVER commit private key)
+.license-private.key
+.integrity-hash
+data/
