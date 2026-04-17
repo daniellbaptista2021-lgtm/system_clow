@@ -10,6 +10,7 @@
 import type { HookInput, HookOutput } from '../../hooks/types.js';
 import { MemoryStore } from '../MemoryStore.js';
 import { generateMemoryContext } from '../MemoryContextInjector.js';
+import { RAGEngine } from '../ragEngine.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Store Cache (per tenant)
@@ -89,7 +90,7 @@ export async function handlePostToolUse(input: HookInput): Promise<HookOutput | 
     // Determine type
     const type = WRITE_TOOLS.has(toolName) ? 'file_change' : 'tool_use';
 
-    store.recordObservation({
+    const obsId = store.recordObservation({
       sessionId: input.session_id,
       toolName,
       type,
@@ -97,6 +98,14 @@ export async function handlePostToolUse(input: HookInput): Promise<HookOutput | 
       narrative,
       filesTouched: files.length > 0 ? files : undefined,
     });
+
+    // Index for RAG semantic search
+    if (obsId) {
+      try {
+        const rag = new RAGEngine(tenantId);
+        rag.indexText('observation', obsId, `${title} ${narrative}`);
+      } catch {}
+    }
   } catch (err) {
     console.warn(`[Memory] PostToolUse hook error: ${(err as Error).message}`);
   }

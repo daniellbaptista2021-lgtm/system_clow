@@ -11,6 +11,7 @@
 
 import { Hono } from 'hono';
 import { MemoryStore } from './MemoryStore.js';
+import { RAGEngine } from './ragEngine.js';
 
 export function buildMemoryRoutes(): Hono {
   const app = new Hono();
@@ -85,6 +86,24 @@ export function buildMemoryRoutes(): Hono {
     }
   });
 
+  // ─── Semantic Search (RAG) ────────────────────────────────────
+
+  app.get('/semantic', (c) => {
+    const q = c.req.query('q') || '';
+    const tenantId = c.req.query('tenant_id') || 'default';
+    const limit = parseInt(c.req.query('limit') || '10', 10);
+
+    if (!q) return c.json({ error: 'Query "q" required' }, 400);
+
+    try {
+      const rag = new RAGEngine(tenantId);
+      const results = rag.search(q, limit);
+      return c.json({ results, count: results.length, method: 'semantic_embedding' });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 500);
+    }
+  });
+
   // ─── Stats ──────────────────────────────────────────────────────
 
   app.get('/stats', (c) => {
@@ -92,7 +111,13 @@ export function buildMemoryRoutes(): Hono {
 
     try {
       const store = new MemoryStore(tenantId);
-      return c.json(store.getStats());
+      const memStats = store.getStats();
+      let ragStats = { totalEmbeddings: 0, observations: 0, summaries: 0 };
+      try {
+        const rag = new RAGEngine(tenantId);
+        ragStats = rag.getStats();
+      } catch {}
+      return c.json({ ...memStats, rag: ragStats });
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500);
     }

@@ -36,6 +36,8 @@ import { buildDocsRoutes } from './openapi.js';
 import { getMetricsSummary } from '../utils/logger.js';
 import { buildDashboardRoutes } from './adminDashboard.js';
 import { apiQueue } from './requestQueue.js';
+import { buildSSORoutes } from './ssoAuth.js';
+import { buildMarketplaceRoutes } from '../plugins/marketplace.js';
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -237,6 +239,16 @@ async function main(): Promise<void> {
   const dashboardRoutes = buildDashboardRoutes(pool);
   app.route('/', dashboardRoutes);
   console.log('  ✓ Dashboard: /admin/dashboard + /health/deep');
+
+  // SSO authentication
+  const ssoRoutes = buildSSORoutes();
+  app.route('/', ssoRoutes);
+  console.log('  ✓ SSO: /auth/sso + /auth/sso/verify');
+
+  // Plugin marketplace
+  const marketplaceRoutes = buildMarketplaceRoutes();
+  app.route('/v1/marketplace', marketplaceRoutes);
+  console.log('  ✓ Marketplace: /v1/marketplace/plugins');
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
