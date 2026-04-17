@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  color: #333;
+  background: #ffffff;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors;
+}
+
+.section-padding {
+  @apply py-16 px-4;
+}
+
+.calendar-day {
+  @apply w-10 h-10 flex items-center justify-center text-sm border border-gray-200 hover:bg-blue-50 cursor-pointer transition-colors;
+}
+
+.calendar-day.available {
+  @apply bg-green-50 text-green-700 hover:bg-green-100;
+}
+
+.feature-card {
+  @apply bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow;
+}
