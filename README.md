@@ -6,7 +6,7 @@
 
 **Agente de codigo AI de nivel enterprise — clone arquitetural do Claude Code**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-67.9K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-69K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Claude](https://img.shields.io/badge/Claude-Sonnet_4-blueviolet?logo=anthropic&logoColor=white)](#)
 [![Status](https://img.shields.io/badge/Status-Producao-brightgreen)](#)
@@ -23,7 +23,7 @@
 
 System Clow e um **agente de codigo AI completo** que executa tarefas de engenharia de software de forma autonoma — le arquivos, escreve codigo, executa comandos, clona sites, acessa APIs, cria documentos, gerencia projetos e orquestra sub-agentes — tudo via chat, terminal ou API.
 
-Construido como **clone arquitetural do Claude Code**, o System Clow implementa **15 subsistemas** em **67.900+ linhas de TypeScript**, rodando como produto SaaS multi-tenant pronto para producao com 2000+ usuarios.
+Construido como **clone arquitetural do Claude Code**, o System Clow implementa **16 subsistemas** em **69.000+ linhas de TypeScript**, rodando como produto SaaS multi-tenant pronto para producao com 2000+ usuarios.
 
 ## Por que System Clow?
 
@@ -271,14 +271,14 @@ docker run -p 3001:3001 --env-file .env system-clow
 
 | Metrica | Valor |
 |---|---|
-| Linhas de codigo | 67.931 |
-| Arquivos TypeScript | 264 |
-| Subsistemas | 15 |
+| Linhas de codigo | 68.991 |
+| Arquivos TypeScript | 269 |
+| Subsistemas | 16 |
 | Ferramentas nativas | 17 |
 | Skills nativas | 13 (inclui clone-website) |
 | Eventos de hook | 24 |
 | Modelos suportados | 5+ |
-| Testes automatizados | 25+ |
+| Testes automatizados | 65+ |
 | Usuarios suportados | 2000+ |
 | Paridade com Claude Code | ~99% |
 
@@ -322,6 +322,43 @@ docker run -p 3001:3001 --env-file .env system-clow
 
 **System Clow** — Construido para quem precisa de um agente AI que realmente executa.
 
-*67.900+ linhas de TypeScript . 15 subsistemas . 17 ferramentas . Claude Sonnet 4 . Producao 24/7*
+*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . Claude Sonnet 4 . Producao 24/7*
 
 </div>
+
+## Escalabilidade
+
+### PostgreSQL para Tenants
+Adapter para migrar de JSON para PostgreSQL/Supabase:
+```env
+CLOW_DB_URL=postgresql://user:pass@host:5432/clow
+```
+Schema auto-migra na primeira conexao. Fallback para JSON quando nao configurado.
+
+### Redis para Sessoes Distribuidas
+Session store distribuido com TTL:
+```env
+CLOW_REDIS_URL=redis://host:6379
+```
+Fallback para in-memory Map quando Redis nao disponivel.
+
+### SSO (Single Sign-On)
+Token HMAC-SHA256 compartilhado entre Clow e System Clow:
+- `POST /auth/sso` — troca token SSO por sessao
+- `GET /auth/sso/verify` — verifica validade
+- Gate `hasSystemClow` para controlar acesso premium
+
+### RAG com Embeddings Vetoriais
+Busca semantica na memoria persistente:
+- Embeddings TF-IDF de 256 dimensoes (local, sem API externa)
+- Cosine similarity para ranking por relevancia
+- `GET /v1/memory/semantic?q=...` — busca semantica
+- Auto-indexa cada observacao gravada
+
+### Plugin Marketplace
+Registro publico de plugins instaláveis:
+- 8 plugins oficiais (clone-website, meta-ads, whatsapp-bot, etc)
+- Browse, install, uninstall, rate, review
+- `GET /v1/marketplace/plugins` — listar plugins
+- `POST /v1/marketplace/plugins/:slug/install` — instalar
+- Per-tenant tracking de instalacoes
