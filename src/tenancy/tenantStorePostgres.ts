@@ -95,7 +95,7 @@ export class TenantStorePostgres {
     if (this.initialized) return;
     try {
       // Dynamic import — pg is optional dependency
-      const { default: pg } = await import('pg');
+      const { default: pg } = await import('pg' as string) as any;
       this.pool = new pg.Pool({
         connectionString: this.connectionString,
         max: 10,
