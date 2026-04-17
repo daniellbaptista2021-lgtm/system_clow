@@ -98,24 +98,24 @@ Pipeline de 5 fases: Reconhecimento, Fundacao, Specs+Dispatch, Assembly, QA Visu
 | `EnterPlanMode` | Modo planejamento (read-only) |
 | `ExitPlanMode` | Sair do modo planejamento |
 
-## 15 Subsistemas Integrados
+## 16 Subsistemas Integrados
 
 ```
 src/
-  plugins/        18.194 linhas  Plugin system completo com marketplace
+  plugins/        18.600 linhas  Plugin system + marketplace publico
   hooks/           5.261 linhas  Pre/Post tool hooks (24 eventos)
   session/         5.557 linhas  Persistencia JSONL append-only
   bridge/          5.502 linhas  Remote control via SSE/WebSocket
   swarm/           5.170 linhas  Multi-agent com file-based mailbox
-  server/          5.800 linhas  HTTP API multi-tenant + dashboard
+  server/          6.200 linhas  HTTP API + SSO + Redis sessions + dashboard
   query/           3.400 linhas  Query engine com budget enforcement
   tools/           3.700 linhas  17 ferramentas + tool result cache
   compact/         3.320 linhas  3-tier compaction (micro/session/full)
   skills/          2.772 linhas  Auto-injecao por contexto + clone-website
-  tenancy/         2.400 linhas  Multi-tenant + rate limiter + audit + sandbox
+  tenancy/         3.100 linhas  Multi-tenant + PostgreSQL + rate limiter + audit
   coordinator/     1.960 linhas  Orchestracao de workers
   bootstrap/       1.892 linhas  Estado global + integrity check
-  memory/          1.150 linhas  Memoria persistente SQLite + FTS5
+  memory/          1.600 linhas  Memoria persistente + RAG embeddings
   mcp/               615 linhas  Model Context Protocol client
 ```
 
@@ -273,7 +273,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 |---|---|
 | Linhas de codigo | 68.991 |
 | Arquivos TypeScript | 269 |
-| Subsistemas | 16 |
+| Subsistemas | 16 + marketplace |
 | Ferramentas nativas | 17 |
 | Skills nativas | 13 (inclui clone-website) |
 | Eventos de hook | 24 |
@@ -312,9 +312,11 @@ docker run -p 3001:3001 --env-file .env system-clow
 - [x] License validator (RSA-256)
 - [x] Deep health check (API + DB + queue)
 - [x] Iframe embedding (produto dentro de produto)
-- [ ] RAG com embeddings vetoriais
-- [ ] Marketplace de plugins publico
-- [ ] SSO entre Clow e System Clow
+- [x] RAG com embeddings vetoriais (TF-IDF 256-dim + cosine similarity)
+- [x] Marketplace de plugins publico (8 oficiais + install/rate/review)
+- [x] SSO entre Clow e System Clow (HMAC-SHA256 token exchange)
+- [x] PostgreSQL adapter para tenants (Supabase compativel)
+- [x] Redis session store distribuido (fallback in-memory)
 
 ---
 
@@ -322,7 +324,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 
 **System Clow** — Construido para quem precisa de um agente AI que realmente executa.
 
-*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . Claude Sonnet 4 . Producao 24/7*
+*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . RAG + Marketplace + SSO . Claude Sonnet 4 . Producao 24/7*
 
 </div>
 
