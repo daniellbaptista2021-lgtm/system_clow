@@ -383,7 +383,7 @@ export async function* callModel(
         system: systemBlocks as any,
         messages: anthropicMessages,
         tools: anthropicTools,
-        max_tokens: cfg.maxOutputTokens || 8192,
+        max_tokens: cfg.maxOutputTokens || 16384,
         temperature: 0,
         stream: true,
       }, { signal }),
