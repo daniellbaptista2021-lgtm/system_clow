@@ -44,7 +44,7 @@ export class RedisSessionStore {
     }
 
     try {
-      const { default: Redis } = await import('ioredis');
+      const { default: Redis } = await import('ioredis' as string) as any;
       this.client = new Redis(url, {
         maxRetriesPerRequest: 3,
         retryStrategy: (times: number) => Math.min(times * 200, 5000),

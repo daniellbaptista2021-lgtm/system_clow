@@ -119,14 +119,14 @@ function getDb(): Database.Database {
 function seedOfficialPlugins(db: Database.Database): void {
   const now = Date.now();
   const plugins: Partial<MarketplacePlugin>[] = [
-    { id: 'clone-website', name: 'Clone Website', slug: 'clone-website', description: 'Clona qualquer site pixel-perfect usando Browser MCP. Pipeline de 5 fases com specs detalhadas.', version: '1.0.0', author: 'System Clow', category: 'skill', tags: JSON.stringify(['clone', 'website', 'next.js', 'pixel-perfect']), is_official: true, is_verified: true },
-    { id: 'meta-ads', name: 'Meta Ads Manager', slug: 'meta-ads', description: 'Gerencia campanhas no Meta Ads (Facebook/Instagram). Cria, analisa e otimiza campanhas.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: JSON.stringify(['meta', 'facebook', 'instagram', 'ads']), is_official: true, is_verified: true },
-    { id: 'whatsapp-bot', name: 'WhatsApp Bot', slug: 'whatsapp-bot', description: 'Bot de atendimento automatico via WhatsApp com Z-API. Respostas inteligentes 24/7.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: JSON.stringify(['whatsapp', 'bot', 'atendimento', 'zapi']), is_official: true, is_verified: true },
-    { id: 'excel-generator', name: 'Excel Generator', slug: 'excel-generator', description: 'Gera planilhas .xlsx profissionais com ExcelJS. Tabelas, graficos e formatacao.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: JSON.stringify(['excel', 'xlsx', 'planilha', 'relatorio']), is_official: true, is_verified: true },
-    { id: 'chatwoot-crm', name: 'Chatwoot CRM', slug: 'chatwoot-crm', description: 'Integra com Chatwoot para gerenciamento de conversas multi-canal.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: JSON.stringify(['crm', 'chatwoot', 'atendimento']), is_official: true, is_verified: true },
-    { id: 'n8n-workflows', name: 'n8n Workflows', slug: 'n8n-workflows', description: 'Cria e gerencia workflows de automacao no n8n via API.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: JSON.stringify(['n8n', 'automacao', 'workflow']), is_official: true, is_verified: true },
-    { id: 'vercel-deploy', name: 'Vercel Deploy', slug: 'vercel-deploy', description: 'Deploy automatico de sites e apps no Vercel com configuracao de dominio.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: JSON.stringify(['vercel', 'deploy', 'hosting']), is_official: true, is_verified: true },
-    { id: 'pdf-generator', name: 'PDF Generator', slug: 'pdf-generator', description: 'Gera documentos PDF profissionais com cabecalho, rodape e formatacao.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: JSON.stringify(['pdf', 'documento', 'relatorio']), is_official: true, is_verified: true },
+    { id: 'clone-website', name: 'Clone Website', slug: 'clone-website', description: 'Clona qualquer site pixel-perfect usando Browser MCP. Pipeline de 5 fases com specs detalhadas.', version: '1.0.0', author: 'System Clow', category: 'skill', tags: ['clone', 'website', 'next.js', 'pixel-perfect'], is_official: true, is_verified: true },
+    { id: 'meta-ads', name: 'Meta Ads Manager', slug: 'meta-ads', description: 'Gerencia campanhas no Meta Ads (Facebook/Instagram). Cria, analisa e otimiza campanhas.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: ['meta', 'facebook', 'instagram', 'ads'], is_official: true, is_verified: true },
+    { id: 'whatsapp-bot', name: 'WhatsApp Bot', slug: 'whatsapp-bot', description: 'Bot de atendimento automatico via WhatsApp com Z-API. Respostas inteligentes 24/7.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: ['whatsapp', 'bot', 'atendimento', 'zapi'], is_official: true, is_verified: true },
+    { id: 'excel-generator', name: 'Excel Generator', slug: 'excel-generator', description: 'Gera planilhas .xlsx profissionais com ExcelJS. Tabelas, graficos e formatacao.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: ['excel', 'xlsx', 'planilha', 'relatorio'], is_official: true, is_verified: true },
+    { id: 'chatwoot-crm', name: 'Chatwoot CRM', slug: 'chatwoot-crm', description: 'Integra com Chatwoot para gerenciamento de conversas multi-canal.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: ['crm', 'chatwoot', 'atendimento'], is_official: true, is_verified: true },
+    { id: 'n8n-workflows', name: 'n8n Workflows', slug: 'n8n-workflows', description: 'Cria e gerencia workflows de automacao no n8n via API.', version: '1.0.0', author: 'System Clow', category: 'integration', tags: ['n8n', 'automacao', 'workflow'], is_official: true, is_verified: true },
+    { id: 'vercel-deploy', name: 'Vercel Deploy', slug: 'vercel-deploy', description: 'Deploy automatico de sites e apps no Vercel com configuracao de dominio.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: ['vercel', 'deploy', 'hosting'], is_official: true, is_verified: true },
+    { id: 'pdf-generator', name: 'PDF Generator', slug: 'pdf-generator', description: 'Gera documentos PDF profissionais com cabecalho, rodape e formatacao.', version: '1.0.0', author: 'System Clow', category: 'tool', tags: ['pdf', 'documento', 'relatorio'], is_official: true, is_verified: true },
   ];
 
   const stmt = db.prepare(`
@@ -135,7 +135,8 @@ function seedOfficialPlugins(db: Database.Database): void {
   `);
 
   for (const p of plugins) {
-    stmt.run(p.id, p.name, p.slug, p.description, p.version, p.author, p.category, p.tags || '[]', p.is_official ? 1 : 0, p.is_verified ? 1 : 0, now, now);
+    const tagsJson = Array.isArray(p.tags) ? JSON.stringify(p.tags) : (p.tags || '[]');
+    stmt.run(p.id, p.name, p.slug, p.description, p.version, p.author, p.category, tagsJson, p.is_official ? 1 : 0, p.is_verified ? 1 : 0, now, now);
   }
 }
 
