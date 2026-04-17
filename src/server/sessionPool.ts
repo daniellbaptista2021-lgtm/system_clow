@@ -241,8 +241,8 @@ export class SessionPool {
     const engine = new QueryEngine({
       tools,
       systemPrompt,
-      maxTurns: options.maxTurns || (options.isAdmin ? 9999 : 30),
-      maxBudgetUsd: options.maxBudgetUsd || (options.isAdmin ? 999 : 1),
+      maxTurns: options.maxTurns || (options.isAdmin ? Infinity : 30),
+      maxBudgetUsd: options.maxBudgetUsd || (options.isAdmin ? Infinity : 1),
       canUseTool,
       getExecutionContext: () => ({
         cwd,

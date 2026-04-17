@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clow - Agente Autônomo com IA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: #1a1a1a;
+            background: #ffffff;
+            line-height: 1.6;
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 13px rgba(0, 0, 0, 0.05);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+            color: white;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #3b82f6;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            border: 2px solid #3b82f6;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-secondary:hover {
+            background: #f0f4ff;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .pricing-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .pricing-card.featured {
+            border-color: #3b82f6;
+            transform: scale(1.05);
+            box-shadow: 0 20px 25px rgba(59, 130, 246, 0.15);
+        }
+        
+        .pricing-card:hover {
+            border-color: #3b82f6;
+        }
+        
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 3rem;
+            color: #1a1a1a;
+        }
+        
+        .accordion-item {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 20px 0;
+        }
+        
+        .accordion-header {
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        
+        .accordion-content {
+            display: none;
+            margin-top: 16px;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+        
+        .accordion-content.active {
+            display: block;
+        }
+        
+        .flow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .flow-item {
+            background: #f9fafb;
+            padding: 24px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .flow-item:hover {
+            background: #f3f4f6;
+            border-color: #3b82f6;
+        }
+        
+        header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .hero {
+            padding: 80px 20px;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        .hero p {
+            font-size: 1.25rem;
+            color: #6b7280;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .section {
+            padding: 80px 20px;
+        }
+        
+        .section-light {
+            background: #f9fafb;
+        }
+        
+        .section-dark {
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+            color: white;
+        }
+        
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 32px;
+        }
+        
+        footer {
+            background: #1f2937;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        footer a {
+            color: white;
+            text-decoration: none;
+            margin: 0 12px;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .section-title {
+                font-size: 1.75rem;
+            }
+            
+            .pricing-card.featured {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">🤖 Clow</div>
+            <a href="#pricing" class="btn-primary">Ver Planos</a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Agente Autônomo com IA</h1>
+            <p>Automatize seus processos de negócio com inteligência artificial avançada. Integre com WhatsApp, CRM e muito mais.</p>
+            <div class="hero-buttons">
+                <a href="#" class="btn-primary">Começar Agora</a>
+                <a href="#" class="btn-secondary">Ver Demo</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section section-light">
+        <div class="container">
+            <h2 class="section-title">Recursos Principais</h2>
+            <div class="grid-4">
+                <div class="feature-card card-shadow">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🤖</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px;">Agente Autônomo</h3>
+                    <p style="color: #6b7280;">IA que trabalha 24/7 para automatizar suas tarefas</p>
+                </div>
+                <div class="feature-card card-shadow">
+                    <div style="font-size: 48px; margin-bottom: 16px;">💬</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px;">WhatsApp com IA</h3>
+                    <p style="color: #6b7280;">Atenda clientes via WhatsApp com respostas inteligentes</p>
+                </div>
+                <div class="feature-card card-shadow">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px;">CRM Integrado</h3>
+                    <p style="color: #6b7280;">Gerencie clientes com Chatwoot integrado</p>
+                </div>
+                <div class="feature-card card-shadow">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🚀</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 12px;">Deploy Fácil</h3>
+                    <p style="color: #6b7280;">Infraestrutura pronta para produção</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="section" id="pricing">
+        <div class="container">
+            <h2 class="section-title">Planos e Preços</h2>
+            <div class="grid-4">
+                <div class="pricing-card">
+                    <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 12px;">ONE</h3>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">R$ 139,90</div>
+                    <p style="color: #6b7280; margin-bottom: 24px;">/mês</p>
+                    <ul style="text-align: left; margin-bottom: 24px; color: #6b7280; list-style: none;">
+                        <li style="padding: 8px 0;">✓ 1 Agente</li>
+                        <li style="padding: 8px 0;">✓ WhatsApp Básico</li>
+                        <li style="padding: 8px 0;">✓ Suporte por Email</li>
+                    </ul>
+                    <a href="#" class="btn-primary" style="width: 100%; text-align: center; display: block;">Escolher Plano</a>
+                </div>
+                <div class="pricing-card featured">
+                    <div style="background: #3b82f6; color: white; padding: 8px 16px; border-radius: 4px; display: inline-block; margin-bottom: 16px; font-size: 0.875rem; font-weight: 600;">MAIS POPULAR</div>
+                    <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 12px;">SMART</h3>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">R$ 177,90</div>
+                    <p style="color: #6b7280; margin-bottom: 24px;">/mês</p>
+                    <ul style="text-align: left; margin-bottom: 24px; color: #6b7280; list-style: none;">
+                        <li style="padding: 8px 0;">✓ 3 Agentes</li>
+                        <li style="padding: 8px 0;">✓ WhatsApp Avançado</li>
+                        <li style="padding: 8px 0;">✓ CRM Chatwoot</li>
+                        <li style="padding: 8px 0;">✓ Suporte Prioritário</li>
+                    </ul>
+                    <a href="#" class="btn-primary" style="width: 100%; text-align: center; display: block;">Escolher Plano</a>
+                </div>
+                <div class="pricing-card">
+                    <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 12px;">PROFISSIONAL</h3>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">R$ 289,90</div>
+                    <p style="color: #6b7280; margin-bottom: 24px;">/mês</p>
+                    <ul style="text-align: left; margin-bottom: 24px; color: #6b7280; list-style: none;">
+                        <li style="padding: 8px 0;">✓ 10 Agentes</li>
+                        <li style="padding: 8px 0;">✓ Integrações Avançadas</li>
+                        <li style="padding: 8px 0;">✓ API Completa</li>
+                        <li style="padding: 8px 0;">✓ Suporte 24/7</li>
+                    </ul>
+                    <a href="#" class="btn-primary" style="width: 100%; text-align: center; display: block;">Escolher Plano</a>
+                </div>
+                <div class="pricing-card">
+                    <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 12px;">BUSINESS</h3>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #3b82f6; margin-bottom: 8px;">R$ 367,90</div>
+                    <p style="color: #6b7280; margin-bottom: 24px;">/mês</p>
+                    <ul style="text-align: left; margin-bottom: 24px; color: #6b7280; list-style: none;">
+                        <li style="padding: 8px 0;">✓ Agentes Ilimitados</li>
+                        <li style="padding: 8px 0;">✓ Todas as Integrações</li>
+                        <li style="padding: 8px 0;">✓ Suporte Dedicado</li>
+                        <li style="padding: 8px 0;">✓ SLA Garantido</li>
+                    </ul>
+                    <a href="#" class="btn-primary" style="width: 100%; text-align: center; display: block;">Escolher Plano</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Automation Flows Section -->
+    <section class="section section-light">
+        <div class="container">
+            <h2 class="section-title">Fluxos de Automação</h2>
+            <div class="flow-grid">
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">📧</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Email Automático</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Envie emails em massa</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">📱</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">SMS Inteligente</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Mensagens personalizadas</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">💳</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Pagamentos</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Integração com gateways</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">📊</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Relatórios</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Análise em tempo real</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">🔔</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Notificações</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Alertas instantâneos</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">🔗</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Integrações</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Conecte suas ferramentas</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">🎯</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Segmentação</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Públicos personalizados</p>
+                </div>
+                <div class="flow-item">
+                    <div style="font-size: 32px; margin-bottom: 12px;">⚙️</div>
+                    <h4 style="font-weight: 600; margin-bottom: 8px;">Customização</h4>
+                    <p style="font-size: 0.875rem; color: #6b7280;">Adapte ao seu negócio</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="section">
+        <div class="container" style="max-width: 800px;">
+            <h2 class="section-title">Perguntas Frequentes</h2>
+            <div class="accordion-item">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <span>Como funciona o Clow?</span>
+                    <span>+</span>
+                </div>
+                <div class="accordion-content">
+                    O Clow é uma plataforma de automação com IA que permite criar agentes autônomos para automatizar processos de negócio. Você pode integrar com WhatsApp, CRM e outras ferramentas.
+                </div>
+            </div>
+            <div class="accordion-item">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <span>Posso testar antes de contratar?</span>
+                    <span>+</span>
+                </div>
+                <div class="accordion-content">
+                    Sim! Oferecemos um período de teste gratuito de 7 dias para você explorar todos os recursos da plataforma.
+                </div>
+            </div>
+            <div class="accordion-item">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <span>Qual é o suporte disponível?</span>
+                    <span>+</span>
+                </div>
+                <div class="accordion-content">
+                    Oferecemos suporte por email para todos os planos, e suporte prioritário/24-7 para planos superiores. Você também tem acesso à documentação completa.
+                </div>
+            </div>
+            <div class="accordion-item">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <span>Posso cancelar a qualquer momento?</span>
+                    <span>+</span>
+                </div>
+                <div class="accordion-content">
+                    Sim, você pode cancelar sua assinatura a qualquer momento sem penalidades. Não há contratos de longo prazo.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section section-dark" style="text-align: center;">
+        <div class="container">
+            <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 20px;">Pronto para Automatizar?</h2>
+            <p style="font-size: 1.125rem; margin-bottom: 32px; opacity: 0.9;">Comece sua jornada de automação com IA hoje mesmo</p>
+            <a href="#" class="btn-secondary" style="color: white; border-color: white;">Começar Agora</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Clow. Todos os direitos reservados.</p>
+            <div class="footer-links">
+                <a href="#">Privacidade</a>
+                <a href="#">Termos</a>
+                <a href="#">Contato</a>
+                <a href="#">Blog</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function toggleAccordion(header) {
+            const content = header.nextElementSibling;
+            const isActive = content.classList.contains('active');
+            
+            // Close all other accordions
+            document.querySelectorAll('.accordion-content.active').forEach(el => {
+                if (el !== content) {
+                    el.classList.remove('active');
+                    el.previousElementSibling.querySelector('span:last-child').textContent = '+';
+                }
+            });
+            
+            // Toggle current
+            if (isActive) {
+                content.classList.remove('active');
+                header.querySelector('span:last-child').textContent = '+';
+            } else {
+                content.classList.add('active');
+                header.querySelector('span:last-child').textContent = '−';
+            }
+        }
+    </script>
+</body>
+</html>
