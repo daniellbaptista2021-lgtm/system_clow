@@ -366,3 +366,22 @@
 .rp-row + .rp-row,
 .rp-row + .tblk-wrap,
 .tblk + .rp-row { margin-top: 14px; }
+
+/* ─── Fix word overflow in bubbles (tokens, URLs, hashes) ────── */
+.u-block, .u-block .ut, .rp, .rp p, .rp li, .tout-inner, .tline {
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  max-width: 100%;
+}
+.u-block { max-width: 78% !important; }
+.u-row { padding: 0 4px; }
+
+/* Prevent horizontal scroll on feed */
+.feed, #chat { overflow-x: hidden !important; }
+.rp-row, .u-row { max-width: 100%; }
+
+/* Inline code should wrap too */
+.rp :not(pre) > code {
+  word-break: break-all;
+  white-space: normal;
+}
