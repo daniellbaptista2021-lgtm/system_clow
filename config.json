@@ -1,0 +1,75 @@
+{
+  "app": {
+    "name": "System Clow",
+    "version": "1.0.0",
+    "environment": "production",
+    "debug": false,
+    "port": 3000
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "clow_db",
+    "username": "admin",
+    "password": "secure_password",
+    "ssl": true,
+    "pool": {
+      "min": 2,
+      "max": 10
+    }
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": null,
+    "db": 0
+  },
+  "api": {
+    "baseUrl": "https://api.example.com",
+    "timeout": 30000,
+    "retries": 3,
+    "rateLimit": {
+      "requests": 100,
+      "window": 60000
+    }
+  },
+  "auth": {
+    "jwtSecret": "your-jwt-secret-key",
+    "tokenExpiry": "24h",
+    "refreshTokenExpiry": "7d",
+    "bcryptRounds": 12
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "file": {
+      "enabled": true,
+      "path": "./logs/app.log",
+      "maxSize": "10MB",
+      "maxFiles": 5
+    }
+  },
+  "features": {
+    "enableCache": true,
+    "enableMetrics": true,
+    "enableWebhooks": false,
+    "maintenanceMode": false
+  },
+  "integrations": {
+    "whatsapp": {
+      "apiUrl": "https://api.z-api.io",
+      "token": "your-whatsapp-token",
+      "instance": "your-instance-id"
+    },
+    "email": {
+      "provider": "smtp",
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "secure": false,
+      "auth": {
+        "user": "your-email@gmail.com",
+        "pass": "your-app-password"
+      }
+    }
+  }
+}
