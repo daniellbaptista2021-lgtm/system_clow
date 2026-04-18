@@ -1,0 +1,16 @@
+data,produto,vendedor,quantidade,valor_unitario,valor_total,regiao,categoria
+2024-01-15,Notebook Dell XPS,João Silva,2,3500.00,7000.00,Sudeste,Eletrônicos
+2024-01-16,Mouse Logitech,Maria Santos,15,89.90,1348.50,Sul,Periféricos
+2024-01-17,Teclado Mecânico,Pedro Costa,8,299.99,2399.92,Nordeste,Periféricos
+2024-01-18,Monitor 27 pol,Ana Oliveira,3,1200.00,3600.00,Sudeste,Eletrônicos
+2024-01-19,Webcam HD,Carlos Lima,12,199.90,2398.80,Centro-Oeste,Periféricos
+2024-01-20,SSD 1TB,Lucia Ferreira,6,450.00,2700.00,Norte,Armazenamento
+2024-01-21,Placa de Vídeo RTX,Roberto Alves,1,2800.00,2800.00,Sudeste,Componentes
+2024-01-22,Headset Gamer,Fernanda Rocha,10,250.00,2500.00,Sul,Periféricos
+2024-01-23,Smartphone Samsung,Marcos Pereira,4,1899.00,7596.00,Nordeste,Celulares
+2024-01-24,Tablet iPad,Juliana Mendes,2,2499.00,4998.00,Sudeste,Tablets
+2024-01-25,Impressora HP,Diego Santos,3,899.90,2699.70,Centro-Oeste,Impressoras
+2024-01-26,Roteador Wi-Fi 6,Camila Torres,7,349.99,2449.93,Sul,Redes
+2024-01-27,HD Externo 2TB,Rafael Souza,9,389.90,3509.10,Norte,Armazenamento
+2024-01-28,Cadeira Gamer,Patrícia Lima,5,1299.00,6495.00,Sudeste,Móveis
+2024-01-29,Microfone USB,Gustavo Reis,8,189.90,1519.20,Nordeste,Áudio

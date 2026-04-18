@@ -114,12 +114,39 @@ Limites de budget do tier aplicam-se.`;
 - Sugira proximos passos proativamente
 - Tom profissional mas acessivel
 
-## OUTPUT DE ARQUIVOS
-Quando criar arquivos (xlsx, pdf, html, etc):
-1. Salve em /tmp/ primeiro, depois use o tool Download para publicar
-2. Retorne APENAS o link markdown que o Download tool gerar: [Baixar arquivo](URL)
-3. NUNCA invente URLs, NUNCA adicione target="_blank" no link, NUNCA duplique o link
-4. Um arquivo = um link`;
+## OUTPUT DE ARQUIVOS — REGRAS CRITICAS (NUNCA FALHE)
+
+Quando o usuario pede pra criar qualquer arquivo para download:
+
+1. PASSO 1: Crie o arquivo. Pode salvar em /tmp/, output/, ou CWD — qualquer um funciona.
+
+2. PASSO 2: OBRIGATORIAMENTE use o tool Download passando o source_path do arquivo criado.
+   O tool Download:
+   - Copia o arquivo para o diretorio output/ do workspace
+   - Valida que o arquivo existe e esta servindo via HTTP
+   - Retorna o URL publico validado em outputText
+
+3. PASSO 3: Na resposta final, use EXATAMENTE o link markdown que o Download tool retornou.
+   Formato: [Baixar arquivo](https://system-clow.pvcorretor01.com.br/downloads/NOME.ext)
+
+REGRAS ABSOLUTAS (violacao = link quebrado):
+- NUNCA invente URLs. Use SOMENTE o URL que o Download tool retornou.
+- NUNCA adicione target="_blank", rel=, ou qualquer atributo HTML dentro do markdown.
+- NUNCA duplique o link na mesma resposta.
+- NUNCA coloque o link em uma lista com outros itens que parecem links.
+- NUNCA escreva o link entre aspas, asteriscos, ou qualquer marcador adicional.
+- Se o Download tool falhar com erro, retry ate 3 vezes antes de reportar ao usuario.
+- Se o arquivo tem caracteres especiais no nome (espacos, acentos), o Download tool ja trata isso.
+
+Exemplo CORRETO:
+   Criei sua planilha com os dados de vendas.
+   [Baixar arquivo](https://system-clow.pvcorretor01.com.br/downloads/vendas_2026.xlsx)
+
+Exemplo ERRADO (NAO FACA):
+   [Clique aqui pra baixar](https://...) target="_blank"
+   [Link 1](url1) e [Link 2](url1)  <- duplicado
+   "Aqui esta: https://...xlsx"  <- sem markdown
+   Use o link que gerei: [planilha](minha_inventada.xlsx)  <- URL inventado`;
 
   const prompt = baseRules + (isAdmin ? adminRules : userRules) + securityRules;
 

@@ -1,0 +1,10 @@
+RELATÓRIO DE EXEMPLO - SYSTEM CLOW
+=====================================
+
+1. Sistema operacional detectado: Linux com Node.js v22.22.2
+2. Diretório de trabalho atual: /opt/system-clow
+3. Ferramentas disponíveis: 17 tools nativos para engenharia de software
+4. Capacidades principais: desenvolvimento full-stack, clonagem de sites, automação
+5. Status do sistema: operacional e pronto para execução de tarefas complexas
+
+Relatório gerado automaticamente pelo System Clow
