@@ -452,7 +452,251 @@ async function verifySavedLogin(){try{const r=await fetch(`${U}/auth/verify`,{he
 async function showApp(){try{localStorage.removeItem('clow_sessions')}catch{}try{localStorage.removeItem('clow_active_session')}catch{}LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},250);AP.style.display='block';syncSidebarState();clearLegacyClientCache();clearBrowserCaches();cleanupSessions();currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY);const emptySession=getLatestEmptySession();if(emptySession){currentSessionId=emptySession.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId)}else{await ensureCurrentSession(true)}renderRecent();renderConversation(getSession());setTimeout(()=>focusComposer(),80)}
 function logout(){localStorage.removeItem(TOKEN_KEY);location.reload()}
 async function reset(){clearFeed();await ensureCurrentSession(true);renderRecent();renderConversation(getSession());closeSidebar();focusComposer()}
-async function go(){const t=(I.value||'').trim();if(!t)return;if(!authToken){renderErrorMessage('Sessão expirada. Faça login novamente.');logout();return}let session;try{session=await ensureCurrentSession(false)}catch(e){renderErrorMessage(e?.message||'Não foi possível iniciar a conversa');return}if(!session?.serverSessionId)return;I.value='';autoResize(I);isProcessing=true;setBtn('stop');closeSidebar();W.classList.add('hide');appendMessage(createUserMessage(t));let assistantMessage=createAssistantMessage('');appendMessage(assistantMessage);renderConversation(getSession());addProcessing();let replyEl=null;try{abortCtrl=new AbortController();const tm=setTimeout(()=>abortCtrl.abort(),300000);const r=await fetch(`${U}/v1/sessions/${session.serverSessionId}/messages`,{method:'POST',headers:authHeaders(),body:JSON.stringify({message:t}),signal:abortCtrl.signal});clearTimeout(tm);document.getElementById('proc')?.remove();if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}if(r.status===404){setServerSessionId(session.id,null);session=await ensureCurrentSession(true);if(session&&session.serverSessionId){r=await fetch(U+"/v1/sessions/"+session.serverSessionId+"/messages",{method:"POST",headers:authHeaders(),body:JSON.stringify({message:t})})}}if(!r.ok){let msg=`Erro ${r.status}`;try{const d=await r.json();msg=d.message||d.error||msg}catch{try{msg=(await r.text())||msg}catch{}}saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.filter(message=>message.id!==assistantMessage.id)}));appendMessage(createErrorMessage(msg));renderConversation(getSession());return}if(!r.body){saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.filter(message=>message.id!==assistantMessage.id)}));appendMessage(createErrorMessage('Resposta vazia do servidor'));renderConversation(getSession());return}replyEl=[...F.querySelectorAll('.rp')].pop()||null;const reader=r.body.getReader();const decoder=new TextDecoder();let buf='',txt='',ev='';while(true){const {done,value}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop()||'';for(const ln of lines){if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue}if(!ln.startsWith('data: '))continue;try{const d=JSON.parse(ln.slice(6));if(ev==='tool_use'){const toolMessage=createToolMessage(d.tool_name||'Tool',d.tool_input);saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:[...current.messages.filter(message=>message.id!==assistantMessage.id),toolMessage,assistantMessage]}));renderConversation(getSession());replyEl=[...F.querySelectorAll('.rp')].pop()||replyEl}else if(ev==='text_delta'){txt+=d.text||'';assistantMessage={...assistantMessage,text:txt};updateAssistantMessage(assistantMessage.id,txt);if(replyEl)replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}else if(ev==='result'&&d.content){txt=d.content;assistantMessage={...assistantMessage,text:txt};updateAssistantMessage(assistantMessage.id,txt);if(replyEl)replyEl.innerHTML='<p>'+md(txt)+'</p>';scr()}else if(ev==='error'){saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.filter(message=>message.id!==assistantMessage.id)}));appendMessage(createErrorMessage(d.message||d.content||'Erro durante o processamento'));renderConversation(getSession());isProcessing=false;setBtn('send');abortCtrl=null;focusComposer();return}}catch{}ev=''}}renderRecent()}catch(e){document.getElementById('proc')?.remove();if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.filter(message=>message.id!==assistantMessage.id)}));appendMessage(createErrorMessage(e?.name==='AbortError'?'Tempo limite excedido ao aguardar resposta do servidor':(e?.message||'Erro de conexão')));renderConversation(getSession())}isProcessing=false;setBtn('send');abortCtrl=null;focusComposer()}
+async function go(){
+  const t=(I.value||'').trim();
+  if(!t)return;
+  if(!authToken){renderErrorMessage('Sessão expirada. Faça login novamente.');logout();return;}
+
+  let session;
+  try{session=await ensureCurrentSession(false);}
+  catch(e){renderErrorMessage(e?.message||'Não foi possível iniciar a conversa');return;}
+  if(!session?.serverSessionId)return;
+
+  I.value='';autoResize(I);
+  isProcessing=true;setBtn('stop');closeSidebar();
+  W.classList.add('hide');
+
+  // Render user message
+  appendMessage(createUserMessage(t));
+  renderUserMessage(t);
+
+  // Create assistant message placeholder
+  let assistantMessage=createAssistantMessage('');
+  appendMessage(assistantMessage);
+
+  // Working indicator appears immediately
+  addProcessing();
+
+  // Track active tool blocks by tool_use_id for live status updates
+  const activeTools=new Map();
+  let lastToolBlock=null;
+  let assistantEl=null;
+  let txt='';
+
+  try{
+    abortCtrl=new AbortController();
+    const tm=setTimeout(()=>abortCtrl.abort(),300000);
+    let r=await fetch(`${U}/v1/sessions/${session.serverSessionId}/messages`,{
+      method:'POST',
+      headers:authHeaders(),
+      body:JSON.stringify({message:t}),
+      signal:abortCtrl.signal
+    });
+    clearTimeout(tm);
+
+    if(r.status===404){
+      setServerSessionId(session.id,null);
+      session=await ensureCurrentSession(true);
+      if(session&&session.serverSessionId){
+        r=await fetch(U+'/v1/sessions/'+session.serverSessionId+'/messages',{
+          method:'POST',
+          headers:authHeaders(),
+          body:JSON.stringify({message:t})
+        });
+      }
+    }
+
+    if(!r.ok){
+      document.getElementById('proc')?.remove();
+      if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
+      let msg=`Erro ${r.status}`;
+      try{const d=await r.json();msg=d.message||d.error||msg;}catch{}
+      renderErrorMessage(msg);
+      return;
+    }
+
+    if(!r.body){
+      document.getElementById('proc')?.remove();
+      renderErrorMessage('Resposta vazia do servidor');
+      return;
+    }
+
+    // Remove working indicator once stream starts
+    const reader=r.body.getReader();
+    const decoder=new TextDecoder();
+    let buf='',ev='';
+    let firstEvent=true;
+
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buf+=decoder.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop()||'';
+
+      for(const ln of lines){
+        if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue;}
+        if(!ln.startsWith('data: '))continue;
+
+        // First event arrived — remove Working indicator
+        if(firstEvent){
+          document.getElementById('proc')?.remove();
+          if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
+          firstEvent=false;
+        }
+
+        try{
+          const d=JSON.parse(ln.slice(6));
+
+          if(ev==='tool_use'){
+            // Mark previous tool as done (if any still act)
+            if(lastToolBlock&&lastToolBlock.classList.contains('act')){
+              updateToolStatus(lastToolBlock,'done');
+            }
+            // Detect special tools for custom rendering
+            const toolName=d.tool_name||'Tool';
+            const toolInput=d.tool_input;
+
+            // Special handling for TodoWrite — render as task plan
+            if(toolName==='TodoWrite'&&toolInput&&Array.isArray(toolInput.todos)){
+              const block=renderTodoPlan(toolInput.todos);
+              lastToolBlock=null;
+            }
+            // Special handling for Agent — render as sub-agent
+            else if(toolName==='Agent'||toolName==='Task'){
+              const block=renderAgentStart(toolInput);
+              lastToolBlock=block;
+              if(d.tool_use_id)activeTools.set(d.tool_use_id,block);
+            }
+            // Standard tool
+            else{
+              const block=renderToolMessage(toolName,toolInput,{status:'act'});
+              lastToolBlock=block;
+              if(d.tool_use_id)activeTools.set(d.tool_use_id,block);
+            }
+
+            // Save to transcript
+            const toolMessage=createToolMessage(toolName,toolInput);
+            saveSessionPatch(currentSessionId,current=>({
+              ...current,
+              updatedAt:Date.now(),
+              messages:[...current.messages.filter(m=>m.id!==assistantMessage.id),toolMessage,assistantMessage]
+            }));
+            scr();
+          }
+          else if(ev==='tool_result'){
+            // Mark the matching tool block as done (or error)
+            const block=d.tool_use_id?activeTools.get(d.tool_use_id):lastToolBlock;
+            if(block){
+              updateToolStatus(block,d.is_error?'err':'done');
+              activeTools.delete(d.tool_use_id);
+            }
+          }
+          else if(ev==='text_delta'){
+            txt+=d.text||'';
+            assistantMessage={...assistantMessage,text:txt};
+            updateAssistantMessage(assistantMessage.id,txt);
+            // Ensure assistant element exists and update it live
+            if(!assistantEl||!document.body.contains(assistantEl)){
+              assistantEl=renderAssistantMessage(txt);
+            }else{
+              assistantEl.innerHTML='<p>'+md(txt)+'</p>';
+            }
+            scr();
+          }
+          else if(ev==='result'&&d.content){
+            txt=d.content;
+            assistantMessage={...assistantMessage,text:txt};
+            updateAssistantMessage(assistantMessage.id,txt);
+            if(!assistantEl||!document.body.contains(assistantEl)){
+              assistantEl=renderAssistantMessage(txt);
+            }else{
+              assistantEl.innerHTML='<p>'+md(txt)+'</p>';
+            }
+
+            // Check for mission card marker
+            if(d.missionId){
+              renderMissionCard(d.missionId);
+            }
+
+            // Check if response contains a download link — render as file card
+            const dlMatch=txt.match(/\[.*?\]\((https:\/\/[^\s)]*\/downloads\/([^\s)]+))\)/);
+            if(dlMatch){
+              const url=dlMatch[1];
+              const filename=decodeURIComponent(dlMatch[2]);
+              renderFileCard(filename,url);
+            }
+
+            scr();
+          }
+          else if(ev==='error'){
+            renderErrorMessage(d.message||d.content||'Erro durante o processamento');
+            isProcessing=false;setBtn('send');abortCtrl=null;focusComposer();
+            return;
+          }
+          else if(ev==='done'){
+            // Mark any remaining active tools as done
+            for(const [id,block] of activeTools){
+              if(block&&block.classList.contains('act')){
+                updateToolStatus(block,'done');
+              }
+            }
+            renderTurnDone();
+          }
+        }catch(err){console.warn('parse error:',err);}
+        ev='';
+      }
+    }
+    renderRecent();
+  }catch(e){
+    document.getElementById('proc')?.remove();
+    if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
+    renderErrorMessage(e?.name==='AbortError'?'Tempo limite excedido':(e?.message||'Erro de conexão'));
+  }
+
+  isProcessing=false;setBtn('send');abortCtrl=null;focusComposer();
+}
+
+// Render TodoWrite as a task plan card (Clow palette)
+function renderTodoPlan(todos){
+  const row=document.createElement('div');row.className='rp-row';
+  const d=document.createElement('div');d.className='tblk done';
+  const items=todos.map(function(t,i){
+    const icon=t.status==='completed'?'✅':t.status==='in_progress'?'⏳':'○';
+    const cls=t.status==='completed'?'done':t.status==='in_progress'?'running':'';
+    return '<div class="mstep '+cls+'"><span class="mstep-icon">'+icon+'</span><span>'+esc(t.content||t.activeForm||'')+'</span></div>';
+  }).join('');
+  d.innerHTML=''
+    +'<div class="tblk-head">'
+    +  '<span class="tdot"></span>'
+    +  '<span class="tn">Plano de Tarefas</span>'
+    +  '<span class="ta">('+todos.length+' etapas)</span>'
+    +  '<span class="tdr"></span>'
+    +'</div>'
+    +'<div class="tout op"><div class="tout-inner">'+items+'</div></div>';
+  row.appendChild(d);F.appendChild(row);scr();
+  return d;
+}
+
+// Render Agent/Task tool as sub-agent block
+function renderAgentStart(input){
+  const row=document.createElement('div');row.className='rp-row';
+  const d=document.createElement('div');d.className='tblk act';
+  d.dataset.toolName='Agent';
+  d.dataset.startTime=Date.now();
+  const desc=(input&&(input.description||input.subagent_type))||'Sub-agente';
+  const prompt=(input&&input.prompt)||'';
+  d.innerHTML=''
+    +'<div class="tblk-head" onclick="this.nextElementSibling.classList.toggle(\'op\')">'
+    +  '<span class="tdot"></span>'
+    +  '<span class="tn">Sub-agent</span>'
+    +  '<span class="ta">('+esc(desc)+')</span>'
+    +  '<span class="tdr"></span>'
+    +'</div>'
+    +'<div class="tout"><div class="tout-inner">'+esc(prompt.slice(0,400))+'</div></div>';
+  row.appendChild(d);F.appendChild(row);scr();
+  return d;
+}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
 window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classList.add('sidebar-collapsed')}else{sidebar.classList.remove('open');overlay.classList.remove('show')}})
 </script>

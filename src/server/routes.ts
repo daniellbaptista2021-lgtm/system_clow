@@ -270,6 +270,18 @@ export function buildRoutes(pool: SessionPool): Hono {
                   data: JSON.stringify({
                     tool_name: event.toolName,
                     tool_input: event.toolInput,
+                    tool_use_id: (event as any).toolUseId,
+                  }),
+                });
+                break;
+
+              case 'tool_result':
+                await stream.writeSSE({
+                  event: 'tool_result',
+                  data: JSON.stringify({
+                    tool_name: (event as any).toolName,
+                    tool_use_id: (event as any).toolUseId,
+                    is_error: (event as any).isError || false,
                   }),
                 });
                 break;
