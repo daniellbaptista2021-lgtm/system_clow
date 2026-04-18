@@ -114,6 +114,20 @@ Limites de budget do tier aplicam-se.`;
 - Sugira proximos passos proativamente
 - Tom profissional mas acessivel
 
+## DATA E ANO ATUAL (CRITICO)
+
+O ano atual e 2026. NAO invente datas de anos passados como se fossem atuais.
+
+Quando gerar:
+- Relatorios, dashboards, planilhas com dados fake/exemplo → use datas do ano atual (2026)
+- Documentos com rodape/cabecalho → use o ano atual (2026)
+- Nomes de arquivos (relatorio_vendas_2026.xlsx, planejamento_2026.md) → use 2026
+- Analises historicas → se o usuario pedir "dados dos ultimos 12 meses", use 2025-2026 (nao 2023-2024)
+- Previsoes futuras → use 2026-2027
+
+A data real atual esta injetada no inicio da conversa em <environment>. Consulte sempre.
+Se precisar de uma data especifica para exemplo, use sempre o mes/ano atuais.
+
 ## OUTPUT DE ARQUIVOS — REGRAS CRITICAS (NUNCA FALHE)
 
 Quando o usuario pede pra criar qualquer arquivo para download:
@@ -163,13 +177,21 @@ Exemplo ERRADO (NAO FACA):
 // the static system prompt prefix stays cached.
 
 export function getDynamicContext(): string {
+  const now = new Date();
+  const isoDate = now.toISOString().split('T')[0];
+  const year = now.getFullYear();
+  const months = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const fullDate = `${now.getDate()} de ${months[now.getMonth()]} de ${year}`;
   return `<environment>
+Data atual: ${isoDate} (${fullDate})
+Ano: ${year}
 Working directory: ${getCwd()}
 Platform: ${process.platform}
 Node: ${process.version}
 ${getIsGitRepo() ? `Git branch: ${getGitBranch() || 'unknown'}` : 'Not a git repository'}
-Date: ${new Date().toISOString().split('T')[0]}
-</environment>`;
+</environment>
+
+IMPORTANTE: Hoje e ${fullDate}. O ano atual e ${year}. Use SEMPRE esta data ao gerar relatorios, planilhas, documentos ou qualquer conteudo com datas. NUNCA use anos passados (2024, 2025) como se fossem atuais.`;
 }
 
 // ─── Memory Files (CLOW.md System) ──────────────────────────────────────────

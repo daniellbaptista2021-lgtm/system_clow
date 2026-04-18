@@ -252,7 +252,14 @@ export class SessionPool {
         permissionMode: 'default',
       }),
       depth: 0,
-      dynamicContext: `<environment>\nWorking directory: ${cwd}\nPlatform: ${process.platform}\nNode: ${process.version}\n</environment>`,
+      dynamicContext: (() => {
+        const now = new Date();
+        const isoDate = now.toISOString().split('T')[0];
+        const year = now.getFullYear();
+        const months = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+        const fullDate = `${now.getDate()} de ${months[now.getMonth()]} de ${year}`;
+        return `<environment>\nData atual: ${isoDate} (${fullDate})\nAno: ${year}\nWorking directory: ${cwd}\nPlatform: ${process.platform}\nNode: ${process.version}\n</environment>\n\nIMPORTANTE: Hoje e ${fullDate}. O ano atual e ${year}. Use SEMPRE esta data ao gerar relatorios, planilhas, documentos ou qualquer conteudo com datas. NUNCA use anos passados (2024, 2025) como se fossem atuais.`;
+      })(),
       features: {
         REACTIVE_COMPACT: true,
         TOMBSTONE: true,
