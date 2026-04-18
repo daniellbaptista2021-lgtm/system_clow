@@ -25,6 +25,8 @@ import { apiQueue } from './requestQueue.js';
 import { rateLimiter } from './rateLimiter.js';
 import { audit } from '../tenancy/auditLog.js';
 import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
+import { detectGreeting, handleSlashCommand } from './slashCommands.js';
+import { getMissionRunner } from './missions.js';
 import {
   flushSession,
   recordTranscriptForSession,
@@ -204,6 +206,36 @@ export function buildRoutes(pool: SessionPool): Hono {
     const requestCwd = sessionMeta?.cwd || process.cwd();
     const workspaceRoot = sessionMeta?.workspaceRoot || requestCwd;
     const tenantId = sessionMeta?.tenantId;
+
+    // ─── Intercept greetings (instant response, zero LLM) ─────────────
+    const greeting = detectGreeting(message);
+    if (greeting) {
+      await recordTranscriptForSession(sessionId, 'user', message);
+      await recordTranscriptForSession(sessionId, 'assistant', greeting);
+      return streamSSE(c, async (stream) => {
+        await stream.writeSSE({ event: 'text_delta', data: JSON.stringify({ text: greeting }) });
+        await stream.writeSSE({ event: 'result', data: JSON.stringify({ subtype: 'success', content: greeting }) });
+        await stream.writeSSE({ event: 'done', data: JSON.stringify({ session_id: sessionId, cost_usd: 0 }) });
+      });
+    }
+
+    // ─── Intercept slash commands ────────────────────────────────────
+    const cmdResult = await handleSlashCommand(message, {
+      tenantId: tenantId || 'default',
+      sessionId,
+      isAdmin,
+      missionRunner: getMissionRunner(),
+    });
+    if (cmdResult.handled && cmdResult.response) {
+      const response = cmdResult.response;
+      await recordTranscriptForSession(sessionId, 'user', message);
+      await recordTranscriptForSession(sessionId, 'assistant', response);
+      return streamSSE(c, async (stream) => {
+        await stream.writeSSE({ event: 'text_delta', data: JSON.stringify({ text: response }) });
+        await stream.writeSSE({ event: 'result', data: JSON.stringify({ subtype: 'success', content: response, missionId: cmdResult.missionId }) });
+        await stream.writeSSE({ event: 'done', data: JSON.stringify({ session_id: sessionId, cost_usd: 0 }) });
+      });
+    }
 
     return streamSSE(c, async (stream) => {
       await runWithExecutionContext({

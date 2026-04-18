@@ -38,6 +38,7 @@ import { buildDashboardRoutes } from './adminDashboard.js';
 import { apiQueue } from './requestQueue.js';
 import { buildSSORoutes } from './ssoAuth.js';
 import { buildMarketplaceRoutes } from '../plugins/marketplace.js';
+import { buildMissionRoutes } from './missions.js';
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -249,6 +250,11 @@ async function main(): Promise<void> {
   const marketplaceRoutes = buildMarketplaceRoutes();
   app.route('/v1/marketplace', marketplaceRoutes);
   console.log('  ✓ Marketplace: /v1/marketplace/plugins');
+
+  // Mission runner
+  const missionRoutes = buildMissionRoutes();
+  app.route('/v1/missions', missionRoutes);
+  console.log('  ✓ Missions: /v1/missions/:id');
 
   // ─── Login Auth ─────────────────────────────────────────────────
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
