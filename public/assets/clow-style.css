@@ -342,3 +342,27 @@
   padding: 6px 12px !important;
   border-radius: 999px !important;
 }
+
+/* ─── Fix rp-row layout (meta header above message) ───────────── */
+.rp-row {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  margin: 18px 0 22px !important;
+  gap: 6px !important;
+}
+.rp-row .msg-meta { margin-bottom: 4px; }
+.rp-row .rp { width: 100%; max-width: 100%; }
+
+/* ─── Fix u-row for user side (meta + bubble aligned right) ───── */
+.u-row { display: flex !important; justify-content: flex-end !important; }
+.u-block { display: flex; flex-direction: column; }
+
+/* Add padding between Clow header and text */
+.msg-meta + .rp { padding-top: 2px; }
+
+/* Give tool blocks breathing room from the meta above */
+.rp-row + .rp-row,
+.rp-row + .tblk-wrap,
+.tblk + .rp-row { margin-top: 14px; }
