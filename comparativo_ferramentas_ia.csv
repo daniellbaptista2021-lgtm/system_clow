@@ -1,0 +1,21 @@
+Característica,Clow (System),Claude Code,ChatGPT,GitHub Copilot,Cursor
+Tipo de Ferramenta,Agente autônomo com execução direta,Assistente de código web,Chatbot conversacional,Autocomplete inteligente no IDE,IDE com IA integrada
+Execução de Código,✅ Executa diretamente no servidor,❌ Apenas sugere código,❌ Apenas sugere código,❌ Apenas sugere código,✅ Pode executar via terminal
+Acesso a APIs Externas,✅ Acesso completo com credenciais,❌ Sem acesso direto,❌ Sem acesso direto,❌ Sem acesso direto,⚠️ Limitado via extensões
+Manipulação de Arquivos,✅ Lê cria edita arquivos reais,❌ Apenas visualiza código,❌ Não manipula arquivos,⚠️ Via IDE apenas,✅ Manipula arquivos do projeto
+Automação de Tarefas,✅ Automação completa end-to-end,❌ Sem automação,❌ Sem automação,❌ Sem automação,⚠️ Limitada ao desenvolvimento
+Integração com Serviços,✅ Meta Ads n8n Supabase etc.,❌ Sem integrações,⚠️ Plugins limitados,⚠️ Via GitHub apenas,⚠️ Extensões limitadas
+Contexto de Projeto,✅ Acesso completo ao workspace,⚠️ Arquivos enviados pelo usuário,❌ Sem contexto persistente,✅ Contexto do repositório,✅ Contexto completo do projeto
+Linguagem de Resposta,🇧🇷 Português brasileiro nativo,🇺🇸 Inglês (tradução manual),🌍 Multilíngue,🇺🇸 Inglês principalmente,🌍 Multilíngue
+Modelo de Preço,Personalizado por uso,Gratuito/Pro $20/mês,Gratuito/Plus $20/mês,$10/mês individual,Gratuito/Pro $20/mês
+Deploy e Hospedagem,✅ Deploy direto (Vercel etc.),❌ Sem deploy,❌ Sem deploy,❌ Sem deploy,⚠️ Via terminal/extensões
+Gerenciamento de Estado,✅ Sessões persistentes,⚠️ Sessão da conversa,⚠️ Sessão da conversa,❌ Sem estado,✅ Estado do projeto
+Debugging e Logs,✅ Logs em tempo real,❌ Sem debugging,❌ Sem debugging,⚠️ Via IDE apenas,✅ Debugging integrado
+Colaboração em Equipe,✅ Multi-agentes e equipes,❌ Individual apenas,⚠️ Compartilhamento limitado,✅ Colaboração via GitHub,⚠️ Compartilhamento de projeto
+Especialização,Automação e operações técnicas,Desenvolvimento web,Conversação geral,Autocomplete de código,IDE completo com IA
+Curva de Aprendizado,Baixa - linguagem natural,Baixa - interface web,Muito baixa - chat simples,Média - integração IDE,Média - novo IDE
+
+Legenda:
+✅ Suporte completo
+⚠️ Suporte parcial  
+❌ Sem suporte
