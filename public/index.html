@@ -270,9 +270,176 @@ function updateAssistantMessage(messageId,text){saveSessionPatch(currentSessionI
 function setServerSessionId(id,serverSessionId){saveSessionPatch(id,current=>({...current,serverSessionId,updatedAt:current.updatedAt||Date.now()}))}
 function deleteSession(id){const sessions=getSessions().filter(session=>session.id!==id);writeSessions(sessions);if(currentSessionId===id){currentSessionId=sessions[0]?.id||null;if(currentSessionId)localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId);else localStorage.removeItem(ACTIVE_SESSION_KEY)}renderRecent();renderConversation(getSession())}
 function clearFeed(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W)}
-function renderUserMessage(text){const row=document.createElement("div");row.className="u-row";const d=document.createElement("div");d.className="u-block";const meta=document.createElement("div");meta.className="msg-meta user";const now=new Date();const hh=now.getHours().toString().padStart(2,"0");const mm=now.getMinutes().toString().padStart(2,"0");const em=(localStorage.getItem("clow_login_user")||"U").charAt(0).toUpperCase();meta.innerHTML='<span class="meta-name">voce</span><span class="meta-time">'+hh+":"+mm+'</span><span class="meta-avatar">'+em+'</span>';d.appendChild(meta);const ut=document.createElement("div");ut.className="ut";ut.textContent=text;d.appendChild(ut);row.appendChild(d);F.appendChild(row);}
-function renderToolMessage(name,input){const s=typeof input==="object"?JSON.stringify(input,null,2):String(input||"");let fl="";if(input&&typeof input==="object"){fl=input.file_path?.split(/[\/\\]/).pop()||input.path?.split(/[\/\\]/).pop()||input.command?.slice(0,70)||input.pattern||input.query?.slice(0,50)||"";}if(fl.length>75)fl=fl.slice(0,75)+"...";const d=document.createElement("div");d.className="tblk done";const outputLines=s.split("\n").slice(0,4).map(function(l){return '<span class="tline">'+esc(l)+'</span>';}).join("");const totalLines=s.split("\n").length;const more=totalLines>4?'<span class="tout-more">&hellip; +'+(totalLines-4)+' lines (click to expand)</span>':'';d.innerHTML='<div class="tblk-head" onclick="this.nextElementSibling.classList.toggle(\'op\')"><span class="tdot"></span><span class="tn">'+esc(name)+'</span>'+(fl?'<span class="ta">('+esc(fl)+')</span>':'')+'<span class="tdr"></span></div><div class="tout"><div class="tout-inner">'+outputLines+more+'</div></div>';F.appendChild(d);return d;}
-function renderConversation(session){clearFeed();if(!session||!session.messages.length){scr();return}W.classList.add('hide');for(const message of session.messages){if(message.role==='user')renderUserMessage(message.text);else if(message.role==='assistant')renderAssistantMessage(message.text||'');else if(message.role==='tool')renderToolMessage(message.toolName||'Tool',message.toolInput);else if(message.role==='error')renderErrorMessage(message.text)}scr()}
+
+
+
+
+// ═══ Render Module — Claude Code style, System Clow palette ═══
+
+function timeNow(){const d=new Date();return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');}
+function userInitial(){return (localStorage.getItem('clow_login_user')||'U').charAt(0).toUpperCase();}
+
+function renderUserMessage(text){
+  const row=document.createElement('div');row.className='u-row';
+  const d=document.createElement('div');d.className='u-block';
+  const meta=document.createElement('div');meta.className='msg-meta user';
+  meta.innerHTML='<span class="meta-name">voce</span><span class="meta-time">'+timeNow()+'</span><span class="meta-avatar">'+userInitial()+'</span>';
+  d.appendChild(meta);
+  const ut=document.createElement('div');ut.className='ut';ut.textContent=text;d.appendChild(ut);
+  row.appendChild(d);F.appendChild(row);
+}
+
+function renderAssistantMessage(text){
+  const row=document.createElement('div');row.className='rp-row';
+  const meta=document.createElement('div');meta.className='msg-meta';
+  meta.innerHTML='<span class="meta-time">'+timeNow()+'</span><span class="meta-name">Clow</span>';
+  row.appendChild(meta);
+  const d=document.createElement('div');d.className='rp';
+  d.innerHTML='<p>'+md(text)+'</p>';
+  row.appendChild(d);F.appendChild(row);return d;
+}
+
+function renderErrorMessage(text){
+  const row=document.createElement('div');row.className='rp-row';
+  const d=document.createElement('div');d.className='err-card';
+  d.textContent=text||'Erro desconhecido';
+  row.appendChild(d);F.appendChild(row);
+}
+
+// Tool block — Claude Code style with colored status dot
+function renderToolMessage(name,input,options){
+  options=options||{};
+  const s=typeof input==='object'?JSON.stringify(input,null,2):String(input||'');
+  let fl='';
+  if(input&&typeof input==='object'){
+    fl=(input.file_path&&input.file_path.split(/[\/\\]/).pop())
+      ||(input.path&&input.path.split(/[\/\\]/).pop())
+      ||(input.command&&input.command.slice(0,70))
+      ||input.pattern
+      ||(input.query&&input.query.slice(0,50))
+      ||'';
+  }
+  if(fl.length>75)fl=fl.slice(0,75)+'...';
+
+  const d=document.createElement('div');
+  d.className='tblk '+(options.status||'act');
+  d.dataset.toolName=name;
+  d.dataset.startTime=Date.now();
+
+  const outputLines=s.split('\n').slice(0,4).map(function(l){return '<span class="tline">'+esc(l)+'</span>';}).join('');
+  const totalLines=s.split('\n').length;
+  const more=totalLines>4?'<span class="tout-more">&hellip; +'+(totalLines-4)+' lines (click to expand)</span>':'';
+
+  d.innerHTML=''
+    +'<div class="tblk-head" onclick="this.nextElementSibling.classList.toggle(\'op\')">'
+    +  '<span class="tdot"></span>'
+    +  '<span class="tn">'+esc(name)+'</span>'
+    +  (fl?'<span class="ta">('+esc(fl)+')</span>':'')
+    +  '<span class="tdr"></span>'
+    +'</div>'
+    +'<div class="tout">'
+    +  '<div class="tout-inner">'+outputLines+more+'</div>'
+    +'</div>';
+
+  F.appendChild(d);return d;
+}
+
+// Mark a previously-rendered tool block as done or error, with duration
+function updateToolStatus(block,status,output){
+  if(!block)return;
+  block.classList.remove('act','done','err');
+  block.classList.add(status);
+  const durEl=block.querySelector('.tdr');
+  if(durEl&&block.dataset.startTime){
+    const ms=Date.now()-parseInt(block.dataset.startTime,10);
+    durEl.textContent=ms<1000?ms+'ms':(ms/1000).toFixed(1)+'s';
+  }
+  if(output!==undefined){
+    const inner=block.querySelector('.tout-inner');
+    if(inner){
+      const txt=typeof output==='object'?JSON.stringify(output,null,2):String(output||'');
+      const lines=txt.split('\n').slice(0,4).map(function(l){return '<span class="tline">'+esc(l)+'</span>';}).join('');
+      const total=txt.split('\n').length;
+      const more=total>4?'<span class="tout-more">&hellip; +'+(total-4)+' lines</span>':'';
+      inner.innerHTML=lines+more;
+    }
+  }
+}
+
+// Render turn-done marker
+function renderTurnDone(){
+  const d=document.createElement('div');d.className='turn-done';d.textContent='── concluido';
+  F.appendChild(d);
+}
+
+// File card (Download tool result)
+function renderFileCard(filename,url,sizeKb){
+  const row=document.createElement('div');row.className='rp-row';
+  const d=document.createElement('div');d.className='file-card';
+  const ext=(filename.split('.').pop()||'').toLowerCase();
+  const icon=({html:'🌐',xlsx:'📊',xls:'📊',csv:'📊',pdf:'📕',docx:'📄',doc:'📄',pptx:'🎬',png:'🖼️',jpg:'🖼️',zip:'📦',json:'📋',txt:'📄',md:'📄'})[ext]||'📁';
+  d.innerHTML=''
+    +'<div class="file-icon">'+icon+'</div>'
+    +'<div class="file-info">'
+    +  '<div class="file-name">'+esc(filename)+'</div>'
+    +  '<div class="file-size">'+(sizeKb?sizeKb+' KB':'')+'</div>'
+    +'</div>'
+    +'<div class="file-actions">'
+    +  '<a class="file-btn" href="'+esc(url)+'" target="_blank">Abrir</a>'
+    +  '<a class="file-btn" href="'+esc(url)+'" download>Download</a>'
+    +'</div>';
+  row.appendChild(d);F.appendChild(row);
+}
+
+// Mission card with progress — polls /v1/missions/:id every 2s
+function renderMissionCard(missionId){
+  const row=document.createElement('div');row.className='rp-row';
+  const d=document.createElement('div');d.className='mcard';d.dataset.missionId=missionId;
+  d.innerHTML=''
+    +'<div class="mcard-head">'
+    +  '<span style="font-size:18px">🚀</span>'
+    +  '<div class="mcard-title">Carregando missao...</div>'
+    +  '<div class="mcard-pct">0%</div>'
+    +'</div>'
+    +'<div class="mbar"><div class="mbar-fill" style="width:0%"></div></div>'
+    +'<div class="msteps"></div>';
+  row.appendChild(d);F.appendChild(row);
+
+  const poll=async()=>{
+    try{
+      const r=await fetch('/v1/missions/'+missionId,{headers:authHeaders()});
+      if(!r.ok)return;
+      const m=await r.json();
+      d.querySelector('.mcard-title').textContent=m.title;
+      d.querySelector('.mcard-pct').textContent=m.progress+'%';
+      d.querySelector('.mbar-fill').style.width=m.progress+'%';
+      const stepsHtml=(m.stepsDetailed||[]).map(function(s,i){
+        const icon=s.status==='running'?'⏳':s.status==='done'?'✅':s.status==='failed'?'❌':'○';
+        return '<div class="mstep '+s.status+'"><span class="mstep-icon">'+icon+'</span><span>'+esc(s.title)+'</span></div>';
+      }).join('');
+      d.querySelector('.msteps').innerHTML=stepsHtml;
+      if(m.status==='completed'){d.classList.add('done');return;}
+      if(m.status==='failed'){d.classList.add('failed');return;}
+      setTimeout(poll,2000);
+    }catch(err){console.warn('Mission poll error:',err);setTimeout(poll,5000);}
+  };
+  poll();
+}
+
+// Full conversation replay
+function renderConversation(session){
+  clearFeed();
+  if(!session||!session.messages.length){scr();return;}
+  W.classList.add('hide');
+  for(const m of session.messages){
+    if(m.role==='user')renderUserMessage(m.text);
+    else if(m.role==='assistant')renderAssistantMessage(m.text||'');
+    else if(m.role==='tool')renderToolMessage(m.toolName||'Tool',m.toolInput,{status:'done'});
+    else if(m.role==='error')renderErrorMessage(m.text);
+  }
+  scr();
+}
+
 function renderRecent(){const sessions=getSessions();recentList.innerHTML='';if(!sessions.length){recentList.innerHTML='<div class="recent-item empty"><div class="recent-main"><div class="recent-name">Nenhuma conversa ainda</div><div class="recent-meta"><span>As conversas da web expiram automaticamente após 3 dias.</span></div></div></div>';return}sessions.forEach(session=>{const btn=document.createElement('button');btn.type='button';btn.className=`recent-item${session.id===currentSessionId?' active':''}`;btn.innerHTML=`<div class="recent-shell"><div class="recent-main"><div class="recent-name">${esc(session.title||'Nova conversa')}</div><div class="recent-meta"><span>${relativeTime(session.updatedAt||session.createdAt)}</span><span class="recent-count">${messageCountLabel(session.messages.length)}</span></div></div><span class="recent-delete" role="button" aria-label="Apagar conversa" title="Apagar conversa"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></div>`;btn.onclick=()=>openSession(session.id);const del=btn.querySelector('.recent-delete');del.onclick=(event)=>{event.preventDefault();event.stopPropagation();deleteSession(session.id)};recentList.appendChild(btn)})}
 function openSession(id){const session=getSession(id);if(!session)return;currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId);renderRecent();renderConversation(session);closeSidebar();focusComposer()}
 function addProcessing(){const d=document.createElement("div");d.className="think";d.id="proc";d.innerHTML='<div class="think-logo"></div><span class="think-t">Working&hellip; (<span class="proc-s">0</span>s)</span>';F.appendChild(d);scr();const start=Date.now();window._procTimer=setInterval(function(){const el=document.querySelector(".proc-s");if(!el){clearInterval(window._procTimer);return}const s=Math.floor((Date.now()-start)/1000);el.textContent=s<60?s:Math.floor(s/60)+"m "+(s%60)+"s";},1000);}
