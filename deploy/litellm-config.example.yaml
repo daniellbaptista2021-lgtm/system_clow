@@ -1,0 +1,40 @@
+# LiteLLM proxy config — substituir Anthropic por OpenRouter (GLM-5.1 ou outro).
+# Copiar pra /opt/litellm/config.yaml, exportar OPENROUTER_API_KEY e rodar:
+#   litellm --config /opt/litellm/config.yaml --port 4000 --host 127.0.0.1
+
+model_list:
+  # Modelo principal
+  - model_name: glm-5.1
+    litellm_params:
+      model: openrouter/z-ai/glm-5.1
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  # Aliases: codigo hardcoded com claude-sonnet-4-* tambem roteia
+  - model_name: claude-sonnet-4-20250514
+    litellm_params:
+      model: openrouter/z-ai/glm-5.1
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: openrouter/z-ai/glm-5.1
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: openrouter/z-ai/glm-5.1
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: openrouter/z-ai/glm-5.1
+      api_key: os.environ/OPENROUTER_API_KEY
+      api_base: https://openrouter.ai/api/v1
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
