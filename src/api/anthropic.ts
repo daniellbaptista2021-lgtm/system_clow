@@ -97,10 +97,11 @@ let sessionCacheMetrics = {
 
 export function initAnthropic(cfg: AnthropicConfig): void {
   config = cfg;
-  client = new Anthropic({
-    apiKey: cfg.apiKey,
-    maxRetries: 0,
-  });
+  // Suporta ANTHROPIC_BASE_URL pra LiteLLM proxy (rotear pra OpenRouter/outros).
+  const baseURL = process.env.ANTHROPIC_BASE_URL;
+  const clientConfig: any = { apiKey: cfg.apiKey, maxRetries: 0 };
+  if (baseURL && baseURL.trim()) clientConfig.baseURL = baseURL.trim();
+  client = new Anthropic(clientConfig);
 }
 
 function getAnthropicClient(): Anthropic {
