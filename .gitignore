@@ -11,3 +11,22 @@ public/downloads/
 .license-private.key
 .integrity-hash
 data/
+
+# Backups locais
+*.bak
+*.bak_*
+*.bak-*
+
+# Test artifacts
+produtos*.csv
+clientes*.csv
+vendas*.csv
+landing.html
+relatorio_*.txt
+relatorio_*.xlsx
+relatorio_*.js
+*.tar.gz
+prompt_*.md
+
+# LiteLLM config com secret (ja tem .env.example)
+.env.bak_before_openrouter
