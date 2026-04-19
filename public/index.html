@@ -597,6 +597,10 @@ async function go(){
               updatedAt:Date.now(),
               messages:[...current.messages.filter(m=>m.id!==assistantMessage.id),toolMessage,assistantMessage]
             }));
+            // Fix ordem visual (Claude Code style): proximo text_delta cria NOVO bloco DEPOIS desse tool
+            assistantEl=null;
+            txt='';
+            assistantMessage={...assistantMessage,id:uid(),text:''};
             scr();
           }
           else if(ev==='tool_result'){
@@ -620,6 +624,13 @@ async function go(){
             scr();
           }
           else if(ev==='result'&&d.content){
+            // Se a resposta final nao bate com o bloco atual (ex: ja teve tools no meio),
+            // forca novo bloco pro texto vir DEPOIS do ultimo tool
+            if(assistantEl && txt && d.content !== txt){
+              assistantEl=null;
+              txt='';
+              assistantMessage={...assistantMessage,id:uid(),text:''};
+            }
             txt=d.content;
             assistantMessage={...assistantMessage,text:txt};
             updateAssistantMessage(assistantMessage.id,txt);
