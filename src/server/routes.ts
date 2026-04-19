@@ -24,6 +24,7 @@ import { incrementUsage } from '../tenancy/tenantStore.js';
 import { apiQueue } from './requestQueue.js';
 import { rateLimiter } from './rateLimiter.js';
 import { audit } from '../tenancy/auditLog.js';
+import { recordClowUsage } from './middleware/clowSonnetGuard.js';
 import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
 import { detectGreeting, handleSlashCommand } from './slashCommands.js';
 import { getMissionRunner } from './missions.js';
@@ -98,7 +99,7 @@ export function buildRoutes(pool: SessionPool): Hono {
       rateLimiter.recordSessionCreate(tenantId);
     }
 
-    const quotaError = tenant ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', tenantId || 'unknown', { code: quotaError.code }, undefined, clientIp);
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
@@ -176,7 +177,7 @@ export function buildRoutes(pool: SessionPool): Hono {
       rateLimiter.recordRequest(requestTenantId);
     }
 
-    const quotaError = tenant ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', requestTenantId || 'unknown', { code: quotaError.code });
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
@@ -319,6 +320,23 @@ export function buildRoutes(pool: SessionPool): Hono {
               cost_usd: Math.max(0, engine!.getInstanceCostUsd() - costBefore),
             });
           }
+
+          // If this is a Clow-Sonnet bridge session, debit Clow user credit
+          // (admins skip — they are flagged is_admin=true in the JWT payload)
+          const clowUserId = (c as any).get?.('clowUserId') as string | undefined;
+          const clowIsAdmin = (c as any).get?.('clowIsAdmin') === true;
+          if (clowUserId && !clowIsAdmin) {
+            const inputTokens = engine!.getInstanceInputTokens();
+            const outputTokens = engine!.getInstanceOutputTokens();
+            await recordClowUsage({
+              userId: clowUserId,
+              sessionId,
+              inputTokens,
+              outputTokens,
+              cacheHitTokens: 0,
+            }).catch((err) => console.error('[recordClowUsage] failed:', err));
+          }
+
           await flushSession();
 
           await stream.writeSSE({

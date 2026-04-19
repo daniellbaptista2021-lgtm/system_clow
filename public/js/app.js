@@ -19,7 +19,20 @@ const TOKEN_KEY = 'clow_token';
 // State
 // ════════════════════════════════════════════════════════════════════════════
 
+// Clow bridge: accept ?clow_token=... from parent (iframe embed)
+(function(){
+  try {
+    const params = new URLSearchParams(location.search);
+    const ct = params.get('clow_token');
+    if (ct && ct.indexOf('clow_sonnet_') === 0) {
+      localStorage.setItem(TOKEN_KEY, ct);
+      localStorage.setItem('clow_bridge_mode', '1');
+      history.replaceState({}, '', location.pathname);
+    }
+  } catch (e) {}
+})();
 let authToken = localStorage.getItem(TOKEN_KEY);
+const CLOW_BRIDGE_MODE = localStorage.getItem('clow_bridge_mode') === '1' && (authToken || '').indexOf('clow_sonnet_') === 0;
 let isProcessing = false;
 let abortCtrl = null;
 let currentSessionId = null;
@@ -495,7 +508,7 @@ async function reset() {
 // ════════════════════════════════════════════════════════════════════════════
 
 window.addEventListener('error', e => console.error(e.message));
-if (authToken) verifySavedLogin();
+if (CLOW_BRIDGE_MODE) { showApp(); } else if (authToken) { verifySavedLogin(); }
 LP.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 LU.addEventListener('keydown', e => { if (e.key === 'Enter') LP.focus(); });
 I?.addEventListener('input', () => autoResize(I));

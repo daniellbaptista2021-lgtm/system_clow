@@ -29,6 +29,7 @@ import { buildWhatsAppRoutes } from '../adapters/whatsapp.js';
 import { buildBridgeRoutes } from './bridgeRoutes.js';
 import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
 import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
+import { clowSonnetGuard } from './middleware/clowSonnetGuard.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
@@ -189,6 +190,10 @@ async function main(): Promise<void> {
       allowHeaders: ['Content-Type', 'Authorization'],
     }));
   }
+
+  // Auth: Clow sonnet bridge (short-circuits for clow_sonnet_* tokens)
+  app.use('/v1/sessions/*', clowSonnetGuard);
+  app.use('/v1/sessions', clowSonnetGuard);
 
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);

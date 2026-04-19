@@ -114,7 +114,8 @@ body.sidebar-collapsed .sidebar-peek-toggle{display:flex}
 .proc{display:flex;align-items:center;gap:10px;padding:14px 2px;font-size:15px;font-weight:600}
 .proc-dot{width:9px;height:9px;border-radius:999px;background:#9B59FC;animation:blink 1s ease-in-out infinite}.proc-label{color:#9B59FC;animation:pulse-gold 1.5s ease-in-out infinite}@keyframes pulse-gold{0%,100%{opacity:1;text-shadow:0 0 8px #9B59FC88}50%{opacity:0.5;text-shadow:0 0 2px #9B59FC22}}
 @keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(.8)}}
-.dock{position:fixed;left:calc(var(--sidebar) + 24px);right:24px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:15;pointer-events:none}
+:root{--kb-h:0px}
+.dock{position:fixed;left:calc(var(--sidebar) + 24px);right:24px;bottom:calc(24px + var(--kb-h, 0px) + env(safe-area-inset-bottom,0px));z-index:15;pointer-events:none;transition:bottom .15s}
 .dock-inner{width:min(100%,920px);margin:0 auto;pointer-events:auto}
 .dock .composer-card{padding:16px 18px 14px;border-radius:24px}
 .dock .composer-input{min-height:30px;max-height:140px;font-size:16px}
@@ -129,6 +130,7 @@ body.sidebar-collapsed .sidebar-peek-toggle{display:flex}
 .overlay.show{opacity:1;pointer-events:auto}
 .login-ov{position:fixed;inset:0;z-index:30;background:linear-gradient(rgba(37,37,69,.5) 1px, transparent 1px),linear-gradient(90deg, rgba(37,37,69,.5) 1px, transparent 1px),radial-gradient(circle at top, rgba(255,255,255,.03), transparent 36%),rgba(8,8,18,.98);background-size:40px 40px,40px 40px,100% 100%,auto;display:flex;align-items:center;justify-content:center;transition:opacity .25s}
 .login-ov.hide{opacity:0;pointer-events:none}
+html.clow-bridge-mode #loginScreen{display:none!important}
 .login-wrap{width:min(100%,560px);padding:24px}
 .login-card{background:rgba(12,12,28,.96);border:1px solid rgba(155,89,252,.12);border-radius:32px;padding:34px 30px 28px;box-shadow:var(--shadow)}
 .login-brand{display:flex;align-items:center;justify-content:center;margin:0 auto 30px}
@@ -176,13 +178,15 @@ const SESSION_TTL=3*24*60*60*1000;
 const SESSIONS_KEY='clow_web_sessions_v2';
 const ACTIVE_SESSION_KEY='clow_web_active_session_v2';
 const TOKEN_KEY='clow_token';
+(function(){try{const params=new URLSearchParams(location.search);const ct=params.get('clow_token');if(ct&&ct.indexOf('clow_sonnet_')===0){localStorage.setItem(TOKEN_KEY,ct);localStorage.setItem('clow_bridge_mode','1');history.replaceState({},'',location.pathname);}if(localStorage.getItem('clow_bridge_mode')==='1'){document.documentElement.classList.add('clow-bridge-mode');}}catch(e){}})();
 let authToken=localStorage.getItem(TOKEN_KEY),isProcessing=false,abortCtrl=null,currentSessionId=null;
+const CLOW_BRIDGE_MODE=localStorage.getItem('clow_bridge_mode')==='1'&&(authToken||'').indexOf('clow_sonnet_')===0;
 window.addEventListener('error',e=>console.error(e.message));
 const LS=document.getElementById('loginScreen'),AP=document.getElementById('app'),LU=document.getElementById('loginUser'),LP=document.getElementById('loginPass'),LE=document.getElementById('loginError');
 const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
 const recentList=document.getElementById('recentList'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');
 const TL={Read:'Leu um arquivo',FileRead:'Leu um arquivo',Bash:'Executou comando',Edit:'Editou um arquivo',FileEdit:'Editou um arquivo',Write:'Criou um arquivo',FileWrite:'Criou um arquivo',Glob:'Buscou arquivos',Grep:'Pesquisou no código',Agent:'Iniciou subagente',WebFetch:'Acessou URL',WebSearch:'Pesquisou na web',Download:'Preparou download',TodoWrite:'Atualizou tarefas',EnterPlanMode:'Entrou em modo de plano',ExitPlanMode:'Tentou aprovar o plano'};
-if(authToken)verifySavedLogin();
+if(CLOW_BRIDGE_MODE){showApp()}else if(authToken)verifySavedLogin();
 LP.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 LU.addEventListener('keydown',e=>{if(e.key==='Enter')LP.focus()});
 I?.addEventListener('input',()=>autoResize(I));
@@ -234,10 +238,21 @@ function md(t){
   // Lists (- item)
   s=s.replace(/^- (.+)$/gm,'<li>$1</li>');
   s=s.replace(/(<li>.*<\/li>\n?)+/g,function(m){return '<ul>'+m.replace(/\n/g,'')+'</ul>';});
-  // Markdown links
-  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Markdown links com URL absoluta (http/https)
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,function(m,txt,url){
+    var isDl = /\/downloads\//.test(url) || /\.(xlsx|xls|csv|pdf|docx|doc|pptx|ppt|zip|json|txt|md|html|mp4|mp3|png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(url);
+    return '<a href="'+url+'" target="_blank" rel="noopener"'+(isDl?' download':'')+'>'+txt+'</a>';
+  });
+  // Markdown links com path relativo (/downloads/..., /output/..., etc) — resolve pro dominio absoluto
+  s=s.replace(/\[([^\]]+)\]\((\/(?:downloads|output|files|public)\/[^\s)]+)\)/g,function(m,txt,path){
+    var url = location.origin + path;
+    return '<a href="'+url+'" target="_blank" rel="noopener" download>'+txt+'</a>';
+  });
   // Linkify plain URLs
-  s=s.replace(/(^|\s)(https?:\/\/[^\s<]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s=s.replace(/(^|\s)(https?:\/\/[^\s<]+)/g,function(m,pre,url){
+    var isDl = /\/downloads\//.test(url) || /\.(xlsx|xls|csv|pdf|docx|doc|pptx|ppt|zip)(\?|$)/i.test(url);
+    return pre+'<a href="'+url+'" target="_blank" rel="noopener"'+(isDl?' download':'')+'>'+url+'</a>';
+  });
   // Paragraphs & breaks
   s=s.replace(/\n{2,}/g,'</p><p>');
   s=s.replace(/\n/g,'<br>');
@@ -450,7 +465,7 @@ async function ensureCurrentSession(forceNew=false){let session=forceNew?null:ge
 async function doLogin(){const u=LU.value.trim(),p=LP.value.trim();if(!u||!p){LE.textContent='Preencha todos os campos';return}document.getElementById('loginBtn').disabled=true;LE.textContent='';try{const r=await fetch(`${U}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(d.ok){authToken=d.token;localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem("clow_login_user",u);await showApp()}else LE.textContent=d.error||'Credenciais inválidas'}catch{LE.textContent='Erro de conexão'}document.getElementById('loginBtn').disabled=false}
 async function verifySavedLogin(){try{const r=await fetch(`${U}/auth/verify`,{headers:{Authorization:`Bearer ${authToken}`}});if(r.ok)await showApp();else logout()}catch{logout()}}
 async function showApp(){try{localStorage.removeItem('clow_sessions')}catch{}try{localStorage.removeItem('clow_active_session')}catch{}LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},250);AP.style.display='block';syncSidebarState();clearLegacyClientCache();clearBrowserCaches();cleanupSessions();currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY);const emptySession=getLatestEmptySession();if(emptySession){currentSessionId=emptySession.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId)}else{await ensureCurrentSession(true)}renderRecent();renderConversation(getSession());setTimeout(()=>focusComposer(),80)}
-function logout(){localStorage.removeItem(TOKEN_KEY);location.reload()}
+function logout(){localStorage.removeItem(TOKEN_KEY);if(CLOW_BRIDGE_MODE){localStorage.removeItem('clow_bridge_mode');const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#08081a;color:#e8e4f0;font-family:system-ui;text-align:center;padding:40px;z-index:9999';d.textContent='Sessao expirada. Feche esta janela e clique novamente em SYSTEM CLOW SONNET 4 no Clow.';document.body.appendChild(d);return;}location.reload();}
 async function reset(){clearFeed();await ensureCurrentSession(true);renderRecent();renderConversation(getSession());closeSidebar();focusComposer()}
 async function go(){
   const t=(I.value||'').trim();
@@ -699,6 +714,25 @@ function renderAgentStart(input){
 }
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
 window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classList.add('sidebar-collapsed')}else{sidebar.classList.remove('open');overlay.classList.remove('show')}})
+</script>
+
+<script>
+(function(){
+  if(!window.visualViewport) return;
+  var root = document.documentElement;
+  var apply = function(){
+    var vv = window.visualViewport;
+    // Distancia entre bottom da viewport layout e bottom da viewport visual = teclado
+    var kbH = Math.max(0, (window.innerHeight - vv.height - vv.offsetTop));
+    root.style.setProperty('--kb-h', kbH + 'px');
+    if(kbH > 50){ document.body.classList.add('kb-open'); }
+    else { document.body.classList.remove('kb-open'); }
+  };
+  window.visualViewport.addEventListener('resize', apply);
+  window.visualViewport.addEventListener('scroll', apply);
+  window.addEventListener('orientationchange', function(){ setTimeout(apply, 120); });
+  apply();
+})();
 </script>
 </body>
 </html>

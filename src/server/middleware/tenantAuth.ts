@@ -90,6 +90,12 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
     return next();
   }
 
+  // Skip auth if clowSonnetGuard already authenticated this request
+  const alreadyAuthed = (c as unknown as { get?: (k: string) => unknown }).get?.('authMode');
+  if (alreadyAuthed === 'clow_sonnet' || alreadyAuthed === 'admin_session') {
+    return next();
+  }
+
   // Extract API key
   const auth = c.req.header('Authorization');
   const bearerToken = extractBearerToken(auth);
