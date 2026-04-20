@@ -54,7 +54,24 @@ Only one task should be in_progress at a time.`,
     return { behavior: 'allow' as const };
   },
 
-  async call(input: TodoWriteInput): Promise<ToolResult> {
+  async call(input: TodoWriteInput, context?: any): Promise<ToolResult> {
+    // ── Delivery guard: prevent marking tasks as 'completed' without evidence ──
+    // If any task is being set to 'completed' that was previously not completed,
+    // we inject a warning reminder into the output so the model self-checks.
+    const newlyCompleted = input.todos.filter((t) => {
+      if (t.status !== 'completed') return false;
+      const prev = currentTodos.find((p) => p.content === t.content);
+      return !prev || prev.status !== 'completed';
+    });
+
+    let deliveryWarning = '';
+    if (newlyCompleted.length > 0) {
+      deliveryWarning = '\n\n⚠ LEMBRETE: Voce marcou tarefas como concluidas. '
+        + 'Verifique se o artefato solicitado (arquivo, codigo, planilha, etc) '
+        + 'foi EFETIVAMENTE entregue na conversa antes de encerrar. '
+        + 'Se ainda nao entregou, continue trabalhando.';
+    }
+
     currentTodos = input.todos.map((t) => ({
       content: t.content,
       status: t.status,
@@ -70,7 +87,7 @@ Only one task should be in_progress at a time.`,
 
     return {
       output: { todos: currentTodos },
-      outputText: `Todo list updated:\n${summary}`,
+      outputText: `Todo list updated:\n${summary}${deliveryWarning}`,
     };
   },
 });

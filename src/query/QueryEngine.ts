@@ -181,7 +181,7 @@ export class QueryEngine {
     let attemptWithFallback = false;
     let maxOutputRetries = 0;
     let toolRounds = 0;
-    const MAX_TOOL_ROUNDS_DEFAULT = 15;
+    const MAX_TOOL_ROUNDS_DEFAULT = 50;
     const MAX_TOOL_ROUNDS = this.config.maxTurns >= 9999 ? 999 : MAX_TOOL_ROUNDS_DEFAULT;
 
     while (true) {

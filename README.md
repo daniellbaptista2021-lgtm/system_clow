@@ -8,7 +8,7 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-69K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Claude](https://img.shields.io/badge/Claude-Sonnet_4-blueviolet?logo=anthropic&logoColor=white)](#)
+[![GLM](https://img.shields.io/badge/Motor-GLM_5.1-blueviolet?logo=openai&logoColor=white)](#)
 [![Status](https://img.shields.io/badge/Status-Producao-brightgreen)](#)
 [![Memory](https://img.shields.io/badge/Memoria-Persistente-blue)](#memoria-persistente)
 [![Security](https://img.shields.io/badge/Security-Hardened-green)](#seguranca-multi-tenant-2000-usuarios)
@@ -37,7 +37,7 @@ Construido como **clone arquitetural do Claude Code**, o System Clow implementa 
 | **Memoria persistente** | Plugin externo | Nao | Nativo (SQLite + FTS5) |
 | **Multi-tenant SaaS** | Nao | Nao | Sim (2000+ usuarios) |
 | **Auto-hospedado** | Nao | Nao | Sim |
-| **Multi-modelo** | Nao | Nao | Sim (Claude, GPT, DeepSeek) |
+| **Multi-modelo** | Nao | Nao | Sim (GLM 5.1, Claude, GPT, DeepSeek) |
 | **WhatsApp** | Nao | Nao | Sim |
 | **PWA Mobile** | Nao | Nao | Sim |
 | **Rate Limiting** | N/A | N/A | Per-tenant sliding window |
@@ -182,7 +182,8 @@ npm run test:coverage # Com cobertura
 
 | Modelo | Uso |
 |--------|-----|
-| **Claude Sonnet 4** | Motor principal (max performance) |
+| **GLM 5.1** | Motor principal (producao via OpenRouter/LiteLLM) |
+| **Claude Sonnet 4** | Alternativa Anthropic (alta qualidade) |
 | **Claude Haiku 4.5** | Rapido e economico |
 | **GPT-4o** | Alternativa OpenAI |
 | **GPT-4o-mini** | Ultra economico |
@@ -243,7 +244,7 @@ docker run -p 3001:3001 --env-file .env system-clow
  (17nat) (24evt) (clone) (SQLite)(ext) (sandbox)
      |
   Providers
-  Claude Sonnet . GPT . DeepSeek
+  GLM 5.1 . Claude . GPT . DeepSeek
 ```
 
 ## Stack Tecnica
@@ -251,7 +252,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 | Componente | Tecnologia |
 |---|---|
 | Runtime | Node.js 22 + TypeScript 5 |
-| AI Model | Claude Sonnet 4 (principal) |
+| AI Model | GLM 5.1 via OpenRouter/LiteLLM (principal) |
 | Server | Hono + @hono/node-server |
 | LLM SDK | Anthropic SDK / OpenAI SDK |
 | Protocolo | MCP (Model Context Protocol) |
@@ -277,7 +278,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 | Ferramentas nativas | 17 |
 | Skills nativas | 13 (inclui clone-website) |
 | Eventos de hook | 24 |
-| Modelos suportados | 5+ |
+| Modelos suportados | 6+ (GLM 5.1 principal) |
 | Testes automatizados | 65+ |
 | Usuarios suportados | 2000+ |
 | Paridade com Claude Code | ~99% |
@@ -295,7 +296,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 - [x] Bridge system (remote control)
 - [x] Multi-tenant SaaS (2000+ usuarios)
 - [x] PWA mobile
-- [x] Multi-modelo (Claude Sonnet, GPT, DeepSeek)
+- [x] Multi-modelo (GLM 5.1, Claude, GPT, DeepSeek)
 - [x] Memoria persistente (SQLite + FTS5)
 - [x] Resumo automatico de sessoes via LLM
 - [x] Testes automatizados (Vitest + V8 Coverage)
@@ -324,7 +325,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 
 **System Clow** — Construido para quem precisa de um agente AI que realmente executa.
 
-*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . RAG + Marketplace + SSO . Claude Sonnet 4 . Producao 24/7*
+*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . RAG + Marketplace + SSO . GLM 5.1 via OpenRouter . Producao 24/7*
 
 </div>
 
