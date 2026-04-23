@@ -140,7 +140,7 @@
             }, f.status === 'active' ? 'Pausar' : 'Ativar'),
             el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:7px 14px',
               on: { click: async () => {
-                if (!confirm('Apagar "' + f.name + '"?')) return;
+                if (!(await clowConfirm('Apagar "' + f.name + '"?', { title: 'Apagar fluxo', danger: true, confirmLabel: 'Apagar' }))) return;
                 await fetch('/v1/n8n/flows/' + f.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + userToken() } });
                 await renderFlows();
                 toast('Removido', 'success');
@@ -385,7 +385,7 @@
         el('button', {
           style: 'padding:10px 16px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit',
           on: { click: async () => {
-            if (!confirm('Cancelar assinatura? Você continua com acesso até o fim do período já pago.')) return;
+            if (!(await clowConfirm('Cancelar assinatura? Você continua com acesso até o fim do período já pago.', { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar' }))) return;
             toast('Entre em contato pelo WhatsApp pra finalizar cancelamento.', 'error');
           } },
         }, 'Cancelar assinatura'),

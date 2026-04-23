@@ -157,7 +157,7 @@
                 class: 'save-btn',
                 style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:6px 12px;font-size:11px',
                 on: { click: async () => {
-                  if (!confirm(`Apagar "${a.name}"?`)) return;
+                  if (!(await clowConfirm(`Apagar "${a.name}"?`, { title: 'Apagar automacao', danger: true, confirmLabel: 'Apagar' }))) return;
                   await api(`/automations/${a.id}`, { method: 'DELETE' });
                   await renderAutomationsList();
                   toast('Removida', 'success');
@@ -287,7 +287,7 @@
             s.status !== 'cancelled' ?
               el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px 12px',
                 on: { click: async () => {
-                  if (!confirm(`Cancelar assinatura "${s.planName}"?`)) return;
+                  if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
                   await api(`/subscriptions/${s.id}`, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } });
                   toast('Cancelada', 'success');
                   await renderSubsList();

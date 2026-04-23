@@ -376,21 +376,21 @@ function showCardContextMenu(card, x, y) {
     ctxHeader(truncate(card.title || 'Card', 30)),
     ctxItem(ICO_OPEN, 'Abrir', () => openCardPanel(card.id)),
     ctxItem(ICO_EDIT, 'Editar titulo', async () => {
-      const t = prompt('Novo titulo:', card.title || '');
+      const t = await clowPrompt('Novo titulo:', card.title || '', { title: 'Editar card' });
       if (t == null || t.trim() === card.title) return;
       await patchCardSafe(card.id, { title: t.trim() });
     }),
     ctxSep(),
     ctxItem(ICO_MONEY, 'Definir valor (R$)', async () => {
       const current = ((card.valueCents || 0) / 100).toFixed(2);
-      const v = prompt('Valor em R$ (ex: 1500.00):', current);
+      const v = await clowPrompt('Valor em R$ (ex: 1500.00):', current, { title: 'Definir valor', type: 'text', hint: 'Use ponto ou virgula como separador decimal.' });
       if (v == null) return;
       const cents = Math.round(parseFloat(String(v).replace(',', '.')) * 100);
       if (!Number.isFinite(cents) || cents < 0) return toast('Valor invalido', 'error');
       await patchCardSafe(card.id, { valueCents: cents });
     }),
     ctxItem(ICO_PCT, 'Definir probabilidade (%)', async () => {
-      const v = prompt('Probabilidade 0-100:', String(card.probability ?? 50));
+      const v = await clowPrompt('Probabilidade 0-100:', String(card.probability ?? 50), { title: 'Definir probabilidade', type: 'number' });
       if (v == null) return;
       const n = parseInt(v, 10);
       if (!Number.isFinite(n) || n < 0 || n > 100) return toast('0-100', 'error');
@@ -398,7 +398,7 @@ function showCardContextMenu(card, x, y) {
     }),
     ctxItem(ICO_CAL, 'Definir vencimento', async () => {
       const cur = card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 10) : '';
-      const v = prompt('Data de vencimento (YYYY-MM-DD):', cur);
+      const v = await clowPrompt('Deixe em branco pra remover.', cur, { title: 'Definir vencimento', type: 'date' });
       if (v == null) return;
       const ms = v.trim() ? Date.parse(v) : null;
       if (v.trim() && !Number.isFinite(ms)) return toast('Data invalida', 'error');
@@ -406,7 +406,7 @@ function showCardContextMenu(card, x, y) {
     }),
     ctxItem(ICO_LABEL, 'Etiquetas...', async () => {
       const cur = (card.labels || []).join(', ');
-      const v = prompt('Etiquetas (separadas por virgula):', cur);
+      const v = await clowPrompt('Etiquetas (separadas por virgula):', cur, { title: 'Etiquetas' });
       if (v == null) return;
       const labels = v.split(',').map(s => s.trim()).filter(Boolean);
       await patchCardSafe(card.id, { labels });
@@ -421,7 +421,7 @@ function showCardContextMenu(card, x, y) {
     ctxItem(ICO_REPEAT, 'Criar cobranca mensal', () => createSubscriptionForCard(card)),
     ctxSep(),
     ctxItem(ICO_TRASH, 'Apagar card', async () => {
-      if (!confirm('Apagar o card "' + (card.title || '') + '"?')) return;
+      if (!(await clowConfirm('Apagar o card "' + (card.title || '') + '"? Esta acao e permanente.', { title: 'Apagar card', danger: true, confirmLabel: 'Apagar' }))) return;
       try {
         await api('/cards/' + card.id, { method: 'DELETE' });
         toast('Card apagado', 'success');
@@ -514,17 +514,17 @@ async function createSubscriptionForCard(card) {
   }
   if (!contactId) return toast('Card sem contato associado. Abra e vincule um.', 'error');
 
-  const planName = prompt('Nome do plano (ex: Plano Premium):', card.title || '');
+  const planName = await clowPrompt('Nome do plano (ex: Plano Premium):', card.title || '', { title: 'Criar cobranca mensal' });
   if (!planName) return;
-  const amtStr = prompt('Valor mensal em R$ (ex: 497.00):', ((card.valueCents || 0) / 100).toFixed(2));
+  const amtStr = await clowPrompt('Valor mensal em R$ (ex: 497.00):', ((card.valueCents || 0) / 100).toFixed(2), { title: 'Cobranca — valor' });
   if (amtStr == null) return;
   const amountCents = Math.round(parseFloat(String(amtStr).replace(',', '.')) * 100);
   if (!Number.isFinite(amountCents) || amountCents <= 0) return toast('Valor invalido', 'error');
 
-  const cycle = prompt('Ciclo (monthly, weekly, quarterly, yearly, one_time):', 'monthly');
+  const cycle = await clowSelect('Ciclo:', [{value:'monthly',label:'Mensal'},{value:'weekly',label:'Semanal'},{value:'quarterly',label:'Trimestral'},{value:'yearly',label:'Anual'},{value:'one_time',label:'Uma vez'}], { title: 'Cobranca — ciclo', defaultValue: 'monthly' });
   if (!cycle) return;
 
-  const nextStr = prompt('Proxima cobranca (YYYY-MM-DD):', new Date(Date.now() + 30*86400000).toISOString().slice(0,10));
+  const nextStr = await clowPrompt('Proxima cobranca:', new Date(Date.now() + 30*86400000).toISOString().slice(0,10), { title: 'Cobranca — proxima data', type: 'date' });
   if (!nextStr) return;
   const nextChargeAt = Date.parse(nextStr);
   if (!Number.isFinite(nextChargeAt)) return toast('Data invalida', 'error');
