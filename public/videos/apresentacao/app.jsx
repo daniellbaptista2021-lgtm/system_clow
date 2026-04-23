@@ -62,6 +62,42 @@ function AudioSync({ src, volume = 0.8 }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────
+// VideoCover — imagem de capa que aparece quando:
+//   - t < 0.2s (inicio, pre-play)
+//   - t >= duration - 0.15s (fim)
+//   - !playing (pausado manualmente, apos ter tocado)
+// ────────────────────────────────────────────────────────────────────
+function VideoCover({ src }) {
+  const { time, playing, duration } = React.useContext(TimelineContext);
+  const [hasPlayedOnce, setHasPlayedOnce] = React.useState(false);
+  React.useEffect(() => { if (playing) setHasPlayedOnce(true); }, [playing]);
+
+  const atStart = time < 0.2 && !hasPlayedOnce;
+  const atEnd = time >= duration - 0.15;
+  const paused = hasPlayedOnce && !playing;
+  const visible = atStart || atEnd || paused;
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `url(${src})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 450ms cubic-bezier(.2,.7,.2,1)',
+        pointerEvents: 'none',
+        zIndex: 9500,
+      }}
+    />
+  );
+}
+
+
 
 function Video() {
   return (
@@ -107,6 +143,9 @@ function VideoRoot() {
       <Sprite start={33}   end={37}>  <Scene8/>    </Sprite>
       <Sprite start={37}   end={42}>  <Scene9/>    </Sprite>
       <Sprite start={42}   end={45}>  <SceneCTA/>  </Sprite>
+
+      {/* Capa — aparece no inicio, fim e pausa */}
+      <VideoCover src="assets/cover.jpg"/>
 
       {/* Trilha sonora acoplada ao play/pause do Stage */}
       <AudioSync src="assets/track.mp3" volume={0.85}/>
