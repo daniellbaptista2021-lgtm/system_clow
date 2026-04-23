@@ -22,6 +22,7 @@ import { initAnthropic } from '../api/anthropic.js';
 import { MCPManager } from '../mcp/MCPManager.js';
 import { SessionPool } from './sessionPool.js';
 import { PluginSystem } from '../plugins/PluginSystem.js';
+import { initCrm } from '../crm/index.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
@@ -179,6 +180,9 @@ async function main(): Promise<void> {
 
   // Create session pool
   const pool = new SessionPool(mcpManager);
+
+  // Initialize CRM (migrations + DB setup)
+  initCrm();
 
   // Build Hono app
   const app = new Hono();
