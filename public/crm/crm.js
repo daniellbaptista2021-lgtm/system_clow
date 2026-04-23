@@ -951,19 +951,61 @@ function wireEvents() {
   });
 }
 
+// ─── Auto-login via System Clow session ───────────────────────────────
+async function tryExchange() {
+  const sessionToken = localStorage.getItem('clow_token');
+  if (!sessionToken) return null;
+  try {
+    const r = await fetch('/v1/crm/auth/exchange', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data.api_key;
+  } catch (e) { return null; }
+}
+
+async function tryAutoLogin() {
+  // 1. Try cached CRM api_key
+  if (state.apiKey) {
+    try { await attemptLogin(state.apiKey); return true; }
+    catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
+  }
+  // 2. Try exchange via System Clow session
+  const fresh = await tryExchange();
+  if (fresh) {
+    state.apiKey = fresh;
+    localStorage.setItem('clow_crm_key', fresh);
+    try { await attemptLogin(fresh); return true; }
+    catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
+  }
+  return false;
+}
+
+function showLoginRequired() {
+  const ls = $('#loginScreen');
+  if (!ls) return;
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa estar logado no System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Ir pro System Clow</a></div>';
+}
+
 // ─── Boot ──────────────────────────────────────────────────────────────
 (async () => {
   wireEvents();
-  if (state.apiKey) {
-    try {
-      await attemptLogin(state.apiKey);
-      $('#loginScreen').classList.add('hide');
-      $('#app').classList.remove('hide');
-      await bootstrap();
-    } catch {
-      // key invalid, stay on login
-      $('#apiKeyInput').value = state.apiKey;
-    }
+  // Hide login form completely; we never want manual API key entry
+  const ls = $('#loginScreen');
+  if (ls) ls.style.display = 'flex';
+
+  // Show a transient loader while we attempt auth
+  if (ls) ls.innerHTML = '<div class="login-card" style="text-align:center"><div style="width:40px;height:40px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:spin .9s linear infinite"></div><div style="color:#9898B8;font-size:13px">Conectando seu CRM...</div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+
+  const ok = await tryAutoLogin();
+  if (ok) {
+    if (ls) ls.classList.add('hide');
+    $('#app').classList.remove('hide');
+    await bootstrap();
+  } else {
+    showLoginRequired();
   }
 })();
 
