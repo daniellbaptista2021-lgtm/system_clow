@@ -159,10 +159,10 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 .crm-launcher:hover .crm-arrow{transform:translateX(3px);opacity:1}
 
 /* ─── CRM Modal (full overlay) ─── */
-.crm-modal{position:fixed;inset:0;z-index:9999;background:rgba(8,8,26,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none;flex-direction:column;animation:crmFadeIn .25s ease;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}
+.crm-modal{position:fixed;inset:0;z-index:9999;background:rgba(8,8,26,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none;flex-direction:column;animation:crmFadeIn .25s ease}
 .crm-modal.show{display:flex}
 @keyframes crmFadeIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(14px)}}
-.crm-modal-header{min-height:calc(60px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 22px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(155,89,252,.18);background:linear-gradient(180deg,rgba(15,15,36,.95),rgba(8,8,26,.95));flex-shrink:0}
+.crm-modal-header{height:60px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(155,89,252,.18);background:linear-gradient(180deg,rgba(15,15,36,.95),rgba(8,8,26,.95));flex-shrink:0}
 .crm-modal-back{display:flex;align-items:center;gap:10px;padding:9px 16px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease}
 .crm-modal-back:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(155,89,252,.35)}
 .crm-modal-back svg{width:16px;height:16px}
@@ -180,17 +180,9 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 .crm-modal-error{padding:24px;color:var(--danger);font-size:13px;text-align:center}
 
 @media (max-width:780px){
-  .crm-modal-body{padding:6px 6px 8px}
+  .crm-modal-body{padding:8px 8px 12px}
   .crm-modal-frame-wrap{border-radius:10px}
-  .crm-modal-title{font-size:12px;gap:6px}
-  .crm-modal-title .crm-modal-dot{width:28px;height:28px;font-size:11px}
-  .crm-modal-header{padding:env(safe-area-inset-top) 10px 0;gap:8px;min-height:calc(52px + env(safe-area-inset-top))}
-  .crm-modal-back{padding:7px 10px;font-size:12px;gap:6px}
-  .crm-modal-close{width:30px;height:30px}
-}
-@media (max-width:480px){
-  .crm-modal-back-text{display:none}
-  .crm-modal-title{display:none}
+  .crm-modal-title{font-size:13px}
 }
 
 
@@ -807,7 +799,7 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
   <div class="crm-modal-header">
     <button class="crm-modal-back" type="button" onclick="closeCRM()" aria-label="Voltar pro System Clow">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-      <span class="crm-modal-back-text">Voltar pro Agente</span>
+      Voltar pro Agente
     </button>
     <div class="crm-modal-title">
       <svg class="crm-modal-infinite" viewBox="0 0 240 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="System Clow">
