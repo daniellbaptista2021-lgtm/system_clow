@@ -430,9 +430,7 @@ function showCardContextMenu(card, x, y) {
     }, { danger: true }),
   );
 
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 function showAssignSubmenu(card, x, y) {
@@ -453,9 +451,7 @@ function showAssignSubmenu(card, x, y) {
   menu.append(ctxSep(), ctxItem('', 'Remover atribuicao', async () => {
     await patchCardSafe(card.id, { assignedAgentId: null });
   }));
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 function showMoveSubmenu(card, x, y) {
@@ -476,9 +472,7 @@ function showMoveSubmenu(card, x, y) {
       } catch (err) { toast('Erro: ' + err.message, 'error'); }
     }));
   });
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 async function markCardWon(card) {
@@ -671,9 +665,7 @@ function showContactContextMenu(contact, x, y) {
     }},
   ];
   const menu = buildMenu(items, truncate(contact.name || 'Contato', 30));
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 // ═══ CHANNEL context menu ═════════════════════════════════════════════════
@@ -708,9 +700,7 @@ function showChannelContextMenu(channel, x, y) {
     }},
   ];
   const menu = buildMenu(items, truncate(channel.name || 'Canal', 30));
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 // ═══ AGENT context menu ═══════════════════════════════════════════════════
@@ -748,9 +738,7 @@ function showAgentContextMenu(agent, x, y) {
     }},
   ];
   const menu = buildMenu(items, truncate(agent.name || 'Agente', 30));
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 // ═══ INVENTORY context menu ═══════════════════════════════════════════════
@@ -780,9 +768,7 @@ function showInventoryContextMenu(item, x, y) {
     }},
   ];
   const menu = buildMenu(items, truncate(item.name || 'Produto', 30));
-  positionMenu(menu, x, y);
-  document.body.appendChild(menu);
-  _ctxMenuEl = menu;
+  showMenu(menu, x, y);
 }
 
 
@@ -1959,3 +1945,37 @@ function showLoginRequired() {
 
 window.__crmRefresh = async function() { try { if (state.currentBoardId) { await loadPipeline(state.currentBoardId); renderKanban(); } if (state.currentCard) { await refreshCurrentCard(); } } catch(e){} };
 window.__crmAppReady = true;
+
+// ═══ EXPORT helpers pro window (crm-extras.js e classic script, nao enxerga module scope) ═══
+function showMenu(menu, x, y) {
+  closeCtxMenus();
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+window.attachListItemContextMenu = attachListItemContextMenu;
+window.closeCtxMenus = closeCtxMenus;
+window.ctxItem = ctxItem;
+window.ctxSep = ctxSep;
+window.ctxHeader = ctxHeader;
+window.positionMenu = positionMenu;
+window.ensureCtxMenuStyles = ensureCtxMenuStyles;
+window.buildMenu = buildMenu;
+window.truncate = truncate;
+window.CTX_ICO = CTX_ICO;
+window.showMenu = showMenu;
+// APIs que crm-extras.js chama pra refresh de listas
+window.loadContacts = loadContacts;
+window.renderContactsList = renderContactsList;
+window.loadChannels = (typeof loadChannels === 'function') ? loadChannels : null;
+window.renderChannelsList = renderChannelsList;
+window.loadAgents = (typeof loadAgents === 'function') ? loadAgents : null;
+window.renderAgentsList = renderAgentsList;
+window.loadInventory = (typeof loadInventory === 'function') ? loadInventory : null;
+window.renderInventoryList = renderInventoryList;
+window.openEditChannelModal = openEditChannelModal;
+window.openEditAgentModal = openEditAgentModal;
+window.openEditInventoryModal = openEditInventoryModal;
+window.openCardPanel = openCardPanel;
+window.fmtMoney = fmtMoney;
+

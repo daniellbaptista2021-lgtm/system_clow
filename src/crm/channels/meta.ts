@@ -80,6 +80,36 @@ async function uploadMediaToMeta(
         xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       };
       mime = mimeMap[ext] || 'application/octet-stream';
+
+      // Meta rejeita audio/webm. Se for gravacao MediaRecorder do browser
+      // (mediaType=audio + ext webm), transcoda pra audio/ogg via ffmpeg.
+      if (mediaType === 'audio' && (ext === 'webm' || mime.startsWith('video/webm') || mime.startsWith('audio/webm'))) {
+        try {
+          const { execFile } = await import('child_process');
+          const { promisify } = await import('util');
+          const { randomUUID } = await import('crypto');
+          const execFileP = promisify(execFile);
+          const tmpDir = '/tmp';
+          const inPath = pathMod.join(tmpDir, 'wa-in-' + randomUUID() + '.webm');
+          const outPath = pathMod.join(tmpDir, 'wa-out-' + randomUUID() + '.ogg');
+          fsMod.writeFileSync(inPath, bytes);
+          // -c:a libopus 48kHz mono 64kbps — formato que Meta aceita
+          await execFileP('ffmpeg', [
+            '-y', '-i', inPath,
+            '-vn', '-ac', '1', '-ar', '48000',
+            '-c:a', 'libopus', '-b:a', '64k',
+            '-f', 'ogg', outPath,
+          ]);
+          bytes = fsMod.readFileSync(outPath);
+          mime = 'audio/ogg';
+          try { fsMod.unlinkSync(inPath); } catch {}
+          try { fsMod.unlinkSync(outPath); } catch {}
+          console.log('[meta-upload] audio webm -> ogg opus (', bytes.length, 'bytes)');
+        } catch (err: any) {
+          console.error('[meta-upload] ffmpeg transcode failed:', err?.message);
+          return { ok: false, error: 'audio_transcode_failed: ' + (err?.message || 'ffmpeg error') };
+        }
+      }
     } else if (/^https?:\/\//.test(mediaUrl)) {
       const r = await fetch(mediaUrl);
       if (!r.ok) return { ok: false, error: 'fetch_media_failed: HTTP ' + r.status };
