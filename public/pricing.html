@@ -157,6 +157,11 @@ nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.78);backdrop-f
 .cta-box::before{content:"";position:absolute;inset:0;background:radial-gradient(40% 60% at 50% 0%,rgba(155,89,252,.2),transparent)}
 .cta-box > *{position:relative}
 .cta-box h2{font-size:clamp(26px,3.5vw,36px);margin:0 0 12px;letter-spacing:-.02em;font-weight:800}
+/* Infinity watermark — marca d’água suave nos cards premium */
+.demo-card, .cta-box{isolation:isolate}
+.card-inf-watermark{position:absolute;top:50%;left:50%;width:90%;max-width:720px;height:auto;transform:translate(-50%,-50%);opacity:.07;pointer-events:none;z-index:0;filter:blur(.4px)}
+.demo-card > .card-inf-watermark,.cta-box > .card-inf-watermark{position:absolute}
+@media (max-width:640px){.card-inf-watermark{opacity:.085;max-width:420px}}
 .cta-box p{color:var(--text-2);font-size:15px;margin:0 0 26px;line-height:1.6}
 
 /* ─── FOOTER ─── */
@@ -308,6 +313,7 @@ footer a:hover{color:var(--text)}
 <!-- ═══ DEMO FLOW ═══ -->
 <section class="demo">
   <div class="demo-card">
+    <svg class="card-inf-watermark" viewBox="0 0 200 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="inf-grad-demo" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs><path stroke="url(#inf-grad-demo)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" d="M 35,50 C 35,25 60,25 100,50 C 140,75 165,75 165,50 C 165,25 140,25 100,50 C 60,75 35,75 35,50 Z"/></svg>
     <h2>Como funciona na prática</h2>
     <p>Um fluxo real de 4 passos automáticos. O cliente nem sabe que tá falando com IA.</p>
     <div class="demo-flow">
@@ -483,6 +489,7 @@ footer a:hover{color:var(--text)}
 <!-- ═══ FINAL CTA ═══ -->
 <section class="cta-final">
   <div class="cta-box">
+    <svg class="card-inf-watermark" viewBox="0 0 200 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="inf-grad-cta" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs><path stroke="url(#inf-grad-cta)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" d="M 35,50 C 35,25 60,25 100,50 C 140,75 165,75 165,50 C 165,25 140,25 100,50 C 60,75 35,75 35,50 Z"/></svg>
     <h2>Comece a vender com IA <br>nos próximos 3 minutos</h2>
     <p>Signup rápido, paga seguro via Stripe, e em 3 minutos você tá logado com WhatsApp conectado.</p>
     <a href="#planos" class="btn btn-primary btn-hero">Escolher meu plano agora →</a>
