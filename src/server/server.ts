@@ -388,7 +388,8 @@ async function main(): Promise<void> {
     if (!fsMod.existsSync(file) || !fsMod.statSync(file).isFile()) return c.text('not found', 404);
     const buf = fsMod.readFileSync(file);
     const mt = p.endsWith('.html') ? 'text/html' : p.endsWith('.css') ? 'text/css' : p.endsWith('.js') ? 'application/javascript' : 'application/octet-stream';
-    return new Response(buf, { headers: { 'Content-Type': mt + '; charset=utf-8', 'Cache-Control': p.endsWith('.html') ? 'no-cache' : 'public, max-age=300' } });
+    const noCache = p.endsWith('.html') || p.endsWith('.js');
+    return new Response(buf, { headers: { 'Content-Type': mt + '; charset=utf-8', 'Cache-Control': noCache ? 'no-cache, no-store, must-revalidate' : 'public, max-age=300' } });
   });
   app.get('/crm', (c) => Response.redirect(new URL('/crm/', c.req.url).toString(), 302) as any);
 
