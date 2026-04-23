@@ -15,6 +15,7 @@ import { Hono } from 'hono';
 import * as store from './store.js';
 import { encryptJson, decryptJson, maskSecret } from './crypto.js';
 import { sendOutbound } from './inbox.js';
+import * as automations from './automations.js';
 import { readMedia } from './media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from './types.js';
 
@@ -493,6 +494,47 @@ app.post('/media/upload', async (c) => {
   const saved = (await import('./media.js')).saveMedia(tid, bytes, { mime, suggestedFilename: filename });
   // Return full URL with tenantId path
   return ok(c, { url: saved.publicUrl, bytes: saved.bytes, mime: saved.mime }, 201);
+});
+
+
+// ═══ AUTOMATIONS ═══════════════════════════════════════════════════════
+app.get('/automations', (c) => {
+  return ok(c, { automations: automations.listAutomations(tenantOf(c)) });
+});
+
+app.get('/automations/templates', (c) => {
+  return ok(c, { templates: automations.AUTOMATION_TEMPLATES });
+});
+
+app.post('/automations', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  if (!body.name || !body.trigger || !Array.isArray(body.actions)) {
+    return badRequest(c, 'name, trigger, actions[] required');
+  }
+  const a = automations.createAutomation(tenantOf(c), body);
+  return ok(c, { automation: a }, 201);
+});
+
+app.post('/automations/install-template', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const tpl = automations.AUTOMATION_TEMPLATES.find(t => t.key === body.key);
+  if (!tpl) return badRequest(c, 'unknown template key');
+  const a = automations.createAutomation(tenantOf(c), {
+    name: tpl.name, trigger: tpl.trigger,
+    conditions: tpl.conditions, actions: tpl.actions, enabled: true,
+  });
+  return ok(c, { automation: a }, 201);
+});
+
+app.patch('/automations/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const upd = automations.updateAutomation(tenantOf(c), c.req.param('id'), body);
+  return upd ? ok(c, { automation: upd }) : notFound(c, 'automation');
+});
+
+app.delete('/automations/:id', (c) => {
+  const ok2 = automations.deleteAutomation(tenantOf(c), c.req.param('id'));
+  return ok2 ? c.body(null, 204) : notFound(c, 'automation');
 });
 
 export default app;

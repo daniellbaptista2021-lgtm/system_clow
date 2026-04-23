@@ -25,6 +25,7 @@ import { PluginSystem } from '../plugins/PluginSystem.js';
 import { initCrm } from '../crm/index.js';
 import crmRoutes from '../crm/routes.js';
 import crmWebhooks from '../crm/webhooks.js';
+import { startScheduler } from '../crm/scheduler.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
@@ -185,6 +186,7 @@ async function main(): Promise<void> {
 
   // Initialize CRM (migrations + DB setup)
   initCrm();
+  startScheduler();
 
   // Build Hono app
   const app = new Hono();

@@ -16,6 +16,7 @@ import { getCrmDb } from './schema.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { saveMedia } from './media.js';
+import * as automations from './automations.js';
 import type { Channel2, Activity, MediaType } from './types.js';
 
 export interface InboundResult {
@@ -116,6 +117,7 @@ export async function ingestInbound(channel: Channel2, msg: {
     void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
   }
 
+  void automations.emit({ trigger: 'inbound_message', tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id, text: msg.text || msg.caption || '' });
   return { ok: true, contactId: contact.id, cardId: card?.id, activityId: activity.id };
 }
 
@@ -249,5 +251,6 @@ export async function sendOutbound(channel: Channel2, opts: SendInbox): Promise<
     createdByAgentId: opts.agentId,
     metadata: { channelId: channel.id, channelName: channel.name, toPhone: opts.to },
   });
+  void automations.emit({ trigger: 'outbound_message', tenantId, cardId: opts.cardId, contactId, activityId: activity.id, text: opts.text || '' });
   return { ok: true, messageId: result.messageId, activityId: activity.id };
 }

@@ -15,6 +15,18 @@ import type {
 } from './types.js';
 
 const now = () => Date.now();
+// Lazy-loaded automation emitter (avoids circular import: automations -> store)
+let _emit: ((ev: any) => Promise<void>) | null = null;
+async function getEmit() {
+  if (!_emit) {
+    try {
+      const mod = await import('./automations.js');
+      _emit = mod.emit;
+    } catch { _emit = async () => {}; }
+  }
+  return _emit;
+}
+
 const nid = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
 // ─── Serialization helpers ──────────────────────────────────────────────
@@ -338,6 +350,7 @@ export function createCard(tenantId: string, input: {
     card.createdAt, card.updatedAt);
   logActivity(tenantId, { cardId: card.id, contactId: card.contactId, type: 'system', channel: 'manual',
     content: `Card criado na coluna ${card.columnId}` });
+  void (async () => { (await getEmit())({ trigger: 'card_created', tenantId, cardId: card.id, contactId: card.contactId }); })();
   return card;
 }
 
@@ -405,6 +418,7 @@ export function moveCard(tenantId: string, cardId: string, toColumnId: string, p
       cardId, contactId: existing.contactId, type: 'stage_change', channel: 'manual',
       content: `Movido de ${existing.columnId} para ${toColumnId}`,
     });
+    void (async () => { (await getEmit())({ trigger: 'card_moved', tenantId, cardId, contactId: existing.contactId, fromColumnId: existing.columnId, toColumnId }); })();
   }
   return moved;
 }
