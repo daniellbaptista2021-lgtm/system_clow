@@ -24,6 +24,7 @@ import { SessionPool } from './sessionPool.js';
 import { PluginSystem } from '../plugins/PluginSystem.js';
 import { initCrm } from '../crm/index.js';
 import crmRoutes from '../crm/routes.js';
+import crmWebhooks from '../crm/webhooks.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
@@ -273,6 +274,7 @@ async function main(): Promise<void> {
   const missionRoutes = buildMissionRoutes();
   app.route('/v1/missions', missionRoutes);
   app.route('/v1/crm', crmRoutes);
+  app.route('/webhooks/crm', crmWebhooks);
   console.log('  ✓ Missions: /v1/missions/:id');
 
   // ─── Login Auth ─────────────────────────────────────────────────

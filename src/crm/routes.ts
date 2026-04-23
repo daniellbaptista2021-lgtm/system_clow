@@ -14,6 +14,8 @@
 import { Hono } from 'hono';
 import * as store from './store.js';
 import { encryptJson, decryptJson, maskSecret } from './crypto.js';
+import { sendOutbound } from './inbox.js';
+import { readMedia } from './media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from './types.js';
 
 const app = new Hono();
@@ -446,5 +448,36 @@ app.get('/stats', (c) => {
     totalSubscriptionsActive: store.listSubscriptions(tid, 'active').length,
   });
 });
+
+
+// ═══ SEND MESSAGE via channel ═══════════════════════════════════════════
+app.post('/channels/:id/send', async (c) => {
+  const tid = tenantOf(c);
+  const ch = store.getChannel(tid, c.req.param('id'));
+  if (!ch) return notFound(c, 'channel');
+  const body = await c.req.json().catch(() => ({}));
+  if (!body.to) return badRequest(c, 'to required');
+  if (!body.text && !body.mediaUrl) return badRequest(c, 'text or mediaUrl required');
+  const r = await sendOutbound(ch, body);
+  return r.ok ? ok(c, r) : c.json({ error: 'send_failed', message: r.error }, 502);
+});
+
+// ═══ MEDIA serving (auth-scoped) ═══════════════════════════════════════
+app.get('/media/:tenantId/:date/:filename', (c) => {
+  const tid = tenantOf(c);
+  const reqTenant = c.req.param('tenantId');
+  if (reqTenant !== tid) return c.text('forbidden', 403);
+  const file = readMedia(tid, c.req.param('date'), c.req.param('filename'));
+  if (!file) return c.text('not_found', 404);
+  return new Response(file.bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': file.mime,
+      'Cache-Control': 'private, max-age=86400',
+      'Content-Length': String(file.bytes.length),
+    },
+  });
+});
+
 
 export default app;
