@@ -162,7 +162,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 .crm-modal{position:fixed;inset:0;z-index:9999;background:rgba(8,8,26,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none;flex-direction:column;animation:crmFadeIn .25s ease}
 .crm-modal.show{display:flex}
 @keyframes crmFadeIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(14px)}}
-.crm-modal-header{height:60px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(155,89,252,.18);background:linear-gradient(180deg,rgba(15,15,36,.95),rgba(8,8,26,.95));flex-shrink:0}
+.crm-modal-header{min-height:calc(60px + env(safe-area-inset-top, 0px));padding:env(safe-area-inset-top, 0px) 22px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(155,89,252,.18);background:linear-gradient(180deg,rgba(15,15,36,.95),rgba(8,8,26,.95));flex-shrink:0}
 .crm-modal-back{display:flex;align-items:center;gap:10px;padding:9px 16px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease}
 .crm-modal-back:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(155,89,252,.35)}
 .crm-modal-back svg{width:16px;height:16px}
