@@ -23,6 +23,7 @@ import { AgentTool } from './AgentTool/AgentTool.js';
 import { DownloadTool } from './DownloadTool/DownloadTool.js';
 import { EnterPlanModeTool } from './EnterPlanModeTool/EnterPlanModeTool.js';
 import { ExitPlanModeTool } from './ExitPlanModeTool/ExitPlanModeTool.js';
+import { CrmTools } from './CrmTool/CrmTool.js';
 import { getSwarmRuntimeTools } from '../swarm/tools/runtimeTools.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import { adaptAllMCPTools } from '../mcp/mcpToolAdapter.js';
@@ -45,6 +46,7 @@ export function getAllBaseTools(): Tools {
     WebFetchTool,
     WebSearchTool,
     ...getSwarmRuntimeTools(),
+    ...CrmTools,
   ];
 }
 
