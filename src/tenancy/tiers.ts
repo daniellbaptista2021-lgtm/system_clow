@@ -17,6 +17,11 @@ export interface TierConfig {
   max_cost_usd_per_month: number;
   max_concurrent_sessions: number;
   max_workspace_size_mb: number;
+  // Per-artifact caps (enforced at generation time)
+  max_sites_per_month: number;
+  max_apps_per_month: number;
+  max_spreadsheets_per_month: number;
+  max_n8n_flows_active: number;
   features: string[];
 }
 
@@ -31,6 +36,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 5,
     max_concurrent_sessions: 3,
     max_workspace_size_mb: 200,
+    max_sites_per_month: 3,
+    max_apps_per_month: 1,
+    max_spreadsheets_per_month: 10,
+    max_n8n_flows_active: 1,
     features: ['basic_tools', 'whatsapp'],
   },
   smart: {
@@ -39,6 +48,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 20,
     max_concurrent_sessions: 8,
     max_workspace_size_mb: 1000,
+    max_sites_per_month: 15,
+    max_apps_per_month: 5,
+    max_spreadsheets_per_month: 50,
+    max_n8n_flows_active: 2,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_basic'],
   },
   profissional: {
@@ -47,6 +60,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 60,
     max_concurrent_sessions: 25,
     max_workspace_size_mb: 5000,
+    max_sites_per_month: 30,
+    max_apps_per_month: 10,
+    max_spreadsheets_per_month: 100,
+    max_n8n_flows_active: 4,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume'],
   },
   business: {
@@ -55,6 +72,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 200,
     max_concurrent_sessions: 100,
     max_workspace_size_mb: 20000,
+    max_sites_per_month: 100,
+    max_apps_per_month: 30,
+    max_spreadsheets_per_month: 300,
+    max_n8n_flows_active: 8,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'priority', 'custom_skills'],
   },
   starter: {
@@ -63,6 +84,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 6,
     max_concurrent_sessions: 3,
     max_workspace_size_mb: 500,
+    max_sites_per_month: 5,
+    max_apps_per_month: 2,
+    max_spreadsheets_per_month: 20,
+    max_n8n_flows_active: 1,
     features: ['basic_tools', 'whatsapp', 'crm'],
   },
   empresarial: {
@@ -71,6 +96,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_cost_usd_per_month: 80,
     max_concurrent_sessions: 50,
     max_workspace_size_mb: 10000,
+    max_sites_per_month: 100,
+    max_apps_per_month: 30,
+    max_spreadsheets_per_month: 300,
+    max_n8n_flows_active: 8,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'crm', 'whitelabel', 'api'],
   },
 } as const;
