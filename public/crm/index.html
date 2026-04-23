@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>CRM Clow</title>
+<link rel="icon" href="/assets/favicon-gold.png">
+<link rel="stylesheet" href="/crm/crm.css">
+</head>
+<body>
+
+<!-- ─── LOGIN SCREEN ─── -->
+<div id="loginScreen" class="login-shell">
+  <div class="login-card">
+    <h1>CRM Clow</h1>
+    <p>Entre com sua API key pra acessar o CRM. Chave tem formato <code>clow_live_...</code>.</p>
+    <form id="loginForm">
+      <input type="text" id="apiKeyInput" placeholder="clow_live_..." autocomplete="off" required>
+      <button type="submit">Entrar</button>
+      <div class="err hide" id="loginErr"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ─── APP SHELL ─── -->
+<div id="app" class="app-shell hide">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">C</div>
+      <div class="brand-text">CRM CLOW</div>
+    </div>
+    <nav>
+      <button class="nav-item active" data-view="kanban">
+        <span class="nav-icon">📋</span><span>Pipeline</span>
+      </button>
+      <button class="nav-item" data-view="contacts">
+        <span class="nav-icon">👥</span><span>Contatos</span>
+      </button>
+      <button class="nav-item" data-view="channels">
+        <span class="nav-icon">💬</span><span>Canais WA</span>
+      </button>
+      <button class="nav-item" data-view="agents">
+        <span class="nav-icon">🧑‍💼</span><span>Equipe</span>
+      </button>
+      <button class="nav-item" data-view="inventory">
+        <span class="nav-icon">📦</span><span>Estoque</span>
+      </button>
+      <button class="nav-item" data-view="stats">
+        <span class="nav-icon">📊</span><span>Stats</span>
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="tenant-info">
+        <div class="name" id="tenantName">—</div>
+        <div class="tier" id="tenantTier">—</div>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sair</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- KANBAN VIEW -->
+    <div class="view active" data-view="kanban" id="kanbanView">
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <select id="boardSelector"></select>
+          <button class="secondary" id="refreshBtn" title="Atualizar">↻</button>
+        </div>
+        <div>
+          <button id="newCardBtn">+ Novo Card</button>
+        </div>
+      </header>
+      <div id="kanban" class="kanban-board"></div>
+    </div>
+
+    <!-- CONTACTS VIEW -->
+    <div class="view" data-view="contacts" id="contactsView">
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <h2>Contatos</h2>
+          <input type="text" id="contactSearchInput" placeholder="Buscar por nome, telefone, email..." style="width:280px">
+        </div>
+        <div>
+          <button id="newContactBtn">+ Novo Contato</button>
+        </div>
+      </header>
+      <div class="list" id="contactsList"></div>
+    </div>
+
+    <!-- CHANNELS VIEW -->
+    <div class="view" data-view="channels" id="channelsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Canais WhatsApp</h2></div>
+        <div>
+          <button id="newChannelBtn">+ Novo Canal</button>
+        </div>
+      </header>
+      <div class="list" id="channelsList"></div>
+    </div>
+
+    <!-- AGENTS VIEW -->
+    <div class="view" data-view="agents" id="agentsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Equipe</h2></div>
+        <div>
+          <button id="newAgentBtn">+ Novo Agente</button>
+        </div>
+      </header>
+      <div class="list" id="agentsList"></div>
+    </div>
+
+    <!-- INVENTORY VIEW -->
+    <div class="view" data-view="inventory" id="inventoryView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Estoque</h2></div>
+        <div>
+          <button id="newInventoryBtn">+ Novo Item</button>
+        </div>
+      </header>
+      <div class="list" id="inventoryList"></div>
+    </div>
+
+    <!-- STATS VIEW -->
+    <div class="view" data-view="stats" id="statsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Dashboard</h2></div>
+      </header>
+      <div id="statsGrid" style="padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;"></div>
+    </div>
+  </main>
+
+  <!-- SIDE PANEL (card detail + conversation) -->
+  <aside id="sidePanel" class="side-panel hide">
+    <div class="panel-head">
+      <div class="contact-meta">
+        <div class="contact-avatar" id="pAvatar">?</div>
+        <div style="min-width:0">
+          <div class="contact-name" id="pName">—</div>
+          <div class="contact-phone" id="pPhone">—</div>
+        </div>
+      </div>
+      <button class="close-panel" id="closePanelBtn">×</button>
+    </div>
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-tab="conversation">Conversa</button>
+      <button class="panel-tab" data-tab="info">Info</button>
+      <button class="panel-tab" data-tab="edit">Editar</button>
+    </div>
+    <div class="panel-body">
+      <!-- CONVERSATION -->
+      <section class="tab-section conversation active" data-tab="conversation">
+        <div class="messages" id="messagesList"></div>
+        <div class="composer">
+          <div class="channel-selector">
+            <label>Enviar por:</label>
+            <select id="sendChannelSelect"></select>
+          </div>
+          <div class="composer-row">
+            <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo">📎</button>
+            <button class="icon-btn rec" id="recordBtn" title="Gravar áudio">🎤</button>
+            <textarea id="composerText" placeholder="Digite uma mensagem..." rows="1"></textarea>
+            <button class="icon-btn send" id="sendMsgBtn" title="Enviar">➤</button>
+          </div>
+          <input type="file" id="attachFile" hidden accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
+        </div>
+      </section>
+      <!-- INFO (read) -->
+      <section class="tab-section" data-tab="info" id="infoSection"></section>
+      <!-- EDIT -->
+      <section class="tab-section" data-tab="edit" id="editSection"></section>
+    </div>
+  </aside>
+</div>
+
+<!-- ─── TOAST CONTAINER ─── -->
+<div id="toastRoot"></div>
+
+<!-- ─── SCRIPT ─── -->
+<script type="module" src="/crm/crm.js"></script>
+</body>
+</html>

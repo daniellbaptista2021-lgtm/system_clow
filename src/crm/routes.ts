@@ -480,4 +480,19 @@ app.get('/media/:tenantId/:date/:filename', (c) => {
 });
 
 
+
+// ═══ MEDIA upload (for UI composer) ═════════════════════════════════════
+app.post('/media/upload', async (c) => {
+  const tid = tenantOf(c);
+  const formData = await c.req.formData();
+  const file = formData.get('file');
+  if (!file || typeof file === 'string') return badRequest(c, 'file required');
+  const bytes = Buffer.from(await (file as any).arrayBuffer());
+  const filename = (file as any).name || 'upload.bin';
+  const mime = (file as any).type || 'application/octet-stream';
+  const saved = (await import('./media.js')).saveMedia(tid, bytes, { mime, suggestedFilename: filename });
+  // Return full URL with tenantId path
+  return ok(c, { url: saved.publicUrl, bytes: saved.bytes, mime: saved.mime }, 201);
+});
+
 export default app;
