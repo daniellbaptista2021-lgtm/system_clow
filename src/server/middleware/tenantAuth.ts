@@ -9,6 +9,7 @@
 import type { Context, Next } from 'hono';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { hashApiKey, findTenantByApiKeyHash, touchApiKey, type Tenant } from '../../tenancy/tenantStore.js';
+import { verifyUserToken } from '../../auth/authRoutes.js';
 
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -107,6 +108,17 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);
     c.set('authMode', 'admin_session');
+    return next();
+  }
+
+  // User session token (multi-tenant SaaS)
+  const userPayload = verifyUserToken(bearerToken);
+  if (userPayload) {
+    c.set('tenantId', userPayload.tid);
+    c.set('userId', userPayload.uid);
+    c.set('userEmail', userPayload.email);
+    c.set('userRole', userPayload.role);
+    c.set('authMode', 'user_session');
     return next();
   }
 

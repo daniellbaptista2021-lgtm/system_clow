@@ -637,7 +637,22 @@ app.post('/auth/exchange', async (c) => {
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!token) return c.json({ error: 'missing_token' }, 401);
 
-  // Try admin session first
+  // Try user session token first (multi-tenant SaaS)
+  const userTok = (await import('../auth/authRoutes.js')).verifyUserToken(token);
+  if (userTok) {
+    const t = (await import('../tenancy/tenantStore.js')).getTenant(userTok.tid);
+    if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+    const apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(t.id, 'crm-shell-' + Date.now());
+    return c.json({
+      api_key: apiKey,
+      tenant_id: t.id,
+      tenant_name: t.name,
+      tenant_email: t.email,
+      tier: t.tier,
+    });
+  }
+
+  // Try admin session (legacy single-admin mode)
   const adm = (await import('../server/middleware/tenantAuth.js')).verifyAdminSessionToken(token);
   if (adm.ok) {
     // Map admin to admin@clow.dev tenant (the one with assets + active subs)

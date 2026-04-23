@@ -23,6 +23,28 @@ import { promisify } from 'util';
  *   2. Lookup CRM channel by phone_number_id from the payload
  *   3. Fallback: 'default' (legacy single-tenant mode)
  */
+
+/**
+ * Check if a phone is authorized to use the System Clow agent for a tenant.
+ * Tenant.authorized_phones is the whitelist set on signup (= owner phone).
+ * If empty / undefined: legacy mode, allow all (admin tenant).
+ */
+async function isPhoneAuthorized(tenantId: string, phone: string): Promise<boolean> {
+  if (tenantId === 'default') return true; // legacy single-tenant mode
+  try {
+    const { getTenant } = await import('../tenancy/tenantStore.js');
+    const t: any = getTenant(tenantId);
+    if (!t) return false;
+    const whitelist: string[] = t.authorized_phones || [];
+    if (whitelist.length === 0) return true; // not enforced for this tenant
+    const normalized = phone.replace(/\D/g, '');
+    return whitelist.some((p) => p.replace(/\D/g, '') === normalized);
+  } catch {
+    return true;
+  }
+}
+
+
 async function resolveTenantForMeta(req: { header: (k: string) => string | undefined }, phoneNumberId?: string): Promise<string> {
   const headerTid = req.header('x-clow-tenant-id');
   if (headerTid) return headerTid;
@@ -653,6 +675,13 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     // Resolve tenant from header (set by CRM forward) or by phone_number_id lookup
     const phoneNumberId = payload?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     tenantId = await resolveTenantForMeta(c.req, phoneNumberId);
+
+    // Gate: only owner-authorized phones may invoke the agent (prevents random
+    // people from triggering the AI on someone else's account).
+    if (!(await isPhoneAuthorized(tenantId, phone))) {
+      console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] BLOCKED unauthorized phone ${phone}: ${text.slice(0,40)}`);
+      return c.json({ ok: true, ignored: 'phone_not_authorized' });
+    }
 
     console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] ${phone}${name ? ` (${name})` : ''}: ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
 
