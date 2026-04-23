@@ -43,6 +43,79 @@ export interface SendResult {
   error?: { code?: number; message: string; raw?: unknown };
 }
 
+// Upload media to Meta WhatsApp Cloud API → returns media_id
+// Necessario quando mediaUrl e relativa (/v1/crm/media/...) ou nao HTTPS publica.
+async function uploadMediaToMeta(
+  creds: MetaCreds,
+  mediaUrl: string,
+  mediaType: 'image' | 'audio' | 'document' | 'video',
+  filename?: string,
+): Promise<{ ok: boolean; mediaId?: string; error?: string }> {
+  try {
+    // 1) Obter bytes do arquivo
+    let bytes: Buffer;
+    let mime: string = 'application/octet-stream';
+
+    const isOurPath = /^\/v1\/crm\/media\/([^\/]+)\/([^\/]+)\/([^\/]+)$/.exec(mediaUrl);
+    if (isOurPath) {
+      // /v1/crm/media/{tenantId}/{date}/{filename} -> ler do disco
+      const [, tenantId, date, fname] = isOurPath;
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const osMod = await import('os');
+      const home = process.env.CLOW_HOME || pathMod.join(osMod.homedir(), '.clow');
+      const filePath = pathMod.join(home, 'crm-media', tenantId, date, fname);
+      if (!fsMod.existsSync(filePath)) {
+        return { ok: false, error: 'media_not_found_on_disk: ' + filePath };
+      }
+      bytes = fsMod.readFileSync(filePath);
+      // adivinha mime do extension
+      const ext = fname.split('.').pop()?.toLowerCase() || '';
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+        ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav',
+        mp4: 'video/mp4', webm: 'video/webm',
+        pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv',
+        doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      mime = mimeMap[ext] || 'application/octet-stream';
+    } else if (/^https?:\/\//.test(mediaUrl)) {
+      const r = await fetch(mediaUrl);
+      if (!r.ok) return { ok: false, error: 'fetch_media_failed: HTTP ' + r.status };
+      bytes = Buffer.from(new Uint8Array(await r.arrayBuffer()));
+      mime = r.headers.get('content-type') || mime;
+    } else {
+      return { ok: false, error: 'unsupported_media_url_format' };
+    }
+
+    // 2) Upload pra Meta /{phone-id}/media
+    const url = endpoint(creds, `/${creds.phoneNumberId}/media`);
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mime);
+    // Nome do arquivo no blob — Meta detecta formato pelo mime primarily
+    const blobName = filename || `upload.${mime.split('/')[1]?.split(';')[0] || 'bin'}`;
+    form.append('file', new Blob([bytes], { type: mime }), blobName);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${creds.accessToken}` },
+      body: form,
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.id) {
+      return {
+        ok: false,
+        error: `meta_upload_failed (${res.status}): ${data?.error?.message || JSON.stringify(data).slice(0, 200)}`,
+      };
+    }
+    return { ok: true, mediaId: data.id };
+  } catch (err: any) {
+    return { ok: false, error: `upload_exception: ${err?.message || 'desconhecido'}` };
+  }
+}
+
 export async function sendMessage(channel: Channel2, opts: SendOptions): Promise<SendResult> {
   const creds = decryptJson<MetaCreds>(channel.credentialsEncrypted);
   const url = endpoint(creds, `/${creds.phoneNumberId}/messages`);
@@ -57,7 +130,20 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
     body.text = { body: opts.text, preview_url: true };
   } else if (opts.mediaUrl && opts.mediaType) {
     body.type = opts.mediaType;
-    body[opts.mediaType] = { link: opts.mediaUrl };
+    // Meta rejeita URLs relativas / auth-scoped. Se a URL for nossa
+    // (/v1/crm/media/...) ou nao HTTPS acessivel, faz upload pra
+    // /{phone-id}/media e usa media_id no lugar.
+    const isOurLocalUrl = /^\/v1\/crm\/media\//.test(opts.mediaUrl);
+    const isAbsoluteHttps = /^https:\/\//.test(opts.mediaUrl);
+    if (isOurLocalUrl || !isAbsoluteHttps) {
+      const uploaded = await uploadMediaToMeta(creds, opts.mediaUrl, opts.mediaType, opts.mediaFilename);
+      if (!uploaded.ok) {
+        return { ok: false, error: { message: uploaded.error || 'media_upload_failed' } };
+      }
+      body[opts.mediaType] = { id: uploaded.mediaId };
+    } else {
+      body[opts.mediaType] = { link: opts.mediaUrl };
+    }
     if (opts.caption && opts.mediaType !== 'audio') body[opts.mediaType].caption = opts.caption;
     if (opts.mediaFilename && opts.mediaType === 'document') body.document.filename = opts.mediaFilename;
   } else {
