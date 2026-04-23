@@ -179,18 +179,43 @@ app.post('/webhooks/stripe', async (c) => {
 
 // ─── GET /signup/success — landing após pagamento ───────────────────────
 app.get('/signup/success', (c) => {
-  return c.html(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>System Clow - Bem-vindo!</title>
-<style>body{background:#08081a;color:#E8E8F0;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-.card{max-width:480px;padding:40px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:16px;text-align:center}
-h1{background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:28px;margin:0 0 12px}
-p{color:#9898B8;line-height:1.6;margin:8px 0}
-a{display:inline-block;margin-top:24px;padding:14px 28px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700}</style>
-</head><body><div class="card">
-<h1>Pagamento confirmado!</h1>
-<p>Sua conta foi criada com sucesso. Você vai receber um email com a senha de acesso em até 5 minutos.</p>
-<p style="font-size:12px;color:#6E6E8C">Email não chegou? Verifique a pasta de spam.</p>
-<a href="/">Ir pro System Clow</a>
-</div></body></html>`);
+  const html = [
+    '<!DOCTYPE html><html lang="pt-BR"><head>',
+    '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>System Clow — Bem-vindo!</title>',
+    '<link rel="icon" href="/assets/favicon-gold.png">',
+    '<style>',
+    'body{margin:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px}',
+    'body::before{content:"";position:fixed;inset:0;background:radial-gradient(50% 50% at 50% 30%,rgba(155,89,252,.12),transparent 65%);pointer-events:none}',
+    '.card{position:relative;max-width:520px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:22px;padding:46px 38px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.55)}',
+    '.logo img{height:38px;margin-bottom:22px;filter:drop-shadow(0 4px 12px rgba(155,89,252,.35))}',
+    '.check{width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#22C55E,#16A34A);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(34,197,94,.35)}',
+    '.check svg{width:38px;height:38px;color:#fff;stroke-width:3}',
+    'h1{background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:28px;margin:0 0 12px;letter-spacing:-.02em;font-weight:800}',
+    'p{color:#B8B8D0;line-height:1.6;font-size:14.5px;margin:10px 0}',
+    '.info{background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.2);border-radius:12px;padding:18px;margin:24px 0;text-align:left;font-size:13px;color:#B8B8D0;line-height:1.75}',
+    '.info strong{color:#E8E8F0}',
+    '.btn{display:inline-block;margin-top:22px;padding:14px 30px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:12px;font-weight:700;font-size:14.5px;box-shadow:0 8px 24px rgba(155,89,252,.35);transition:transform .15s ease}',
+    '.btn:hover{transform:translateY(-2px)}',
+    '.note{font-size:11.5px;color:#6E6E8C;margin-top:16px}',
+    '</style></head><body>',
+    '<div class="card">',
+    '<div class="logo"><img src="/assets/logo-official-full-white.png" alt="System Clow"></div>',
+    '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
+    '<h1>Pagamento confirmado!</h1>',
+    '<p>Sua conta foi criada e sua assinatura tá ativa.</p>',
+    '<div class="info">',
+    '<strong>Próximos passos</strong><br>',
+    '1. Verifique seu email — enviamos sua <strong>senha temporária</strong><br>',
+    '2. Faça login em system-clow.pvcorretor01.com.br<br>',
+    '3. Complete o onboarding (3 min): conecta WhatsApp + instala automações<br>',
+    '4. Sua IA começa a atender 24/7',
+    '</div>',
+    '<a href="/" class="btn">Fazer login →</a>',
+    '<div class="note">Email não chegou? Verifica o spam. Ainda sem? <a href="mailto:contato@pvcorretor01.com.br" style="color:#9B59FC">contato@pvcorretor01.com.br</a></div>',
+    '</div></body></html>',
+  ].join('');
+  return c.html(html);
 });
 
 export default app;

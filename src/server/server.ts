@@ -418,15 +418,10 @@ async function main(): Promise<void> {
       return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
     } catch (e: any) { return c.text('error: ' + e.message, 500); }
   });
-  app.get('/signup', async (c) => {
-    try {
-      const fsMod = await import('fs');
-      const pathMod = await import('path');
-      const file = pathMod.join(process.cwd(), 'public/signup.html');
-      if (!fsMod.existsSync(file)) return c.text('not found', 404);
-      const buf = fsMod.readFileSync(file);
-      return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
-    } catch (e: any) { return c.text('error: ' + e.message, 500); }
+  app.get('/signup', (c) => {
+    // Old signup form unified into /pricing (plan picker + modal)
+    const qs = (new URL(c.req.url)).search;
+    return c.redirect('/pricing' + qs, 302);
   });
   app.get('/assets/*', (c) => {
     const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));
