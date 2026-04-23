@@ -453,6 +453,34 @@ async function main(): Promise<void> {
     const qs = (new URL(c.req.url)).search;
     return c.redirect('/pricing' + qs, 302);
   });
+  // Videos estaticos (HTML + JSX + assets PNG) pra landing /pricing etc
+  app.get('/videos/*', (c) => {
+    const rel = c.req.path.slice(1).replace(/\.\.+/g,'');
+    const filePath = path.resolve(process.cwd(), 'public', rel);
+    if (!filePath.startsWith(path.resolve(process.cwd(), 'public/videos'))) return c.notFound();
+    const fp = fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()
+      ? path.join(filePath, 'index.html')
+      : filePath;
+    if (!fs.existsSync(fp)) return c.notFound();
+    const content = fs.readFileSync(fp);
+    const ext = path.extname(fp).toLowerCase();
+    const types: Record<string,string> = {
+      '.html':'text/html; charset=utf-8',
+      '.jsx':'text/javascript; charset=utf-8',
+      '.js':'text/javascript; charset=utf-8',
+      '.css':'text/css; charset=utf-8',
+      '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
+      '.svg':'image/svg+xml','.webp':'image/webp','.gif':'image/gif',
+      '.mp4':'video/mp4','.webm':'video/webm','.ogg':'video/ogg',
+      '.json':'application/json; charset=utf-8',
+    };
+    return new Response(content, { headers: {
+      'Content-Type': types[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=3600',
+      'X-Frame-Options': 'SAMEORIGIN',
+    }});
+  });
+
   app.get('/assets/*', (c) => {
     const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));
     if (fs.existsSync(filePath)) {
