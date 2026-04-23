@@ -1129,6 +1129,163 @@ async function openNewInventoryModal() {
   document.body.append(backdrop);
 }
 
+
+// ─── EDIT MODALS (channel / agent / inventory) ─────────────────────────
+async function openEditChannelModal(ch) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const isMeta = ch.type === 'meta';
+  const c = ch.credentials || {};
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const patch = {
+      name: fd.get('name'),
+      status: fd.get('status'),
+      phoneNumber: fd.get('phoneNumber') || undefined,
+    };
+    const newToken = fd.get('credToken');
+    if (newToken && !newToken.includes('...')) {
+      patch.credentials = isMeta
+        ? { accessToken: newToken, phoneNumberId: fd.get('phoneNumberId'), verifyToken: c.verifyToken, apiVersion: c.apiVersion || 'v22.0' }
+        : { instanceId: fd.get('instanceId'), token: newToken, clientToken: fd.get('clientToken') || undefined };
+    }
+    try {
+      await api('/channels/' + ch.id, { method: 'PATCH', body: patch });
+      backdrop.remove();
+      await loadChannels();
+      renderChannelsList();
+      toast('Canal atualizado', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  const statusSel = el('select', { name: 'status' });
+  for (const st of ['active', 'disabled', 'pending', 'error']) {
+    const opt = el('option', { value: st }, st);
+    if (st === ch.status) opt.selected = true;
+    statusSel.append(opt);
+  }
+  const credsBlock = el('div', { style: 'border-top:1px solid var(--border);padding-top:14px;margin-top:6px' },
+    el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:600' },
+      'Credenciais ' + (isMeta ? 'Meta' : 'Z-API')),
+  );
+  if (isMeta) {
+    credsBlock.append(field('Phone Number ID', 'phoneNumberId', 'text', c.phoneNumberId || ''));
+    credsBlock.append(field('Access Token (deixa como esta pra nao alterar)', 'credToken', 'text', c.accessToken || ''));
+  } else {
+    credsBlock.append(field('Instance ID', 'instanceId', 'text', c.instanceId || ''));
+    credsBlock.append(field('Token (deixa como esta pra nao alterar)', 'credToken', 'text', c.token || ''));
+    credsBlock.append(field('Client-Token (opcional)', 'clientToken', 'text', c.clientToken || ''));
+  }
+  form.append(
+    field('Nome do canal', 'name', 'text', ch.name, { required: '' }),
+    field('Telefone (display)', 'phoneNumber', 'text', ch.phoneNumber || ''),
+    el('div', { class: 'field' }, el('label', {}, 'Status'), statusSel),
+    credsBlock,
+    el('div', { style: 'background:var(--bg-3);padding:10px;border-radius:8px;margin:14px 0;font-size:11px;color:var(--text-dim);word-break:break-all' },
+      'Webhook URL: ', el('br'),
+      el('code', { style: 'color:var(--text-2);user-select:all' }, location.origin + '/webhooks/crm/' + ch.type + '/' + ch.webhookSecret),
+    ),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Salvar alterações'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Editar canal'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+async function openEditAgentModal(a) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/agents/' + a.id, { method: 'PATCH', body: {
+        name: fd.get('name'),
+        email: fd.get('email'),
+        phone: fd.get('phone') || null,
+        role: fd.get('role'),
+        active: fd.get('active') === 'on',
+      } });
+      backdrop.remove();
+      await loadAgents();
+      renderAgentsList();
+      toast('Agente atualizado', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  const roleSel = el('select', { name: 'role' });
+  for (const [v, label] of [['agent', 'Atendente / Vendedor'], ['admin', 'Administrador'], ['owner', 'Proprietário'], ['viewer', 'Apenas leitura']]) {
+    const opt = el('option', { value: v }, label);
+    if (v === a.role) opt.selected = true;
+    roleSel.append(opt);
+  }
+  form.append(
+    field('Nome', 'name', 'text', a.name, { required: '' }),
+    field('Email', 'email', 'email', a.email, { required: '' }),
+    field('Telefone', 'phone', 'tel', a.phone || ''),
+    el('div', { class: 'field' }, el('label', {}, 'Papel'), roleSel),
+    el('label', { style: 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);cursor:pointer;margin:8px 0 16px' },
+      el('input', { type: 'checkbox', name: 'active', checked: a.active ? '' : null }),
+      'Ativo (pode receber atribuições)',
+    ),
+    el('div', { class: 'modal-actions' },
+      el('button', {
+        type: 'button',
+        style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;margin-right:auto',
+        on: { click: async () => {
+          if (!await confirmDialog('Remover agente', 'Apagar ' + a.name + '? Cards atribuídos ficam sem dono.', 'Apagar')) return;
+          await api('/agents/' + a.id, { method: 'DELETE' });
+          backdrop.remove();
+          await loadAgents();
+          renderAgentsList();
+          toast('Agente removido', 'success');
+        } },
+      }, 'Apagar'),
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Salvar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Editar agente'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+async function openEditInventoryModal(it) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      const newStock = parseInt(fd.get('stock') || '0', 10);
+      const delta = newStock - it.stock;
+      if (delta !== 0) {
+        await api('/inventory/' + it.id + '/stock', { method: 'POST', body: { delta } });
+      }
+      backdrop.remove();
+      await loadInventory();
+      renderInventoryList();
+      toast('Estoque atualizado (' + (delta >= 0 ? '+' : '') + delta + ')', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:10px;margin-bottom:14px' },
+      el('div', { style: 'font-weight:600;color:var(--text);font-size:14px' }, it.name),
+      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' },
+        'SKU ' + it.sku + ' · R$ ' + (it.priceCents / 100).toFixed(2)),
+    ),
+    field('Estoque atual', 'stock', 'number', String(it.stock), { min: '0', required: '' }),
+    el('div', { style: 'font-size:11px;color:var(--text-dim);margin:-8px 0 14px' },
+      'A diferença entre o valor atual e o novo vira movimentação de estoque.'),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Salvar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Editar produto'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
 // ─── Event wiring ──────────────────────────────────────────────────────
 function wireEvents() {
   // Helper: safe wire — null-tolerant + try/catch around addEventListener
