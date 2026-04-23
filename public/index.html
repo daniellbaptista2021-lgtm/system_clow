@@ -822,55 +822,110 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 (function(){
   // ─── Open / close CRM in modal ─────────────────────────────────────
   let _crmReady = false;
+  async function attemptExchange(sessionToken) {
+    const r = await fetch('/v1/crm/auth/exchange', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(()=>('http_' + r.status));
+      const err = new Error(txt);
+      err.status = r.status;
+      throw err;
+    }
+    const data = await r.json();
+    return data.api_key;
+  }
+
+  function clearCrmCaches() {
+    sessionStorage.removeItem('clow_crm_exchanged');
+    localStorage.removeItem('clow_crm_key');
+  }
+
+  function showCrmError(loading, msg, showRelogin) {
+    if (!loading) return;
+    const reloginBtn = showRelogin
+      ? '<button id="crmReloginBtn" style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;margin-right:8px">Relogar</button>'
+      : '';
+    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br>' + reloginBtn + '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
+    setTimeout(()=>{
+      const rb = document.getElementById('crmReloginBtn');
+      if (rb) rb.onclick = function(){ clearCrmCaches(); localStorage.removeItem('clow_token'); location.reload(); };
+      const cb = document.getElementById('crmCloseBtn');
+      if (cb) cb.onclick = function(){ closeCRM(); };
+    }, 0);
+  }
+
+  window.clearCrmCaches = clearCrmCaches;
+
   window.openCRM = async function() {
     const modal = document.getElementById('crmModal');
     const frame = document.getElementById('crmModalIframe');
     const loading = document.getElementById('crmModalLoading');
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
-    if (loading) loading.classList.remove('hide');
+    if (loading) {
+      loading.classList.remove('hide');
+      loading.innerHTML = '<div class="crm-spin"></div><div>Carregando seu CRM...</div>';
+    }
 
+    const sessionToken = localStorage.getItem('clow_token');
+    if (!sessionToken) {
+      showCrmError(loading, 'Voce precisa estar logado no System Clow.', true);
+      return;
+    }
+
+    let apiKey = null;
+    // Try cached exchange (only if same session token)
     try {
-      // 1. Get current System Clow session token
-      const sessionToken = localStorage.getItem('clow_token');
-      if (!sessionToken) throw new Error('Voce precisa estar logado.');
-
-      // 2. Exchange for CRM api key (or reuse cached one if fresh)
-      const cached = sessionStorage.getItem('clow_crm_exchanged');
-      let apiKey = null;
-      if (cached) {
-        try { const obj = JSON.parse(cached); if (obj.token === sessionToken && obj.api_key) apiKey = obj.api_key; } catch(e){}
+      const cached = JSON.parse(sessionStorage.getItem('clow_crm_exchanged') || 'null');
+      if (cached && cached.token === sessionToken && cached.api_key && (Date.now() - cached.ts) < 86400000) {
+        apiKey = cached.api_key;
       }
-      if (!apiKey) {
-        const r = await fetch('/v1/crm/auth/exchange', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
-        });
-        if (!r.ok) {
-          const txt = await r.text();
-          throw new Error('Auth CRM falhou: ' + r.status + ' ' + txt.slice(0, 100));
-        }
-        const data = await r.json();
-        apiKey = data.api_key;
+    } catch (e) {}
+
+    // Always validate by trying exchange (fresh) — fall back if cached fails
+    if (!apiKey) {
+      try {
+        apiKey = await attemptExchange(sessionToken);
         sessionStorage.setItem('clow_crm_exchanged', JSON.stringify({ token: sessionToken, api_key: apiKey, ts: Date.now() }));
-      }
-
-      // 3. Save into the key the CRM UI looks for, then open iframe
-      localStorage.setItem('clow_crm_key', apiKey);
-
-      // 4. Set iframe src (cache-bust to force reload of crm.js auth check)
-      const url = '/crm/?from=shell&_cb=' + Date.now();
-      frame.onload = function(){ if (loading) loading.classList.add('hide'); _crmReady = true; };
-      frame.src = url;
-
-      // Failsafe: hide loader after 6s no matter what
-      setTimeout(()=>{ if (loading) loading.classList.add('hide'); }, 6000);
-
-    } catch (err) {
-      if (loading) {
-        loading.innerHTML = '<div class="crm-modal-error">Erro ao abrir CRM: ' + (err.message || 'desconhecido') + '<br><br><button onclick="closeCRM()" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit">Fechar</button></div>';
+      } catch (err) {
+        if (err.status === 401) {
+          // Token invalido/expirado — limpa tudo e pede relogin
+          clearCrmCaches();
+          showCrmError(loading, 'Sua sessao expirou. Faça login novamente para abrir o CRM.', true);
+          return;
+        }
+        showCrmError(loading, 'Erro ao abrir CRM: ' + (err.message || 'desconhecido'), false);
+        return;
       }
     }
+
+    // Save into the key the CRM UI looks for
+    localStorage.setItem('clow_crm_key', apiKey);
+
+    // Validate the key actually works (in case cached one was revoked)
+    try {
+      const v = await fetch('/v1/crm/stats', { headers: { 'Authorization': 'Bearer ' + apiKey } });
+      if (!v.ok) {
+        clearCrmCaches();
+        // Retry once with fresh exchange
+        try {
+          apiKey = await attemptExchange(sessionToken);
+          sessionStorage.setItem('clow_crm_exchanged', JSON.stringify({ token: sessionToken, api_key: apiKey, ts: Date.now() }));
+          localStorage.setItem('clow_crm_key', apiKey);
+        } catch (err) {
+          showCrmError(loading, 'Erro ao validar acesso CRM: ' + (err.message || ''), true);
+          return;
+        }
+      }
+    } catch (e) { /* network error — let iframe try */ }
+
+    // Open iframe
+    const url = '/crm/?from=shell&_cb=' + Date.now();
+    frame.onload = function(){ if (loading) loading.classList.add('hide'); _crmReady = true; };
+    frame.src = url;
+    setTimeout(()=>{ if (loading) loading.classList.add('hide'); }, 6000);
   };
 
   window.closeCRM = function() {
