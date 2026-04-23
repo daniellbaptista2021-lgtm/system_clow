@@ -735,18 +735,97 @@ function renderChannelsList() {
         el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
-      el('div', { style: 'margin-top:8px;display:flex;gap:6px' },
-        el('button', { class: 'save-btn', style: 'flex:1;background:transparent;border:1px solid var(--red);color:var(--red)', on: { click: async () => {
-          if (!await confirmDialog('Remover canal', `Apagar canal "${ch.name}"? Atividades antigas permanecem.`, 'Apagar')) return;
-          await api(`/channels/${ch.id}`, { method: 'DELETE' });
-          await loadChannels();
-          renderChannelsList();
-          toast('Canal removido', 'success');
-        } } }, 'Remover'),
+      el('div', { style: 'margin-top:10px;display:flex;gap:6px' },
+        el('button', { class: 'save-btn', style: 'flex:1;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px',
+          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Ver webhook URL & instruções'),
+        el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 16px;font-size:12px',
+          on: { click: async () => {
+            if (!await confirmDialog('Remover canal', `Apagar canal "${ch.name}"? Atividades antigas permanecem.`, 'Apagar')) return;
+            await api(`/channels/${ch.id}`, { method: 'DELETE' });
+            await loadChannels();
+            renderChannelsList();
+            toast('Canal removido', 'success');
+          } } }, 'Remover'),
       ),
     ));
   }
 }
+
+
+// ─── Webhook helpers ───────────────────────────────────────────────────
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast('Copiado!', 'success'),
+      () => fallbackCopy(text),
+    );
+  } else fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+  document.body.append(ta);
+  ta.select();
+  try { document.execCommand('copy'); toast('Copiado!', 'success'); }
+  catch (e) { toast('Copia manual: ' + text.slice(0, 40), 'error'); }
+  ta.remove();
+}
+
+function copyableField(label, value) {
+  const wrap = el('div', { style: 'margin-bottom:14px' });
+  const inp = el('input', {
+    type: 'text', readonly: '', value: value || '',
+    style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:12px;user-select:all',
+    on: { focus: (e) => e.target.select() },
+  });
+  const btn = el('button', {
+    type: 'button',
+    style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    on: { click: () => copyToClipboard(value) },
+  }, 'Copiar');
+  wrap.append(
+    el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, label),
+    el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, inp, btn),
+  );
+  return wrap;
+}
+
+function showWebhookSetup(channel, isNew) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const isMeta = channel.type === 'meta';
+  const whUrl = location.origin + '/webhooks/crm/' + channel.type + '/' + channel.webhookSecret;
+  const verifyTok = (channel.credentials && channel.credentials.verifyToken) || '';
+
+  const headerColor = isNew ? 'var(--green)' : 'var(--purple)';
+  const title = isNew ? '✓ Canal criado — agora configure no provedor' : 'Webhook do canal ' + channel.name;
+
+  const metaInstr = el('div', {
+    style: 'background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
+    html: '<div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Como configurar no Meta</div>1. Acesse <strong>Meta for Developers</strong> → seu app → <strong>WhatsApp → Configuração</strong><br>2. No bloco <strong>Webhook</strong>, clique <strong>Editar</strong><br>3. Cole a <strong>Webhook URL</strong> abaixo no campo <em>"URL de retorno de chamada"</em><br>4. Cole o <strong>Verify Token</strong> abaixo no campo <em>"Verificar token"</em><br>5. Clique <strong>Verificar e salvar</strong> (deve ficar verde)<br>6. Em <strong>Campos do webhook</strong>, marque <code>messages</code> e <strong>Inscrever</strong>',
+  });
+  const zapiInstr = el('div', {
+    style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
+    html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📋 Como configurar na Z-API</div>1. Acesse o painel da <strong>Z-API</strong> → sua instância<br>2. Vá em <strong>Webhooks</strong> no menu lateral<br>3. Cole a URL abaixo nos campos <strong>"Ao receber"</strong> (mensagens recebidas)<br>4. Marque a opção <strong>"Notificar mensagens enviadas por mim também"</strong> se quiser sync de outbound<br>5. Salve as alterações',
+  });
+
+  const fields = [copyableField('Webhook URL', whUrl)];
+  if (isMeta && verifyTok) fields.push(copyableField('Verify Token', verifyTok));
+
+  const modal = el('div', { class: 'modal', style: 'max-width:600px' },
+    el('h3', { style: 'color:' + headerColor + ';margin:0 0 6px;font-size:18px' }, title),
+    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:18px' }, channel.name + ' · ' + (isMeta ? 'Meta Cloud API' : 'Z-API') + (channel.phoneNumber ? ' · ' + channel.phoneNumber : '')),
+    isMeta ? metaInstr : zapiInstr,
+    ...fields,
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'confirm', on: { click: () => backdrop.remove() } }, 'Concluído'),
+    ),
+  );
+  backdrop.append(modal);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
 
 async function openNewChannelModal() {
   const backdrop = el('div', { class: 'modal-backdrop' });
@@ -772,7 +851,8 @@ async function openNewChannelModal() {
       backdrop.remove();
       await loadChannels();
       renderChannelsList();
-      toast(`Canal criado. Use o webhook URL mostrado na lista pra conectar no ${type === 'meta' ? 'Meta' : 'Z-API'}.`, 'success');
+      // Mostrar tela de setup com webhook URL + verify token + instrucoes
+      showWebhookSetup(r.channel, true);
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
 
