@@ -33,3 +33,27 @@ Comandos disponiveis:
 
 Stack de clonagem: Next.js 16, React 19, shadcn/ui, Tailwind CSS v4
 A skill completa esta em: src/skills/builtin/clone-website.md
+
+## 🔒 Política de Acesso Admin
+
+Apenas o administrador (Daniel) pode autorizar alterações na infraestrutura da VPS e na estrutura do System Clow.
+
+### Ações que REQUEREM senha de admin:
+- Instalar/desinstalar pacotes na VPS (apt, npm, pip, docker)
+- Modificar serviços (systemd, nginx, docker, pm2)
+- Alterar configurações do System Clow
+- Apagar arquivos/diretórios do sistema
+- Clonar repositórios na VPS
+- Acessar/modificar .env ou credenciais
+- Qualquer comando com sudo ou root que altere o sistema
+
+### Ações que NÃO requerem senha:
+- Gerar arquivos no workspace do usuário
+- Conversar, responder perguntas
+- Criar arquivos de output (xlsx, pdf, csv, etc.)
+- Consultas e leituras (sem modificação)
+
+### Regra:
+Sempre que alguém solicitar algo que envolva mexer na infraestrutura da VPS ou na estrutura do sistema, **solicitar a senha de admin** antes de executar.
+
+**Senha de admin:** `<admin-password>`
