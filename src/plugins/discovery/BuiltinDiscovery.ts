@@ -24,9 +24,14 @@
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { PluginLoader } from '../PluginLoader.js';
 import type { LoadedPlugin } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+
+// ESM-compat: __dirname/__filename nao existem em ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 

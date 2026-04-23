@@ -148,7 +148,9 @@ export class PluginDiscovery {
     this.lastResult = { plugins: active, errors, stats };
 
     if (errors.length > 0 && process.env.CLOW_QUIET_BOOTSTRAP !== '1') {
-      console.warn(`[PluginDiscovery] ${errors.length} errors during discovery`);
+      // Log detalhado: source + erro (ajuda diagnostico)
+      const summary = errors.map(e => `${e.source}:${e.error}`).join(" | ");
+      console.warn(`[PluginDiscovery] ${errors.length} error(s): ${summary}`);
     }
 
     return active;
