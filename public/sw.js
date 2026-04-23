@@ -1,8 +1,8 @@
-// System Clow PWA Service Worker — v101
+// System Clow PWA Service Worker — v102
 // Bypass: /v1/* /auth/* /webhooks/* /crm/* /downloads/* — sempre fresh do server
 // Cache: assets estaticos do shell (icons, manifest)
 
-const CACHE = 'clow-v101-mobile-fix';
+const CACHE = 'clow-v102-crm-revert';
 const STATIC = ['/assets/logo.png', '/assets/favicon.png', '/assets/icon-192.png', '/assets/icon-512.png', '/assets/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', e => {

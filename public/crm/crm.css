@@ -38,7 +38,6 @@ body {
   font-size: 14px;
   line-height: 1.5;
   min-height: 100vh;
-  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -89,7 +88,6 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr;
   height: 100vh;
-  height: 100dvh;
   overflow: hidden;
 }
 .app-shell.panel-open {
@@ -551,56 +549,10 @@ body {
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns: 56px 1fr; }
-  .app-shell.panel-open { grid-template-columns: 56px 1fr; }
+  .app-shell { grid-template-columns: 64px 1fr; }
+  .app-shell.panel-open { grid-template-columns: 64px 1fr; }
   .side-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 100%; max-width: 420px; }
-
-  /* Sidebar compacta */
-  .sidebar { padding: 10px 4px; gap: 6px; overflow-y: auto; overflow-x: hidden; }
-  .brand { padding: 8px 0 12px !important; }
-  .brand-infinite { width: 40px; height: 22px; }
-  .nav-item { padding: 10px 4px; justify-content: center; gap: 0; font-size: 0; }
-  .nav-item .nav-icon { width: 22px; height: 22px; }
+  .sidebar { padding: 12px 6px; }
   .nav-item span:not(.nav-icon) { display: none; }
   .brand-text, .sidebar-foot { display: none; }
-
-  /* Top bar compacta e com flex-wrap */
-  .top-bar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
-  .top-bar-left { flex: 1 1 auto; min-width: 0; gap: 8px; }
-  .top-bar-left h2 { font-size: 14px; white-space: nowrap; }
-  .top-bar select, .top-bar input {
-    padding: 7px 10px; font-size: 12px; min-width: 0; max-width: 100%;
-  }
-  .top-bar-left input { width: 100% !important; flex: 1 1 auto; }
-  .top-bar button { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
-
-  /* Kanban: colunas caberem na tela */
-  .kanban-board { padding: 12px; gap: 10px; scroll-snap-type: x mandatory; }
-  .kanban-col {
-    flex: 0 0 calc(100vw - 84px);   /* 56px sidebar + 24px padding + 4px folga */
-    max-width: 340px;
-    min-width: 260px;
-    scroll-snap-align: start;
-  }
-
-  /* Views ocupam altura total */
-  .view { height: 100%; display: flex; flex-direction: column; }
-  .view.active { display: flex; }
-  .view > .top-bar { flex-shrink: 0; }
-  .view > .kanban-board,
-  .view > .list { flex: 1; min-height: 0; }
-}
-
-/* Telas muito pequenas: botao "Novo Card/Contato" vai pra linha de baixo */
-@media (max-width: 480px) {
-  .top-bar { gap: 6px; }
-  .top-bar-left { width: 100%; }
-  .top-bar > div:last-child { width: 100%; }
-  .top-bar > div:last-child button {
-    width: 100%; justify-content: center; padding: 10px;
-  }
-  .kanban-col {
-    flex: 0 0 calc(100vw - 72px);
-    min-width: 240px;
-  }
 }
