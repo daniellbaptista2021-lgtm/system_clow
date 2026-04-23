@@ -15,6 +15,23 @@ import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { ingestInbound } from './inbox.js';
 
+
+// Internal forward: also deliver the raw webhook to the System Clow agent
+// adapter so the AI can respond. Fire-and-forget; never blocks ACK to Meta.
+async function forwardToAgent(path: string, payload: unknown, sigHeader?: string) {
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-clow-internal-forward': '1' };
+    if (sigHeader) headers['x-hub-signature-256'] = sigHeader;
+    await fetch('http://127.0.0.1:3001' + path, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+  } catch (err: any) {
+    console.warn('[crm-webhook forward] agent unreachable:', err?.message || err);
+  }
+}
+
 const app = new Hono();
 
 // ─── META: GET (verification handshake) ─────────────────────────────────
@@ -71,6 +88,9 @@ app.post('/meta/:secret', async (c) => {
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }
+  // ALSO forward the original payload to the System Clow AI agent so it can reply
+  // (the agent handler dedupes by messageId so no double-processing risk)
+  void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'));
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 
@@ -88,6 +108,8 @@ app.post('/zapi/:secret', async (c) => {
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }
+  // Forward to agent (Z-API webhook endpoint exists in whatsappAgent adapter)
+  void forwardToAgent('/webhooks/zapi', payload);
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 
