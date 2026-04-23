@@ -1,5 +1,68 @@
 // app.jsx — System Clow video 16:9 YouTube 1920x1080, 45s
 
+// ────────────────────────────────────────────────────────────────────
+// AudioSync — <audio> atrelado ao Stage/TimelineContext.
+// play() quando playing=true, pause() quando false, seek quando drift>.3s
+// Loop do Stage reseta time pra 0 -> audio segue junto
+// ────────────────────────────────────────────────────────────────────
+function AudioSync({ src, volume = 0.8 }) {
+  const { time, playing } = React.useContext(TimelineContext);
+  const ref = React.useRef(null);
+  const lastSeekRef = React.useRef(0);
+
+  // play/pause quando playing muda
+  React.useEffect(() => {
+    const a = ref.current;
+    if (!a) return;
+    a.volume = volume;
+    if (playing) {
+      const p = a.play();
+      if (p && p.catch) p.catch(() => { /* autoplay bloqueado, user gesture handler abaixo destravara */ });
+    } else {
+      a.pause();
+    }
+  }, [playing, volume]);
+
+  // sincroniza currentTime quando driftar muito do Stage time (loop/seek manual)
+  React.useEffect(() => {
+    const a = ref.current;
+    if (!a || a.readyState < 1) return;
+    const drift = a.currentTime - time;
+    // Se Stage voltou (loop) ou o user scrubou -> seek
+    if (Math.abs(drift) > 0.3) {
+      // Evita seek se ja seekou no mesmo time muito recentemente
+      const now = performance.now();
+      if (now - lastSeekRef.current > 100) {
+        a.currentTime = Math.max(0, Math.min(time, a.duration || time));
+        lastSeekRef.current = now;
+      }
+    }
+  }, [time]);
+
+  // Fallback: primeiro click/touch destrava autoplay
+  React.useEffect(() => {
+    const unlock = () => {
+      const a = ref.current;
+      if (a && playing) {
+        a.play().catch(() => {});
+      }
+      document.removeEventListener('click', unlock, true);
+      document.removeEventListener('touchstart', unlock, true);
+    };
+    document.addEventListener('click', unlock, true);
+    document.addEventListener('touchstart', unlock, true);
+    return () => {
+      document.removeEventListener('click', unlock, true);
+      document.removeEventListener('touchstart', unlock, true);
+    };
+  }, []);
+
+  return (
+    <audio ref={ref} src={src} preload="auto" loop={false} style={{ display: 'none' }} />
+  );
+}
+
+
 function Video() {
   return (
     <Stage
@@ -44,6 +107,9 @@ function VideoRoot() {
       <Sprite start={33}   end={37}>  <Scene8/>    </Sprite>
       <Sprite start={37}   end={42}>  <Scene9/>    </Sprite>
       <Sprite start={42}   end={45}>  <SceneCTA/>  </Sprite>
+
+      {/* Trilha sonora acoplada ao play/pause do Stage */}
+      <AudioSync src="assets/track.mp3" volume={0.85}/>
     </div>
   );
 }

@@ -471,7 +471,7 @@ async function main(): Promise<void> {
       '.css':'text/css; charset=utf-8',
       '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
       '.svg':'image/svg+xml','.webp':'image/webp','.gif':'image/gif',
-      '.mp4':'video/mp4','.webm':'video/webm','.ogg':'video/ogg',
+      '.mp4':'video/mp4','.webm':'video/webm','.ogg':'video/ogg','.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4',
       '.json':'application/json; charset=utf-8',
     };
     return new Response(content, { headers: {
