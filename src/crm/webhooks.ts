@@ -18,10 +18,11 @@ import { ingestInbound } from './inbox.js';
 
 // Internal forward: also deliver the raw webhook to the System Clow agent
 // adapter so the AI can respond. Fire-and-forget; never blocks ACK to Meta.
-async function forwardToAgent(path: string, payload: unknown, sigHeader?: string) {
+async function forwardToAgent(path: string, payload: unknown, sigHeader?: string, tenantId?: string) {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-clow-internal-forward': '1' };
     if (sigHeader) headers['x-hub-signature-256'] = sigHeader;
+    if (tenantId) headers['x-clow-tenant-id'] = tenantId;
     await fetch('http://127.0.0.1:3001' + path, {
       method: 'POST',
       headers,
@@ -90,7 +91,7 @@ app.post('/meta/:secret', async (c) => {
   }
   // ALSO forward the original payload to the System Clow AI agent so it can reply
   // (the agent handler dedupes by messageId so no double-processing risk)
-  void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'));
+  void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'), channel.tenantId);
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 
@@ -109,7 +110,7 @@ app.post('/zapi/:secret', async (c) => {
     void ingestInbound(channel, msg);
   }
   // Forward to agent (Z-API webhook endpoint exists in whatsappAgent adapter)
-  void forwardToAgent('/webhooks/zapi', payload);
+  void forwardToAgent('/webhooks/zapi', payload, undefined, channel.tenantId);
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 
