@@ -107,30 +107,81 @@ body {
   padding: 8px 10px 20px; margin-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
-.brand-logo {
-  width: 34px; height: 34px; border-radius: 9px;
-  background: var(--grad);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; color: white; font-size: 15px;
+.brand { justify-content: center; padding: 18px 12px 24px !important; }
+.brand-infinite {
+  width: 90px; height: 45px;
+  filter: drop-shadow(0 4px 12px rgba(155,89,252,.55)) drop-shadow(0 0 24px rgba(74,158,255,.25));
+  transition: transform .25s ease, filter .25s ease;
 }
-.brand-text {
-  font-weight: 700; font-size: 15px;
-  background: var(--grad); -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+.brand:hover .brand-infinite { transform: scale(1.05); filter: drop-shadow(0 6px 18px rgba(155,89,252,.7)) drop-shadow(0 0 32px rgba(74,158,255,.4)); }
+/* ─── Cards 3D do menu lateral ─── */
+.sidebar nav { display: flex; flex-direction: column; gap: 8px; }
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; background: transparent; color: var(--text-dim);
-  border: none; border-radius: var(--radius-sm); cursor: pointer;
-  font-family: inherit; font-size: 13px; text-align: left;
-  transition: background var(--transition), color var(--transition);
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 13px;
+  background: linear-gradient(145deg, #15152d, #0d0d20);
+  color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,.04);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,.35),
+    0 1px 0 rgba(255,255,255,.04) inset,
+    0 -1px 0 rgba(0,0,0,.4) inset;
+  transition: transform .18s cubic-bezier(.4,0,.2,1),
+              box-shadow .18s cubic-bezier(.4,0,.2,1),
+              border-color .18s,
+              color .18s,
+              background .18s;
 }
-.nav-item:hover { background: var(--bg-3); color: var(--text); }
+.nav-item::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--grad);
+  opacity: 0; transform: translateX(-3px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.nav-item:hover {
+  color: var(--text);
+  border-color: rgba(155,89,252,.25);
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 16px rgba(0,0,0,.5),
+    0 2px 6px rgba(155,89,252,.18),
+    0 1px 0 rgba(255,255,255,.06) inset,
+    0 -1px 0 rgba(0,0,0,.4) inset;
+  background: linear-gradient(145deg, #1a1a36, #11112a);
+}
+.nav-item:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4) inset;
+}
 .nav-item.active {
-  background: var(--grad-soft); color: var(--text);
-  border-left: 2px solid var(--purple); padding-left: 10px;
+  color: var(--text);
+  border-color: rgba(155,89,252,.45);
+  background: linear-gradient(145deg, rgba(155,89,252,.18), rgba(74,158,255,.10) 60%, rgba(20,20,46,.95));
+  box-shadow:
+    0 4px 14px rgba(155,89,252,.22),
+    0 1px 0 rgba(255,255,255,.08) inset,
+    0 -1px 0 rgba(0,0,0,.5) inset;
 }
-.nav-icon { font-size: 16px; width: 18px; text-align: center; }
+.nav-item.active::before { opacity: 1; transform: translateX(0); }
+.nav-icon {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  transition: color .18s, transform .18s;
+}
+.nav-icon svg { width: 18px; height: 18px; display: block; }
+.nav-item:hover .nav-icon { color: var(--purple); transform: scale(1.08); }
+.nav-item.active .nav-icon { color: var(--purple); }
+.nav-label { flex: 1; }
 .sidebar-foot {
   margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 6px;

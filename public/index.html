@@ -185,6 +185,8 @@ html.clow-bridge-mode #loginScreen{display:none!important}
   .crm-modal-title{font-size:13px}
 }
 
+
+.crm-modal-infinite{height:32px;width:auto;display:block;filter:drop-shadow(0 2px 8px rgba(155,89,252,.4))}
 </style>
 </head>
 <body>
@@ -800,8 +802,10 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
       Voltar pro Agente
     </button>
     <div class="crm-modal-title">
-      <span class="crm-modal-dot">C</span>
-      <span>CRM Clow</span>
+      <svg class="crm-modal-infinite" viewBox="0 0 240 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="System Clow">
+        <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z"
+              stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </div>
     <button class="crm-modal-close" type="button" onclick="closeCRM()" aria-label="Fechar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>

@@ -496,28 +496,99 @@ async function uploadAndSendFile(file) {
 // Audio recording via MediaRecorder
 let mediaRecorder = null;
 let recordedChunks = [];
+let recordedStream = null;
+
+function pickAudioMime() {
+  if (!window.MediaRecorder) return null;
+  const candidates = [
+    'audio/ogg;codecs=opus',
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mp4',
+  ];
+  for (const m of candidates) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {}
+  }
+  return ''; // browser picks default
+}
+
 async function toggleRecording() {
   const btn = $('#recordBtn');
+  if (!btn) return;
+
+  // Stop if already recording
   if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
+    try { mediaRecorder.stop(); } catch (e) {}
     btn.classList.remove('recording');
     return;
   }
+
+  // Browser support check
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return toast('Navegador não suporta gravação de áudio', 'error');
+  }
+  if (!window.MediaRecorder) {
+    return toast('Navegador não tem MediaRecorder', 'error');
+  }
+
+  // Secure context check (mic requires HTTPS or localhost)
+  if (!window.isSecureContext) {
+    return toast('Microfone só funciona via HTTPS', 'error');
+  }
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-    recordedChunks = [];
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-      const file = new File([blob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+    recordedStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (e) {
+    let msg = 'Microfone bloqueado';
+    if (e.name === 'NotAllowedError') msg = 'Você precisa permitir o microfone no navegador (cadeado na barra de endereço → Site settings → Microfone)';
+    else if (e.name === 'NotFoundError') msg = 'Nenhum microfone detectado no dispositivo';
+    else if (e.name === 'NotReadableError') msg = 'Microfone está em uso por outro app';
+    else if (e.message) msg = msg + ': ' + e.message;
+    return toast(msg, 'error');
+  }
+
+  const mime = pickAudioMime();
+  try {
+    mediaRecorder = mime ? new MediaRecorder(recordedStream, { mimeType: mime }) : new MediaRecorder(recordedStream);
+  } catch (e) {
+    recordedStream.getTracks().forEach(t => t.stop());
+    return toast('Erro ao iniciar gravador: ' + (e.message || e.name), 'error');
+  }
+
+  recordedChunks = [];
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onerror = (e) => {
+    toast('Erro na gravação: ' + (e.error?.name || 'desconhecido'), 'error');
+    btn.classList.remove('recording');
+    if (recordedStream) recordedStream.getTracks().forEach(t => t.stop());
+  };
+  mediaRecorder.onstop = async () => {
+    try {
+      if (recordedStream) recordedStream.getTracks().forEach(t => t.stop());
+      if (recordedChunks.length === 0) {
+        return toast('Gravação vazia (segura o botão alguns segundos)', 'error');
+      }
+      const finalMime = mediaRecorder.mimeType || mime || 'audio/webm';
+      const blob = new Blob(recordedChunks, { type: finalMime });
+      const ext = finalMime.includes('ogg') ? 'ogg' : finalMime.includes('mp4') ? 'm4a' : 'webm';
+      const file = new File([blob], 'audio-' + Date.now() + '.' + ext, { type: finalMime });
       await uploadAndSendFile(file);
-    };
+      toast('Áudio enviado', 'success');
+    } catch (e) {
+      toast('Erro ao processar áudio: ' + (e.message || ''), 'error');
+    }
+  };
+
+  try {
     mediaRecorder.start();
     btn.classList.add('recording');
+    toast('Gravando... clique de novo pra parar', '');
   } catch (e) {
-    toast('Microfone bloqueado: ' + e.message, 'error');
+    toast('Não pude iniciar: ' + (e.message || e.name), 'error');
+    if (recordedStream) recordedStream.getTracks().forEach(t => t.stop());
   }
 }
 
@@ -837,9 +908,12 @@ function wireEvents() {
     toast('Atualizado', 'success');
   });
 
-  // Buttons
+  // Buttons (all "new" buttons in views)
   $('#newCardBtn').addEventListener('click', () => openNewCardModal());
   $('#newChannelBtn')?.addEventListener('click', openNewChannelModal);
+  $('#newContactBtn')?.addEventListener('click', openNewContactModal);
+  $('#newAgentBtn')?.addEventListener('click', openNewAgentModal);
+  $('#newInventoryBtn')?.addEventListener('click', openNewInventoryModal);
 
   // Side panel
   $('#closePanelBtn').addEventListener('click', closeCardPanel);
