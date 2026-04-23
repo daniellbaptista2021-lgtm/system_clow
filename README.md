@@ -1,365 +1,308 @@
-<div align="center">
-
-<img src="public/assets/logo-official-full.png" width="400" alt="System Clow">
-
 # System Clow
 
-**Agente de codigo AI de nivel enterprise — clone arquitetural do Claude Code**
+> Plataforma SaaS premium que une **Agente IA via WhatsApp** + **CRM completo** + **automações n8n** num único produto. Cada cliente assinante recebe seu workspace isolado com pipeline de vendas, atendimento por WhatsApp e IA que opera o CRM por comando natural.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-69K_linhas-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![GLM](https://img.shields.io/badge/Motor-GLM_5.1-blueviolet?logo=openai&logoColor=white)](#)
-[![Status](https://img.shields.io/badge/Status-Producao-brightgreen)](#)
-[![Memory](https://img.shields.io/badge/Memoria-Persistente-blue)](#memoria-persistente)
-[![Security](https://img.shields.io/badge/Security-Hardened-green)](#seguranca-multi-tenant-2000-usuarios)
-
-*Inteligencia Infinita . Possibilidades Premium*
-
-</div>
+**Live:** https://system-clow.pvcorretor01.com.br
+**Stack:** Node 22 + TypeScript + Hono + better-sqlite3 + GLM-5.1 (via LiteLLM/OpenRouter)
 
 ---
 
-## O que e o System Clow?
-
-System Clow e um **agente de codigo AI completo** que executa tarefas de engenharia de software de forma autonoma — le arquivos, escreve codigo, executa comandos, clona sites, acessa APIs, cria documentos, gerencia projetos e orquestra sub-agentes — tudo via chat, terminal ou API.
-
-Construido como **clone arquitetural do Claude Code**, o System Clow implementa **16 subsistemas** em **69.000+ linhas de TypeScript**, rodando como produto SaaS multi-tenant pronto para producao com 2000+ usuarios.
-
-## Por que System Clow?
-
-| | Claude Code | ChatGPT | System Clow |
-|---|---|---|---|
-| **Executa codigo** | Sim | Nao | Sim |
-| **Le/edita arquivos** | Sim | Nao | Sim |
-| **Sub-agentes** | Sim | Nao | Sim |
-| **Plugins** | Sim | Sim | Sim |
-| **Clona sites** | Via skill | Nao | Nativo (pixel-perfect) |
-| **Memoria persistente** | Plugin externo | Nao | Nativo (SQLite + FTS5) |
-| **Multi-tenant SaaS** | Nao | Nao | Sim (2000+ usuarios) |
-| **Auto-hospedado** | Nao | Nao | Sim |
-| **Multi-modelo** | Nao | Nao | Sim (GLM 5.1, Claude, GPT) |
-| **WhatsApp** | Nao | Nao | Sim |
-| **PWA Mobile** | Nao | Nao | Sim |
-| **Rate Limiting** | N/A | N/A | Per-tenant sliding window |
-| **Audit Log** | Nao | Nao | JSONL append-only |
-| **API Docs** | Nao | Nao | OpenAPI 3.1 + Swagger UI |
-| **Custo** | $200/mes fixo | $200/mes fixo | Seu servidor, seus custos |
-
-## Memoria Persistente
-
-O System Clow **lembra o que fez** entre sessoes:
-
-- **Captura automatica** — Cada uso de ferramenta grava uma observacao no SQLite
-- **Resumo por sessao** — Ao final, gera resumo via LLM (request, investigated, learned, completed)
-- **Injecao de contexto** — Ao iniciar nova sessao, injeta memorias relevantes no system prompt
-- **Busca full-text** — FTS5 para buscar em observacoes e resumos
-- **Deduplicacao** — SHA256 content hash com janela de 30s
-- **Multi-tenant** — Cada tenant tem seu proprio banco SQLite isolado
-
-### API de Memoria
-
-| Metodo | Rota | Descricao |
-|--------|------|-----------|
-| GET | `/v1/memory/search?q=...` | Busca full-text em memorias |
-| GET | `/v1/memory/sessions` | Lista sessoes com resumos |
-| GET | `/v1/memory/sessions/:id/timeline` | Timeline de observacoes |
-| DELETE | `/v1/memory/sessions/:id` | Deleta sessao (GDPR) |
-| GET | `/v1/memory/stats` | Estatisticas do banco |
-
-## Clone de Sites (Skill Nativa)
-
-Clonagem pixel-perfect de qualquer site via Browser MCP:
+## ⚙️ Arquitetura
 
 ```
-"clone o site https://exemplo.com"
+┌──────────────────────────────────────────────────────────────────┐
+│                      System Clow Workspace                       │
+│  https://system-clow.pvcorretor01.com.br                         │
+│                                                                  │
+│  ┌────────────────┐         ┌──────────────────────────────┐    │
+│  │ Agente IA      │ ◄──────►│ CRM Clow (modal in-app)      │    │
+│  │ (chat + tools) │         │  /crm/                       │    │
+│  └───────┬────────┘         │                              │    │
+│          │                  │  • Pipeline Kanban           │    │
+│          │ tools            │  • Contatos                  │    │
+│          │ (10 crm_*)       │  • Canais WhatsApp           │    │
+│          │                  │  • Equipe                    │    │
+│  ┌───────▼────────┐         │  • Produtos                  │    │
+│  │ LiteLLM proxy  │         │  • Stats                     │    │
+│  │ → OpenRouter   │         │  • Automações                │    │
+│  │ → GLM-5.1      │         │  • Mensalidades              │    │
+│  └────────────────┘         └──────────────────────────────┘    │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+        ▲                              ▲
+        │                              │
+   WhatsApp Meta              Webhook (Meta + Z-API)
+   (cliente fala)             (msgs chegam)
 ```
 
-Pipeline de 5 fases: Reconhecimento, Fundacao, Specs+Dispatch, Assembly, QA Visual. Stack: Next.js 16 + React 19 + shadcn/ui + Tailwind CSS v4.
+### Multi-tenant (SaaS-ready)
 
-## 17 Ferramentas Nativas
+- Cada **cliente assinante** = 1 `tenant`
+- Login email + senha per-tenant (bcrypt)
+- Token de sessão HMAC com `tenantId` propagado pelo sistema todo
+- Todas as 12 tabelas do CRM têm `tenant_id` — isolamento garantido na camada de DB
+- Telefone WhatsApp do cliente = único autorizado a invocar a IA dele
+- Cada cliente conecta sua própria conta WhatsApp Meta ou Z-API ao CRM dele
 
-| Ferramenta | Funcao |
+---
+
+## 🚀 Funcionalidades
+
+### Agente IA (System Clow)
+
+- Conversa via WhatsApp com cliente final usando GLM-5.1
+- **10 ferramentas CRM** que a IA opera por comando natural:
+  - `crm_find_or_create_contact` · `crm_create_card` · `crm_move_card`
+  - `crm_add_note` · `crm_send_whatsapp` · `crm_search`
+  - `crm_pipeline` · `crm_get_contact` · `crm_create_reminder` · `crm_dashboard`
+- Sessão persistente por número de telefone (memória cross-conversation)
+- Workspace isolado por número em `~/.clow/sessions/`
+
+### CRM Clow
+
+| Módulo | Capacidades |
 |---|---|
-| `Read` | Ler arquivos com numeracao de linhas |
-| `Write` | Criar novos arquivos |
-| `Edit` | Editar arquivos existentes (diff-based) |
-| `Bash` | Executar comandos shell |
-| `Glob` | Buscar arquivos por padrao |
-| `Grep` | Pesquisar conteudo no codigo |
-| `WebFetch` | Acessar URLs e APIs |
-| `Agent` | Spawnar sub-agentes isolados |
-| `TodoWrite` | Gerenciar lista de tarefas |
-| `Download` | Publicar arquivos para download |
-| `TeamCreate` | Criar equipe multi-agente |
-| `TeamDelete` | Deletar equipe |
-| `SendMessage` | Enviar mensagens entre agentes |
-| `ListPeers` | Listar membros da equipe |
-| `TeammateIdle` | Notificar ociosidade |
-| `EnterPlanMode` | Modo planejamento (read-only) |
-| `ExitPlanMode` | Sair do modo planejamento |
+| **Pipeline Kanban** | Boards customizáveis, drag-and-drop, cores, colunas terminais (Ganho/Perdido) |
+| **Contatos** | Cadastro completo, busca em tempo real, tags, histórico unificado |
+| **Canais WhatsApp** | Suporte Meta Cloud API + Z-API, credenciais criptografadas (AES-256-GCM), webhook URL pronto pra colar |
+| **Side Panel** | Conversação inline com bubble UI, envio de texto/áudio (gravação MediaRecorder)/imagem/PDF |
+| **Equipe** | Agentes com papéis (owner/admin/agent/viewer), atribuição automática (round-robin/load-balanced/manual) |
+| **Produtos (estoque)** | SKU, preço, estoque, vinculação a cards (line items), baixa automática ao ganhar |
+| **Mensalidades** | Cobrança recorrente (weekly/monthly/quarterly/yearly), lembretes T-3/T-1/T-0 via WhatsApp, marcar como pago |
+| **Automações** | 6 triggers × 9 conditions × 8 actions, 5 templates one-click, scheduler 60s |
+| **Stats** | Forecast ponderado, métricas por agente (cards/valor/tempo de resposta) |
+| **Real-time** | SSE pub/sub, UI atualiza sem polling |
 
-## 16 Subsistemas Integrados
+### Multi-tenant SaaS
+
+- **Signup** (`POST /auth/signup`): valida CPF, telefone E.164, email único, hash bcrypt
+- **Login** (`POST /auth/login`): retorna `usr.{payload}.{sig}` token (30d TTL)
+- **Mesmo login → mesmo CRM**: clica botão CRM → exchange → entra direto sem nova senha
+- **Phone whitelist**: só telefones cadastrados podem invocar a IA do tenant
+- **Stripe Checkout** (esqueleto): `POST /api/billing/checkout` cria session, webhook auto-cria tenant
+- **Status do tenant** controlado por Stripe events (active/past_due/cancelled)
+
+### Planos comerciais
+
+| | **STARTER** | **PROFISSIONAL** ⭐ | **EMPRESARIAL** |
+|---|---|---|---|
+| Preço/mês | R$ 197 | R$ 497 | R$ 1.197 |
+| Usuários | 1 | 5 | 20 |
+| Números WhatsApp | 1 | 3 | 10 |
+| Mensagens IA/mês | 500 | 3.000 | 8.000 |
+| Excedente por msg | R$ 0,20 | R$ 0,15 | R$ 0,12 |
+| Fluxos N8N | 1 | 4 | 8 |
+| Margem operacional | ~82% | ~61% | ~57% |
+
+Cálculo de custo: GLM-5.1 a $1.05/M input + $3.50/M output ≈ R$ 0,06/mensagem.
+
+---
+
+## 📁 Estrutura
 
 ```
 src/
-  plugins/        18.600 linhas  Plugin system + marketplace publico
-  hooks/           5.261 linhas  Pre/Post tool hooks (24 eventos)
-  session/         5.557 linhas  Persistencia JSONL append-only
-  bridge/          5.502 linhas  Remote control via SSE/WebSocket
-  swarm/           5.170 linhas  Multi-agent com file-based mailbox
-  server/          6.200 linhas  HTTP API + SSO + Redis sessions + dashboard
-  query/           3.400 linhas  Query engine com budget enforcement
-  tools/           3.700 linhas  17 ferramentas + tool result cache
-  compact/         3.320 linhas  3-tier compaction (micro/session/full)
-  skills/          2.772 linhas  Auto-injecao por contexto + clone-website
-  tenancy/         3.100 linhas  Multi-tenant + PostgreSQL + rate limiter + audit
-  coordinator/     1.960 linhas  Orchestracao de workers
-  bootstrap/       1.892 linhas  Estado global + integrity check
-  memory/          1.600 linhas  Memoria persistente + RAG embeddings
-  mcp/               615 linhas  Model Context Protocol client
+├── adapters/         WhatsApp Meta + Z-API integration (agente)
+├── api/              Anthropic SDK wrapper (rota pra LiteLLM)
+├── auth/             ★ Signup/Login multi-user + tokens HMAC
+├── billing/          ★ Stripe Checkout + webhooks
+├── bootstrap/        Initialization
+├── bridge/           External integration (Clow ↔ System Clow)
+├── cli/ + cli.ts     Standalone CLI
+├── coordinator/      Agent orchestration
+├── crm/              ★ CRM module completo (12 tabelas, REST, webhooks, automations, billing)
+│   ├── channels/     Meta + Z-API send/receive
+│   ├── automations.ts  Engine (triggers/conditions/actions) + 5 templates
+│   ├── billing.ts    Subscriptions runtime (charge + reminders)
+│   ├── assignment.ts Round-robin/load-balanced agent assignment
+│   ├── lineItems.ts  Card↔inventory link + auto stock decrement
+│   ├── events.ts     SSE pub/sub
+│   ├── inbox.ts      Inbound orchestrator (idempotent + auto-card)
+│   ├── webhooks.ts   /webhooks/crm/{meta|zapi}/:secret
+│   ├── routes.ts     50+ REST endpoints under /v1/crm
+│   ├── store.ts      Data access layer (~1500 LOC)
+│   ├── schema.ts     SQLite migrations (WAL, FK on)
+│   └── types.ts      TypeScript types
+├── hooks/            Lifecycle hooks
+├── mcp/              MCP server support
+├── memory/           Persistent memory per tenant
+├── plugins/          Plugin system (4 discovery sources)
+├── query/            QueryEngine (orchestrator de tools)
+├── server/           Hono server + middleware (tenantAuth, sessionPool)
+├── skills/           Skills system
+├── swarm/            Multi-agent
+├── tenancy/          ★ Tenant store (JSON-backed) + license + quotas
+├── tools/            18 base tools + ★ 10 CRM tools (CrmTool/)
+└── utils/            Compaction, logging, paths
+
+public/
+├── index.html        Shell System Clow (login + chat + sidebar + CRM modal)
+├── crm/              ★ CRM SPA
+│   ├── index.html    App shell (auto-loader, no manual API key prompt)
+│   ├── crm.css       Dark theme + nav 3D + brand SVG
+│   ├── crm.js        ~37KB vanilla JS (kanban + side panel + edit modals)
+│   └── crm-extras.js Automations + Subscriptions UI
+└── sw.js             Service worker v100 (bypass /crm/ /v1/ /auth/)
+
+~/.clow/             (state, fora do repo)
+├── crm.sqlite3       12 tabelas CRM
+├── crm-media/{tenant}/{date}/  Mídia recebida
+├── memory/{tenant}.sqlite3     Memória persistente do agente
+├── sessions/{uuid}.jsonl       Sessions do agente
+├── tenants.json      Tenants + users + api_keys
+└── audit/            Logs JSONL
 ```
-
-## Seguranca Multi-Tenant (2000+ usuarios)
-
-### Isolamento
-- **Session Ownership Guard** — Tenant A nao acessa sessoes do Tenant B
-- **Workspace Isolation** — Cada tenant em diretorio isolado
-- **Memoria isolada** — SQLite separado por tenant
-- **System Prompt bifurcado** — Admin tem acesso total, regular tem sandbox
-
-### Rate Limiting Per-Tenant
-| Tier | Limite |
-|------|--------|
-| ONE | 20 req/min |
-| SMART | 60 req/min |
-| PROFISSIONAL | 120 req/min |
-| BUSINESS | 300 req/min |
-| ADMIN | Ilimitado |
-
-### Bash Sandbox
-- Regular users: whitelist de comandos seguros
-- Bloqueio: pm2, sudo, .env, system files
-- Admin: sem restricoes
-
-### Audit Logger
-- Todas as acoes em `~/.clow/audit/YYYY-MM-DD.jsonl`
-- Login, sessao, rate limit, comandos bloqueados, violacoes
-
-### Licenciamento
-- Validacao RSA-256 de tokens de licenca
-- Origin tracking e integrity check
-
-## Observabilidade
-
-- **Logger estruturado** — JSON logs com severity, component tagging
-- **Metricas de latencia** — p95/p99, media, por componente e por tenant
-- **Admin Dashboard** — `/admin/dashboard` com metricas visuais
-- **Deep Health Check** — `/health/deep` verifica API + DB + queue
-- **Endpoint de metricas** — `GET /v1/metrics`
-
-## Documentacao da API
-
-- **Swagger UI**: `/docs`
-- **OpenAPI JSON**: `/openapi.json`
-- Endpoints: Auth, Sessions, Memory, System, Metrics
-
-## Testes Automatizados
-
-```bash
-npm test              # Executar testes
-npm run test:watch    # Modo watch
-npm run test:coverage # Com cobertura
-```
-
-## Otimizacoes de Performance
-
-- **Prompt Cache** — cache_control ephemeral (~90% economia em input tokens)
-- **Tool Result Cache** — LRU 5min para Read/Glob/Grep com invalidacao automatica
-- **Request Queue** — Concorrencia controlada (configuravel via env)
-- **3-Tier Compaction** — MicroCompact, SessionMemory, FullLLM
-
-## Multi-Modelo
-
-| Modelo | Uso |
-|--------|-----|
-| **GLM 5.1** | Motor principal (producao via OpenRouter/LiteLLM) |
-| **Claude Sonnet 4** | Alternativa Anthropic (alta qualidade) |
-| **Claude Haiku 4.5** | Rapido e economico |
-| **GPT-4o** | Alternativa OpenAI |
-| **GPT-4o-mini** | Ultra economico |
-## Multi-Tenant SaaS
-
-- 4 tiers: ONE, SMART, PROFISSIONAL, BUSINESS
-- Quotas por plano (mensagens, custo, sessoes)
-- Billing webhook (Asaas)
-- Banco de memoria isolado por tenant
-
-## Acesso Multiplataforma
-
-- **Web** — Interface responsiva com chat, sidebar, tools, downloads
-- **PWA** — Instalavel no celular como app nativo
-- **Terminal** — CLI interativo com streaming
-- **API REST** — Integracao com qualquer sistema
-- **WhatsApp** — Atendimento automatico via Z-API
-- **Iframe** — Embutivel dentro de outros produtos
-
-## Quick Start
-
-```bash
-git clone https://github.com/daniellbaptista2021-lgtm/system_clow.git
-cd system_clow
-npm install
-cp .env.example .env
-npm run build
-node dist/cli.js
-```
-
-## Servidor HTTP
-
-```bash
-node dist/server/server.js
-```
-
-## Docker
-
-```bash
-docker build -t system-clow .
-docker run -p 3001:3001 --env-file .env system-clow
-```
-
-## Arquitetura
-
-```
-                    Usuario
-                  (CLI/Web/API)
-                       |
-                  Query Engine
-                  (orquestrador)
-                       |
-     +------+------+------+------+------+
-     |      |      |      |      |      |
-  Tools   Hooks  Skills Memory  MCP   Security
- (17nat) (24evt) (clone) (SQLite)(ext) (sandbox)
-     |
-  Providers
-  GLM 5.1 . Claude . GPT
-```
-
-## Stack Tecnica
-
-| Componente | Tecnologia |
-|---|---|
-| Runtime | Node.js 22 + TypeScript 5 |
-| AI Model | GLM 5.1 via OpenRouter/LiteLLM (principal) |
-| Server | Hono + @hono/node-server |
-| LLM SDK | Anthropic SDK / OpenAI SDK |
-| Protocolo | MCP (Model Context Protocol) |
-| Persistencia | JSONL + SQLite (memoria) |
-| Busca | FTS5 full-text search |
-| Cache | Prompt cache + Tool result LRU |
-| Auth | JWT + API keys + RSA license |
-| Security | Sandbox + Rate limit + Audit |
-| Testes | Vitest + V8 Coverage |
-| API Docs | OpenAPI 3.1 + Swagger UI |
-| Observabilidade | Logger JSON + Metricas p95/p99 |
-| Process | PM2 |
-| SSL | Lets Encrypt + Nginx |
-| PWA | Service Worker + manifest.json |
-
-## Performance
-
-| Metrica | Valor |
-|---|---|
-| Linhas de codigo | 68.991 |
-| Arquivos TypeScript | 269 |
-| Subsistemas | 16 + marketplace |
-| Ferramentas nativas | 17 |
-| Skills nativas | 13 (inclui clone-website) |
-| Eventos de hook | 24 |
-| Modelos suportados | 6+ (GLM 5.1 principal) |
-| Testes automatizados | 65+ |
-| Usuarios suportados | 2000+ |
-| Paridade com Claude Code | ~99% |
-
-## Roadmap
-
-- [x] CLI interativo com streaming
-- [x] 17 ferramentas nativas
-- [x] Plugin system com marketplace
-- [x] Hook system (24 eventos)
-- [x] Skill system com auto-injecao
-- [x] Clone de sites pixel-perfect
-- [x] Coordinator mode (multi-agent)
-- [x] Swarm system (multi-processo)
-- [x] Bridge system (remote control)
-- [x] Multi-tenant SaaS (2000+ usuarios)
-- [x] PWA mobile
-- [x] Multi-modelo (GLM 5.1, Claude, GPT)
-- [x] Memoria persistente (SQLite + FTS5)
-- [x] Resumo automatico de sessoes via LLM
-- [x] Testes automatizados (Vitest + V8 Coverage)
-- [x] Observabilidade (Logger JSON + Metricas p95/p99)
-- [x] Documentacao API (OpenAPI 3.1 + Swagger UI)
-- [x] Admin Dashboard com metricas visuais
-- [x] Prompt cache optimization (~90% economia)
-- [x] Tool result cache (LRU 5min)
-- [x] Request queue (concorrencia controlada)
-- [x] Rate limiting per-tenant
-- [x] Bash sandbox para usuarios regulares
-- [x] Audit log (JSONL append-only)
-- [x] Session ownership guard
-- [x] License validator (RSA-256)
-- [x] Deep health check (API + DB + queue)
-- [x] Iframe embedding (produto dentro de produto)
-- [x] RAG com embeddings vetoriais (TF-IDF 256-dim + cosine similarity)
-- [x] Marketplace de plugins publico (8 oficiais + install/rate/review)
-- [x] SSO entre Clow e System Clow (HMAC-SHA256 token exchange)
-- [x] PostgreSQL adapter para tenants (Supabase compativel)
-- [x] Redis session store distribuido (fallback in-memory)
 
 ---
 
-<div align="center">
+## 🔌 API REST (resumo)
 
-**System Clow** — Construido para quem precisa de um agente AI que realmente executa.
-
-*69.000+ linhas de TypeScript . 16 subsistemas . 17 ferramentas . RAG + Marketplace + SSO . GLM 5.1 via OpenRouter . Producao 24/7*
-
-</div>
-
-## Escalabilidade
-
-### PostgreSQL para Tenants
-Adapter para migrar de JSON para PostgreSQL/Supabase:
-```env
-CLOW_DB_URL=postgresql://user:pass@host:5432/clow
+### Auth (multi-tenant SaaS)
 ```
-Schema auto-migra na primeira conexao. Fallback para JSON quando nao configurado.
-
-### Redis para Sessoes Distribuidas
-Session store distribuido com TTL:
-```env
-CLOW_REDIS_URL=redis://host:6379
+POST   /auth/signup                {email,password,full_name,cpf,birth_date,phone,plan_tier}
+POST   /auth/login                 {email,password}             → user_session token
+GET    /auth/me                    Bearer user_session          → user info
+POST   /auth/change-password
+POST   /auth/authorized-phones     {phones:[...]}
 ```
-Fallback para in-memory Map quando Redis nao disponivel.
 
-### SSO (Single Sign-On)
-Token HMAC-SHA256 compartilhado entre Clow e System Clow:
-- `POST /auth/sso` — troca token SSO por sessao
-- `GET /auth/sso/verify` — verifica validade
-- Gate `hasSystemClow` para controlar acesso premium
+### Billing (Stripe)
+```
+POST   /api/billing/checkout       {plan,email,full_name,cpf,phone}  → Stripe URL
+POST   /webhooks/stripe            (Stripe → server)
+GET    /signup/success             Landing após pagamento
+```
 
-### RAG com Embeddings Vetoriais
-Busca semantica na memoria persistente:
-- Embeddings TF-IDF de 256 dimensoes (local, sem API externa)
-- Cosine similarity para ranking por relevancia
-- `GET /v1/memory/semantic?q=...` — busca semantica
-- Auto-indexa cada observacao gravada
+### CRM (todas em /v1/crm)
+```
+POST   /init
+GET    /boards · POST · GET/PATCH/DELETE /:id · GET /:id/pipeline
+GET/POST /boards/:id/columns · PATCH/DELETE /columns/:id
+POST   /cards · GET/PATCH/DELETE /:id · POST /:id/move
+POST   /cards/:id/items · GET · DELETE /:cardId/items/:itemId
+GET/POST /contacts · GET /search · GET/PATCH/DELETE /:id
+POST   /activities
+GET/POST /agents · PATCH/DELETE /:id · GET /metrics · GET /:id/metrics
+GET    /settings/assignment-strategy · PUT
+GET/POST /channels · GET/PATCH/DELETE /:id · POST /:id/send
+GET/POST /subscriptions · PATCH /:id · POST /:id/mark-paid
+GET/POST /inventory · POST /:id/stock
+GET/POST /automations · GET /templates · POST /install-template · PATCH/DELETE /:id
+POST   /reminders
+POST   /media/upload · GET /media/:tenantId/:date/:file
+GET    /events                     (SSE)
+GET    /stats
+POST   /auth/exchange              (System Clow session → CRM api_key)
+```
 
-### Plugin Marketplace
-Registro publico de plugins instaláveis:
-- 8 plugins oficiais (clone-website, meta-ads, whatsapp-bot, etc)
-- Browse, install, uninstall, rate, review
-- `GET /v1/marketplace/plugins` — listar plugins
-- `POST /v1/marketplace/plugins/:slug/install` — instalar
-- Per-tenant tracking de instalacoes
+### Webhooks (públicos, secret-validated)
+```
+GET/POST  /webhooks/crm/meta/:secret    Meta verification + ingest
+POST      /webhooks/crm/zapi/:secret    Z-API ingest
+POST      /webhooks/meta                Legacy agent endpoint (forward-target)
+POST      /webhooks/stripe              Stripe events
+```
+
+---
+
+## 🔐 Segurança
+
+- **Bcrypt** (cost 10) pra senhas
+- **HMAC SHA-256** pra session tokens (admin + user)
+- **AES-256-GCM** pra credenciais de canal WhatsApp (scrypt KDF)
+- **CLOW_CRM_SECRET** + **CLOW_USER_SESSION_SECRET** + **STRIPE_WEBHOOK_SECRET** em env vars
+- Server escuta só em `127.0.0.1:3001` (nginx faz o terminate TLS público)
+- CSP `frame-ancestors 'self'` no CRM (não embarcável fora do System Clow)
+- Webhook signature verification opcional (Meta `X-Hub-Signature-256`, Stripe assinatura)
+- Phone whitelist no agente (impede uso por terceiros)
+- Path traversal guard no media handler
+
+---
+
+## 🛠️ Operação
+
+### Stack rodando
+
+```
+PM2:
+  clow      Node + Hono em 127.0.0.1:3001
+  litellm   LiteLLM proxy em 127.0.0.1:4000
+
+Nginx: TLS público em 443 → proxy pro 3001
+Redis: 127.0.0.1:6379 (cache de sessões)
+SQLite WAL: ~/.clow/crm.sqlite3
+```
+
+### Env vars principais
+
+```bash
+# Modelo
+ANTHROPIC_API_KEY=sk-clow-proxy-local       # dummy pra LiteLLM
+ANTHROPIC_BASE_URL=http://127.0.0.1:4000    # LiteLLM
+CLOW_MODEL=glm-5.1
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Auth
+CLOW_ADMIN_USER=...                          # legacy admin
+CLOW_ADMIN_PASS=...
+CLOW_ADMIN_SESSION_SECRET=...                # HMAC pra admin tokens
+CLOW_USER_SESSION_SECRET=...                 # HMAC pra user tokens (multi-tenant)
+CLOW_CRM_SECRET=...                          # AES-256 pra credenciais
+
+# WhatsApp Meta (canal padrão / admin)
+META_WA_ACCESS_TOKEN=...                     # System User token (vitalício)
+META_WA_PHONE_NUMBER_ID=REDACTED_PHONE_ID
+META_WA_BUSINESS_ACCOUNT_ID=REDACTED_BUSINESS_ID
+META_WA_APP_ID=REDACTED_APP_ID
+META_WA_VERIFY_TOKEN=REDACTED_VERIFY_TOKEN
+META_WA_ADMIN_PHONES=REDACTED_ADMIN_PHONE
+
+# Stripe (preencher pra ativar billing)
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_STARTER=price_...
+STRIPE_PRICE_PROFISSIONAL=price_...
+STRIPE_PRICE_EMPRESARIAL=price_...
+STRIPE_SUCCESS_URL=https://system-clow.pvcorretor01.com.br/signup/success
+STRIPE_CANCEL_URL=https://system-clow.pvcorretor01.com.br/signup
+```
+
+### Deploy
+
+```bash
+ssh root@<vps-ip>
+cd /opt/system-clow
+git pull origin main
+npm run build
+pm2 restart clow --update-env
+```
+
+---
+
+## 📌 Estado atual (2026-04-23)
+
+✅ Concluído
+- 11 ondas do CRM (do schema até UI completa + automações + SSE + UI extras)
+- Integração CRM como modal in-app no System Clow
+- Auto-login via session token (zero fricção)
+- Multi-tenant signup/login (bcrypt + HMAC tokens)
+- Phone whitelist por tenant (proteção contra hijack)
+- Webhook do CRM forwarda pro agente (IA continua respondendo)
+- Stripe Checkout esqueleto + webhook handler
+- Tabela de planos definida (Starter R$ 197 / Profissional R$ 497 / Empresarial R$ 1.197)
+- 26 commits hoje, todos no GitHub
+
+⏭️ Próximas etapas
+- UI de signup (landing com seletor de plano + formulário)
+- Conectar Stripe ao vivo (precisa price IDs + secret key)
+- Email transacional (envio da senha temp)
+- Rate limit enforcement por plano (quotas: msgs IA/mês, fluxos n8n)
+- N8N integration (1/4/8 fluxos por plano)
+- White-label tenant config (logo + cores customizáveis)
+
+---
+
+## 📞 Suporte
+
+GitHub: https://github.com/daniellbaptista2021-lgtm/system_clow
+Owner: Daniel Baptista (daniellbaptista2021@gmail.com)
