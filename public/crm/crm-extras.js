@@ -65,11 +65,13 @@
   function injectExtras() {
     const nav = $('.sidebar nav');
     if (!nav || nav.querySelector('[data-view="automations"]')) return;
+    const autoIcon = el('span', { class: 'nav-icon', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' });
+    const subsIcon = el('span', { class: 'nav-icon', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="9" y2="15"/></svg>' });
     nav.append(
       el('button', { class: 'nav-item', data: { view: 'automations' } },
-        el('span', { class: 'nav-icon' }, '⚡'), el('span', {}, 'Automações')),
+        autoIcon, el('span', { class: 'nav-label' }, 'Automações')),
       el('button', { class: 'nav-item', data: { view: 'subscriptions' } },
-        el('span', { class: 'nav-icon' }, '💳'), el('span', {}, 'Mensalidades')),
+        subsIcon, el('span', { class: 'nav-label' }, 'Mensalidades')),
     );
 
     const main = $('.main');
@@ -262,7 +264,7 @@
         const due = new Date(s.nextChargeAt);
         const overdue = due.getTime() < Date.now() && s.status === 'active';
         const statusClass = s.status === 'active' ? 'green' : s.status === 'past_due' ? 'red' : 'gray';
-        l.append(el('div', { class: 'list-item', style: 'flex-direction:column;align-items:stretch' },
+        const subItem = el('div', { class: 'list-item', style: 'flex-direction:column;align-items:stretch;cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } } },
           el('div', { style: 'display:flex;align-items:center;justify-content:space-between' },
             el('div', { class: 'list-item-left' },
               el('div', {},
@@ -291,7 +293,8 @@
                   await renderSubsList();
                 } } }, 'Cancelar') : null,
           ),
-        ));
+        );
+      l.append(subItem);
       }
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
   }

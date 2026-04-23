@@ -720,7 +720,7 @@ function renderChannelsList() {
   }
   for (const ch of state.channels) {
     const whUrl = `${location.origin}/webhooks/crm/${ch.type}/${ch.webhookSecret}`;
-    l.append(el('div', { class: 'list-item', style: 'cursor:default;flex-direction:column;align-items:stretch' },
+    const chRow = el('div', { class: 'list-item', style: 'cursor:pointer;flex-direction:column;align-items:stretch', on: { click: (e) => { if (e.target.closest('button') || e.target.closest('input') || e.target.closest('code')) return; openEditChannelModal(ch); } } },
       el('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:10px' },
         el('div', { class: 'list-item-left' },
           el('div', { class: 'contact-avatar' }, ch.type === 'meta' ? 'M' : 'Z'),
@@ -747,7 +747,8 @@ function renderChannelsList() {
             toast('Canal removido', 'success');
           } } }, 'Remover'),
       ),
-    ));
+    );
+    l.append(chRow);
   }
 }
 
@@ -959,7 +960,7 @@ function renderAgentsList() {
   l.innerHTML = '';
   if (!state.agents.length) { l.append(el('div', { class: 'empty' }, 'Nenhum agente cadastrado.')); return; }
   for (const a of state.agents) {
-    l.append(el('div', { class: 'list-item' },
+    l.append(el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditAgentModal(a); } } },
       el('div', { class: 'list-item-left' },
         el('div', { class: 'contact-avatar' }, initials(a.name)),
         el('div', {},
@@ -977,7 +978,7 @@ function renderInventoryList() {
   l.innerHTML = '';
   if (!state.inventory.length) { l.append(el('div', { class: 'empty' }, 'Estoque vazio.')); return; }
   for (const it of state.inventory) {
-    l.append(el('div', { class: 'list-item' },
+    l.append(el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditInventoryModal(it); } } },
       el('div', { class: 'list-item-left' },
         el('div', {},
           el('div', { class: 'list-item-title' }, it.name),
