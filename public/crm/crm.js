@@ -892,3 +892,7 @@ function wireEvents() {
     }
   }
 })();
+
+
+window.__crmRefresh = async function() { try { if (state.currentBoardId) { await loadPipeline(state.currentBoardId); renderKanban(); } if (state.currentCard) { await refreshCurrentCard(); } } catch(e){} };
+window.__crmAppReady = true;

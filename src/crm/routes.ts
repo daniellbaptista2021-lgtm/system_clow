@@ -16,6 +16,11 @@ import * as store from './store.js';
 import { encryptJson, decryptJson, maskSecret } from './crypto.js';
 import { sendOutbound } from './inbox.js';
 import * as automations from './automations.js';
+import { markPaid } from './billing.js';
+import * as assignment from './assignment.js';
+import * as lineItems from './lineItems.js';
+import { subscribe, formatSseFrame } from './events.js';
+import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from './types.js';
 
@@ -535,6 +540,88 @@ app.patch('/automations/:id', async (c) => {
 app.delete('/automations/:id', (c) => {
   const ok2 = automations.deleteAutomation(tenantOf(c), c.req.param('id'));
   return ok2 ? c.body(null, 204) : notFound(c, 'automation');
+});
+
+
+// ═══ Billing extras ════════════════════════════════════════════════════
+app.post('/subscriptions/:id/mark-paid', (c) => {
+  const r = markPaid(tenantOf(c), c.req.param('id'));
+  return r ? ok(c, { subscription: r }) : notFound(c, 'subscription');
+});
+
+// ═══ Assignment / Agent metrics ════════════════════════════════════════
+app.get('/agents/metrics', (c) => {
+  return ok(c, { agents: assignment.getAllAgentMetrics(tenantOf(c)) });
+});
+app.get('/agents/:id/metrics', (c) => {
+  const m = assignment.getAgentMetrics(tenantOf(c), c.req.param('id'));
+  return m ? ok(c, m) : notFound(c, 'agent');
+});
+app.get('/settings/assignment-strategy', (c) => {
+  return ok(c, { strategy: assignment.getStrategy(tenantOf(c)) });
+});
+app.put('/settings/assignment-strategy', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  if (!['round_robin', 'load_balanced', 'manual'].includes(body.strategy)) {
+    return badRequest(c, 'strategy must be: round_robin | load_balanced | manual');
+  }
+  assignment.setStrategy(tenantOf(c), body.strategy);
+  return ok(c, { ok: true, strategy: body.strategy });
+});
+
+// ═══ Card line items (inventory ↔ deals) ═══════════════════════════════
+app.get('/cards/:id/items', (c) => {
+  return ok(c, { items: lineItems.listItemsByCard(tenantOf(c), c.req.param('id')) });
+});
+app.post('/cards/:id/items', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  if (!body.inventoryId || !body.qty) return badRequest(c, 'inventoryId and qty required');
+  try {
+    const item = lineItems.addItemToCard(tenantOf(c), c.req.param('id'), body);
+    return item ? ok(c, { item }, 201) : notFound(c, 'card or product');
+  } catch (e: any) {
+    return badRequest(c, e.message);
+  }
+});
+app.delete('/cards/:cardId/items/:itemId', (c) => {
+  const ok2 = lineItems.removeItemFromCard(tenantOf(c), c.req.param('cardId'), c.req.param('itemId'));
+  return ok2 ? c.body(null, 204) : notFound(c, 'item');
+});
+
+// ═══ SSE real-time stream ══════════════════════════════════════════════
+app.get('/events', async (c) => {
+  const tokenQ = c.req.query('token');
+  let tid = (c as any).get?.('tenantId');
+  if (!tid && tokenQ) {
+    const t = findTenantByApiKeyHash(hashApiKey(tokenQ));
+    if (t) tid = t.id;
+  }
+  if (!tid) return c.text('unauthorized', 401);
+  const tenantId = tid;
+  const stream = new ReadableStream({
+    start(controller) {
+      const enc = new TextEncoder();
+      controller.enqueue(enc.encode(': connected\n\n'));
+      const heartbeat = setInterval(() => {
+        try { controller.enqueue(enc.encode(': hb\n\n')); } catch { clearInterval(heartbeat); }
+      }, 25_000);
+      const unsub = subscribe(tenantId, {
+        send: (event, data) => {
+          try { controller.enqueue(enc.encode(formatSseFrame(event, data))); } catch {}
+        },
+        close: () => { clearInterval(heartbeat); try { controller.close(); } catch {} },
+      });
+      (c as any).req.raw?.signal?.addEventListener?.('abort', () => { clearInterval(heartbeat); unsub(); try { controller.close(); } catch {} });
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 });
 
 export default app;

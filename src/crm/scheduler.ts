@@ -11,6 +11,7 @@
 import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import * as automations from './automations.js';
+import { processBillingTick } from './billing.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -39,6 +40,7 @@ async function tick(): Promise<void> {
       processReminders(),
       detectStaleCards(),
       detectDueApproaching(),
+      processBillingTick(),
     ]);
   } catch (e: any) {
     console.warn('[CRM scheduler] tick error:', e.message);

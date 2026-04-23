@@ -17,6 +17,32 @@ import type {
 const now = () => Date.now();
 // Lazy-loaded automation emitter (avoids circular import: automations -> store)
 let _emit: ((ev: any) => Promise<void>) | null = null;
+
+let _autoAssign: ((tid: string, cid: string) => boolean) | null = null;
+async function getAutoAssign() {
+  if (!_autoAssign) {
+    try { _autoAssign = (await import('./assignment.js')).maybeAutoAssign; }
+    catch { _autoAssign = () => false; }
+  }
+  return _autoAssign;
+}
+let _commitStock: ((tid: string, cid: string) => void) | null = null;
+async function getCommitStock() {
+  if (!_commitStock) {
+    try { _commitStock = (await import('./lineItems.js')).commitStockForWonCard; }
+    catch { _commitStock = () => {}; }
+  }
+  return _commitStock;
+}
+let _publishEvent: ((tid: string, ev: string, data: any) => void) | null = null;
+async function getPublish() {
+  if (!_publishEvent) {
+    try { _publishEvent = (await import('./events.js')).publish; }
+    catch { _publishEvent = () => {}; }
+  }
+  return _publishEvent;
+}
+
 async function getEmit() {
   if (!_emit) {
     try {
@@ -350,7 +376,7 @@ export function createCard(tenantId: string, input: {
     card.createdAt, card.updatedAt);
   logActivity(tenantId, { cardId: card.id, contactId: card.contactId, type: 'system', channel: 'manual',
     content: `Card criado na coluna ${card.columnId}` });
-  void (async () => { (await getEmit())({ trigger: 'card_created', tenantId, cardId: card.id, contactId: card.contactId }); })();
+  void (async () => { (await getEmit())({ trigger: 'card_created', tenantId, cardId: card.id, contactId: card.contactId }); (await getAutoAssign())(tenantId, card.id); (await getPublish())(tenantId, 'card', { action: 'created', cardId: card.id }); })();
   return card;
 }
 
@@ -418,7 +444,7 @@ export function moveCard(tenantId: string, cardId: string, toColumnId: string, p
       cardId, contactId: existing.contactId, type: 'stage_change', channel: 'manual',
       content: `Movido de ${existing.columnId} para ${toColumnId}`,
     });
-    void (async () => { (await getEmit())({ trigger: 'card_moved', tenantId, cardId, contactId: existing.contactId, fromColumnId: existing.columnId, toColumnId }); })();
+    void (async () => { (await getEmit())({ trigger: 'card_moved', tenantId, cardId, contactId: existing.contactId, fromColumnId: existing.columnId, toColumnId }); const cols2 = listColumns(tenantId, existing.boardId); const tgt = cols2.find(c => c.id === toColumnId); if (tgt?.isTerminal && /ganho|won/i.test(tgt.name)) { (await getCommitStock())(tenantId, cardId); } (await getPublish())(tenantId, 'card', { action: 'moved', cardId, toColumnId }); })();
   }
   return moved;
 }
@@ -483,6 +509,7 @@ export function logActivity(tenantId: string, input: {
     db.prepare('UPDATE crm_contacts SET last_interaction_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
       .run(a.createdAt, a.createdAt, a.contactId, tenantId);
   }
+  void (async () => { (await getPublish())(tenantId, 'activity', { activityId: a.id, cardId: a.cardId, contactId: a.contactId, type: a.type }); })();
   return a;
 }
 
