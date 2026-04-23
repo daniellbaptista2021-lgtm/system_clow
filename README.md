@@ -37,7 +37,7 @@ Construido como **clone arquitetural do Claude Code**, o System Clow implementa 
 | **Memoria persistente** | Plugin externo | Nao | Nativo (SQLite + FTS5) |
 | **Multi-tenant SaaS** | Nao | Nao | Sim (2000+ usuarios) |
 | **Auto-hospedado** | Nao | Nao | Sim |
-| **Multi-modelo** | Nao | Nao | Sim (GLM 5.1, Claude, GPT, DeepSeek) |
+| **Multi-modelo** | Nao | Nao | Sim (GLM 5.1, Claude, GPT) |
 | **WhatsApp** | Nao | Nao | Sim |
 | **PWA Mobile** | Nao | Nao | Sim |
 | **Rate Limiting** | N/A | N/A | Per-tenant sliding window |
@@ -187,8 +187,6 @@ npm run test:coverage # Com cobertura
 | **Claude Haiku 4.5** | Rapido e economico |
 | **GPT-4o** | Alternativa OpenAI |
 | **GPT-4o-mini** | Ultra economico |
-| **DeepSeek V3** | Custo minimo |
-
 ## Multi-Tenant SaaS
 
 - 4 tiers: ONE, SMART, PROFISSIONAL, BUSINESS
@@ -244,7 +242,7 @@ docker run -p 3001:3001 --env-file .env system-clow
  (17nat) (24evt) (clone) (SQLite)(ext) (sandbox)
      |
   Providers
-  GLM 5.1 . Claude . GPT . DeepSeek
+  GLM 5.1 . Claude . GPT
 ```
 
 ## Stack Tecnica
@@ -296,7 +294,7 @@ docker run -p 3001:3001 --env-file .env system-clow
 - [x] Bridge system (remote control)
 - [x] Multi-tenant SaaS (2000+ usuarios)
 - [x] PWA mobile
-- [x] Multi-modelo (GLM 5.1, Claude, GPT, DeepSeek)
+- [x] Multi-modelo (GLM 5.1, Claude, GPT)
 - [x] Memoria persistente (SQLite + FTS5)
 - [x] Resumo automatico de sessoes via LLM
 - [x] Testes automatizados (Vitest + V8 Coverage)

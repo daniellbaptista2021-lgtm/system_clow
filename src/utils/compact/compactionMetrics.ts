@@ -18,7 +18,7 @@ import type { CompactionReport, MicroCompactResult, CompactionResult, CompactTyp
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const DEEPSEEK_INPUT_PRICE_PER_TOKEN = 0.28 / 1_000_000;  // $0.28 per 1M tokens
+const GLM_INPUT_PRICE_PER_TOKEN = 0.95 / 1_000_000;  // GLM-5.1 via OpenRouter: $0.95 per 1M input tokens
 const MAX_HISTORY = 100;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ export class CompactionMetrics {
       },
       totalTokensSaved: this.totalTokensSaved,
       avgDurationMs: total > 0 ? this.totalDurationMs / total : 0,
-      estimatedCostSaved: this.totalTokensSaved * DEEPSEEK_INPUT_PRICE_PER_TOKEN,
+      estimatedCostSaved: this.totalTokensSaved * GLM_INPUT_PRICE_PER_TOKEN,
     };
   }
 
