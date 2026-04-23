@@ -27,11 +27,14 @@ import { sendWelcomeEmail } from '../notifications/mailer.js';
 
 const app = new Hono();
 
-const PRICE_IDS: Record<string, string | undefined> = {
-  starter: process.env.STRIPE_PRICE_STARTER,
-  profissional: process.env.STRIPE_PRICE_PROFISSIONAL,
-  empresarial: process.env.STRIPE_PRICE_EMPRESARIAL,
-};
+// Price IDs are resolved at REQUEST time — env is loaded after module import
+function priceIds(): Record<string, string | undefined> {
+  return {
+    starter: process.env.STRIPE_PRICE_STARTER,
+    profissional: process.env.STRIPE_PRICE_PROFISSIONAL,
+    empresarial: process.env.STRIPE_PRICE_EMPRESARIAL,
+  };
+}
 
 function publicBase(): string {
   return process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
@@ -51,7 +54,7 @@ async function stripe(): Promise<any> {
 app.post('/api/billing/checkout', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
   const { plan, email, full_name, cpf, phone } = body;
-  if (!plan || !PRICE_IDS[plan]) {
+  if (!plan || !priceIds()[plan]) {
     return c.json({ error: 'invalid_plan', message: 'Plano deve ser starter, profissional ou empresarial.' }, 400);
   }
   if (!email || !full_name || !cpf || !phone) {
@@ -66,7 +69,7 @@ app.post('/api/billing/checkout', async (c) => {
     const session = await sk.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
-      line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
+      line_items: [{ price: priceIds()[plan], quantity: 1 }],
       customer_email: email,
       success_url: (process.env.STRIPE_SUCCESS_URL || `${publicBase()}/signup/success`) + '?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: process.env.STRIPE_CANCEL_URL || `${publicBase()}/signup`,
