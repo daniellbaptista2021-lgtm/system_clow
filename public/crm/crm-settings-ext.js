@@ -60,19 +60,13 @@
   // ─── Inject nav items + views ────────────────────────────────────────
   function injectExtras() {
     const nav = $('.sidebar nav');
-    if (!nav || nav.querySelector('[data-view="flows"]')) return;
+    if (!nav || nav.querySelector('[data-view="settings"]')) return;
 
     const svgFlow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/></svg>';
     const svgBrand = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
     const svgGear = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 
     nav.append(
-      el('button', { class: 'nav-item', data: { view: 'flows' } },
-        el('span', { class: 'nav-icon', html: svgFlow }),
-        el('span', { class: 'nav-label' }, 'Fluxos n8n')),
-      el('button', { class: 'nav-item', data: { view: 'branding' } },
-        el('span', { class: 'nav-icon', html: svgBrand }),
-        el('span', { class: 'nav-label' }, 'Marca')),
       el('button', { class: 'nav-item', data: { view: 'settings' } },
         el('span', { class: 'nav-icon', html: svgGear }),
         el('span', { class: 'nav-label' }, 'Configurações')),
@@ -80,19 +74,6 @@
 
     const main = $('.main');
     main.append(
-      el('div', { class: 'view', data: { view: 'flows' }, id: 'flowsView' },
-        el('header', { class: 'top-bar' },
-          el('div', { class: 'top-bar-left' }, el('h2', {}, 'Fluxos n8n'), el('span', { id: 'flowsQuota', style: 'font-size:11px;color:var(--text-dim);margin-left:12px' })),
-          el('div', {}, el('button', { id: 'flowsBrowseBtn' }, '+ Instalar template')),
-        ),
-        el('div', { class: 'list', id: 'flowsList' }),
-      ),
-      el('div', { class: 'view', data: { view: 'branding' }, id: 'brandingView' },
-        el('header', { class: 'top-bar' },
-          el('div', { class: 'top-bar-left' }, el('h2', {}, 'Identidade visual (white-label)')),
-        ),
-        el('div', { id: 'brandingBody', style: 'padding:20px;overflow-y:auto' }),
-      ),
       el('div', { class: 'view', data: { view: 'settings' }, id: 'settingsView' },
         el('header', { class: 'top-bar' },
           el('div', { class: 'top-bar-left' }, el('h2', {}, 'Configurações da conta')),
@@ -107,11 +88,11 @@
         n.addEventListener('click', () => showExtraView2(n.dataset.view));
       }
     });
-    $('#flowsBrowseBtn')?.addEventListener('click', openFlowsBrowser);
+    // flows browser removido (admin gerencia n8n na VPS dele)
   }
 
   async function showExtraView2(view) {
-    if (!['flows', 'branding', 'settings'].includes(view)) return;
+    if (view !== 'settings') return;
     $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
     $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
     if (view === 'flows') await renderFlows();

@@ -197,27 +197,54 @@ app.post('/login', async (c) => {
 });
 
 // ─── /auth/me ───────────────────────────────────────────────────────────
-app.get('/me', (c) => {
+app.get('/me', async (c) => {
   const auth = c.req.header('Authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
+
+  // 1) Tentar token de tenant (formato usr.payload.sig)
   const payload = verifyUserToken(token);
-  if (!payload) return c.json({ ok: false }, 401);
-  const tenant = getTenant(payload.tid);
-  if (!tenant) return c.json({ ok: false }, 404);
-  const t = tenant as any;
-  return c.json({
-    ok: true,
-    user: {
-      id: tenant.id,
-      email: tenant.email,
-      name: t.full_name || tenant.name,
-      tier: tenant.tier,
-      status: tenant.status,
-      phone: t.phone_e164,
-      authorized_phones: t.authorized_phones || [],
-      role: payload.role,
-    },
-  });
+  if (payload) {
+    const tenant = getTenant(payload.tid);
+    if (!tenant) return c.json({ ok: false }, 404);
+    const t = tenant as any;
+    return c.json({
+      ok: true,
+      user: {
+        id: tenant.id,
+        email: tenant.email,
+        name: t.full_name || tenant.name,
+        tier: tenant.tier,
+        status: tenant.status,
+        phone: t.phone_e164,
+        authorized_phones: t.authorized_phones || [],
+        role: payload.role,
+      },
+    });
+  }
+
+  // 2) Fallback: token de admin (payload.sig, 2 partes) — retorna pseudo-user admin
+  try {
+    const { verifyAdminSessionToken } = await import('../server/middleware/tenantAuth.js');
+    const adm = verifyAdminSessionToken(token);
+    if (adm.ok && adm.username) {
+      return c.json({
+        ok: true,
+        user: {
+          id: 'admin',
+          email: adm.username + '@system-clow',
+          name: adm.username,
+          tier: 'admin',
+          status: 'active',
+          phone: null,
+          authorized_phones: [],
+          role: 'admin',
+          is_admin: true,
+        },
+      });
+    }
+  } catch { /* ignore */ }
+
+  return c.json({ ok: false }, 401);
 });
 
 // ─── Change password ────────────────────────────────────────────────────
