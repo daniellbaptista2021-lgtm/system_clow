@@ -547,6 +547,29 @@ function validateCPF(cpf) {
   return d2 === parseInt(c[10]);
 }
 
+
+function showPaymentPending(url, popupRef) {
+  const modal = document.querySelector('.modal');
+  modal.innerHTML = '<button class="modal-close" onclick="closeModal()">×</button>' +
+    '<div style="text-align:center">' +
+    '<div style="width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(155,89,252,.35)">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:38px;height:38px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/></svg>' +
+    '</div>' +
+    '<h3 style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:22px;margin:0 0 12px;letter-spacing:-.01em;font-weight:800">Finalize o pagamento</h3>' +
+    '<p style="color:#B8B8D0;line-height:1.6;font-size:14px;margin:10px 0 20px">O Stripe abriu em uma <strong style="color:#E8E8F0">nova aba</strong> do navegador.<br>Finalize o pagamento por lá e volte aqui pra fazer login.</p>' +
+    '<div style="background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.22);border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:12.5px;color:#B8B8D0;line-height:1.7">' +
+      '<strong style="color:#E8E8F0">O que esperar:</strong><br>' +
+      '1. Paga com cartão no Stripe (aba nova)<br>' +
+      '2. Recebe email com <strong>senha temporária</strong><br>' +
+      '3. Volta aqui e clica <strong>Fazer login</strong><br>' +
+      '4. Completa onboarding em 3 min' +
+    '</div>' +
+    '<a href="/" class="modal-btn" style="display:block;text-decoration:none;text-align:center;margin-top:10px">Já paguei — ir pro login →</a>' +
+    '<button type="button" onclick="reopenStripe('' + url + '')" style="width:100%;padding:12px;margin-top:10px;background:transparent;border:1px solid rgba(255,255,255,.12);color:#9898B8;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px">Aba fechou? Reabrir pagamento</button>' +
+    '</div>';
+}
+window.reopenStripe = function(url) { window.open(url, '_blank', 'noopener,noreferrer'); };
+
 document.getElementById('subForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = document.getElementById('subErr');
@@ -576,7 +599,10 @@ document.getElementById('subForm').addEventListener('submit', async (e) => {
     const res = await r.json();
     if (res.ok && res.url) {
       sessionStorage.setItem('pending_signup', JSON.stringify(data));
-      location.href = res.url;
+      // Abre Stripe Checkout em nova aba
+      const w = window.open(res.url, '_blank', 'noopener,noreferrer');
+      // Substitui modal por tela de 'pagamento em andamento' com link fallback
+      showPaymentPending(res.url, w);
       return;
     }
     if (res.error === 'email_in_use') {
