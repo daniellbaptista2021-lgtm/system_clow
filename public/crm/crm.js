@@ -828,15 +828,64 @@ function showWebhookSetup(channel, isNew) {
 
 
 async function openNewChannelModal() {
+  // Pre-generate webhook secret so we can show the URL inside the form
+  const presetSecret = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+  let currentType = 'zapi';
+
   const backdrop = el('div', { class: 'modal-backdrop' });
+
+  // Live webhook URL display — updates when provider changes
+  const whUrlInput = el('input', {
+    type: 'text', readonly: '',
+    value: location.origin + '/webhooks/crm/zapi/' + presetSecret,
+    style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;user-select:all',
+    on: { focus: (e) => e.target.select() },
+  });
+  const whCopyBtn = el('button', {
+    type: 'button',
+    style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    on: { click: () => copyToClipboard(whUrlInput.value) },
+  }, 'Copiar');
+  const whBlock = el('div', { style: 'background:rgba(155,89,252,.06);border:1px solid rgba(155,89,252,.18);padding:12px;border-radius:10px;margin-bottom:14px' },
+    el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔗 WEBHOOK URL (cole no painel do provedor)'),
+    el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, whUrlInput, whCopyBtn),
+    el('div', { id: 'whInstr', style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5' }),
+  );
+
+  // Verify token preview (Meta only)
+  const verifyTokDefault = 'clow_verify_' + Math.random().toString(36).slice(2, 10);
+  const verifyTokInput = el('input', {
+    type: 'text', readonly: '', value: verifyTokDefault,
+    style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;user-select:all',
+    on: { focus: (e) => e.target.select() },
+  });
+  const verifyTokBlock = el('div', { style: 'background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.18);padding:12px;border-radius:10px;margin-bottom:14px;display:none' },
+    el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔑 VERIFY TOKEN (cole no campo "Verificar token" do Meta)'),
+    el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, verifyTokInput,
+      el('button', { type: 'button', style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit', on: { click: () => copyToClipboard(verifyTokInput.value) } }, 'Copiar'),
+    ),
+  );
+
+  function refreshWebhookUI(type) {
+    currentType = type || 'zapi';
+    whUrlInput.value = location.origin + '/webhooks/crm/' + currentType + '/' + presetSecret;
+    const instr = document.getElementById('whInstr');
+    if (instr) {
+      instr.innerHTML = currentType === 'meta'
+        ? '<strong>Meta:</strong> Configuração → Webhook → Editar → cole acima na <em>URL de retorno</em> + <em>Verificar token</em> abaixo → Verificar e salvar.'
+        : '<strong>Z-API:</strong> Painel da instância → Webhooks → cole acima no campo <em>"Ao receber"</em>.';
+    }
+    verifyTokBlock.style.display = currentType === 'meta' ? '' : 'none';
+  }
+
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
-    const type = fd.get('type');
+    const type = currentType;
     const credentials = type === 'meta' ? {
       accessToken: fd.get('metaToken'),
       phoneNumberId: fd.get('metaPhoneId'),
-      verifyToken: fd.get('metaVerify') || `cw_${Date.now()}`,
+      verifyToken: verifyTokInput.value,
       apiVersion: 'v22.0',
     } : {
       instanceId: fd.get('zapiInstance'),
@@ -847,21 +896,20 @@ async function openNewChannelModal() {
       const r = await api('/channels', { method: 'POST', body: {
         type, name: fd.get('name'), credentials,
         phoneNumber: fd.get('phoneDisplay') || undefined,
+        webhookSecret: presetSecret,
       } });
       backdrop.remove();
       await loadChannels();
       renderChannelsList();
-      // Mostrar tela de setup com webhook URL + verify token + instrucoes
       showWebhookSetup(r.channel, true);
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
 
-  let fieldsMeta = el('div', { style: 'display:none' },
+  const fieldsMeta = el('div', { style: 'display:none' },
     field('Access Token', 'metaToken', 'text', ''),
     field('Phone Number ID', 'metaPhoneId', 'text', ''),
-    field('Verify Token (use ao configurar no Meta)', 'metaVerify', 'text', 'clow_verify_' + Math.random().toString(36).slice(2, 10)),
   );
-  let fieldsZapi = el('div', { style: 'display:none' },
+  const fieldsZapi = el('div', { style: 'display:none' },
     field('Instance ID', 'zapiInstance', 'text', ''),
     field('Token', 'zapiToken', 'text', ''),
     field('Client-Token (opcional)', 'zapiClientToken', 'text', ''),
@@ -874,27 +922,36 @@ async function openNewChannelModal() {
       el('label', {}, 'Provedor'),
       (() => {
         const sel = el('select', { name: 'type', on: { change: (e) => {
-          fieldsMeta.style.display = e.target.value === 'meta' ? '' : 'none';
-          fieldsZapi.style.display = e.target.value === 'zapi' ? '' : 'none';
+          const v = e.target.value;
+          fieldsMeta.style.display = v === 'meta' ? '' : 'none';
+          fieldsZapi.style.display = v === 'zapi' ? '' : 'none';
+          refreshWebhookUI(v);
         } } },
-          el('option', { value: '' }, 'Selecione...'),
-          el('option', { value: 'meta' }, 'Meta Cloud API (oficial)'),
           el('option', { value: 'zapi' }, 'Z-API'),
+          el('option', { value: 'meta' }, 'Meta Cloud API (oficial)'),
         );
         return sel;
       })(),
     ),
-    fieldsMeta,
     fieldsZapi,
+    fieldsMeta,
+    whBlock,
+    verifyTokBlock,
     el('div', { class: 'modal-actions' },
       el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
       el('button', { type: 'submit', class: 'confirm' }, 'Criar'),
     ),
   );
 
-  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Novo canal WhatsApp'), form));
+  backdrop.append(el('div', { class: 'modal', style: 'max-width:540px' }, el('h3', {}, 'Novo canal WhatsApp'), form));
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
   document.body.append(backdrop);
+
+  // Initialize: default to Z-API since it's first option
+  setTimeout(() => {
+    fieldsZapi.style.display = '';
+    refreshWebhookUI('zapi');
+  }, 0);
 }
 
 function renderAgentsList() {
