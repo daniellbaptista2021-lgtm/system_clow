@@ -788,8 +788,9 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
 
 
 
-.video-iframe-wrap{position:relative;width:100%;padding-bottom:56.25%;background:#000;overflow:hidden}
-.video-iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.video-native{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#000;outline:none}
+.video-native::-webkit-media-controls-panel{background:linear-gradient(180deg,transparent,rgba(5,6,10,.8))}
+.video-native::-webkit-media-controls-play-button,.video-native::-webkit-media-controls-timeline,.video-native::-webkit-media-controls-volume-slider{filter:hue-rotate(220deg)}
 
 
 @media(max-width:780px){
@@ -1076,15 +1077,17 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
     <div class="video-wrap reveal d1">
       <div class="video-halo" aria-hidden="true"></div>
       <div class="video-frame">
-        <div class="video-iframe-wrap">
-          <iframe
-            class="video-iframe"
-            src="/videos/apresentacao/"
-            title="System Clow — demo 45 segundos"
-            loading="lazy"
-            allow="autoplay; fullscreen"
-            referrerpolicy="no-referrer"></iframe>
-        </div>
+        <video
+          class="video-native"
+          controls
+          playsinline
+          preload="metadata"
+          poster="/assets/clow-demo-poster.jpg"
+          aria-label="System Clow — demo 45 segundos">
+          <source src="/assets/clow-demo-45s.mp4" type="video/mp4">
+          Seu navegador não suporta vídeo HTML5.
+          <a href="/assets/clow-demo-45s.mp4">Baixar video</a>
+        </video>
       </div>
     </div>
   </div>

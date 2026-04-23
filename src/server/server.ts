@@ -486,7 +486,7 @@ async function main(): Promise<void> {
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath);
       const ext = path.extname(filePath).toLowerCase();
-      const types: Record<string,string> = { '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.css':'text/css', '.js':'text/javascript' };
+      const types: Record<string,string> = { '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.webp':'image/webp', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.css':'text/css', '.js':'text/javascript', '.mp4':'video/mp4', '.webm':'video/webm', '.ogg':'video/ogg', '.mp3':'audio/mpeg', '.wav':'audio/wav', '.m4a':'audio/mp4' };
       return new Response(content, { headers: { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' } });
     }
     return c.notFound();
