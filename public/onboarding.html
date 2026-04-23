@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Clow — Configuração inicial</title>
+<style>
+:root{--bg:#08081a;--bg-2:#0F0F24;--bg-3:#14142A;--text:#E8E8F0;--text-dim:#9898B8;--text-faint:#6E6E8C;--purple:#9B59FC;--blue:#4A9EFF;--green:#22C55E;--red:#EF4444;--border:rgba(255,255,255,.08);--border-2:rgba(155,89,252,.22);--grad:linear-gradient(135deg,#9B59FC,#4A9EFF)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.wrap{max-width:640px;margin:0 auto;min-height:100vh;padding:40px 20px;display:flex;flex-direction:column}
+.brand{text-align:center;margin-bottom:32px}
+.brand svg{height:38px;filter:drop-shadow(0 2px 8px rgba(155,89,252,.4))}
+.progress{display:flex;gap:6px;margin-bottom:32px}
+.step-dot{flex:1;height:5px;border-radius:99px;background:var(--bg-3);transition:background .3s ease}
+.step-dot.done{background:var(--grad)}
+.step-dot.current{background:var(--grad);box-shadow:0 0 12px rgba(155,89,252,.5)}
+.card{background:var(--bg-2);border:1px solid var(--border);border-radius:18px;padding:36px;flex:1}
+.step{display:none}
+.step.active{display:block}
+.step h1{font-size:26px;margin:0 0 10px;line-height:1.2;letter-spacing:-.01em}
+.step h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.step .sub{color:var(--text-dim);font-size:15px;margin:0 0 26px;line-height:1.55}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.field label{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.field input,.field select,.field textarea{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;transition:border-color .15s ease,box-shadow .15s ease}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(155,89,252,.15)}
+.field .hint{font-size:11px;color:var(--text-faint)}
+.btn-row{display:flex;gap:10px;margin-top:26px;justify-content:space-between;align-items:center}
+.btn{padding:13px 24px;border-radius:11px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;border:none;transition:transform .15s ease,box-shadow .15s ease}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 20px rgba(155,89,252,.3)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 28px rgba(155,89,252,.42)}
+.btn-primary:disabled{opacity:.5;cursor:wait}
+.btn-skip{background:transparent;color:var(--text-dim);padding:13px 16px}
+.btn-skip:hover{color:var(--text)}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.choice-card{background:var(--bg);border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;text-align:center;transition:all .18s ease}
+.choice-card:hover{border-color:var(--border-2)}
+.choice-card.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(155,89,252,.1),var(--bg))}
+.choice-card .ico{font-size:30px;margin-bottom:8px}
+.choice-card .name{font-weight:700;font-size:14px;margin-bottom:4px}
+.choice-card .desc{font-size:11px;color:var(--text-dim);line-height:1.4}
+.template-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;cursor:pointer;transition:all .15s ease}
+.template-card:hover{border-color:var(--border-2);background:var(--bg-3)}
+.template-card input{flex-shrink:0;margin-top:3px;accent-color:var(--purple)}
+.template-card .t-name{font-weight:600;font-size:13px;color:var(--text)}
+.template-card .t-desc{font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.4}
+.webhook-box{background:rgba(155,89,252,.06);border:1px solid var(--border-2);border-radius:10px;padding:14px;margin:14px 0;font-size:12px}
+.webhook-box .lbl{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600}
+.webhook-box .url{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:monospace;font-size:11px;word-break:break-all;user-select:all}
+.copy-btn{margin-top:6px;padding:6px 12px;background:var(--grad);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
+.success{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);padding:20px;border-radius:12px;text-align:center;margin-bottom:20px}
+.success .big{font-size:56px;margin-bottom:10px}
+.success h2{margin:0 0 10px;color:var(--green)}
+.success p{color:var(--text-dim);margin:0;font-size:13px}
+.err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin:10px 0;display:none}
+.err.show{display:block}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.two-col{grid-template-columns:1fr}.choice{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <svg viewBox="0 0 240 120" fill="none">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs>
+      <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z" stroke="url(#g)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <div class="progress">
+    <div class="step-dot current" data-step="1"></div>
+    <div class="step-dot" data-step="2"></div>
+    <div class="step-dot" data-step="3"></div>
+    <div class="step-dot" data-step="4"></div>
+  </div>
+
+  <div class="card">
+    <!-- STEP 1: Welcome -->
+    <div class="step active" data-step="1">
+      <h1>Bem-vindo ao <span class="grad">System Clow</span>, <span id="firstName">amigo</span>!</h1>
+      <p class="sub">Vamos configurar seu workspace em 3 minutos. Você vai sair com CRM + WhatsApp + automações rodando.</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;margin:20px 0">
+        <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:10px">O que vamos fazer:</div>
+        <div style="font-size:13px;color:var(--text-dim);line-height:2">
+          1. ✅ Confirmar seus telefones autorizados<br>
+          2. 📱 Conectar seu canal WhatsApp (Meta ou Z-API)<br>
+          3. ⚡ Instalar automações prontas (opcional)<br>
+          4. 🚀 Pronto pra atender
+        </div>
+      </div>
+      <div class="btn-row">
+        <span></span>
+        <button class="btn btn-primary" onclick="goStep(2)">Começar →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Authorized phones -->
+    <div class="step" data-step="2">
+      <h1>Telefones autorizados</h1>
+      <p class="sub">Só esses números podem comandar sua IA pelo WhatsApp. Seu número do cadastro já tá liberado.</p>
+      <div id="phoneList"></div>
+      <div class="field">
+        <label>Adicionar outro telefone (opcional)</label>
+        <input type="tel" id="newPhone" placeholder="(21) 99999-8888" autocomplete="tel">
+        <div class="hint">Ex: sócio, assistente, outro celular seu. Deixe vazio se só você vai usar.</div>
+      </div>
+      <button class="btn" style="background:var(--bg-3);color:var(--text);font-size:12px;padding:9px 16px" onclick="addPhone()">+ Adicionar</button>
+      <div class="err" id="err2"></div>
+      <div class="btn-row">
+        <button class="btn btn-skip" onclick="goStep(1)">← Voltar</button>
+        <button class="btn btn-primary" onclick="savePhonesAndGo()">Próximo →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Channel WA -->
+    <div class="step" data-step="3">
+      <h1>Conecte seu WhatsApp</h1>
+      <p class="sub">Escolha o provedor. Se não souber, vá de Meta (oficial, grátis até 1000 conversas/mês).</p>
+      <div class="choice">
+        <div class="choice-card selected" data-provider="meta" onclick="selectProvider('meta')">
+          <div class="ico">📘</div>
+          <div class="name">Meta Cloud API</div>
+          <div class="desc">Oficial. Grátis até 1000 conversas. Aprovado Meta.</div>
+        </div>
+        <div class="choice-card" data-provider="zapi" onclick="selectProvider('zapi')">
+          <div class="ico">⚡</div>
+          <div class="name">Z-API</div>
+          <div class="desc">BR. Simples. QR code. Sem aprovação.</div>
+        </div>
+      </div>
+
+      <div id="metaFields">
+        <div class="two-col">
+          <div class="field">
+            <label>Phone Number ID</label>
+            <input type="text" id="metaPhoneId" placeholder="ex: REDACTED_PHONE_ID">
+            <div class="hint">Meta Business → WhatsApp → Configuração da API.</div>
+          </div>
+          <div class="field">
+            <label>Access Token</label>
+            <input type="text" id="metaToken" placeholder="EAAM...">
+            <div class="hint">Token permanente (System User recomendado).</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="zapiFields" style="display:none">
+        <div class="two-col">
+          <div class="field">
+            <label>Instance ID</label>
+            <input type="text" id="zapiInstance" placeholder="ex: 3A2F8B...">
+          </div>
+          <div class="field">
+            <label>Token</label>
+            <input type="text" id="zapiToken" placeholder="token da instância">
+          </div>
+        </div>
+        <div class="field">
+          <label>Client-Token (opcional)</label>
+          <input type="text" id="zapiClient" placeholder="deixa vazio se não usa">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Nome do canal</label>
+        <input type="text" id="channelName" placeholder="WA Vendas" value="Meu WhatsApp">
+      </div>
+
+      <div class="webhook-box">
+        <div class="lbl">🔗 Webhook URL (cole no painel do provedor DEPOIS de clicar "Conectar")</div>
+        <div class="url" id="webhookPreview">https://system-clow.pvcorretor01.com.br/webhooks/crm/meta/[será gerado]</div>
+        <button class="copy-btn" onclick="copyWebhook()">Copiar</button>
+      </div>
+      <div id="verifyTokenBlock" class="webhook-box" style="display:block">
+        <div class="lbl">🔑 Verify Token (cole no campo "Verificar token" do Meta)</div>
+        <div class="url" id="verifyTokenPreview"></div>
+        <button class="copy-btn" onclick="copyVerify()">Copiar</button>
+      </div>
+
+      <div class="err" id="err3"></div>
+      <div class="btn-row">
+        <button class="btn btn-skip" onclick="goStep(2)">← Voltar</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-skip" onclick="goStep(4)">Pular por agora</button>
+          <button class="btn btn-primary" id="connectBtn" onclick="connectChannel()">Conectar →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4: Automations + finish -->
+    <div class="step" data-step="4">
+      <h1>Automações prontas</h1>
+      <p class="sub">Marque as que quer instalar. Você pode criar/desativar depois.</p>
+      <div id="templatesList"></div>
+      <div class="err" id="err4"></div>
+      <div class="btn-row">
+        <button class="btn btn-skip" onclick="goStep(3)">← Voltar</button>
+        <button class="btn btn-primary" id="finishBtn" onclick="finishOnboarding()">Finalizar →</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: Success -->
+    <div class="step" data-step="5">
+      <div class="success">
+        <div class="big">🎉</div>
+        <h2>Tudo pronto!</h2>
+        <p>Seu workspace tá rodando. Redirecionando em 3s...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = {
+  token: localStorage.getItem('clow_token') || '',
+  user: null,
+  authorizedPhones: [],
+  provider: 'meta',
+  webhookSecret: crypto.randomUUID ? crypto.randomUUID().replace(/-/g,'') : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2),
+  verifyToken: 'clow_verify_' + Math.random().toString(36).slice(2,10),
+  channelId: null,
+  selectedTemplates: new Set(['auto_qualify_on_keyword', 'welcome_new_lead']),
+};
+
+async function api(path, opts={}) {
+  const h = { 'Authorization': 'Bearer ' + state.token, ...(opts.headers || {}) };
+  if (!(opts.body instanceof FormData)) {
+    h['Content-Type'] = 'application/json';
+    if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+  }
+  const r = await fetch(path, { ...opts, headers: h });
+  if (r.status === 204) return null;
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(d.message || d.error || 'http_' + r.status);
+  return d;
+}
+
+async function init() {
+  if (!state.token) { location.href = '/signup'; return; }
+  try {
+    const me = await api('/auth/me');
+    state.user = me.user;
+    state.authorizedPhones = me.user.authorized_phones || [];
+    document.getElementById('firstName').textContent = (state.user.name || '').split(' ')[0] || 'amigo';
+    renderPhones();
+    updateWebhookPreview();
+    loadTemplates();
+  } catch (err) {
+    localStorage.removeItem('clow_token');
+    location.href = '/signup';
+  }
+}
+
+function renderPhones() {
+  const list = document.getElementById('phoneList');
+  list.innerHTML = '';
+  state.authorizedPhones.forEach((phone, idx) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px';
+    div.innerHTML = '<span style="flex:1;font-family:monospace">📱 +' + phone + '</span>';
+    if (idx > 0 || state.authorizedPhones.length > 1) {
+      const rm = document.createElement('button');
+      rm.textContent = '✕';
+      rm.style.cssText = 'background:transparent;border:1px solid var(--border);color:var(--text-dim);width:28px;height:28px;border-radius:6px;cursor:pointer';
+      rm.onclick = () => { state.authorizedPhones.splice(idx, 1); renderPhones(); };
+      div.appendChild(rm);
+    }
+    list.appendChild(div);
+  });
+}
+
+function addPhone() {
+  const inp = document.getElementById('newPhone');
+  const digits = inp.value.replace(/\D/g,'');
+  if (digits.length < 10) { document.getElementById('err2').textContent = 'Telefone inválido (mín 10 dígitos)'; document.getElementById('err2').classList.add('show'); return; }
+  const full = digits.startsWith('55') ? digits : '55' + digits;
+  if (state.authorizedPhones.includes(full)) { document.getElementById('err2').textContent = 'Já está na lista'; document.getElementById('err2').classList.add('show'); return; }
+  state.authorizedPhones.push(full);
+  inp.value = '';
+  document.getElementById('err2').classList.remove('show');
+  renderPhones();
+}
+
+async function savePhonesAndGo() {
+  try {
+    await api('/auth/authorized-phones', { method: 'POST', body: { phones: state.authorizedPhones } });
+    goStep(3);
+  } catch (err) {
+    document.getElementById('err2').textContent = err.message;
+    document.getElementById('err2').classList.add('show');
+  }
+}
+
+function selectProvider(p) {
+  state.provider = p;
+  document.querySelectorAll('.choice-card').forEach(c => c.classList.toggle('selected', c.dataset.provider === p));
+  document.getElementById('metaFields').style.display = p === 'meta' ? '' : 'none';
+  document.getElementById('zapiFields').style.display = p === 'zapi' ? '' : 'none';
+  document.getElementById('verifyTokenBlock').style.display = p === 'meta' ? '' : 'none';
+  updateWebhookPreview();
+}
+
+function updateWebhookPreview() {
+  document.getElementById('webhookPreview').textContent = location.origin + '/webhooks/crm/' + state.provider + '/' + state.webhookSecret;
+  document.getElementById('verifyTokenPreview').textContent = state.verifyToken;
+}
+
+function copyWebhook() {
+  navigator.clipboard.writeText(document.getElementById('webhookPreview').textContent);
+  event.target.textContent = 'Copiado!';
+  setTimeout(() => event.target.textContent = 'Copiar', 1500);
+}
+function copyVerify() {
+  navigator.clipboard.writeText(document.getElementById('verifyTokenPreview').textContent);
+  event.target.textContent = 'Copiado!';
+  setTimeout(() => event.target.textContent = 'Copiar', 1500);
+}
+
+async function connectChannel() {
+  // First exchange System Clow token → CRM api_key
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true; btn.textContent = 'Conectando...';
+  const errEl = document.getElementById('err3');
+  errEl.classList.remove('show');
+
+  try {
+    const ex = await api('/v1/crm/auth/exchange', { method: 'POST' });
+    const crmKey = ex.api_key;
+    localStorage.setItem('clow_crm_key', crmKey);
+
+    const creds = state.provider === 'meta' ? {
+      accessToken: document.getElementById('metaToken').value.trim(),
+      phoneNumberId: document.getElementById('metaPhoneId').value.trim(),
+      verifyToken: state.verifyToken,
+      apiVersion: 'v22.0',
+    } : {
+      instanceId: document.getElementById('zapiInstance').value.trim(),
+      token: document.getElementById('zapiToken').value.trim(),
+      clientToken: document.getElementById('zapiClient').value.trim() || undefined,
+    };
+
+    if (state.provider === 'meta' && (!creds.accessToken || !creds.phoneNumberId)) {
+      throw new Error('Preencha Access Token e Phone Number ID.');
+    }
+    if (state.provider === 'zapi' && (!creds.instanceId || !creds.token)) {
+      throw new Error('Preencha Instance ID e Token.');
+    }
+
+    const chResp = await fetch('/v1/crm/channels', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + crmKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: state.provider,
+        name: document.getElementById('channelName').value.trim() || 'Meu WhatsApp',
+        credentials: creds,
+        webhookSecret: state.webhookSecret,
+      }),
+    });
+    const ch = await chResp.json();
+    if (!chResp.ok) throw new Error(ch.message || 'Erro ao criar canal');
+    state.channelId = ch.channel.id;
+    goStep(4);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Conectar →';
+  }
+}
+
+async function loadTemplates() {
+  try {
+    const crmKey = localStorage.getItem('clow_crm_key');
+    if (!crmKey) return;
+    const r = await fetch('/v1/crm/automations/templates', { headers: { 'Authorization': 'Bearer ' + crmKey } });
+    const d = await r.json();
+    const list = document.getElementById('templatesList');
+    list.innerHTML = '';
+    (d.templates || []).forEach(t => {
+      const label = document.createElement('label');
+      label.className = 'template-card';
+      const checked = state.selectedTemplates.has(t.key);
+      label.innerHTML = '<input type="checkbox" value="' + t.key + '" ' + (checked ? 'checked' : '') + '><div><div class="t-name">' + t.name + '</div><div class="t-desc">' + t.description + '</div></div>';
+      label.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) state.selectedTemplates.add(t.key);
+        else state.selectedTemplates.delete(t.key);
+      });
+      list.appendChild(label);
+    });
+  } catch {}
+}
+
+async function finishOnboarding() {
+  const btn = document.getElementById('finishBtn');
+  btn.disabled = true; btn.textContent = 'Instalando...';
+  try {
+    const crmKey = localStorage.getItem('clow_crm_key');
+    if (crmKey) {
+      for (const key of state.selectedTemplates) {
+        await fetch('/v1/crm/automations/install-template', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + crmKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+      }
+    }
+    // Mark onboarding complete via user profile update — TODO: add endpoint
+    goStep(5);
+    setTimeout(() => location.href = '/', 3000);
+  } catch (err) {
+    document.getElementById('err4').textContent = err.message;
+    document.getElementById('err4').classList.add('show');
+    btn.disabled = false; btn.textContent = 'Finalizar →';
+  }
+}
+
+function goStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', +s.dataset.step === n));
+  document.querySelectorAll('.step-dot').forEach(d => {
+    const dn = +d.dataset.step;
+    d.classList.toggle('done', dn < n);
+    d.classList.toggle('current', dn === n);
+  });
+  window.scrollTo(0, 0);
+}
+
+init();
+</script>
+</body>
+</html>

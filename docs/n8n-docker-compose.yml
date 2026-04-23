@@ -1,0 +1,93 @@
+# n8n self-hosted para System Clow SaaS
+#
+# Deploy:
+#   scp n8n-docker-compose.yml root@<vps-ip>:/opt/n8n/
+#   ssh root@<vps-ip> "cd /opt/n8n && docker compose up -d"
+#
+# URL pública: https://n8n.pvcorretor01.com.br (nginx proxy pra 127.0.0.1:5678)
+# Auth: basic (N8N_BASIC_AUTH_USER + PASSWORD) ou OAuth/SSO depois
+#
+# Integração com System Clow:
+#   - cada tenant recebe credenciais n8n com prefixo tenant_{id}
+#   - workflows são criados via API do n8n (POST /rest/workflows)
+#   - webhooks de workflows apontam pra System Clow endpoints:
+#     POST /webhooks/n8n/{tenantId}/{flowSecret}
+
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_HOST=n8n.pvcorretor01.com.br
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - WEBHOOK_URL=https://n8n.pvcorretor01.com.br/
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      # Auth — trocar em produção
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASS:-troque_isso_urgente}
+      # Postgres externo (recomendado pra produção)
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-postgres
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASS:-n8n_secure_pass}
+      # Execução
+      - EXECUTIONS_PROCESS=main
+      - EXECUTIONS_MODE=regular
+      - N8N_METRICS=true
+      # Dar acesso à API REST interna (pra System Clow criar workflows programaticamente)
+      - N8N_PUBLIC_API_DISABLED=false
+      - N8N_PUBLIC_API_ENDPOINT=api
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./custom:/home/node/.n8n/custom
+    depends_on:
+      - n8n-postgres
+
+  n8n-postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${N8N_DB_PASS:-n8n_secure_pass}
+      - POSTGRES_DB=n8n
+    volumes:
+      - n8n_pg:/var/lib/postgresql/data
+
+volumes:
+  n8n_data:
+  n8n_pg:
+
+# ─── Nginx config snippet (adicionar em /etc/nginx/sites-enabled/n8n) ────
+#
+# server {
+#   listen 443 ssl http2;
+#   server_name n8n.pvcorretor01.com.br;
+#   ssl_certificate     /etc/letsencrypt/live/n8n.pvcorretor01.com.br/fullchain.pem;
+#   ssl_certificate_key /etc/letsencrypt/live/n8n.pvcorretor01.com.br/privkey.pem;
+#
+#   client_max_body_size 100M;
+#
+#   location / {
+#     proxy_pass http://127.0.0.1:5678;
+#     proxy_http_version 1.1;
+#     proxy_set_header Upgrade $http_upgrade;
+#     proxy_set_header Connection "upgrade";
+#     proxy_set_header Host $host;
+#     proxy_set_header X-Real-IP $remote_addr;
+#     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#     proxy_set_header X-Forwarded-Proto $scheme;
+#     proxy_read_timeout 120s;
+#   }
+# }
+#
+# Após deploy:
+#   certbot --nginx -d n8n.pvcorretor01.com.br
+#   systemctl reload nginx

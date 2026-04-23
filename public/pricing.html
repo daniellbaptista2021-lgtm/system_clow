@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Clow — Planos e Preços</title>
+<meta name="description" content="Escolha seu plano. Substitui Pipedrive + WhatsApp Business + Make com IA nativa. A partir de R$ 197/mês.">
+<style>
+:root{--bg:#08081a;--bg-2:#0F0F24;--bg-3:#14142A;--text:#E8E8F0;--text-dim:#9898B8;--text-faint:#6E6E8C;--purple:#9B59FC;--blue:#4A9EFF;--green:#22C55E;--red:#EF4444;--border:rgba(255,255,255,.08);--border-2:rgba(155,89,252,.25);--grad:linear-gradient(135deg,#9B59FC,#4A9EFF);--grad-soft:linear-gradient(135deg,rgba(155,89,252,.15),rgba(74,158,255,.15))}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5;scroll-behavior:smooth}
+a{color:inherit;text-decoration:none}
+
+nav{position:sticky;top:0;z-index:50;background:rgba(8,8,26,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-in{max-width:1100px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{height:30px}
+.brand-name{font-weight:700;font-size:15px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav-link{color:var(--text-dim);font-size:13px;margin-right:18px}
+.nav-link:hover{color:var(--text)}
+.nav-cta{display:flex;gap:10px;align-items:center}
+.btn{display:inline-flex;align-items:center;padding:10px 20px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;border:none;font-family:inherit;transition:transform .15s ease,box-shadow .15s ease;text-decoration:none}
+.btn-p{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(155,89,252,.3)}
+.btn-p:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(155,89,252,.4)}
+.btn-s{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-s:hover{border-color:var(--purple)}
+
+.hero{max-width:1100px;margin:0 auto;padding:70px 24px 30px;text-align:center;position:relative}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(50% 50% at 50% 30%,rgba(155,89,252,.1),transparent);z-index:-1}
+.hero h1{font-size:clamp(34px,5vw,52px);margin:0 0 18px;line-height:1.1;letter-spacing:-.02em;font-weight:800}
+.hero h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:17px;color:var(--text-dim);max-width:640px;margin:0 auto 30px}
+.badge{display:inline-block;padding:6px 14px;background:var(--grad-soft);border:1px solid var(--border-2);border-radius:99px;font-size:12px;font-weight:600;color:var(--purple);margin-bottom:24px}
+
+.plans{max-width:1180px;margin:0 auto;padding:30px 24px 70px;display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:20px}
+.plan{background:var(--bg-2);border:1px solid var(--border);border-radius:18px;padding:32px;position:relative;display:flex;flex-direction:column;gap:16px;transition:all .25s ease}
+.plan:hover{border-color:var(--border-2);transform:translateY(-4px);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.plan.featured{border-color:var(--purple);background:linear-gradient(180deg,rgba(155,89,252,.08),var(--bg-2));box-shadow:0 0 0 3px rgba(155,89,252,.15),0 24px 70px rgba(155,89,252,.18)}
+.plan.featured::before{content:"MAIS ESCOLHIDO";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;padding:4px 16px;border-radius:99px;font-size:10px;font-weight:800;letter-spacing:1.5px;box-shadow:0 4px 14px rgba(155,89,252,.4)}
+.p-name{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--purple);text-transform:uppercase}
+.p-price{display:flex;align-items:baseline;gap:6px}
+.p-val{font-size:44px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.02em}
+.p-per{color:var(--text-dim);font-size:14px}
+.p-sub{color:var(--text-dim);font-size:13px;margin-top:-6px}
+.p-feat{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:9px;flex:1}
+.p-feat li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--text-dim)}
+.p-feat li::before{content:"✓";color:var(--green);font-weight:800;flex-shrink:0}
+.p-feat li.s{color:var(--text);font-weight:600}
+.p-cta{display:block;width:100%;text-align:center;padding:13px;border-radius:11px;font-weight:700;font-size:14px;text-decoration:none;transition:all .18s ease}
+.plan .p-cta{background:transparent;color:var(--text);border:1px solid var(--border)}
+.plan .p-cta:hover{border-color:var(--purple);color:var(--purple)}
+.plan.featured .p-cta{background:var(--grad);color:#fff;border:none;box-shadow:0 6px 20px rgba(155,89,252,.3)}
+.plan.featured .p-cta:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(155,89,252,.45)}
+
+.compare{max-width:1100px;margin:0 auto;padding:60px 24px;border-top:1px solid var(--border)}
+.compare h2{font-size:clamp(24px,3vw,32px);text-align:center;margin:0 0 12px;letter-spacing:-.01em}
+.compare > p{text-align:center;color:var(--text-dim);margin:0 0 40px;font-size:15px}
+.tbl{background:var(--bg-2);border:1px solid var(--border);border-radius:14px;overflow:hidden;border-collapse:separate;border-spacing:0;width:100%}
+.tbl th,.tbl td{padding:14px 18px;text-align:left;border-bottom:1px solid var(--border);font-size:13.5px}
+.tbl th{background:var(--bg-3);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.tbl td{color:var(--text-dim)}
+.tbl td:first-child{color:var(--text);font-weight:500}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .yes{color:var(--green);font-weight:700}
+.tbl .no{color:var(--text-faint)}
+.tbl .highlight{background:rgba(155,89,252,.04)}
+
+.faq{max-width:780px;margin:0 auto;padding:50px 24px 100px}
+.faq h2{font-size:clamp(24px,3vw,30px);text-align:center;margin:0 0 30px}
+.faq-item{background:var(--bg-2);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.faq-item summary{padding:18px 22px;font-size:14px;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.faq-item summary::after{content:"+";font-size:20px;color:var(--purple);font-weight:300}
+.faq-item[open] summary::after{content:"−"}
+.faq-item p{margin:0;padding:0 22px 20px;color:var(--text-dim);font-size:13.5px;line-height:1.7}
+
+footer{border-top:1px solid var(--border);padding:30px 24px;text-align:center;color:var(--text-faint);font-size:12px}
+
+@media(max-width:680px){
+  .plans{grid-template-columns:1fr}
+  .tbl{font-size:12px}
+  .tbl th,.tbl td{padding:10px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand">
+      <svg viewBox="0 0 240 120" fill="none" aria-label="System Clow">
+        <defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs>
+        <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z" stroke="url(#pg)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">System Clow</span>
+    </div>
+    <div class="nav-cta">
+      <a href="#compare" class="nav-link">Comparar</a>
+      <a href="#faq" class="nav-link">FAQ</a>
+      <a href="/" class="btn btn-s">Entrar</a>
+      <a href="/signup" class="btn btn-p">Começar →</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="badge">💸 30% mais barato que Pipedrive + WhatsApp Business + Make juntos</div>
+  <h1>Escolha o plano certo pra<br><span class="g">vender mais com menos esforço</span></h1>
+  <p>Sem fidelidade · Cancela quando quiser · Reembolso em 7 dias · Upgrade a qualquer momento</p>
+</section>
+
+<section class="plans">
+  <div class="plan">
+    <div class="p-name">Starter</div>
+    <div class="p-price"><span class="p-val">R$ 197</span><span class="p-per">/mês</span></div>
+    <div class="p-sub">Autônomos + pequenos negócios começando agora.</div>
+    <ul class="p-feat">
+      <li class="s">1 usuário / 1 número WhatsApp</li>
+      <li class="s">500 mensagens IA/mês</li>
+      <li>Até 500 contatos no CRM</li>
+      <li>2 boards no kanban</li>
+      <li>5 automações ativas</li>
+      <li>Cobrança recorrente com lembretes WA</li>
+      <li>1 fluxo n8n + chatbot 24/7</li>
+      <li>Suporte por email</li>
+    </ul>
+    <a href="/signup?plan=starter" class="p-cta">Começar Starter</a>
+  </div>
+
+  <div class="plan featured">
+    <div class="p-name">Profissional</div>
+    <div class="p-price"><span class="p-val">R$ 497</span><span class="p-per">/mês</span></div>
+    <div class="p-sub">Equipes pequenas/médias que já vendem de verdade.</div>
+    <ul class="p-feat">
+      <li class="s">5 usuários / 3 números WhatsApp</li>
+      <li class="s">3.000 mensagens IA/mês</li>
+      <li>Até 5.000 contatos</li>
+      <li>10 boards no kanban</li>
+      <li>30 automações ativas</li>
+      <li>Relatórios avançados</li>
+      <li>4 fluxos n8n + chatbots 24/7</li>
+      <li>Suporte WhatsApp + email</li>
+      <li>API + Webhooks customizados</li>
+    </ul>
+    <a href="/signup?plan=profissional" class="p-cta">Começar Profissional</a>
+  </div>
+
+  <div class="plan">
+    <div class="p-name">Empresarial</div>
+    <div class="p-price"><span class="p-val">R$ 1.197</span><span class="p-per">/mês</span></div>
+    <div class="p-sub">Empresas que querem white-label e operação completa.</div>
+    <ul class="p-feat">
+      <li class="s">20 usuários / 10 números WhatsApp</li>
+      <li class="s">8.000 mensagens IA/mês</li>
+      <li>Até 50.000 contatos</li>
+      <li>30 boards no kanban</li>
+      <li>100 automações ativas</li>
+      <li>8 fluxos n8n + chatbots 24/7</li>
+      <li>White-label (logo + cores)</li>
+      <li>Domínio próprio (crm.suaempresa.com.br)</li>
+      <li>Suporte dedicado WhatsApp 24/7</li>
+      <li>SLA 99.9%</li>
+    </ul>
+    <a href="/signup?plan=empresarial" class="p-cta">Começar Empresarial</a>
+  </div>
+</section>
+
+<section class="compare" id="compare">
+  <h2>Compare todos os planos</h2>
+  <p>Sem letra miúda. Mesma IA, mesmos recursos core. O que muda é escala.</p>
+  <div style="overflow-x:auto">
+  <table class="tbl">
+    <thead>
+      <tr><th style="width:40%">Recurso</th><th>Starter</th><th>Profissional</th><th>Empresarial</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Preço mensal</td><td>R$ 197</td><td>R$ 497</td><td>R$ 1.197</td></tr>
+      <tr class="highlight"><td>Usuários</td><td>1</td><td>5</td><td>20</td></tr>
+      <tr class="highlight"><td>Números WhatsApp</td><td>1</td><td>3</td><td>10</td></tr>
+      <tr class="highlight"><td>Mensagens IA/mês</td><td>500</td><td>3.000</td><td>8.000</td></tr>
+      <tr><td>Excedente por mensagem</td><td>R$ 0,20</td><td>R$ 0,15</td><td>R$ 0,12</td></tr>
+      <tr><td>Contatos no CRM</td><td>500</td><td>5.000</td><td>50.000</td></tr>
+      <tr><td>Boards no Kanban</td><td>2</td><td>10</td><td>30</td></tr>
+      <tr><td>Automações ativas</td><td>5</td><td>30</td><td>100</td></tr>
+      <tr class="highlight"><td>Fluxos N8N</td><td>1</td><td>4</td><td>8</td></tr>
+      <tr><td>Cobrança recorrente</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Inventário/produtos</td><td>50</td><td>500</td><td>5.000</td></tr>
+      <tr><td>Histórico de mensagens</td><td>90 dias</td><td>1 ano</td><td>2 anos</td></tr>
+      <tr><td>Atribuição automática</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>Métricas por agente</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr><td>API + Webhooks</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+      <tr class="highlight"><td>White-label (logo + cores)</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td></tr>
+      <tr class="highlight"><td>Domínio próprio</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td></tr>
+      <tr><td>Suporte</td><td>Email</td><td>WhatsApp + email</td><td>Dedicado 24/7</td></tr>
+      <tr><td>SLA uptime</td><td>99%</td><td>99.5%</td><td>99.9%</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <h2>Perguntas frequentes</h2>
+  <details class="faq-item"><summary>Tem fidelidade?</summary>
+    <p>Não. Você paga mensal e cancela quando quiser direto no painel. Sem multa. Se cancelar no meio do mês, você continua usando até o fim do período já pago.</p>
+  </details>
+  <details class="faq-item"><summary>Posso testar antes de pagar?</summary>
+    <p>Sim: reembolso total em até 7 dias. Se não te servir, você pede refund e recebe o valor integral.</p>
+  </details>
+  <details class="faq-item"><summary>O que acontece quando estouro o limite de mensagens?</summary>
+    <p>Você tem 100% de "zona de excedente" — se o limite é 500, tá tudo liberado até 1000. Cada mensagem extra custa o valor da tabela (R$ 0,12 a R$ 0,20). Passou de 2× o plano, a IA para de responder até virar o mês ou você fazer upgrade. Aviso automático por WhatsApp 80% e 100%.</p>
+  </details>
+  <details class="faq-item"><summary>A IA responde em português?</summary>
+    <p>Sim, de forma nativa. Ela aprende seu negócio lendo as conversas + notas que você vai criando no CRM. Quanto mais você usa, mais personalizada ela fica.</p>
+  </details>
+  <details class="faq-item"><summary>Meu WhatsApp pessoal vai ficar exposto?</summary>
+    <p>Não. Cada plano tem N números WhatsApp — são números de empresa separados (via Meta Cloud API ou Z-API). Seu WhatsApp pessoal só é "autorizado" pra você comandar a IA (ex: "cria um card pro João", "manda oferta pro lead frio"). Ninguém de fora pode invocar a IA pelo seu celular pessoal.</p>
+  </details>
+  <details class="faq-item"><summary>Posso migrar meu CRM atual pra cá?</summary>
+    <p>Sim. Importação via CSV (contatos) e API (pra migração completa). Empresarial tem onboarding dedicado: 1h com nosso time pra trazer seus dados.</p>
+  </details>
+  <details class="faq-item"><summary>O n8n tá incluso mesmo? Como funciona?</summary>
+    <p>Sim, incluso. Do Starter ao Empresarial você ganha 1, 4 ou 8 fluxos já prontos (atendimento 24/7, qualificação automática, cobrança, NPS, aniversariantes, etc). Você escolhe quais instalar no onboarding. Se quiser criar fluxo custom, também dá.</p>
+  </details>
+  <details class="faq-item"><summary>Empresarial: como funciona o white-label e domínio próprio?</summary>
+    <p>Você configura no painel: logo, cores primária e secundária, nome da marca. O app inteiro (CRM, signup, emails) passa a usar sua identidade visual. Domínio próprio tipo crm.suaempresa.com.br é apontado via CNAME — nosso time configura o SSL pra você.</p>
+  </details>
+  <details class="faq-item"><summary>Posso fazer upgrade/downgrade depois?</summary>
+    <p>A qualquer momento. Upgrade é imediato (paga a diferença proporcional). Downgrade vigora no próximo ciclo (sem perder nenhum dado).</p>
+  </details>
+</section>
+
+<footer>System Clow © 2026 · <a href="#" style="color:var(--text-dim)">Termos</a> · <a href="#" style="color:var(--text-dim)">Privacidade</a></footer>
+
+</body>
+</html>

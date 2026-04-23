@@ -468,7 +468,7 @@ form.addEventListener('submit', async (e) => {
     // Success: save token + redirect
     localStorage.setItem('clow_token', resp.token);
     showSuccess('<strong>✓ Conta criada!</strong><br>Te redirecionando pro System Clow...');
-    setTimeout(() => { location.href = '/'; }, 1500);
+    setTimeout(() => { location.href = '/onboarding'; }, 1500);
 
   } catch (err) {
     showError('Erro de conexão: ' + (err.message || 'desconhecido'));

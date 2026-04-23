@@ -400,6 +400,24 @@ async function main(): Promise<void> {
   });
   app.get('/crm', (c) => Response.redirect(new URL('/crm/', c.req.url).toString(), 302) as any);
 
+  app.get('/onboarding', async (c) => {
+    try {
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const file = pathMod.join(process.cwd(), 'public/onboarding.html');
+      const buf = fsMod.readFileSync(file);
+      return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
+    } catch (e: any) { return c.text('error: ' + e.message, 500); }
+  });
+  app.get('/pricing', async (c) => {
+    try {
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const file = pathMod.join(process.cwd(), 'public/pricing.html');
+      const buf = fsMod.readFileSync(file);
+      return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
+    } catch (e: any) { return c.text('error: ' + e.message, 500); }
+  });
   app.get('/signup', async (c) => {
     try {
       const fsMod = await import('fs');
