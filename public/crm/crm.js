@@ -282,8 +282,288 @@ function cardEl(card) {
   });
   c.addEventListener('dragend', () => c.classList.remove('dragging'));
   c.addEventListener('click', () => openCardPanel(card.id));
+  // Right-click: menu de contexto com acoes
+  c.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showCardContextMenu(card, e.clientX, e.clientY);
+  });
+  // Long-press no mobile: 550ms = abre menu centrado no dedo
+  let _lpTimer = null, _lpStart = null;
+  c.addEventListener('touchstart', (e) => {
+    const t = e.touches[0]; if (!t) return;
+    _lpStart = { x: t.clientX, y: t.clientY };
+    _lpTimer = setTimeout(() => {
+      if (_lpStart) { navigator.vibrate?.(20); showCardContextMenu(card, _lpStart.x, _lpStart.y); _lpStart = null; }
+    }, 550);
+  }, { passive: true });
+  c.addEventListener('touchmove', (e) => {
+    const t = e.touches[0]; if (!t || !_lpStart) return;
+    if (Math.abs(t.clientX - _lpStart.x) > 10 || Math.abs(t.clientY - _lpStart.y) > 10) {
+      clearTimeout(_lpTimer); _lpStart = null;
+    }
+  }, { passive: true });
+  c.addEventListener('touchend', () => { clearTimeout(_lpTimer); _lpStart = null; });
+  c.addEventListener('touchcancel', () => { clearTimeout(_lpTimer); _lpStart = null; });
   return c;
 }
+
+// ═══ CARD CONTEXT MENU (right-click + long-press) ═════════════════════════
+function ensureCtxMenuStyles() {
+  if (document.getElementById('ctx-menu-style')) return;
+  const st = document.createElement('style');
+  st.id = 'ctx-menu-style';
+  st.textContent = `
+.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,rgba(155,89,252,.3));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
+@keyframes ctxIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.ctx-menu .ctx-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--text,#E8E8F0);user-select:none;white-space:nowrap;position:relative}
+.ctx-menu .ctx-item:hover{background:linear-gradient(135deg,rgba(155,89,252,.14),rgba(74,158,255,.08))}
+.ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#9898B8);display:inline-flex;align-items:center;justify-content:center}
+.ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#9898B8);font-size:11px}
+.ctx-menu .ctx-item.ctx-danger{color:var(--red,#EF4444)}
+.ctx-menu .ctx-item.ctx-danger .ctx-ico{color:var(--red,#EF4444)}
+.ctx-menu .ctx-item.ctx-danger:hover{background:rgba(239,68,68,.12)}
+.ctx-menu .ctx-sep{height:1px;background:var(--border,rgba(255,255,255,.08));margin:4px 2px}
+.ctx-menu .ctx-header{padding:8px 12px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-faint,#6E6E8C);font-weight:700}
+.ctx-sub{padding:6px 12px;color:var(--text-dim,#9898B8);font-size:11.5px;font-style:italic}
+`;
+  document.head.appendChild(st);
+}
+
+let _ctxMenuEl = null;
+function closeCtxMenus() {
+  if (_ctxMenuEl) { _ctxMenuEl.remove(); _ctxMenuEl = null; }
+}
+document.addEventListener('click', (e) => {
+  if (_ctxMenuEl && !_ctxMenuEl.contains(e.target)) closeCtxMenus();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtxMenus(); });
+window.addEventListener('scroll', closeCtxMenus, true);
+
+function ctxItem(icon, label, onClick, opts = {}) {
+  const span = el('span', { class: 'ctx-ico', html: icon });
+  const item = el('div', { class: 'ctx-item' + (opts.danger ? ' ctx-danger' : '') }, span, label);
+  if (opts.submenu) item.append(el('span', { class: 'ctx-arrow' }, '›'));
+  item.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeCtxMenus();
+    onClick?.();
+  });
+  return item;
+}
+
+function ctxSep() { return el('div', { class: 'ctx-sep' }); }
+function ctxHeader(t) { return el('div', { class: 'ctx-header' }, t); }
+
+function showCardContextMenu(card, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+
+  const ICO_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+  const ICO_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const ICO_MONEY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const ICO_PCT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>';
+  const ICO_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const ICO_MOVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+  const ICO_WIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="20 6 9 17 4 12"/></svg>';
+  const ICO_LOSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const ICO_REPEAT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  const ICO_LABEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  const ICO_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const ICO_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  const menu = el('div', { class: 'ctx-menu' });
+  menu.append(
+    ctxHeader(truncate(card.title || 'Card', 30)),
+    ctxItem(ICO_OPEN, 'Abrir', () => openCardPanel(card.id)),
+    ctxItem(ICO_EDIT, 'Editar titulo', async () => {
+      const t = prompt('Novo titulo:', card.title || '');
+      if (t == null || t.trim() === card.title) return;
+      await patchCardSafe(card.id, { title: t.trim() });
+    }),
+    ctxSep(),
+    ctxItem(ICO_MONEY, 'Definir valor (R$)', async () => {
+      const current = ((card.valueCents || 0) / 100).toFixed(2);
+      const v = prompt('Valor em R$ (ex: 1500.00):', current);
+      if (v == null) return;
+      const cents = Math.round(parseFloat(String(v).replace(',', '.')) * 100);
+      if (!Number.isFinite(cents) || cents < 0) return toast('Valor invalido', 'error');
+      await patchCardSafe(card.id, { valueCents: cents });
+    }),
+    ctxItem(ICO_PCT, 'Definir probabilidade (%)', async () => {
+      const v = prompt('Probabilidade 0-100:', String(card.probability ?? 50));
+      if (v == null) return;
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 0 || n > 100) return toast('0-100', 'error');
+      await patchCardSafe(card.id, { probability: n });
+    }),
+    ctxItem(ICO_CAL, 'Definir vencimento', async () => {
+      const cur = card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 10) : '';
+      const v = prompt('Data de vencimento (YYYY-MM-DD):', cur);
+      if (v == null) return;
+      const ms = v.trim() ? Date.parse(v) : null;
+      if (v.trim() && !Number.isFinite(ms)) return toast('Data invalida', 'error');
+      await patchCardSafe(card.id, { dueDate: ms });
+    }),
+    ctxItem(ICO_LABEL, 'Etiquetas...', async () => {
+      const cur = (card.labels || []).join(', ');
+      const v = prompt('Etiquetas (separadas por virgula):', cur);
+      if (v == null) return;
+      const labels = v.split(',').map(s => s.trim()).filter(Boolean);
+      await patchCardSafe(card.id, { labels });
+    }),
+    ctxSep(),
+    ctxItem(ICO_USER, 'Atribuir agente...', () => showAssignSubmenu(card, x, y)),
+    ctxItem(ICO_MOVE, 'Mover para coluna...', () => showMoveSubmenu(card, x, y)),
+    ctxSep(),
+    ctxItem(ICO_WIN, 'Marcar como Ganho', () => markCardWon(card)),
+    ctxItem(ICO_LOSS, 'Marcar como Perdido', () => markCardLost(card)),
+    ctxSep(),
+    ctxItem(ICO_REPEAT, 'Criar cobranca mensal', () => createSubscriptionForCard(card)),
+    ctxSep(),
+    ctxItem(ICO_TRASH, 'Apagar card', async () => {
+      if (!confirm('Apagar o card "' + (card.title || '') + '"?')) return;
+      try {
+        await api('/cards/' + card.id, { method: 'DELETE' });
+        toast('Card apagado', 'success');
+        await refreshBoard();
+      } catch (err) { toast('Erro: ' + err.message, 'error'); }
+    }, { danger: true }),
+  );
+
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+function showAssignSubmenu(card, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+  const menu = el('div', { class: 'ctx-menu' });
+  menu.append(ctxHeader('Atribuir agente'));
+  const agents = (state.agents || []);
+  if (!agents.length) {
+    menu.append(el('div', { class: 'ctx-sub' }, 'Nenhum agente cadastrado'));
+  } else {
+    agents.forEach(a => {
+      menu.append(ctxItem('', a.name + (a.id === card.assignedAgentId ? ' (atual)' : ''), async () => {
+        await patchCardSafe(card.id, { assignedAgentId: a.id });
+      }));
+    });
+  }
+  menu.append(ctxSep(), ctxItem('', 'Remover atribuicao', async () => {
+    await patchCardSafe(card.id, { assignedAgentId: null });
+  }));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+function showMoveSubmenu(card, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+  const menu = el('div', { class: 'ctx-menu' });
+  menu.append(ctxHeader('Mover para coluna'));
+  const cols = state.pipeline?.columns || [];
+  if (!cols.length) menu.append(el('div', { class: 'ctx-sub' }, 'Sem colunas'));
+  cols.forEach(col => {
+    const isCurrent = col.id === card.columnId;
+    menu.append(ctxItem('', col.name + (isCurrent ? ' (atual)' : ''), async () => {
+      if (isCurrent) return;
+      try {
+        await api('/cards/' + card.id + '/move', { method: 'POST', body: { toColumnId: col.id } });
+        toast('Movido pra ' + col.name, 'success');
+        await refreshBoard();
+      } catch (err) { toast('Erro: ' + err.message, 'error'); }
+    }));
+  });
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+async function markCardWon(card) {
+  const cols = state.pipeline?.columns || [];
+  const won = cols.find(c => (c.stageType === 'won' || /ganho|fechado|won/i.test(c.name)));
+  if (!won) return toast('Coluna de Ganho nao encontrada. Crie uma.', 'error');
+  try {
+    await api('/cards/' + card.id + '/move', { method: 'POST', body: { toColumnId: won.id } });
+    toast('Parabens! Card marcado como Ganho', 'success');
+    await refreshBoard();
+  } catch (err) { toast('Erro: ' + err.message, 'error'); }
+}
+
+async function markCardLost(card) {
+  const cols = state.pipeline?.columns || [];
+  const lost = cols.find(c => (c.stageType === 'lost' || /perdido|lost/i.test(c.name)));
+  if (!lost) return toast('Coluna de Perdido nao encontrada. Crie uma.', 'error');
+  try {
+    await api('/cards/' + card.id + '/move', { method: 'POST', body: { toColumnId: lost.id } });
+    toast('Card marcado como Perdido', 'success');
+    await refreshBoard();
+  } catch (err) { toast('Erro: ' + err.message, 'error'); }
+}
+
+async function createSubscriptionForCard(card) {
+  // Pega o contact do card primeiro
+  let contactId = card.contactId;
+  if (!contactId) {
+    try {
+      const r = await api('/cards/' + card.id);
+      contactId = r.card?.contactId || r.contact?.id;
+    } catch { /* silent */ }
+  }
+  if (!contactId) return toast('Card sem contato associado. Abra e vincule um.', 'error');
+
+  const planName = prompt('Nome do plano (ex: Plano Premium):', card.title || '');
+  if (!planName) return;
+  const amtStr = prompt('Valor mensal em R$ (ex: 497.00):', ((card.valueCents || 0) / 100).toFixed(2));
+  if (amtStr == null) return;
+  const amountCents = Math.round(parseFloat(String(amtStr).replace(',', '.')) * 100);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) return toast('Valor invalido', 'error');
+
+  const cycle = prompt('Ciclo (monthly, weekly, quarterly, yearly, one_time):', 'monthly');
+  if (!cycle) return;
+
+  const nextStr = prompt('Proxima cobranca (YYYY-MM-DD):', new Date(Date.now() + 30*86400000).toISOString().slice(0,10));
+  if (!nextStr) return;
+  const nextChargeAt = Date.parse(nextStr);
+  if (!Number.isFinite(nextChargeAt)) return toast('Data invalida', 'error');
+
+  try {
+    await api('/subscriptions', {
+      method: 'POST',
+      body: { contactId, planName, amountCents, cycle, nextChargeAt },
+    });
+    toast('Cobranca mensal criada!', 'success');
+  } catch (err) { toast('Erro: ' + err.message, 'error'); }
+}
+
+async function patchCardSafe(cardId, patch) {
+  try {
+    await api('/cards/' + cardId, { method: 'PATCH', body: patch });
+    toast('Salvo', 'success');
+    await refreshBoard();
+  } catch (err) { toast('Erro: ' + err.message, 'error'); }
+}
+
+function positionMenu(menu, x, y) {
+  // Estima 280x400 antes de medir; ajusta se sair da viewport
+  menu.style.left = Math.min(x, window.innerWidth - 260) + 'px';
+  menu.style.top = Math.min(y, window.innerHeight - 420) + 'px';
+}
+
+function truncate(s, n) {
+  s = String(s || '');
+  return s.length > n ? s.slice(0, n - 1) + '...' : s;
+}
+
+async function refreshBoard() {
+  try {
+    await loadPipeline?.();
+    renderBoard?.();
+  } catch { /* silent */ }
+}
+
 
 // ─── Side panel ────────────────────────────────────────────────────────
 async function openCardPanel(cardId) {
