@@ -880,8 +880,9 @@ async function renderStats() {
 
 // ─── Event wiring ──────────────────────────────────────────────────────
 function wireEvents() {
-  // Login
-  $('#loginForm').addEventListener('submit', async (e) => {
+  // Login (form may not exist after auto-auth refactor — that's fine)
+  const lf = document.getElementById('loginForm');
+  if (lf) lf.addEventListener('submit', async (e) => {
     e.preventDefault();
     const key = $('#apiKeyInput').value.trim();
     const errEl = $('#loginErr');
@@ -896,7 +897,7 @@ function wireEvents() {
       errEl.classList.remove('hide');
     }
   });
-  $('#logoutBtn').addEventListener('click', logout);
+  document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
   // Nav
   $$('.nav-item').forEach(n => n.addEventListener('click', () => showView(n.dataset.view)));
@@ -991,21 +992,26 @@ function showLoginRequired() {
 
 // ─── Boot ──────────────────────────────────────────────────────────────
 (async () => {
-  wireEvents();
-  // Hide login form completely; we never want manual API key entry
-  const ls = $('#loginScreen');
-  if (ls) ls.style.display = 'flex';
+  // Wire events with safety wrap — never let one missing element kill the boot
+  try { wireEvents(); } catch (e) { console.warn('[CRM] wireEvents partial:', e.message); }
 
-  // Show a transient loader while we attempt auth
-  if (ls) ls.innerHTML = '<div class="login-card" style="text-align:center"><div style="width:40px;height:40px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:spin .9s linear infinite"></div><div style="color:#9898B8;font-size:13px">Conectando seu CRM...</div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+  const ls = document.getElementById('loginScreen');
 
-  const ok = await tryAutoLogin();
-  if (ok) {
-    if (ls) ls.classList.add('hide');
-    $('#app').classList.remove('hide');
-    await bootstrap();
-  } else {
-    showLoginRequired();
+  try {
+    const ok = await tryAutoLogin();
+    if (ok) {
+      if (ls) ls.classList.add('hide');
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.classList.remove('hide');
+      await bootstrap();
+    } else {
+      showLoginRequired();
+    }
+  } catch (err) {
+    console.error('[CRM] boot failed:', err);
+    if (ls) {
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+    }
   }
 })();
 

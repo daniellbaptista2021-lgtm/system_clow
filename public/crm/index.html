@@ -9,16 +9,12 @@
 </head>
 <body>
 
-<!-- ─── LOGIN SCREEN ─── -->
+<!-- ─── AUTO-AUTH SCREEN (sempre carrega — JS popula com loader/erro) ─── -->
 <div id="loginScreen" class="login-shell">
-  <div class="login-card">
-    <h1>CRM Clow</h1>
-    <p>Entre com sua API key pra acessar o CRM. Chave tem formato <code>clow_live_...</code>.</p>
-    <form id="loginForm">
-      <input type="text" id="apiKeyInput" placeholder="clow_live_..." autocomplete="off" required>
-      <button type="submit">Entrar</button>
-      <div class="err hide" id="loginErr"></div>
-    </form>
+  <div class="login-card" style="text-align:center">
+    <div style="width:40px;height:40px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .9s linear infinite"></div>
+    <div style="color:#9898B8;font-size:13px">Conectando seu CRM...</div>
+    <style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
   </div>
 </div>
 
