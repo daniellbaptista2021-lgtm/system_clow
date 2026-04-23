@@ -565,6 +565,228 @@ async function refreshBoard() {
 }
 
 
+// ═══ GENERIC LIST CONTEXT MENU HELPER ═════════════════════════════════════
+function attachListItemContextMenu(itemEl, showMenuFn) {
+  itemEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showMenuFn(e.clientX, e.clientY);
+  });
+  let _lpTimer = null, _lpStart = null;
+  itemEl.addEventListener('touchstart', (e) => {
+    const t = e.touches[0]; if (!t) return;
+    _lpStart = { x: t.clientX, y: t.clientY };
+    _lpTimer = setTimeout(() => {
+      if (_lpStart) { navigator.vibrate?.(20); showMenuFn(_lpStart.x, _lpStart.y); _lpStart = null; }
+    }, 550);
+  }, { passive: true });
+  itemEl.addEventListener('touchmove', (e) => {
+    const t = e.touches[0]; if (!t || !_lpStart) return;
+    if (Math.abs(t.clientX - _lpStart.x) > 10 || Math.abs(t.clientY - _lpStart.y) > 10) {
+      clearTimeout(_lpTimer); _lpStart = null;
+    }
+  }, { passive: true });
+  itemEl.addEventListener('touchend', () => { clearTimeout(_lpTimer); _lpStart = null; });
+  itemEl.addEventListener('touchcancel', () => { clearTimeout(_lpTimer); _lpStart = null; });
+}
+
+// Icones SVG compartilhados
+const CTX_ICO = {
+  open:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  edit:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  send:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  card:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  copy:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
+  play:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  stock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="20 6 9 17 4 12"/></svg>',
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  json:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+};
+
+function buildMenu(items, headerText) {
+  ensureCtxMenuStyles();
+  const menu = el('div', { class: 'ctx-menu' });
+  if (headerText) menu.append(ctxHeader(headerText));
+  for (const it of items) {
+    if (it === 'sep') { menu.append(ctxSep()); continue; }
+    menu.append(ctxItem(it.icon, it.label, it.onClick, { danger: it.danger }));
+  }
+  return menu;
+}
+
+// ═══ CONTACT context menu ═════════════════════════════════════════════════
+function showContactContextMenu(contact, x, y) {
+  closeCtxMenus();
+  const items = [
+    { icon: CTX_ICO.open, label: 'Abrir (card vinculado)', onClick: async () => {
+      try {
+        const detail = await api('/contacts/' + contact.id);
+        const card = detail.cards?.[0];
+        if (card) openCardPanel(card.id);
+        else toast('Contato sem card vinculado', '');
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    { icon: CTX_ICO.edit, label: 'Editar contato', onClick: async () => {
+      const name = await clowPrompt('Nome:', contact.name || '', { title: 'Editar contato' });
+      if (name == null) return;
+      const phone = await clowPrompt('Telefone:', contact.phone || '', { title: 'Editar contato', type: 'tel' });
+      if (phone == null) return;
+      const email = await clowPrompt('Email:', contact.email || '', { title: 'Editar contato', type: 'email' });
+      if (email == null) return;
+      try {
+        await api('/contacts/' + contact.id, { method: 'PATCH', body: { name: name.trim(), phone: phone.trim(), email: email.trim() } });
+        toast('Atualizado', 'success');
+        await loadContacts(); renderContactsList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    'sep',
+    { icon: CTX_ICO.card, label: 'Criar card no pipeline', onClick: async () => {
+      const title = await clowPrompt('Titulo do card:', contact.name || '', { title: 'Novo card' });
+      if (!title) return;
+      try {
+        const boards = state.boards || [];
+        const board = boards[0];
+        if (!board) return toast('Nenhum board. Crie um primeiro.', 'error');
+        const cols = state.pipeline?.columns?.length ? state.pipeline.columns :
+          (await api('/boards/' + board.id + '/columns')).columns;
+        const firstCol = cols.find(c => !c.isTerminal) || cols[0];
+        await api('/cards', { method: 'POST', body: {
+          boardId: board.id, columnId: firstCol.id, title, contactId: contact.id,
+        } });
+        toast('Card criado em ' + firstCol.name, 'success');
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Apagar contato', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Apagar "' + contact.name + '"? Cards vinculados ficam sem contato.', { title: 'Apagar contato', danger: true, confirmLabel: 'Apagar' }))) return;
+      try {
+        await api('/contacts/' + contact.id, { method: 'DELETE' });
+        toast('Contato apagado', 'success');
+        await loadContacts(); renderContactsList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(contact.name || 'Contato', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+// ═══ CHANNEL context menu ═════════════════════════════════════════════════
+function showChannelContextMenu(channel, x, y) {
+  closeCtxMenus();
+  const whUrl = location.origin + '/webhooks/crm/' + channel.type + '/' + channel.webhookSecret;
+  const items = [
+    { icon: CTX_ICO.edit, label: 'Editar canal', onClick: () => openEditChannelModal(channel) },
+    { icon: CTX_ICO.copy, label: 'Copiar webhook URL', onClick: async () => {
+      try { await navigator.clipboard.writeText(whUrl); toast('Webhook copiado', 'success'); }
+      catch { toast('URL: ' + whUrl, ''); }
+    }},
+    'sep',
+    { icon: channel.status === 'active' ? CTX_ICO.pause : CTX_ICO.play,
+      label: channel.status === 'active' ? 'Pausar canal' : 'Ativar canal',
+      onClick: async () => {
+        try {
+          const newStatus = channel.status === 'active' ? 'paused' : 'active';
+          await api('/channels/' + channel.id, { method: 'PATCH', body: { status: newStatus } });
+          toast(newStatus === 'active' ? 'Canal ativado' : 'Canal pausado', 'success');
+          await loadChannels?.(); renderChannelsList();
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+      }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Apagar canal', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Apagar canal "' + channel.name + '"? Mensagens recebidas continuam no historico.', { title: 'Apagar canal', danger: true, confirmLabel: 'Apagar' }))) return;
+      try {
+        await api('/channels/' + channel.id, { method: 'DELETE' });
+        toast('Canal apagado', 'success');
+        await loadChannels?.(); renderChannelsList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(channel.name || 'Canal', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+// ═══ AGENT context menu ═══════════════════════════════════════════════════
+function showAgentContextMenu(agent, x, y) {
+  closeCtxMenus();
+  const items = [
+    { icon: CTX_ICO.edit, label: 'Editar agente', onClick: () => openEditAgentModal(agent) },
+    { icon: CTX_ICO.chart, label: 'Ver metricas', onClick: async () => {
+      try {
+        const m = await api('/agents/' + agent.id + '/metrics');
+        await clowAlert(
+          `Agente: ${agent.name}
+` +
+          `Cards atribuidos: ${m.cardsAssigned || 0}
+` +
+          `Cards ganhos: ${m.cardsWon || 0}
+` +
+          `Conversao: ${((m.conversionRate || 0) * 100).toFixed(1)}%
+` +
+          `Tempo medio resposta: ${m.avgResponseMinutes || 0}min
+` +
+          `Receita: ${fmtMoney((m.revenueWonCents || 0))}`,
+          { title: 'Metricas do agente' }
+        );
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Apagar agente', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Apagar "' + agent.name + '"? Cards atribuidos ficam sem dono.', { title: 'Apagar agente', danger: true, confirmLabel: 'Apagar' }))) return;
+      try {
+        await api('/agents/' + agent.id, { method: 'DELETE' });
+        toast('Agente apagado', 'success');
+        await loadAgents?.(); renderAgentsList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(agent.name || 'Agente', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+// ═══ INVENTORY context menu ═══════════════════════════════════════════════
+function showInventoryContextMenu(item, x, y) {
+  closeCtxMenus();
+  const items = [
+    { icon: CTX_ICO.edit, label: 'Editar produto', onClick: () => openEditInventoryModal(item) },
+    { icon: CTX_ICO.stock, label: 'Ajustar estoque', onClick: async () => {
+      const v = await clowPrompt('Delta de estoque (ex: +5 ou -2):', '0', { title: 'Ajustar estoque', hint: 'Use sinal + ou -. Estoque atual: ' + item.stock });
+      if (v == null) return;
+      const delta = parseInt(String(v).replace(/[^\-\d]/g, ''), 10);
+      if (!Number.isFinite(delta)) return toast('Valor invalido', 'error');
+      try {
+        await api('/inventory/' + item.id + '/stock', { method: 'POST', body: { delta } });
+        toast('Estoque ajustado em ' + (delta > 0 ? '+' : '') + delta, 'success');
+        await loadInventory?.(); renderInventoryList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Apagar produto', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Apagar produto "' + item.name + '"?', { title: 'Apagar produto', danger: true, confirmLabel: 'Apagar' }))) return;
+      try {
+        await api('/inventory/' + item.id, { method: 'DELETE' });
+        toast('Produto apagado', 'success');
+        await loadInventory?.(); renderInventoryList();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(item.name || 'Produto', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+
+
 // ─── Side panel ────────────────────────────────────────────────────────
 async function openCardPanel(cardId) {
   try {
@@ -972,8 +1194,7 @@ function renderContactsList() {
   l.innerHTML = '';
   if (!state.contacts.length) { l.append(el('div', { class: 'empty' }, 'Nenhum contato ainda.')); return; }
   for (const c of state.contacts) {
-    l.append(el('div', { class: 'list-item', on: { click: async () => {
-      // Open first card linked to this contact (or create one)
+    const item = el('div', { class: 'list-item', on: { click: async () => {
       const detail = await api(`/contacts/${c.id}`);
       const card = detail.cards?.[0];
       if (card) openCardPanel(card.id);
@@ -987,7 +1208,9 @@ function renderContactsList() {
         ),
       ),
       c.source ? el('span', { class: 'pill purple' }, c.source) : null,
-    ));
+    );
+    attachListItemContextMenu(item, (x, y) => showContactContextMenu(c, x, y));
+    l.append(item);
   }
 }
 
@@ -1028,6 +1251,7 @@ function renderChannelsList() {
           } } }, 'Remover'),
       ),
     );
+    attachListItemContextMenu(chRow, (x, y) => showChannelContextMenu(ch, x, y));
     l.append(chRow);
   }
 }
@@ -1240,7 +1464,7 @@ function renderAgentsList() {
   l.innerHTML = '';
   if (!state.agents.length) { l.append(el('div', { class: 'empty' }, 'Nenhum agente cadastrado.')); return; }
   for (const a of state.agents) {
-    l.append(el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditAgentModal(a); } } },
+    const item = el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditAgentModal(a); } } },
       el('div', { class: 'list-item-left' },
         el('div', { class: 'contact-avatar' }, initials(a.name)),
         el('div', {},
@@ -1249,7 +1473,9 @@ function renderAgentsList() {
         ),
       ),
       el('span', { class: 'pill purple' }, a.role),
-    ));
+    );
+    attachListItemContextMenu(item, (x, y) => showAgentContextMenu(a, x, y));
+    l.append(item);
   }
 }
 
@@ -1258,7 +1484,7 @@ function renderInventoryList() {
   l.innerHTML = '';
   if (!state.inventory.length) { l.append(el('div', { class: 'empty' }, 'Estoque vazio.')); return; }
   for (const it of state.inventory) {
-    l.append(el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditInventoryModal(it); } } },
+    const item = el('div', { class: 'list-item', style: 'cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditInventoryModal(it); } } },
       el('div', { class: 'list-item-left' },
         el('div', {},
           el('div', { class: 'list-item-title' }, it.name),
@@ -1266,7 +1492,9 @@ function renderInventoryList() {
         ),
       ),
       el('span', { class: `pill ${it.stock > 5 ? 'green' : it.stock > 0 ? 'amber' : 'red'}` }, `${it.stock} em estoque`),
-    ));
+    );
+    attachListItemContextMenu(item, (x, y) => showInventoryContextMenu(it, x, y));
+    l.append(item);
   }
 }
 

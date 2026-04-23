@@ -135,7 +135,7 @@
         return;
       }
       for (const a of r.automations) {
-        l.append(el('div', { class: 'list-item', style: 'cursor:default;flex-direction:column;align-items:stretch' },
+        const autoItem = el('div', { class: 'list-item', style: 'cursor:default;flex-direction:column;align-items:stretch' },
           el('div', { style: 'display:flex;align-items:center;justify-content:space-between' },
             el('div', { class: 'list-item-left' },
               el('div', {},
@@ -171,7 +171,9 @@
               trigger: a.trigger, conditions: a.conditions, actions: a.actions,
             }, null, 2)),
           ),
-        ));
+        );
+        attachListItemContextMenu(autoItem, (x, y) => showAutomationContextMenu(a, x, y, renderAutomationsList));
+        l.append(autoItem);
       }
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
   }
@@ -294,6 +296,7 @@
                 } } }, 'Cancelar') : null,
           ),
         );
+      attachListItemContextMenu(subItem, (x, y) => showSubscriptionContextMenu(s, x, y, renderSubsList));
       l.append(subItem);
       }
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
@@ -438,3 +441,84 @@
   // also try after a short delay (in case login already happened)
   setTimeout(tryBoot, 1500);
 })();
+
+
+// ═══ AUTOMATION context menu ═════════════════════════════════════════════
+async function showAutomationContextMenu(auto, x, y, refreshFn) {
+  closeCtxMenus();
+  const items = [
+    { icon: CTX_ICO.json, label: 'Ver/editar JSON', onClick: async () => {
+      const json = JSON.stringify({ trigger: auto.trigger, conditions: auto.conditions, actions: auto.actions }, null, 2);
+      const v = await clowPrompt('JSON da automacao:', json, { title: 'Editar automacao (JSON)', multiline: true, hint: 'Altere trigger, conditions ou actions. Invalid JSON cancela.' });
+      if (v == null) return;
+      try {
+        const parsed = JSON.parse(v);
+        await api('/automations/' + auto.id, { method: 'PATCH', body: parsed });
+        toast('Salvo', 'success');
+        await refreshFn?.();
+      } catch (e) { toast('JSON invalido: ' + e.message, 'error'); }
+    }},
+    { icon: auto.enabled ? CTX_ICO.pause : CTX_ICO.play,
+      label: auto.enabled ? 'Pausar' : 'Ativar',
+      onClick: async () => {
+        try {
+          await api('/automations/' + auto.id, { method: 'PATCH', body: { enabled: !auto.enabled } });
+          toast(auto.enabled ? 'Pausada' : 'Ativada', 'success');
+          await refreshFn?.();
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+      }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Apagar automacao', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Apagar "' + auto.name + '"?', { title: 'Apagar automacao', danger: true, confirmLabel: 'Apagar' }))) return;
+      try {
+        await api('/automations/' + auto.id, { method: 'DELETE' });
+        toast('Removida', 'success');
+        await refreshFn?.();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(auto.name || 'Automacao', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
+// ═══ SUBSCRIPTION context menu ══════════════════════════════════════════
+async function showSubscriptionContextMenu(sub, x, y, refreshFn) {
+  closeCtxMenus();
+  const items = [
+    { icon: CTX_ICO.edit, label: 'Editar valor', onClick: async () => {
+      const v = await clowPrompt('Valor em R$:', ((sub.amountCents || 0) / 100).toFixed(2), { title: 'Editar valor' });
+      if (v == null) return;
+      const amountCents = Math.round(parseFloat(String(v).replace(',', '.')) * 100);
+      if (!Number.isFinite(amountCents) || amountCents < 0) return toast('Valor invalido', 'error');
+      try {
+        await api('/subscriptions/' + sub.id, { method: 'PATCH', body: { amountCents } });
+        toast('Atualizado', 'success');
+        await refreshFn?.();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    { icon: CTX_ICO.money, label: 'Marcar como paga', onClick: async () => {
+      if (!(await clowConfirm('Marcar parcela atual como paga?', { title: 'Confirmar pagamento', confirmLabel: 'Sim' }))) return;
+      try {
+        await api('/subscriptions/' + sub.id + '/mark-paid', { method: 'POST' });
+        toast('Marcada como paga', 'success');
+        await refreshFn?.();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+    'sep',
+    { icon: CTX_ICO.trash, label: 'Cancelar assinatura', danger: true, onClick: async () => {
+      if (!(await clowConfirm('Cancelar "' + sub.planName + '"? Cliente tem acesso ate o fim do periodo pago.', { title: 'Cancelar', danger: true, confirmLabel: 'Cancelar' }))) return;
+      try {
+        await api('/subscriptions/' + sub.id, { method: 'PATCH', body: { status: 'cancelled' } });
+        toast('Cancelada', 'success');
+        await refreshFn?.();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }},
+  ];
+  const menu = buildMenu(items, truncate(sub.planName || 'Assinatura', 30));
+  positionMenu(menu, x, y);
+  document.body.appendChild(menu);
+  _ctxMenuEl = menu;
+}
+
