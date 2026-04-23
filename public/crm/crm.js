@@ -878,9 +878,137 @@ async function renderStats() {
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
+
+// ─── Missing modals (v2 — these were declared in wireEvents but never defined) ─
+async function openNewContactModal() {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/contacts', { method: 'POST', body: {
+        name: fd.get('name'),
+        phone: fd.get('phone') || null,
+        email: fd.get('email') || null,
+        source: fd.get('source') || 'manual',
+        tags: (fd.get('tags') || '').split(',').map(t => t.trim()).filter(Boolean),
+      } });
+      backdrop.remove();
+      await loadContacts();
+      renderContactsList();
+      toast('Contato criado', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    field('Nome', 'name', 'text', '', { required: '', placeholder: 'João Silva' }),
+    field('Telefone', 'phone', 'tel', '', { placeholder: '5521999998888' }),
+    field('Email', 'email', 'email', '', { placeholder: 'joao@exemplo.com' }),
+    field('Origem', 'source', 'text', '', { placeholder: 'Instagram, indicação, site...' }),
+    field('Tags (vírgulas)', 'tags', 'text', '', { placeholder: 'vip, premium' }),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Criar contato'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Novo contato'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+async function openNewAgentModal() {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/agents', { method: 'POST', body: {
+        name: fd.get('name'),
+        email: fd.get('email'),
+        phone: fd.get('phone') || null,
+        role: fd.get('role'),
+      } });
+      backdrop.remove();
+      await loadAgents();
+      renderAgentsList();
+      toast('Agente cadastrado', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  const roleSel = el('select', { name: 'role' });
+  for (const [v, label] of [['agent', 'Atendente / Vendedor'], ['admin', 'Administrador'], ['owner', 'Proprietário'], ['viewer', 'Apenas leitura']]) {
+    roleSel.append(el('option', { value: v }, label));
+  }
+  form.append(
+    field('Nome', 'name', 'text', '', { required: '', placeholder: 'Maria Vendedora' }),
+    field('Email', 'email', 'email', '', { required: '', placeholder: 'maria@empresa.com' }),
+    field('Telefone (opcional)', 'phone', 'tel', '', { placeholder: '5521988887777' }),
+    el('div', { class: 'field' }, el('label', {}, 'Papel'), roleSel),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Cadastrar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Novo membro da equipe'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+async function openNewInventoryModal() {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/inventory', { method: 'POST', body: {
+        sku: fd.get('sku'),
+        name: fd.get('name'),
+        description: fd.get('description') || null,
+        priceCents: Math.round(parseFloat(fd.get('price') || '0') * 100),
+        stock: parseInt(fd.get('stock') || '0', 10),
+        category: fd.get('category') || null,
+      } });
+      backdrop.remove();
+      await loadInventory();
+      renderInventoryList();
+      toast('Item adicionado', 'success');
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    field('SKU', 'sku', 'text', '', { required: '', placeholder: 'PRD-001' }),
+    field('Nome do produto', 'name', 'text', '', { required: '', placeholder: 'Plano Premium Anual' }),
+    fieldTextarea('Descrição', 'description', ''),
+    el('div', { style: 'display:flex;gap:10px' },
+      field('Preço (R$)', 'price', 'number', '0', { step: '0.01', style: 'flex:1' }),
+      field('Estoque', 'stock', 'number', '0', { min: '0', style: 'flex:1' }),
+    ),
+    field('Categoria', 'category', 'text', '', { placeholder: 'Serviços, Produtos físicos...' }),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Adicionar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Novo item de estoque'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
 // ─── Event wiring ──────────────────────────────────────────────────────
 function wireEvents() {
-  // Login (form may not exist after auto-auth refactor — that's fine)
+  // Helper: safe wire — null-tolerant + try/catch around addEventListener
+  const wire = (sel, ev, fn) => {
+    try {
+      const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      if (el && fn) el.addEventListener(ev, fn);
+    } catch (e) { console.warn('[wire]', sel, ev, e.message); }
+  };
+  const wireAll = (sel, ev, fn) => {
+    try {
+      document.querySelectorAll(sel).forEach(el => {
+        try { el.addEventListener(ev, fn); } catch (e) { console.warn('[wireAll]', sel, e.message); }
+      });
+    } catch (e) { console.warn('[wireAll-outer]', sel, e.message); }
+  };
+
+  // Login (form may be absent — that's by design)
   const lf = document.getElementById('loginForm');
   if (lf) lf.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -897,53 +1025,62 @@ function wireEvents() {
       errEl.classList.remove('hide');
     }
   });
-  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+
+  wire('#logoutBtn', 'click', logout);
 
   // Nav
-  $$('.nav-item').forEach(n => n.addEventListener('click', () => showView(n.dataset.view)));
+  wireAll('.nav-item', 'click', (e) => {
+    const v = e.currentTarget?.dataset?.view;
+    if (v) showView(v);
+  });
 
-  // Refresh
-  $('#refreshBtn').addEventListener('click', async () => {
+  // Refresh + new buttons
+  wire('#refreshBtn', 'click', async () => {
     await loadPipeline(state.currentBoardId);
     renderKanban();
     toast('Atualizado', 'success');
   });
+  wire('#newCardBtn', 'click', () => openNewCardModal());
+  wire('#newChannelBtn', 'click', openNewChannelModal);
+  wire('#newContactBtn', 'click', openNewContactModal);
+  wire('#newAgentBtn', 'click', openNewAgentModal);
+  wire('#newInventoryBtn', 'click', openNewInventoryModal);
 
-  // Buttons (all "new" buttons in views)
-  $('#newCardBtn').addEventListener('click', () => openNewCardModal());
-  $('#newChannelBtn')?.addEventListener('click', openNewChannelModal);
-  $('#newContactBtn')?.addEventListener('click', openNewContactModal);
-  $('#newAgentBtn')?.addEventListener('click', openNewAgentModal);
-  $('#newInventoryBtn')?.addEventListener('click', openNewInventoryModal);
-
-  // Side panel
-  $('#closePanelBtn').addEventListener('click', closeCardPanel);
-  $$('.panel-tab').forEach(t => t.addEventListener('click', () => {
-    $$('.panel-tab').forEach(x => x.classList.toggle('active', x === t));
-    $$('.tab-section').forEach(s => s.classList.toggle('active', s.dataset.tab === t.dataset.tab));
-  }));
+  // Side panel — close + tabs
+  wire('#closePanelBtn', 'click', closeCardPanel);
+  wireAll('.panel-tab', 'click', (e) => {
+    const tab = e.currentTarget;
+    const tabId = tab.dataset.tab;
+    document.querySelectorAll('.panel-tab').forEach(x => x.classList.toggle('active', x === tab));
+    document.querySelectorAll('.tab-section').forEach(s => s.classList.toggle('active', s.dataset.tab === tabId));
+  });
 
   // Composer
-  $('#sendMsgBtn').addEventListener('click', () => {
-    const txt = $('#composerText').value.trim();
+  wire('#sendMsgBtn', 'click', () => {
+    const t = document.getElementById('composerText');
+    const txt = (t?.value || '').trim();
     if (txt) sendCurrentMessage(txt);
   });
-  $('#composerText').addEventListener('keydown', (e) => {
+  wire('#composerText', 'keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const txt = $('#composerText').value.trim();
+      const txt = (e.currentTarget.value || '').trim();
       if (txt) sendCurrentMessage(txt);
     }
   });
-  $('#attachBtn').addEventListener('click', () => $('#attachFile').click());
-  $('#attachFile').addEventListener('change', (e) => {
-    if (e.target.files[0]) uploadAndSendFile(e.target.files[0]);
-    e.target.value = '';
+  wire('#attachBtn', 'click', () => {
+    const f = document.getElementById('attachFile');
+    if (f) f.click();
   });
-  $('#recordBtn').addEventListener('click', toggleRecording);
+  wire('#attachFile', 'change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) uploadAndSendFile(file);
+    if (e.target) e.target.value = '';
+  });
+  wire('#recordBtn', 'click', toggleRecording);
 
   // Contact search
-  $('#contactSearchInput')?.addEventListener('input', async (e) => {
+  wire('#contactSearchInput', 'input', async (e) => {
     clearTimeout(window.__searchT);
     window.__searchT = setTimeout(async () => {
       await loadContacts(e.target.value);
@@ -951,6 +1088,7 @@ function wireEvents() {
     }, 250);
   });
 }
+
 
 // ─── Auto-login via System Clow session ───────────────────────────────
 async function tryExchange() {
