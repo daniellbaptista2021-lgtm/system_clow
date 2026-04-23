@@ -501,6 +501,25 @@ app.post('/media/upload', async (c) => {
   return ok(c, { url: saved.publicUrl, bytes: saved.bytes, mime: saved.mime }, 201);
 });
 
+// ═══ MEDIA PROCESS (extrai texto de audio/imagem/pdf/arquivo) ═══════════
+// POST /v1/crm/media/process — multipart file field
+// Retorna: { kind: 'audio|image|pdf|text|unknown', content: '...' }
+app.post('/media/process', async (c) => {
+  const formData = await c.req.formData();
+  const file = formData.get('file');
+  if (!file || typeof file === 'string') return badRequest(c, 'file required');
+  const bytes = Buffer.from(await (file as any).arrayBuffer());
+  const filename = (file as any).name || 'upload.bin';
+  const mime = (file as any).type || 'application/octet-stream';
+  try {
+    const { processMedia } = await import('../notifications/openaiMedia.js');
+    const result = await processMedia(bytes, mime, filename);
+    return ok(c, { kind: result.kind, content: result.content, filename, mime, bytes: bytes.length });
+  } catch (err: any) {
+    return c.json({ error: 'process_failed', message: err?.message }, 500);
+  }
+});
+
 
 // ═══ AUTOMATIONS ═══════════════════════════════════════════════════════
 app.get('/automations', (c) => {

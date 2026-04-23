@@ -175,101 +175,59 @@ async function sendReaction(messageId: string, emoji: string): Promise<void> {
 // ─── Audio Transcription (Google Speech-to-Text) ───────────────────────────
 
 async function transcribeAudio(audioId: string): Promise<string> {
-  const googleApiKey = process.env.GOOGLE_API_KEY;
-
-  if (!googleApiKey) {
-    return '[Audio recebido — transcrição indisponível. Configure GOOGLE_API_KEY.]';
-  }
-
+  // Tenta OpenAI Whisper primeiro (OPENAI_API_KEY).
+  // Fallback: Google Speech-to-Text (se GOOGLE_API_KEY existir).
   const config = getMetaConfig();
-  if (!config) {
-    return '[Audio recebido — sem configuração Meta para baixar o áudio.]';
-  }
+  if (!config) return '[Audio recebido - sem configuracao Meta para baixar]';
 
-  const tmpDir = '/tmp/clow-audio';
-  try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
-
-  const oggPath = `${tmpDir}/${audioId}.ogg`;
-  const wavPath = `${tmpDir}/${audioId}.wav`;
-
+  // Passo 1: baixar bytes do audio via Meta Graph API
+  let buf: Buffer;
+  let mime: string;
   try {
-    // Step 1: Download audio from Meta Cloud API
-    const downloadUrl = `https://graph.facebook.com/${config.apiVersion}/${audioId}`;
-    const audioRes = await fetch(downloadUrl, {
+    const metaRes = await fetch(`https://graph.facebook.com/${config.apiVersion}/${audioId}`, {
       headers: { 'Authorization': `Bearer ${config.accessToken}` },
     });
-
-    if (!audioRes.ok) {
-      console.error(`[meta-wa/stt] Failed to download audio: ${audioRes.status}`);
-      return '[Audio recebido — erro ao baixar o arquivo de áudio.]';
-    }
-
-    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-    fs.writeFileSync(oggPath, audioBuffer);
-
-    // Step 2: Convert OGG/Opus to WAV (LINEAR16, 16kHz, mono) — Google requirement
-    try {
-      await execFileAsync('ffmpeg', [
-        '-y', '-i', oggPath,
-        '-ar', '16000',        // 16kHz sample rate
-        '-ac', '1',            // mono
-        '-sample_fmt', 's16',  // LINEAR16
-        wavPath,
-      ]);
-    } catch (ffmpegErr: any) {
-      console.error(`[meta-wa/stt] FFmpeg conversion failed: ${ffmpegErr.message}`);
-      return '[Audio recebido — erro ao converter o formato do áudio.]';
-    }
-
-    // Step 3: Read WAV and send to Google Speech-to-Text API
-    const wavBuffer = fs.readFileSync(wavPath);
-    const audioBase64 = wavBuffer.toString('base64');
-
-    const sttRes = await fetch(
-      `https://speech.googleapis.com/v1/speech:recognize?key=${googleApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          config: {
-            encoding: 'LINEAR16',
-            sampleRateHertz: 16000,
-            languageCode: 'pt-BR',
-            enableAutomaticPunctuation: true,
-            model: 'latest_long',
-          },
-          audio: {
-            content: audioBase64,
-          },
-        }),
-      }
-    );
-
-    if (!sttRes.ok) {
-      const errBody = await sttRes.text();
-      console.error(`[meta-wa/stt] Google STT API error: ${sttRes.status} ${errBody}`);
-      return '[Audio recebido — erro na transcrição via Google.]';
-    }
-
-    const sttResult = await sttRes.json() as any;
-    const transcript = sttResult.results?.[0]?.alternatives?.[0]?.transcript;
-
-    if (transcript) {
-      console.log(`[meta-wa/stt] Transcribed: "${transcript.slice(0, 100)}"`);
-      return transcript;
-    }
-
-    return '[Audio recebido — não foi possível transcrever o conteúdo.]';
+    if (!metaRes.ok) return `[Erro baixando audio do Meta: HTTP ${metaRes.status}]`;
+    const metaJson: any = await metaRes.json();
+    if (!metaJson?.url) return '[Meta respondeu sem url de audio]';
+    mime = metaJson?.mime_type || 'audio/ogg';
+    const streamRes = await fetch(metaJson.url, {
+      headers: { 'Authorization': `Bearer ${config.accessToken}` },
+    });
+    if (!streamRes.ok) return `[Erro baixando stream do audio: HTTP ${streamRes.status}]`;
+    buf = Buffer.from(new Uint8Array(await streamRes.arrayBuffer()));
   } catch (err: any) {
-    console.error(`[meta-wa/stt] Transcription failed: ${err.message}`);
-    return '[Audio recebido — falha na transcrição.]';
-  } finally {
-    // Cleanup temp files
-    try { fs.unlinkSync(oggPath); } catch {}
-    try { fs.unlinkSync(wavPath); } catch {}
+    return `[Erro baixando audio: ${err?.message || 'desconhecido'}]`;
   }
-}
 
+  const ext = mime.includes('mpeg') ? 'mp3'
+    : mime.includes('webm') ? 'webm'
+    : mime.includes('mp4') ? 'm4a'
+    : mime.includes('wav') ? 'wav'
+    : 'ogg';
+
+  // Passo 2: OpenAI Whisper (preferencia)
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const { transcribeAudio: openaiTranscribe } = await import('../notifications/openaiMedia.js');
+      const txt = await openaiTranscribe(buf, `audio-${audioId}.${ext}`, 'pt');
+      if (txt && !txt.startsWith('[Erro')) return txt;
+    } catch (err: any) {
+      console.error('[whisper openai]', err?.message);
+    }
+  }
+
+  // Passo 3: Fallback Google (requer ffmpeg + GOOGLE_API_KEY)
+  if (process.env.GOOGLE_API_KEY) {
+    try {
+      return await transcribeAudioGoogle(audioId);
+    } catch (err: any) {
+      return `[Erro Google STT: ${err?.message}]`;
+    }
+  }
+
+  return '[Audio recebido - transcricao indisponivel. Configure OPENAI_API_KEY]';
+}
 
 // ─── Audio Transcription (Google Speech-to-Text) ───────────────────────────
 
@@ -423,15 +381,42 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
       return { phone, messageId, text: msg.text.body, name, type: 'text' };
     }
 
-    // Image message
+    // Image message — download + describe via OpenAI Vision
     if (msg.type === 'image') {
       const caption = msg.image?.caption || '';
-      return {
-        phone, messageId, name, type: 'image',
-        text: caption
-          ? `[Imagem recebida com legenda: "${caption}"]`
-          : '[Imagem recebida — envie como texto para eu processar]',
-      };
+      const imageId = msg.image?.id;
+      let description = '[Imagem sem ID]';
+      if (imageId) {
+        try {
+          const config = getMetaConfig();
+          if (config) {
+            const r1 = await fetch(`https://graph.facebook.com/${config.apiVersion}/${imageId}`, {
+              headers: { 'Authorization': `Bearer ${config.accessToken}` },
+            });
+            if (r1.ok) {
+              const j1: any = await r1.json();
+              if (j1?.url) {
+                const r2 = await fetch(j1.url, {
+                  headers: { 'Authorization': `Bearer ${config.accessToken}` },
+                });
+                if (r2.ok) {
+                  const buf = Buffer.from(new Uint8Array(await r2.arrayBuffer()));
+                  const mime = j1?.mime_type || 'image/jpeg';
+                  const { describeImage } = await import('../notifications/openaiMedia.js');
+                  description = await describeImage(buf, mime, caption || undefined);
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error('[image describe]', err?.message);
+          description = `[Erro processando imagem: ${err?.message || 'desconhecido'}]`;
+        }
+      }
+      const text = caption
+        ? `[Imagem recebida com legenda: "${caption}"]\n\nDescricao automatica:\n${description}`
+        : `[Imagem recebida]\n\nDescricao automatica:\n${description}`;
+      return { phone, messageId, name, type: 'image', text };
     }
 
     // Audio message — transcribe with Google Speech-to-Text
@@ -446,13 +431,43 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
       };
     }
 
-    // Document
+    // Document — download + extract text (PDF via pdftotext, text/csv utf-8)
     if (msg.type === 'document') {
       const fileName = msg.document?.filename || 'arquivo';
-      return {
-        phone, messageId, name, type: 'document',
-        text: `[Documento recebido: ${fileName}]`,
-      };
+      const docId = msg.document?.id;
+      const docMime = msg.document?.mime_type || 'application/octet-stream';
+      let extracted = '';
+      if (docId) {
+        try {
+          const config = getMetaConfig();
+          if (config) {
+            const r1 = await fetch(`https://graph.facebook.com/${config.apiVersion}/${docId}`, {
+              headers: { 'Authorization': `Bearer ${config.accessToken}` },
+            });
+            if (r1.ok) {
+              const j1: any = await r1.json();
+              if (j1?.url) {
+                const r2 = await fetch(j1.url, {
+                  headers: { 'Authorization': `Bearer ${config.accessToken}` },
+                });
+                if (r2.ok) {
+                  const buf = Buffer.from(new Uint8Array(await r2.arrayBuffer()));
+                  const { processMedia } = await import('../notifications/openaiMedia.js');
+                  const res = await processMedia(buf, j1?.mime_type || docMime, fileName);
+                  extracted = res.content;
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error('[document extract]', err?.message);
+          extracted = `[Erro processando documento: ${err?.message || 'desconhecido'}]`;
+        }
+      }
+      const text = extracted
+        ? `[Documento recebido: ${fileName}]\n\nConteudo extraido:\n${extracted}`
+        : `[Documento recebido: ${fileName} — conteudo nao extraivel]`;
+      return { phone, messageId, name, type: 'document', text };
     }
 
     // Sticker — ignore
