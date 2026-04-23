@@ -23,6 +23,7 @@ import { MCPManager } from '../mcp/MCPManager.js';
 import { SessionPool } from './sessionPool.js';
 import { PluginSystem } from '../plugins/PluginSystem.js';
 import { initCrm } from '../crm/index.js';
+import crmRoutes from '../crm/routes.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
@@ -203,6 +204,8 @@ async function main(): Promise<void> {
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);
   app.use('/v1/sessions', tenantAuth);
+  app.use('/v1/crm/*', tenantAuth);
+  app.use('/v1/crm', tenantAuth);
   console.log('  ✓ Auth: Multi-tenant API key enabled');
 
   // Mount routes
@@ -269,6 +272,7 @@ async function main(): Promise<void> {
   // Mission runner
   const missionRoutes = buildMissionRoutes();
   app.route('/v1/missions', missionRoutes);
+  app.route('/v1/crm', crmRoutes);
   console.log('  ✓ Missions: /v1/missions/:id');
 
   // ─── Login Auth ─────────────────────────────────────────────────
