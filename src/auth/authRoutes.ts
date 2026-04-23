@@ -227,6 +227,11 @@ app.get('/me', async (c) => {
     const { verifyAdminSessionToken } = await import('../server/middleware/tenantAuth.js');
     const adm = verifyAdminSessionToken(token);
     if (adm.ok && adm.username) {
+      let adminPhones: string[] = [];
+      try {
+        const { getAdminPhones } = await import('../admin/adminConfig.js');
+        adminPhones = getAdminPhones();
+      } catch { /* fallback silencioso */ }
       return c.json({
         ok: true,
         user: {
@@ -236,7 +241,7 @@ app.get('/me', async (c) => {
           tier: 'admin',
           status: 'active',
           phone: null,
-          authorized_phones: [],
+          authorized_phones: adminPhones,
           role: 'admin',
           is_admin: true,
         },
@@ -268,18 +273,35 @@ app.post('/change-password', async (c) => {
   return c.json({ ok: true });
 });
 
-// ─── Manage authorized phones (owner only) ──────────────────────────────
+// ─── Manage authorized phones (admin OR tenant owner) ─────────────────
 app.post('/authorized-phones', async (c) => {
   const auth = c.req.header('Authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
-  const payload = verifyUserToken(token);
-  if (!payload) return c.json({ error: 'unauthorized' }, 401);
   const body = await c.req.json().catch(() => ({})) as any;
-  const phones: string[] = (body.phones || [])
-    .map((p: string) => normalizePhone(p))
-    .filter((p: string) => p.length >= 10);
-  updateTenant(payload.tid, { authorized_phones: phones } as any);
-  return c.json({ ok: true, phones });
+  const rawPhones: string[] = Array.isArray(body.phones) ? body.phones : [];
+
+  // 1) Tenant token (3 partes: usr.payload.sig)
+  const payload = verifyUserToken(token);
+  if (payload) {
+    const phones = rawPhones.map((p: string) => normalizePhone(p)).filter((p: string) => p.length >= 10);
+    updateTenant(payload.tid, { authorized_phones: phones } as any);
+    return c.json({ ok: true, phones });
+  }
+
+  // 2) Admin token (2 partes: payload.sig) — salva no admin config
+  try {
+    const { verifyAdminSessionToken } = await import('../server/middleware/tenantAuth.js');
+    const adm = verifyAdminSessionToken(token);
+    if (adm.ok) {
+      const { setAdminPhones } = await import('../admin/adminConfig.js');
+      const saved = setAdminPhones(rawPhones);
+      return c.json({ ok: true, phones: saved });
+    }
+  } catch (err: any) {
+    console.error('[authorized-phones admin branch]', err?.message);
+  }
+
+  return c.json({ error: 'unauthorized' }, 401);
 });
 
 // ─── /auth/usage — current month usage per limits ──────────────────────

@@ -152,12 +152,22 @@ export function buildRoutes(pool: SessionPool): Hono {
   app.post('/v1/sessions/:id/messages', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    const message = body.message || body.content || body.prompt;
+    let message = body.message || body.content || body.prompt;
     const { tenant, tenantId: requestTenantId, tenantTier } = getTenantContext(c);
     const isAdmin = (c as any).get("authMode") === "admin_session";
 
     if (!message || typeof message !== 'string') {
       return c.json({ error: 'message is required (string)' }, 400);
+    }
+
+    // Admin password unlock: se msg for so a senha admin, destravar sessao
+    // e substituir pelo marker [ADMIN_PASSWORD_VERIFIED] antes do LLM ver
+    if (isAdmin) {
+      try {
+        const { tryUnlockFromMessage } = await import('../auth/adminUnlock.js');
+        const res = tryUnlockFromMessage(sessionId, message, true);
+        if (res.matched) message = res.stripped;
+      } catch (err: any) { console.error('[adminUnlock web]', err?.message); }
     }
 
     // Session ownership check

@@ -154,23 +154,33 @@ Commands timeout after 120 seconds by default.`,
     const v = CommandValidator.validate(input.command);
     if (!v.valid) return { valid: false, message: v.reason, errorCode: v.code };
 
-    const isMultiTenantContext = Boolean(_ctx.tenantId && _ctx.workspaceRoot);
+    const isMultiTenantContext = Boolean(_ctx.tenantId && _ctx.tenantId !== 'default' && _ctx.workspaceRoot);
     if (isMultiTenantContext) {
-      if (SandboxRunner.detect() === 'none') {
-        return {
-          valid: false,
-          message: 'Bash is disabled for multi-tenant sessions until an OS sandbox backend is installed on the server.',
-          errorCode: 'BASH_SANDBOX_UNAVAILABLE',
-        };
-      }
+      // TENANT: bloqueia tudo (usuario comum nunca roda bash no servidor)
+      return {
+        valid: false,
+        message: 'Essas operacoes sao exclusivas do administrador do sistema. Posso te ajudar com outras tarefas — criar sites, apps, planilhas, debug de codigo, consultas, relatorios.',
+        errorCode: 'BASH_NOT_ALLOWED_FOR_USER',
+      };
+    }
 
-      if (input.run_in_background) {
+    // ADMIN: requer senha destravada na sessao (NUNCA persiste entre sessoes)
+    try {
+      const { isSessionUnlocked } = await import('../../auth/adminUnlock.js');
+      if (!isSessionUnlocked(_ctx.sessionId)) {
         return {
           valid: false,
-          message: 'Background Bash is disabled for multi-tenant sessions until sandboxed background execution is implemented.',
-          errorCode: 'BASH_BG_SANDBOX_UNAVAILABLE',
+          message: 'Pra rodar comandos no servidor preciso da senha admin. Me envie na proxima mensagem (sem nada alem dela). A senha nao fica salva — cada conversa nova exige verificacao novamente.',
+          errorCode: 'ADMIN_PASSWORD_REQUIRED',
         };
       }
+    } catch (err: any) {
+      // Se o modulo falhou por qualquer motivo, fail-closed
+      return {
+        valid: false,
+        message: 'Erro ao verificar destravamento admin: ' + (err?.message || 'desconhecido'),
+        errorCode: 'ADMIN_UNLOCK_CHECK_FAILED',
+      };
     }
 
     return { valid: true };

@@ -15,6 +15,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { isAdminPhone as isAdminPhoneFromConfig } from '../admin/adminConfig.js';
 
 
 /**
@@ -30,17 +31,22 @@ import { promisify } from 'util';
  * If empty / undefined: legacy mode, allow all (admin tenant).
  */
 async function isPhoneAuthorized(tenantId: string, phone: string): Promise<boolean> {
-  if (tenantId === 'default') return true; // legacy single-tenant mode
+  // Admin inbound (tenantId='default') — whitelist admin
+  if (tenantId === 'default') return isAdminPhone(phone);
   try {
     const { getTenant } = await import('../tenancy/tenantStore.js');
     const t: any = getTenant(tenantId);
     if (!t) return false;
     const whitelist: string[] = t.authorized_phones || [];
-    if (whitelist.length === 0) return true; // not enforced for this tenant
+    // SECURITY: fail-closed quando whitelist vazia (era fail-open/true antes).
+    // Um tenant sem phones autorizados NAO pode receber comandos de ninguem
+    // ate o owner cadastrar pelo menos 1 numero em Configuracoes.
+    if (whitelist.length === 0) return false;
     const normalized = phone.replace(/\D/g, '');
     return whitelist.some((p) => p.replace(/\D/g, '') === normalized);
-  } catch {
-    return true;
+  } catch (err: any) {
+    console.error('[isPhoneAuthorized]', err?.message);
+    return false; // fail-closed em erro
   }
 }
 
@@ -534,9 +540,8 @@ function splitForWhatsApp(text: string, maxLen = 3500): string[] {
 // ─── Admin Phone Check ─────────────────────────────────────────────────────
 
 function isAdminPhone(phone: string): boolean {
-  const adminPhones = (process.env.META_WA_ADMIN_PHONES || '').split(',').map(p => p.trim().replace(/\D/g, ''));
-  const cleaned = phone.replace(/\D/g, '');
-  return adminPhones.some(ap => ap && cleaned.endsWith(ap));
+  // Delega pra adminConfig (seed do env + persiste adicoes via UI admin)
+  return isAdminPhoneFromConfig(phone);
 }
 
 // ─── Background Processing ────────────────────────────────────────────────
@@ -569,10 +574,21 @@ async function processInBackground(
     let lastToolNotified = '';
     let toolCount = 0;
 
+    // Admin password unlock: se a msg for apenas a senha admin, destravar sessao
+    // e substituir pelo marcador antes do LLM ver.
+    let effectiveUserMessage = userMessage;
+    try {
+      if (isAdminPhone(phone)) {
+        const { tryUnlockFromMessage } = await import('../auth/adminUnlock.js');
+        const res = tryUnlockFromMessage(sessionId, userMessage, true);
+        if (res.matched) effectiveUserMessage = res.stripped;
+      }
+    } catch (err: any) { console.error('[adminUnlock wa]', err?.message); }
+
     // Prepend user name context on first message
     const contextMessage = userName
-      ? `[Usuario: ${userName} | WhatsApp: ${phone}]\n\n${userMessage}`
-      : userMessage;
+      ? `[Usuario: ${userName} | WhatsApp: ${phone}]\n\n${effectiveUserMessage}`
+      : effectiveUserMessage;
 
     for await (const event of engine.submitMessage(contextMessage)) {
       if (event.type === 'assistant' && event.content) {
