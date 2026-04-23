@@ -1,33 +1,35 @@
 /**
- * stripeRoutes.ts — Stripe Checkout + webhook handler.
+ * stripeRoutes.ts — Stripe Checkout + webhook handler + polling.
  *
- * Flow:
- *   1. POST /api/billing/checkout — create checkout session (returns Stripe URL)
- *   2. User pays on Stripe (collects card + customer details)
- *   3. Stripe sends checkout.session.completed → POST /webhooks/stripe
- *   4. Webhook validates signature, extracts customer details, calls signup
- *      OR upgrades existing tenant.
+ * Fluxo:
+ *   1. POST /api/billing/checkout — cria session (retorna Stripe URL + session_id)
+ *   2. Cliente paga na nova aba (cartão, débito, pix, boleto)
+ *   3. Stripe manda checkout.session.completed → POST /webhooks/stripe
+ *   4. Webhook cria tenant + envia credenciais via EMAIL + WHATSAPP
+ *   5. Pricing modal faz poll em GET /api/billing/session/:id
+ *      quando status=paid → redireciona pra /signup/success
  *
- * Required env:
- *   STRIPE_SECRET_KEY        — sk_live_... or sk_test_...
- *   STRIPE_WEBHOOK_SECRET    — whsec_...
- *   STRIPE_PRICE_STARTER     — price_id of starter plan
- *   STRIPE_PRICE_PROFISSIONAL
- *   STRIPE_PRICE_EMPRESARIAL
- *   STRIPE_SUCCESS_URL       — redirect after payment (default: /signup/success)
- *   STRIPE_CANCEL_URL        — default: /signup
+ * Métodos de pagamento:
+ *   - card: crédito + débito (Stripe detecta automático no BR)
+ *   - boleto: boleto bancário (subscription com boleto recorrente)
+ *   - pix: pix instantâneo (subscription com pix mensal)
+ *
+ * Notas:
+ *   - Pra subscription mode no BR, Stripe aceita ['card'] + payment_method_options
+ *     para boleto/pix. Alguns tipos requerem ativação no Dashboard.
+ *   - Se fornecedor bloquear algum método, /checkout retorna 502 e mostra mensagem.
  */
 
 import { Hono } from 'hono';
 import { findTenantByEmail, createTenant, updateTenant } from '../tenancy/tenantStore.js';
-import { signUserToken } from '../auth/authRoutes.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { sendWelcomeEmail } from '../notifications/mailer.js';
+import { sendWelcomeWhatsApp } from '../notifications/whatsapper.js';
 
 const app = new Hono();
 
-// Price IDs are resolved at REQUEST time — env is loaded after module import
+// Price IDs resolvidos em REQUEST time (env carrega depois do import)
 function priceIds(): Record<string, string | undefined> {
   return {
     starter: process.env.STRIPE_PRICE_STARTER,
@@ -50,7 +52,18 @@ async function stripe(): Promise<any> {
   return _stripeClient;
 }
 
-// ─── POST /api/billing/checkout — create Stripe Checkout session ────────
+// Quais métodos habilitar por tier: todos aceitam os mesmos, mas deixo parametrizável
+function paymentMethodsFor(_plan: string): string[] {
+  // Stripe subscription mode no BR aceita:
+  //   - card (credit + debit)
+  //   - boleto (recorrente mensal)
+  //   - Para pix recorrente: precisa habilitar no Dashboard e usar
+  //     automatic_payment_methods. Por ora, habilita via env var.
+  const configured = (process.env.STRIPE_PAYMENT_METHODS || 'card,boleto').split(',').map(s => s.trim()).filter(Boolean);
+  return configured;
+}
+
+// ─── POST /api/billing/checkout — cria Stripe Checkout session ────────
 app.post('/api/billing/checkout', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
   const { plan, email, full_name, cpf, phone } = body;
@@ -66,29 +79,84 @@ app.post('/api/billing/checkout', async (c) => {
 
   try {
     const sk = await stripe();
-    const session = await sk.checkout.sessions.create({
+    const cpfDigits = String(cpf).replace(/\D/g, '');
+    const phoneDigits = String(phone).replace(/\D/g, '');
+
+    const sessionParams: any = {
       mode: 'subscription',
-      payment_method_types: ['card'],
+      payment_method_types: paymentMethodsFor(plan),
       line_items: [{ price: priceIds()[plan], quantity: 1 }],
       customer_email: email,
-      success_url: (process.env.STRIPE_SUCCESS_URL || `${publicBase()}/signup/success`) + '?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: process.env.STRIPE_CANCEL_URL || `${publicBase()}/signup`,
+      locale: 'pt-BR',
+      billing_address_collection: 'required',
+      // boleto + pix exigem CPF/CNPJ (tax ID)
+      tax_id_collection: { enabled: true },
+      // boleto: dar 3 dias pra pagar
+      payment_method_options: {
+        boleto: { expires_after_days: 3 },
+      },
+      success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${publicBase()}/pricing`,
       metadata: {
-        plan, email, full_name, cpf,
-        phone: String(phone).replace(/\D/g, ''),
+        plan, email, full_name, cpf: cpfDigits,
+        phone: phoneDigits,
       },
       subscription_data: {
-        metadata: { plan, email, full_name, cpf, phone: String(phone).replace(/\D/g, '') },
+        metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
       },
-    });
+    };
+
+    const session = await sk.checkout.sessions.create(sessionParams);
     return c.json({ ok: true, url: session.url, session_id: session.id });
   } catch (err: any) {
     console.error('[stripe checkout] error:', err.message);
+    // Se boleto/pix derem problema na conta, tenta fallback só com card
+    if (/payment_method_type|not_allowed|not.*enabled/i.test(err.message || '')) {
+      try {
+        const sk = await stripe();
+        const cpfDigits = String(cpf).replace(/\D/g, '');
+        const phoneDigits = String(phone).replace(/\D/g, '');
+        const session = await sk.checkout.sessions.create({
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [{ price: priceIds()[plan], quantity: 1 }],
+          customer_email: email,
+          locale: 'pt-BR',
+          billing_address_collection: 'required',
+          success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${publicBase()}/pricing`,
+          metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
+          subscription_data: { metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits } },
+        });
+        console.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
+        return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
+      } catch (err2: any) {
+        return c.json({ error: 'checkout_failed', message: err2.message }, 502);
+      }
+    }
     return c.json({ error: 'checkout_failed', message: err.message }, 502);
   }
 });
 
-// ─── POST /webhooks/stripe — handle subscription events ────────────────
+// ─── GET /api/billing/session/:id — poll status pro modal ─────────────
+app.get('/api/billing/session/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!id || !id.startsWith('cs_')) return c.json({ error: 'invalid_session' }, 400);
+  try {
+    const sk = await stripe();
+    const session = await sk.checkout.sessions.retrieve(id);
+    return c.json({
+      ok: true,
+      payment_status: session.payment_status, // paid | unpaid | no_payment_required
+      status: session.status,                 // open | complete | expired
+      customer_email: session.customer_email,
+    });
+  } catch (err: any) {
+    return c.json({ error: 'session_fetch_failed', message: err.message }, 502);
+  }
+});
+
+// ─── POST /webhooks/stripe ─────────────────────────────────────────────
 app.post('/webhooks/stripe', async (c) => {
   const sig = c.req.header('stripe-signature');
   const wh = process.env.STRIPE_WEBHOOK_SECRET;
@@ -108,46 +176,29 @@ app.post('/webhooks/stripe', async (c) => {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
-        const md = session.metadata || {};
-        const email = String(md.email || session.customer_email || '').toLowerCase();
-        if (!email) return c.json({ ok: true, skipped: 'no_email' });
-
-        // Already exists? upgrade if needed
-        const existing = findTenantByEmail(email);
-        if (existing) {
-          updateTenant(existing.id, {
-            tier: md.plan || existing.tier,
-            stripe_customer_id: session.customer,
-            stripe_subscription_id: session.subscription,
-            status: 'active',
-          } as any);
-          console.log(`[stripe] upgraded ${email} to ${md.plan}`);
+        // Para boleto/pix: session.status=complete mas payment_status=unpaid até pagar
+        // Só provisiona quando payment_status === 'paid'
+        if (session.payment_status !== 'paid') {
+          console.log(`[stripe] session completed mas payment_status=${session.payment_status} — aguardando confirmação`);
           break;
         }
-
-        // New tenant: generate temp password (sent via email later) — but for now use a random
-        // strong one; user resets via reset-password flow that we'll add when needed.
-        const tempPassword = randomBytes(12).toString('base64url');
-        const password_hash = await bcrypt.hash(tempPassword, 10);
-        const { tenant } = createTenant({ email, name: md.full_name || email, tier: (md.plan as any) || 'starter' });
-        updateTenant(tenant.id, {
-          password_hash,
-          full_name: md.full_name,
-          cpf: md.cpf,
-          phone_e164: md.phone,
-          authorized_phones: [md.phone],
-          stripe_customer_id: session.customer,
-          stripe_subscription_id: session.subscription,
-          status: 'active',
-          temp_password_for_email: tempPassword, // mark for email-sender to grab
-        } as any);
-        console.log(`[stripe] created tenant ${email} (${md.plan}); sending welcome email`);
-          void sendWelcomeEmail(email, md.full_name || email, tempPassword, md.plan || 'starter');
+        await provisionFromSession(session);
+        break;
+      }
+      case 'checkout.session.async_payment_succeeded': {
+        // Pix/boleto confirmado (pagamento assíncrono)
+        const session = event.data.object;
+        console.log(`[stripe] async payment succeeded — provisionando ${session.customer_email}`);
+        await provisionFromSession(session);
+        break;
+      }
+      case 'checkout.session.async_payment_failed': {
+        const session = event.data.object;
+        console.warn(`[stripe] async payment FAILED para ${session.customer_email} (boleto/pix expirou)`);
         break;
       }
       case 'customer.subscription.updated': {
         const sub = event.data.object;
-        // Find tenant by stripe_subscription_id
         const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
         const t = tenants.find((tt: any) => tt.stripe_subscription_id === sub.id);
         if (t) {
@@ -177,6 +228,54 @@ app.post('/webhooks/stripe', async (c) => {
   }
 });
 
+// Provisiona tenant a partir da session (email + wa welcome)
+async function provisionFromSession(session: any): Promise<void> {
+  const md = session.metadata || {};
+  const email = String(md.email || session.customer_email || '').toLowerCase();
+  if (!email) return;
+
+  const existing = findTenantByEmail(email);
+  if (existing) {
+    updateTenant(existing.id, {
+      tier: md.plan || existing.tier,
+      stripe_customer_id: session.customer,
+      stripe_subscription_id: session.subscription,
+      status: 'active',
+    } as any);
+    console.log(`[stripe] upgraded ${email} to ${md.plan}`);
+    return;
+  }
+
+  const tempPassword = randomBytes(9).toString('base64url'); // 12 chars, legível
+  const password_hash = await bcrypt.hash(tempPassword, 10);
+  const { tenant } = createTenant({ email, name: md.full_name || email, tier: (md.plan as any) || 'starter' });
+  updateTenant(tenant.id, {
+    password_hash,
+    full_name: md.full_name,
+    cpf: md.cpf,
+    phone_e164: md.phone,
+    authorized_phones: [md.phone],
+    stripe_customer_id: session.customer,
+    stripe_subscription_id: session.subscription,
+    status: 'active',
+    temp_password_for_email: tempPassword,
+  } as any);
+  console.log(`[stripe] created tenant ${email} (${md.plan}); disparando email + whatsapp`);
+
+  // Dispara email + WhatsApp em paralelo; nenhum é bloqueante
+  const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+  Promise.allSettled([
+    sendWelcomeEmail(email, md.full_name || email, tempPassword, md.plan || 'starter'),
+    md.phone ? sendWelcomeWhatsApp(md.phone, md.full_name || email, tempPassword, md.plan || 'starter', loginUrl) : Promise.resolve({ ok: false, error: 'no_phone' }),
+  ]).then(results => {
+    const [emailR, waR] = results;
+    console.log('[stripe] welcome:', {
+      email: emailR.status === 'fulfilled' ? (emailR.value as any)?.ok : 'rejected',
+      whatsapp: waR.status === 'fulfilled' ? (waR.value as any)?.ok : 'rejected',
+    });
+  });
+}
+
 // ─── GET /signup/success — landing após pagamento ───────────────────────
 app.get('/signup/success', (c) => {
   const html = [
@@ -187,15 +286,18 @@ app.get('/signup/success', (c) => {
     '<style>',
     'body{margin:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px}',
     'body::before{content:"";position:fixed;inset:0;background:radial-gradient(50% 50% at 50% 30%,rgba(155,89,252,.12),transparent 65%);pointer-events:none}',
-    '.card{position:relative;max-width:520px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:22px;padding:46px 38px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.55)}',
+    '.card{position:relative;max-width:540px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:22px;padding:46px 38px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.55)}',
     '.logo img{height:38px;margin-bottom:22px;filter:drop-shadow(0 4px 12px rgba(155,89,252,.35))}',
     '.check{width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#22C55E,#16A34A);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(34,197,94,.35)}',
     '.check svg{width:38px;height:38px;color:#fff;stroke-width:3}',
     'h1{background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:28px;margin:0 0 12px;letter-spacing:-.02em;font-weight:800}',
     'p{color:#B8B8D0;line-height:1.6;font-size:14.5px;margin:10px 0}',
+    '.channels{display:flex;gap:12px;margin:22px 0}',
+    '.ch{flex:1;background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.22);border-radius:12px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:#E8E8F0}',
+    '.ch svg{width:26px;height:26px;color:#9B59FC}',
     '.info{background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.2);border-radius:12px;padding:18px;margin:24px 0;text-align:left;font-size:13px;color:#B8B8D0;line-height:1.75}',
     '.info strong{color:#E8E8F0}',
-    '.btn{display:inline-block;margin-top:22px;padding:14px 30px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:12px;font-weight:700;font-size:14.5px;box-shadow:0 8px 24px rgba(155,89,252,.35);transition:transform .15s ease}',
+    '.btn{display:inline-block;margin-top:14px;padding:14px 30px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:12px;font-weight:700;font-size:14.5px;box-shadow:0 8px 24px rgba(155,89,252,.35);transition:transform .15s ease}',
     '.btn:hover{transform:translateY(-2px)}',
     '.note{font-size:11.5px;color:#6E6E8C;margin-top:16px}',
     '</style></head><body>',
@@ -203,16 +305,20 @@ app.get('/signup/success', (c) => {
     '<div class="logo"><img src="/assets/logo-official-full-white.png" alt="System Clow"></div>',
     '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
     '<h1>Pagamento confirmado!</h1>',
-    '<p>Sua conta foi criada e sua assinatura tá ativa.</p>',
+    '<p>Sua conta foi criada. Enviamos sua <strong>senha temporária</strong> por:</p>',
+    '<div class="channels">',
+    '<div class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg><span>Email</span></div>',
+    '<div class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span>WhatsApp</span></div>',
+    '</div>',
     '<div class="info">',
     '<strong>Próximos passos</strong><br>',
-    '1. Verifique seu email — enviamos sua <strong>senha temporária</strong><br>',
-    '2. Faça login em system-clow.pvcorretor01.com.br<br>',
+    '1. Pegue a senha temporária no email (ou WhatsApp)<br>',
+    '2. Faça login — troca de senha acontece automática no 1º acesso<br>',
     '3. Complete o onboarding (3 min): conecta WhatsApp + instala automações<br>',
     '4. Sua IA começa a atender 24/7',
     '</div>',
-    '<a href="/" class="btn">Fazer login →</a>',
-    '<div class="note">Email não chegou? Verifica o spam. Ainda sem? <a href="mailto:contato@pvcorretor01.com.br" style="color:#9B59FC">contato@pvcorretor01.com.br</a></div>',
+    '<a href="/" class="btn">Ir pro login →</a>',
+    '<div class="note">Não recebeu? Verifica o spam ou <a href="mailto:contato@pvcorretor01.com.br" style="color:#9B59FC">contato@pvcorretor01.com.br</a></div>',
     '</div></body></html>',
   ].join('');
   return c.html(html);

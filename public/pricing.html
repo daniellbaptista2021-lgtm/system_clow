@@ -548,9 +548,10 @@ function validateCPF(cpf) {
 }
 
 
-function showPaymentPending(url, popupRef) {
+function showPaymentPending(url, popupRef, sessionId) {
   const modal = document.querySelector('.modal');
   modal.innerHTML = '';
+
   const close = document.createElement('button');
   close.className = 'modal-close'; close.textContent = '\u00d7';
   close.addEventListener('click', closeModal);
@@ -559,27 +560,106 @@ function showPaymentPending(url, popupRef) {
   const container = document.createElement('div');
   container.style.cssText = 'text-align:center';
   container.innerHTML = [
-    '<div style="width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(155,89,252,.35)">',
+    '<div id="pending-spinner" style="width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(155,89,252,.35);animation:pulse 2s ease-in-out infinite">',
       '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:38px;height:38px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="13" y2="14"/></svg>',
     '</div>',
-    '<h3 style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:22px;margin:0 0 12px;letter-spacing:-.01em;font-weight:800">Finalize o pagamento</h3>',
-    '<p style="color:#B8B8D0;line-height:1.6;font-size:14px;margin:10px 0 20px">O Stripe abriu em uma <strong style="color:#E8E8F0">nova aba</strong> do navegador.<br>Finalize o pagamento por l\u00e1 e volte aqui pra fazer login.</p>',
+    '<h3 id="pending-title" style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:22px;margin:0 0 12px;letter-spacing:-.01em;font-weight:800">Aguardando pagamento</h3>',
+    '<p id="pending-desc" style="color:#B8B8D0;line-height:1.6;font-size:14px;margin:10px 0 20px">O Stripe abriu em uma <strong style="color:#E8E8F0">nova aba</strong>.<br>Finalize o pagamento por l\u00e1 \u2014 cart\u00e3o, pix ou boleto.<br><span style="color:#9B59FC;font-weight:600">Confirmamos automaticamente.</span></p>',
     '<div style="background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.22);border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:12.5px;color:#B8B8D0;line-height:1.7">',
-      '<strong style="color:#E8E8F0">O que esperar</strong><br>',
-      '1. Paga com cart\u00e3o no Stripe (aba nova)<br>',
-      '2. Recebe email com <strong>senha tempor\u00e1ria</strong><br>',
-      '3. Volta aqui e clica <strong>Fazer login</strong><br>',
-      '4. Completa onboarding em 3 min',
+      '<strong style="color:#E8E8F0">Assim que o Stripe confirmar:</strong><br>',
+      '\u2022 Enviamos <strong>senha tempor\u00e1ria</strong> por email',
+      '<br>\u2022 Enviamos tamb\u00e9m por <strong>WhatsApp</strong> no n\u00famero informado',
+      '<br>\u2022 Essa tela avan\u00e7a sozinha pro onboarding',
+      '<br><span style="color:#6E6E8C;font-size:11px">(pix confirma em segundos; boleto em at\u00e9 2 dias \u00fateis)</span>',
     '</div>',
-    '<a href="/" class="modal-btn" style="display:block;text-decoration:none;text-align:center;margin-top:10px">J\u00e1 paguei \u2014 ir pro login \u2192</a>',
     '<button type="button" id="reopenBtn" style="width:100%;padding:12px;margin-top:10px;background:transparent;border:1px solid rgba(255,255,255,.12);color:#9898B8;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px">Aba fechou? Reabrir pagamento</button>',
+    '<div id="poll-status" style="margin-top:14px;font-size:11.5px;color:#6E6E8C">Verificando status a cada 5s\u2026</div>',
   ].join('');
   modal.appendChild(container);
+
+  // Estilo do pulse
+  if (!document.getElementById('pending-anim-style')) {
+    const st = document.createElement('style');
+    st.id = 'pending-anim-style';
+    st.textContent = '@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}}';
+    document.head.appendChild(st);
+  }
 
   const reopenBtn = container.querySelector('#reopenBtn');
   if (reopenBtn) {
     reopenBtn.addEventListener('click', () => window.open(url, '_blank', 'noopener,noreferrer'));
   }
+
+  // Poll status a cada 5s
+  if (sessionId) startPaymentPoll(sessionId);
+}
+
+let _pollTimer = null;
+function startPaymentPoll(sessionId) {
+  if (_pollTimer) clearInterval(_pollTimer);
+  const statusEl = document.getElementById('poll-status');
+  let attempts = 0;
+  const MAX_ATTEMPTS = 240; // 20 minutos
+  const tick = async () => {
+    attempts++;
+    try {
+      const r = await fetch('/api/billing/session/' + encodeURIComponent(sessionId));
+      const d = await r.json();
+      if (d.ok && d.payment_status === 'paid') {
+        clearInterval(_pollTimer); _pollTimer = null;
+        showPaymentConfirmed();
+        return;
+      }
+      if (statusEl) {
+        if (d.payment_status === 'unpaid' && d.status === 'open') {
+          statusEl.textContent = 'Aguardando voc\u00ea finalizar no Stripe\u2026';
+        } else if (d.payment_status === 'unpaid' && d.status === 'complete') {
+          statusEl.textContent = 'Voc\u00ea escolheu pix/boleto \u2014 aguardando confirma\u00e7\u00e3o\u2026';
+        } else {
+          statusEl.textContent = 'Verificando\u2026 (tentativa ' + attempts + ')';
+        }
+      }
+    } catch (_) { /* silent */ }
+    if (attempts >= MAX_ATTEMPTS) {
+      clearInterval(_pollTimer); _pollTimer = null;
+      if (statusEl) statusEl.textContent = 'Timeout. Se j\u00e1 pagou, verifique seu email.';
+    }
+  };
+  _pollTimer = setInterval(tick, 5000);
+  tick(); // primeiro tick imediato
+}
+
+function showPaymentConfirmed() {
+  const modal = document.querySelector('.modal');
+  if (!modal) return;
+  modal.innerHTML = '';
+  const close = document.createElement('button');
+  close.className = 'modal-close'; close.textContent = '\u00d7';
+  close.addEventListener('click', closeModal);
+  modal.appendChild(close);
+
+  const c = document.createElement('div');
+  c.style.cssText = 'text-align:center';
+  c.innerHTML = [
+    '<div style="width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#22C55E,#16A34A);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(34,197,94,.4)">',
+      '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:38px;height:38px"><polyline points="20 6 9 17 4 12"/></svg>',
+    '</div>',
+    '<h3 style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:24px;margin:0 0 12px;letter-spacing:-.01em;font-weight:800">Pagamento confirmado!</h3>',
+    '<p style="color:#B8B8D0;line-height:1.6;font-size:14.5px;margin:10px 0 18px">Sua conta foi criada e a assinatura t\u00e1 ativa.</p>',
+    '<div style="display:flex;gap:10px;margin:18px 0">',
+      '<div style="flex:1;background:rgba(155,89,252,.1);border:1px solid rgba(155,89,252,.25);border-radius:12px;padding:14px 10px;font-size:12px;color:#E8E8F0;display:flex;flex-direction:column;align-items:center;gap:6px">',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="#9B59FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg>',
+        '<span>Senha no email</span>',
+      '</div>',
+      '<div style="flex:1;background:rgba(155,89,252,.1);border:1px solid rgba(155,89,252,.25);border-radius:12px;padding:14px 10px;font-size:12px;color:#E8E8F0;display:flex;flex-direction:column;align-items:center;gap:6px">',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="#9B59FC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+        '<span>Senha no WhatsApp</span>',
+      '</div>',
+    '</div>',
+    '<p style="color:#6E6E8C;font-size:12px;margin:10px 0 18px">Verifique sua caixa de entrada (e o spam) em <strong style="color:#9898B8">alguns segundos</strong>.</p>',
+    '<a href="/" class="modal-btn" style="display:block;text-decoration:none;text-align:center">Ir pro login \u2192</a>',
+  ].join('');
+  modal.appendChild(c);
 }
 
 document.getElementById('subForm').addEventListener('submit', async (e) => {
@@ -614,7 +694,7 @@ document.getElementById('subForm').addEventListener('submit', async (e) => {
       // Abre Stripe Checkout em nova aba
       const w = window.open(res.url, '_blank', 'noopener,noreferrer');
       // Substitui modal por tela de 'pagamento em andamento' com link fallback
-      showPaymentPending(res.url, w);
+      showPaymentPending(res.url, w, res.session_id);
       return;
     }
     if (res.error === 'email_in_use') {
