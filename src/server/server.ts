@@ -280,27 +280,50 @@ async function main(): Promise<void> {
   app.route('/v1/missions', missionRoutes);
   app.route('/v1/crm', crmRoutes);
   app.route('/webhooks/crm', crmWebhooks);
-  app.route('/auth', authRoutes);
-  app.route('/', stripeRoutes);
-  app.route('/v1/n8n', n8nRoutes);
-  app.route('/v1/branding', n8nRoutes);
-  console.log('  ✓ Missions: /v1/missions/:id');
-
-  // ─── Login Auth ─────────────────────────────────────────────────
+  // ─── Login Auth UNIFIED (registered BEFORE /auth mount pra ter precedência) ───
+  // Ordem importa no Hono: handler direto ganha do app.route('/auth', authRoutes).
+  // Aceita admin (username+password) OU tenant (email+password, ou username contendo '@').
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
   const ADMIN_PASS = process.env.CLOW_ADMIN_PASS;
 
   app.post('/auth/login', async (c) => {
-    if (!ADMIN_USER || !ADMIN_PASS) {
-      return c.json({ ok: false, error: 'Login admin não configurado no servidor' }, 503);
+    const body = await c.req.json().catch(() => ({})) as any;
+    const { username, email, password } = body as { username?: string; email?: string; password?: string };
+    if (!password || (!username && !email)) {
+      return c.json({ ok: false, error: 'missing_credentials' }, 400);
     }
-    const body = await c.req.json().catch(() => ({}));
-    const { username, password } = body as { username?: string; password?: string };
-    if (username === ADMIN_USER && password === ADMIN_PASS) {
+
+    // 1) Admin login (username match)
+    if (username && ADMIN_USER && ADMIN_PASS && username === ADMIN_USER && password === ADMIN_PASS) {
       const token = createAdminSessionToken(username);
       return c.json({ ok: true, token });
     }
-    return c.json({ ok: false, error: 'Credenciais inválidas' }, 401);
+
+    // 2) Tenant login (email). Form antigo manda 'username' que pode ser o email.
+    const emailStr = String(email || username || '').toLowerCase().trim();
+    if (emailStr && emailStr.includes('@')) {
+      try {
+        const { findTenantByEmail, updateTenant } = await import('../tenancy/tenantStore.js');
+        const { signUserToken } = await import('../auth/authRoutes.js');
+        const bcrypt = (await import('bcryptjs')).default;
+        const tenant = findTenantByEmail(emailStr);
+        if (tenant && (tenant as any).password_hash) {
+          if (tenant.status === 'cancelled' || tenant.status === 'suspended') {
+            return c.json({ ok: false, error: 'account_blocked' }, 403);
+          }
+          const ok = await bcrypt.compare(password, (tenant as any).password_hash);
+          if (ok) {
+            updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
+            const token = signUserToken({ tid: tenant.id, uid: tenant.id, email: tenant.email, role: 'owner' });
+            return c.json({ ok: true, token, user: { id: tenant.id, email: tenant.email, tier: tenant.tier, role: 'owner' } });
+          }
+        }
+      } catch (err: any) {
+        console.error('[auth tenant fallback]', err?.message);
+      }
+    }
+
+    return c.json({ ok: false, error: 'invalid_credentials' }, 401);
   });
 
   app.get('/auth/verify', (c) => {
@@ -312,6 +335,13 @@ async function main(): Promise<void> {
     if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true });
     return c.json({ ok: false }, 401);
   });
+
+  // Route mounts DEPOIS pra preservar precedência dos handlers acima
+  app.route('/auth', authRoutes);
+  app.route('/', stripeRoutes);
+  app.route('/v1/n8n', n8nRoutes);
+  app.route('/v1/branding', n8nRoutes);
+  console.log('  ✓ Missions: /v1/missions/:id');
 
   // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
   app.get('/downloads/*', (c) => {
