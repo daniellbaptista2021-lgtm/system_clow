@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Clow — Inteligência Infinita para Vendas</title>
+<meta name="description" content="CRM completo + Agente IA via WhatsApp + Automações. Substitui Pipedrive + WhatsApp Business + Make em um único produto.">
+<link rel="icon" href="/assets/favicon-gold.png">
+<style>
+:root {
+  --bg:#08081a; --bg-2:#0F0F24; --bg-3:#14142A; --bg-4:#1E1E3C;
+  --text:#E8E8F0; --text-2:#B8B8D0; --text-dim:#9898B8; --text-faint:#6E6E8C;
+  --purple:#9B59FC; --blue:#4A9EFF; --green:#22C55E; --amber:#F59E0B; --red:#EF4444;
+  --border:rgba(255,255,255,.08); --border-2:rgba(155,89,252,.2);
+  --grad:linear-gradient(135deg,#9B59FC,#4A9EFF);
+  --grad-soft:linear-gradient(135deg,rgba(155,89,252,.15),rgba(74,158,255,.15));
+  --shadow-lg:0 20px 60px rgba(0,0,0,.5);
+  --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5;scroll-behavior:smooth}
+a{color:inherit;text-decoration:none}
+.hide{display:none !important}
+
+/* ─── NAV ─── */
+nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1200px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.brand svg{height:32px;width:auto;filter:drop-shadow(0 2px 6px rgba(155,89,252,.35))}
+.brand-name{font-weight:700;font-size:16px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav-cta{display:flex;gap:10px;align-items:center}
+.nav-cta a{padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600}
+.nav-cta .link{color:var(--text-dim)}
+.nav-cta .link:hover{color:var(--text)}
+.nav-cta .btn-primary{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(155,89,252,.28)}
+
+/* ─── HERO ─── */
+.hero{max-width:1100px;margin:0 auto;padding:80px 24px 40px;text-align:center;position:relative}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 50% 30%,rgba(155,89,252,.12),transparent);pointer-events:none;z-index:-1}
+.hero-badge{display:inline-block;padding:7px 14px;background:var(--grad-soft);border:1px solid var(--border-2);border-radius:999px;font-size:12px;font-weight:600;color:var(--purple);letter-spacing:.3px;margin-bottom:24px}
+.hero h1{font-size:clamp(36px,5vw,56px);font-weight:800;margin:0 0 20px;line-height:1.1;letter-spacing:-.02em}
+.hero h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:18px;color:var(--text-dim);max-width:700px;margin:0 auto 40px;line-height:1.6}
+.hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 26px;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;border:none;font-family:inherit;transition:transform .15s ease,box-shadow .15s ease}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 24px rgba(155,89,252,.35)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(155,89,252,.45)}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--purple)}
+
+/* ─── FEATURES ─── */
+.features{max-width:1100px;margin:0 auto;padding:60px 24px}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.feat{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;transition:border-color .18s ease,transform .18s ease}
+.feat:hover{border-color:var(--border-2);transform:translateY(-2px)}
+.feat-ico{width:44px;height:44px;border-radius:12px;background:var(--grad-soft);display:flex;align-items:center;justify-content:center;color:var(--purple);margin-bottom:14px}
+.feat-ico svg{width:22px;height:22px}
+.feat h3{font-size:15px;margin:0 0 6px;font-weight:700}
+.feat p{font-size:13px;color:var(--text-dim);margin:0;line-height:1.55}
+
+/* ─── PLANS ─── */
+.plans-section{max-width:1200px;margin:0 auto;padding:80px 24px 40px}
+.plans-title{text-align:center;margin-bottom:50px}
+.plans-title h2{font-size:clamp(28px,3.5vw,38px);margin:0 0 12px;letter-spacing:-.02em}
+.plans-title p{color:var(--text-dim);font-size:16px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;max-width:1100px;margin:0 auto}
+.plan{position:relative;background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:28px;cursor:pointer;transition:all .22s ease;display:flex;flex-direction:column;gap:14px}
+.plan:hover{border-color:rgba(155,89,252,.4);transform:translateY(-4px);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.plan.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(155,89,252,.08),rgba(15,15,36,.95));box-shadow:0 0 0 3px rgba(155,89,252,.15),0 20px 60px rgba(155,89,252,.18)}
+.plan.featured::before{content:"MAIS POPULAR";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;padding:4px 14px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:1px;box-shadow:0 4px 12px rgba(155,89,252,.35)}
+.plan-name{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--purple);text-transform:uppercase}
+.plan-price{display:flex;align-items:baseline;gap:6px}
+.plan-price .val{font-size:42px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.02em}
+.plan-price .per{font-size:14px;color:var(--text-dim)}
+.plan-desc{color:var(--text-dim);font-size:13px;margin:2px 0 10px}
+.plan-features{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;flex:1}
+.plan-features li{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text-2)}
+.plan-features li::before{content:"✓";color:var(--green);font-weight:800;flex-shrink:0}
+.plan-features li.strong{color:var(--text);font-weight:600}
+.plan-pick{width:100%;padding:13px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:transparent;color:var(--text);transition:all .18s ease}
+.plan-pick:hover{border-color:var(--purple);color:var(--purple)}
+.plan.selected .plan-pick{background:var(--grad);color:#fff;border:none;box-shadow:0 6px 20px rgba(155,89,252,.3)}
+
+/* ─── SIGNUP FORM ─── */
+.signup-section{max-width:720px;margin:0 auto;padding:40px 24px 100px;scroll-margin-top:80px}
+.signup-section h2{font-size:28px;margin:0 0 10px;text-align:center}
+.signup-section > p{color:var(--text-dim);text-align:center;margin:0 0 30px;font-size:15px}
+.form-card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:30px}
+.selected-plan{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--grad-soft);border:1px solid var(--border-2);border-radius:12px;margin-bottom:24px;font-size:13px}
+.selected-plan .sp-label{color:var(--text-dim)}
+.selected-plan .sp-val{font-weight:700;color:var(--text);font-size:14px}
+.selected-plan .sp-val strong{color:var(--purple)}
+.selected-plan a{color:var(--purple);font-size:12px;font-weight:600}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.form-grid .full{grid-column:1 / -1}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.field input{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;transition:border-color .15s ease,box-shadow .15s ease}
+.field input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(155,89,252,.15)}
+.field .hint{font-size:11px;color:var(--text-faint)}
+.field.error input{border-color:var(--red)}
+.field .err{font-size:11px;color:var(--red);margin-top:2px}
+.form-footer{margin-top:26px}
+.terms{font-size:12px;color:var(--text-dim);margin-bottom:16px;line-height:1.6}
+.terms a{color:var(--purple)}
+.submit-btn{width:100%;padding:15px;background:var(--grad);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;box-shadow:0 8px 24px rgba(155,89,252,.3);transition:transform .15s ease,box-shadow .15s ease}
+.submit-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 30px rgba(155,89,252,.4)}
+.submit-btn:disabled{opacity:.55;cursor:wait}
+.form-error{color:var(--red);font-size:13px;margin-top:14px;padding:12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;display:none}
+.form-error.show{display:block}
+.form-success{color:var(--green);font-size:13px;margin-top:14px;padding:14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;display:none;line-height:1.6}
+.form-success.show{display:block}
+
+/* ─── FOOTER ─── */
+footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;color:var(--text-faint);font-size:12px}
+
+@media (max-width:700px){
+  .form-grid{grid-template-columns:1fr}
+  .hero{padding:50px 20px 30px}
+  .plans{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ─── NAV ─── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <svg viewBox="0 0 240 120" fill="none" aria-label="System Clow">
+        <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs>
+        <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z" stroke="url(#bg)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">System Clow</span>
+    </div>
+    <div class="nav-cta">
+      <a href="#planos" class="link">Planos</a>
+      <a href="/" class="btn-primary">Entrar</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── HERO ─── -->
+<section class="hero">
+  <div class="hero-badge">⚡ IA + CRM + WhatsApp em um só lugar</div>
+  <h1>Seu atendimento <span class="grad">24/7</span><br>com vendedor IA que <span class="grad">fecha negócio</span></h1>
+  <p>Cada cliente do WhatsApp vira um lead no seu CRM automaticamente. A IA responde, qualifica, move cards no pipeline e aciona cobrança. Você só aparece pra fechar.</p>
+  <div class="hero-ctas">
+    <a href="#planos" class="btn btn-primary">Começar agora →</a>
+    <a href="/" class="btn btn-secondary">Já sou cliente</a>
+  </div>
+</section>
+
+<!-- ─── FEATURES ─── -->
+<section class="features">
+  <div class="features-grid">
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <h3>WhatsApp com IA 24/7</h3>
+      <p>Conecta seu número (Meta oficial ou Z-API). A IA responde clientes mesmo às 3h da manhã, registra tudo e escala quando precisa humano.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></div>
+      <h3>CRM Kanban completo</h3>
+      <p>Pipeline de vendas, contatos, histórico unificado, cobrança recorrente, estoque. Tudo que Pipedrive + RD Station faz, por 1/3 do preço.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+      <h3>Automações nativas</h3>
+      <p>"Quando cliente mandar 'preço', move pro funil qualificado e agenda follow-up 24h." Regras no-code + 5 templates prontos.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="9" y2="15"/></svg></div>
+      <h3>Cobrança automática</h3>
+      <p>Mensalidade recorrente com lembretes WhatsApp (T-3, T-1, no dia). Você marca como pago e segue a vida. Sem planilha.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <h3>Equipe com atribuição</h3>
+      <p>Múltiplos vendedores, atribuição round-robin ou por carga. Métricas de resposta e conversão por pessoa.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></div>
+      <h3>n8n grátis incluso</h3>
+      <p>Chatbot 24/7 pronto. Integra Instagram, Telegram, email, planilha. Do Starter ao Empresarial você ganha 1 a 8 fluxos.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PLANS ─── -->
+<section class="plans-section" id="planos">
+  <div class="plans-title">
+    <h2>Escolha seu plano</h2>
+    <p>Sem fidelidade. Cancela quando quiser. Troca de plano quando crescer.</p>
+  </div>
+  <div class="plans">
+    <div class="plan" data-plan="starter" data-price="197">
+      <div class="plan-name">Starter</div>
+      <div class="plan-price"><span class="val">R$ 197</span><span class="per">/mês</span></div>
+      <div class="plan-desc">Para autônomos e pequenos negócios começando.</div>
+      <ul class="plan-features">
+        <li class="strong">1 usuário</li>
+        <li class="strong">1 número WhatsApp</li>
+        <li class="strong">500 mensagens IA/mês</li>
+        <li>Até 500 contatos</li>
+        <li>2 boards no Kanban</li>
+        <li>5 automações ativas</li>
+        <li>Cobrança recorrente</li>
+        <li>1 fluxo n8n + chatbot 24/7</li>
+        <li>Suporte por email</li>
+      </ul>
+      <button class="plan-pick">Escolher Starter</button>
+    </div>
+
+    <div class="plan featured" data-plan="profissional" data-price="497">
+      <div class="plan-name">Profissional</div>
+      <div class="plan-price"><span class="val">R$ 497</span><span class="per">/mês</span></div>
+      <div class="plan-desc">Para equipes pequenas e médias que já vendem de verdade.</div>
+      <ul class="plan-features">
+        <li class="strong">5 usuários (vendedores)</li>
+        <li class="strong">3 números WhatsApp</li>
+        <li class="strong">3.000 mensagens IA/mês</li>
+        <li>Até 5.000 contatos</li>
+        <li>10 boards no Kanban</li>
+        <li>30 automações ativas</li>
+        <li>Cobrança recorrente + relatórios</li>
+        <li>4 fluxos n8n + chatbots 24/7</li>
+        <li>Suporte WhatsApp + email</li>
+        <li>API + Webhooks</li>
+      </ul>
+      <button class="plan-pick">Escolher Profissional</button>
+    </div>
+
+    <div class="plan" data-plan="empresarial" data-price="1197">
+      <div class="plan-name">Empresarial</div>
+      <div class="plan-price"><span class="val">R$ 1.197</span><span class="per">/mês</span></div>
+      <div class="plan-desc">Para empresas que querem white-label e operação completa.</div>
+      <ul class="plan-features">
+        <li class="strong">20 usuários</li>
+        <li class="strong">10 números WhatsApp</li>
+        <li class="strong">8.000 mensagens IA/mês</li>
+        <li>Até 50.000 contatos</li>
+        <li>30 boards no Kanban</li>
+        <li>100 automações ativas</li>
+        <li>Relatórios avançados + export</li>
+        <li>8 fluxos n8n + chatbots 24/7</li>
+        <li>Suporte dedicado WhatsApp 24/7</li>
+        <li>White-label (logo + cores)</li>
+        <li>Domínio próprio (crm.suaempresa.com.br)</li>
+        <li>SLA 99.9%</li>
+      </ul>
+      <button class="plan-pick">Escolher Empresarial</button>
+    </div>
+  </div>
+</section>
+
+<!-- ─── SIGNUP FORM ─── -->
+<section class="signup-section" id="signup">
+  <h2>Crie sua conta</h2>
+  <p>Em 2 minutos você tá logado e pronto pra conectar seu WhatsApp.</p>
+
+  <div class="form-card">
+    <div class="selected-plan">
+      <div>
+        <div class="sp-label">Plano selecionado:</div>
+        <div class="sp-val" id="planLabel"><strong>Profissional</strong> — R$ 497/mês</div>
+      </div>
+      <a href="#planos">Trocar plano</a>
+    </div>
+
+    <form id="signupForm" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="full_name">Nome completo</label>
+          <input type="text" name="full_name" id="full_name" placeholder="João da Silva" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="email">Email (será seu login)</label>
+          <input type="email" name="email" id="email" placeholder="voce@empresa.com.br" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="password">Senha (mín. 8 caracteres)</label>
+          <input type="password" name="password" id="password" placeholder="••••••••" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label for="cpf">CPF</label>
+          <input type="text" name="cpf" id="cpf" placeholder="000.000.000-00" required inputmode="numeric" maxlength="14">
+        </div>
+        <div class="field">
+          <label for="birth_date">Data de nascimento</label>
+          <input type="date" name="birth_date" id="birth_date" required>
+        </div>
+        <div class="field">
+          <label for="phone">Telefone WhatsApp</label>
+          <input type="tel" name="phone" id="phone" placeholder="(21) 99999-8888" required autocomplete="tel">
+          <div class="hint">Apenas esse número poderá comandar sua IA.</div>
+        </div>
+        <div class="field">
+          <label for="cep">CEP (opcional)</label>
+          <input type="text" name="cep" id="cep" placeholder="00000-000" inputmode="numeric" maxlength="9">
+        </div>
+        <div class="field full">
+          <label for="address">Endereço (opcional)</label>
+          <input type="text" name="address" id="address" placeholder="Rua exemplo, 123 — Bairro, Cidade/UF">
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <div class="terms">
+          Ao criar conta você concorda com nossos <a href="#">Termos</a> e <a href="#">Política de Privacidade</a>.
+          Sem fidelidade — cancele quando quiser.
+        </div>
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span id="submitLabel">Assinar e criar conta</span>
+        </button>
+        <div class="form-error" id="formError"></div>
+        <div class="form-success" id="formSuccess"></div>
+      </div>
+    </form>
+  </div>
+</section>
+
+<footer>
+  System Clow © 2026 · Todos os direitos reservados
+</footer>
+
+<script>
+// ─── Plan selection ──────────────────────────────────────────────────
+const plans = { starter:{name:'Starter',price:197}, profissional:{name:'Profissional',price:497}, empresarial:{name:'Empresarial',price:1197} };
+let selectedPlan = 'profissional';
+
+function selectPlan(key) {
+  selectedPlan = key;
+  document.querySelectorAll('.plan').forEach(p => p.classList.toggle('selected', p.dataset.plan === key));
+  const p = plans[key];
+  document.getElementById('planLabel').innerHTML = '<strong>' + p.name + '</strong> — R$ ' + p.price + '/mês';
+}
+
+document.querySelectorAll('.plan').forEach(p => {
+  p.addEventListener('click', (e) => {
+    if (!e.target.matches('.plan-pick')) return;
+    selectPlan(p.dataset.plan);
+    document.getElementById('signup').scrollIntoView({behavior:'smooth'});
+  });
+});
+selectPlan('profissional');
+
+// ─── Input masks ─────────────────────────────────────────────────────
+function maskCPF(v) {
+  v = v.replace(/\D/g,'').slice(0,11);
+  if (v.length > 9) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4');
+  if (v.length > 6) return v.replace(/(\d{3})(\d{3})(\d{1,3})/,'$1.$2.$3');
+  if (v.length > 3) return v.replace(/(\d{3})(\d{1,3})/,'$1.$2');
+  return v;
+}
+function maskPhone(v) {
+  v = v.replace(/\D/g,'').slice(0,11);
+  if (v.length > 10) return v.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
+  if (v.length > 6)  return v.replace(/(\d{2})(\d{4,5})(\d{0,4})/,'($1) $2-$3').trim();
+  if (v.length > 2)  return v.replace(/(\d{2})(\d{0,5})/,'($1) $2').trim();
+  return v;
+}
+function maskCEP(v) {
+  v = v.replace(/\D/g,'').slice(0,8);
+  if (v.length > 5) return v.replace(/(\d{5})(\d{1,3})/,'$1-$2');
+  return v;
+}
+document.getElementById('cpf').addEventListener('input', e => { e.target.value = maskCPF(e.target.value); });
+document.getElementById('phone').addEventListener('input', e => { e.target.value = maskPhone(e.target.value); });
+document.getElementById('cep').addEventListener('input', e => { e.target.value = maskCEP(e.target.value); });
+
+// ─── CPF validation ──────────────────────────────────────────────────
+function validateCPF(cpf) {
+  const c = cpf.replace(/\D/g,'');
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+  let d1 = 11 - (sum % 11); if (d1 >= 10) d1 = 0;
+  if (d1 !== parseInt(c[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+  let d2 = 11 - (sum % 11); if (d2 >= 10) d2 = 0;
+  return d2 === parseInt(c[10]);
+}
+
+// ─── Submit ──────────────────────────────────────────────────────────
+const form = document.getElementById('signupForm');
+const submitBtn = document.getElementById('submitBtn');
+const submitLabel = document.getElementById('submitLabel');
+const errBox = document.getElementById('formError');
+const okBox = document.getElementById('formSuccess');
+
+function showError(msg) { errBox.textContent = msg; errBox.classList.add('show'); okBox.classList.remove('show'); }
+function showSuccess(msg) { okBox.innerHTML = msg; okBox.classList.add('show'); errBox.classList.remove('show'); }
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errBox.classList.remove('show');
+  okBox.classList.remove('show');
+
+  const fd = new FormData(form);
+  const data = {
+    full_name: fd.get('full_name').trim(),
+    email: fd.get('email').trim().toLowerCase(),
+    password: fd.get('password'),
+    cpf: fd.get('cpf').replace(/\D/g,''),
+    birth_date: fd.get('birth_date'),
+    phone: '55' + fd.get('phone').replace(/\D/g,''),
+    address: [fd.get('cep'), fd.get('address')].filter(Boolean).join(' · ') || null,
+    plan_tier: selectedPlan,
+  };
+
+  // Client-side validation
+  if (data.full_name.length < 3) return showError('Nome muito curto.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return showError('Email inválido.');
+  if (data.password.length < 8) return showError('Senha precisa de mínimo 8 caracteres.');
+  if (!validateCPF(data.cpf)) return showError('CPF inválido.');
+  if (!data.birth_date) return showError('Informe a data de nascimento.');
+  if (data.phone.replace(/\D/g,'').length < 12) return showError('Telefone incompleto.');
+
+  submitBtn.disabled = true;
+  submitLabel.textContent = 'Criando sua conta...';
+
+  try {
+    // Try Stripe Checkout first
+    const stripeResp = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: data.plan_tier, email: data.email, full_name: data.full_name, cpf: data.cpf, phone: data.phone }),
+    });
+
+    if (stripeResp.ok) {
+      const res = await stripeResp.json();
+      if (res.url) {
+        // Store signup info in sessionStorage for the Stripe success handler
+        sessionStorage.setItem('pending_signup', JSON.stringify(data));
+        submitLabel.textContent = 'Redirecionando pro pagamento...';
+        location.href = res.url;
+        return;
+      }
+    }
+
+    // Fallback: direct signup (dev mode / no Stripe configured)
+    const errBody = stripeResp.ok ? null : await stripeResp.json().catch(() => ({}));
+    if (errBody && errBody.error === 'email_in_use') {
+      return showError('Esse email já tem conta. Clique "Entrar" no topo pra logar.');
+    }
+
+    // Direct signup
+    const r = await fetch('/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const resp = await r.json();
+    if (!r.ok) {
+      const msg = {
+        invalid_email: 'Email inválido.',
+        invalid_cpf: 'CPF inválido.',
+        invalid_phone: 'Telefone inválido.',
+        invalid_birth_date: 'Data de nascimento inválida.',
+        password_too_short: 'Senha muito curta (mín. 8 caracteres).',
+        email_in_use: 'Esse email já tem conta.',
+      }[resp.error] || resp.message || 'Erro ao criar conta.';
+      return showError(msg);
+    }
+
+    // Success: save token + redirect
+    localStorage.setItem('clow_token', resp.token);
+    showSuccess('<strong>✓ Conta criada!</strong><br>Te redirecionando pro System Clow...');
+    setTimeout(() => { location.href = '/'; }, 1500);
+
+  } catch (err) {
+    showError('Erro de conexão: ' + (err.message || 'desconhecido'));
+    submitBtn.disabled = false;
+    submitLabel.textContent = 'Assinar e criar conta';
+  }
+});
+</script>
+</body>
+</html>

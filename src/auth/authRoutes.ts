@@ -255,4 +255,16 @@ app.post('/authorized-phones', async (c) => {
   return c.json({ ok: true, phones });
 });
 
+// ─── /auth/usage — current month usage per limits ──────────────────────
+app.get('/usage', async (c) => {
+  const auth = c.req.header('Authorization') || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  const payload = verifyUserToken(token);
+  if (!payload) return c.json({ error: 'unauthorized' }, 401);
+  const { getQuotaStatus } = await import('../billing/quotaGuard.js');
+  const status = getQuotaStatus(payload.tid);
+  if (!status) return c.json({ error: 'tenant_not_found' }, 404);
+  return c.json(status);
+});
+
 export default app;

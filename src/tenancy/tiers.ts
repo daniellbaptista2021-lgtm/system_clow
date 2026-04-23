@@ -9,7 +9,7 @@
  *   BUSINESS:     R$897   - ~R$400 avg      = ~R$497 margin (55%)
  */
 
-export type TierName = 'one' | 'smart' | 'profissional' | 'business';
+export type TierName = 'one' | 'smart' | 'profissional' | 'business' | 'starter' | 'empresarial';
 
 export interface TierConfig {
   price_brl: number;
@@ -56,6 +56,22 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_concurrent_sessions: 100,
     max_workspace_size_mb: 20000,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'priority', 'custom_skills'],
+  },
+  starter: {
+    price_brl: 197,
+    max_messages_per_month: 500,
+    max_cost_usd_per_month: 6,
+    max_concurrent_sessions: 3,
+    max_workspace_size_mb: 500,
+    features: ['basic_tools', 'whatsapp', 'crm'],
+  },
+  empresarial: {
+    price_brl: 1197,
+    max_messages_per_month: 8000,
+    max_cost_usd_per_month: 80,
+    max_concurrent_sessions: 50,
+    max_workspace_size_mb: 10000,
+    features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'crm', 'whitelabel', 'api'],
   },
 } as const;
 

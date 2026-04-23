@@ -676,6 +676,33 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     const phoneNumberId = payload?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     tenantId = await resolveTenantForMeta(c.req, phoneNumberId);
 
+    // Quota gate: check monthly message limit per plan
+    try {
+      const { checkAndIncrementMessageQuota } = await import('../billing/quotaGuard.js');
+      const q = checkAndIncrementMessageQuota(tenantId);
+      if (!q.allowed) {
+        const reason = q.reason === 'over_hard_limit' ? 'Limite mensal atingido (2× plano). Upgrade em /signup ou aguarde virar do mês.' : 'Conta suspensa. Contate suporte.';
+        console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] QUOTA BLOCK: ${q.reason} (${q.current}/${q.limit})`);
+        // Notify user once via WA so they know
+        try {
+          const config2 = getMetaConfig();
+          if (config2) {
+            await fetch(`https://graph.facebook.com/${config2.apiVersion}/${config2.phoneNumberId}/messages`, {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + config2.accessToken, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messaging_product: 'whatsapp', to: phone.replace(/\D/g,''), type: 'text', text: { body: '⚠️ ' + reason } }),
+            });
+          }
+        } catch {}
+        return c.json({ ok: true, blocked: 'quota' });
+      }
+      if (q.overage_msgs > 0 && q.overage_msgs === 1) {
+        console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] entered OVERAGE zone (custo extra R$ ${(q.overage_cost_cents/100).toFixed(2)}/msg)`);
+      }
+    } catch (err: any) {
+      console.warn('[quota check] failed, allowing msg:', err.message);
+    }
+
     // Gate: only owner-authorized phones may invoke the agent (prevents random
     // people from triggering the AI on someone else's account).
     if (!(await isPhoneAuthorized(tenantId, phone))) {

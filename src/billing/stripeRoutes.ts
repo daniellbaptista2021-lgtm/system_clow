@@ -23,6 +23,7 @@ import { findTenantByEmail, createTenant, updateTenant } from '../tenancy/tenant
 import { signUserToken } from '../auth/authRoutes.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { sendWelcomeEmail } from '../notifications/mailer.js';
 
 const app = new Hono();
 
@@ -137,7 +138,8 @@ app.post('/webhooks/stripe', async (c) => {
           status: 'active',
           temp_password_for_email: tempPassword, // mark for email-sender to grab
         } as any);
-        console.log(`[stripe] created tenant ${email} (${md.plan}); temp pwd ready for email`);
+        console.log(`[stripe] created tenant ${email} (${md.plan}); sending welcome email`);
+          void sendWelcomeEmail(email, md.full_name || email, tempPassword, md.plan || 'starter');
         break;
       }
       case 'customer.subscription.updated': {

@@ -12,6 +12,7 @@ import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import * as automations from './automations.js';
 import { processBillingTick } from './billing.js';
+import { rotateMonthlyAllTenants } from '../billing/quotaGuard.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -32,6 +33,25 @@ export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
 }
 
+
+
+/** Track last rotation day to avoid running twice per day. */
+let _lastRotationDay = -1;
+function maybeRotateMonthly() {
+  try {
+    const now = new Date();
+    const day = now.getUTCDate();
+    // Only on day 1 of month, and not already done today
+    if (day !== 1) return;
+    const key = now.getUTCFullYear() * 100 + now.getUTCMonth();
+    if (_lastRotationDay === key) return;
+    _lastRotationDay = key;
+    rotateMonthlyAllTenants();
+  } catch (err: any) {
+    console.warn('[scheduler monthly rotate] err:', err.message);
+  }
+}
+
 async function tick(): Promise<void> {
   if (_runningTick) return;
   _runningTick = true;
@@ -42,6 +62,7 @@ async function tick(): Promise<void> {
       detectDueApproaching(),
       processBillingTick(),
     ]);
+    maybeRotateMonthly();
   } catch (e: any) {
     console.warn('[CRM scheduler] tick error:', e.message);
   } finally {

@@ -28,6 +28,7 @@ import crmWebhooks from '../crm/webhooks.js';
 import { startScheduler } from '../crm/scheduler.js';
 import authRoutes from '../auth/authRoutes.js';
 import stripeRoutes from '../billing/stripeRoutes.js';
+import n8nRoutes from '../billing/n8nRoutes.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
@@ -281,6 +282,8 @@ async function main(): Promise<void> {
   app.route('/webhooks/crm', crmWebhooks);
   app.route('/auth', authRoutes);
   app.route('/', stripeRoutes);
+  app.route('/v1/n8n', n8nRoutes);
+  app.route('/v1/branding', n8nRoutes);
   console.log('  ✓ Missions: /v1/missions/:id');
 
   // ─── Login Auth ─────────────────────────────────────────────────
@@ -397,6 +400,16 @@ async function main(): Promise<void> {
   });
   app.get('/crm', (c) => Response.redirect(new URL('/crm/', c.req.url).toString(), 302) as any);
 
+  app.get('/signup', async (c) => {
+    try {
+      const fsMod = await import('fs');
+      const pathMod = await import('path');
+      const file = pathMod.join(process.cwd(), 'public/signup.html');
+      if (!fsMod.existsSync(file)) return c.text('not found', 404);
+      const buf = fsMod.readFileSync(file);
+      return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
+    } catch (e: any) { return c.text('error: ' + e.message, 500); }
+  });
   app.get('/assets/*', (c) => {
     const filePath = path.resolve(process.cwd(), 'public', c.req.path.slice(1));
     if (fs.existsSync(filePath)) {
