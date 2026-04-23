@@ -624,4 +624,60 @@ app.get('/events', async (c) => {
   });
 });
 
+
+// ═══ AUTH EXCHANGE: trade System Clow session token for CRM api_key ════
+// Used by the System Clow shell to open CRM in-app without asking the user
+// for an API key. When user logs into System Clow (workspace), this endpoint
+// gives them the CRM key for their tenant.
+//
+// Today: admin session token → admin tenant key
+// Tomorrow (multi-tenant SaaS): tenant session token → that tenant's key
+app.post('/auth/exchange', async (c) => {
+  const authHeader = c.req.header('Authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return c.json({ error: 'missing_token' }, 401);
+
+  // Try admin session first
+  const adm = (await import('../server/middleware/tenantAuth.js')).verifyAdminSessionToken(token);
+  if (adm.ok) {
+    // Map admin to admin@clow.dev tenant (the one with assets + active subs)
+    const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
+    const tenant = tenants.find(t => t.email === 'admin@clow.dev') || tenants[0];
+    if (!tenant) return c.json({ error: 'no_tenant' }, 404);
+    // Find or create a CRM key for this tenant
+    const keys = (await import('../tenancy/tenantStore.js')).listApiKeysForTenant(tenant.id);
+    let apiKey: string;
+    const existing = keys.find(k => k.name && k.name.startsWith('crm-shell-'));
+    if (existing) {
+      // We dont store raw keys, so always create a fresh shell key per session
+      // (cheap; old ones stay valid until rotated)
+      apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
+    } else {
+      apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
+    }
+    return c.json({
+      api_key: apiKey,
+      tenant_id: tenant.id,
+      tenant_name: tenant.name,
+      tenant_email: tenant.email,
+      tier: tenant.tier,
+    });
+  }
+
+  // Try tenant API key (if user logs in with their key directly)
+  const hash = (await import('../tenancy/tenantStore.js')).hashApiKey(token);
+  const tenant = (await import('../tenancy/tenantStore.js')).findTenantByApiKeyHash(hash);
+  if (tenant) {
+    return c.json({
+      api_key: token,
+      tenant_id: tenant.id,
+      tenant_name: tenant.name,
+      tenant_email: tenant.email,
+      tier: tenant.tier,
+    });
+  }
+
+  return c.json({ error: 'invalid_token' }, 401);
+});
+
 export default app;
