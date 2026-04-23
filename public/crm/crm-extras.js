@@ -350,6 +350,64 @@
     document.body.append(backdrop);
   }
 
+  
+  async function openEditSubscriptionModal(s) {
+    const contacts = (await api('/contacts?limit=200')).contacts || [];
+    const backdrop = el('div', { class: 'modal-backdrop' });
+    const form = el('form', { on: { submit: async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      try {
+        await api('/subscriptions/' + s.id, { method: 'PATCH', body: {
+          planName: fd.get('planName'),
+          amountCents: Math.round(parseFloat(fd.get('amount')) * 100),
+          cycle: fd.get('cycle'),
+          nextChargeAt: new Date(fd.get('nextCharge')).getTime(),
+        } });
+        backdrop.remove();
+        await renderSubsList();
+        toast('Assinatura atualizada', 'success');
+      } catch (err) { toast('Erro: ' + err.message, 'error'); }
+    } } });
+    const contact = contacts.find(c => c.id === s.contactId);
+    const cycleSel = el('select', { name: 'cycle', required: '' });
+    for (const c of ['monthly','weekly','quarterly','yearly','one_time']) {
+      const opt = el('option', { value: c }, c);
+      if (c === s.cycle) opt.selected = true;
+      cycleSel.append(opt);
+    }
+    const dt = new Date(s.nextChargeAt);
+    const pad = (n) => String(n).padStart(2,'0');
+    const dtIso = dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+    const planInput = el('input', { name: 'planName', type: 'text', value: s.planName, required: '', style: 'padding:8px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px' });
+    const amountInput = el('input', { name: 'amount', type: 'number', step: '0.01', value: (s.amountCents/100).toFixed(2), required: '', style: 'padding:8px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px' });
+    const dateInput = el('input', { name: 'nextCharge', type: 'datetime-local', value: dtIso, required: '', style: 'padding:8px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px' });
+    cycleSel.style.cssText = 'padding:8px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px';
+    form.append(
+      el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:10px;margin-bottom:14px' },
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px;font-weight:600' }, 'Cliente'),
+        el('div', { style: 'color:var(--text);font-size:13px' }, contact ? contact.name + ' (' + (contact.phone || '—') + ')' : s.contactId),
+      ),
+      el('div', { class: 'field' }, el('label', {}, 'Nome do plano'), planInput),
+      el('div', { style: 'display:flex;gap:10px' },
+        el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Valor (R$)'), amountInput),
+        el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Ciclo'), cycleSel),
+      ),
+      el('div', { class: 'field' }, el('label', {}, 'Próxima cobrança'), dateInput),
+      el('div', { style: 'background:var(--bg-3);padding:10px;border-radius:8px;margin-bottom:14px;font-size:11px;color:var(--text-dim)' },
+        'Status atual: ' + s.status + ' · Lembretes enviados: ' + s.remindersSent,
+      ),
+      el('div', { class: 'modal-actions' },
+        el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+        el('button', { type: 'submit', class: 'confirm' }, 'Salvar'),
+      ),
+    );
+    backdrop.append(el('div', { class: 'modal' }, el('h3', {}, 'Editar assinatura'), form));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+    document.body.append(backdrop);
+  }
+
+
   // ─── SSE real-time refresh ───────────────────────────────────────────
   let _es = null;
   function startSSE() {
