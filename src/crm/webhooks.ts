@@ -89,9 +89,25 @@ app.post('/meta/:secret', async (c) => {
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }
+
+  // Detecta se algum sender eh ADMIN (seu WA pessoal autorizado em admin-config.json).
+  // Se for, encaminha para o agente SEM tenantId -> resolveTenantForMeta cai pra 'default'
+  // -> admin handler processa com isAdmin=true (acesso pleno, sem quotas de tenant).
+  let forwardTenantId: string | undefined = channel.tenantId;
+  try {
+    const { isAdminPhone } = await import('../admin/adminConfig.js');
+    const hasAdminSender = parsed.messages.some((m: any) => m.phone && isAdminPhone(String(m.phone)));
+    if (hasAdminSender) {
+      forwardTenantId = undefined; // admin path
+      console.log('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
+    }
+  } catch (err: any) {
+    console.warn('[crm-webhook] adminConfig check failed:', err?.message);
+  }
+
   // ALSO forward the original payload to the System Clow AI agent so it can reply
   // (the agent handler dedupes by messageId so no double-processing risk)
-  void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'), channel.tenantId);
+  void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'), forwardTenantId);
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 
