@@ -32,6 +32,8 @@ import * as collab from './collaboration.js';
 import * as search from './search.js';
 import * as ohk from './outboundWebhooks.js';
 import * as extint from './integrations.js';
+import * as push from './push.js';
+import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1930,6 +1932,60 @@ app.post('/external-integrations/:id/sync', async (c) => {
     if (integ.provider === 'rdstation') return ok(c, await extint.importFromRDStation(tid, id));
     return badRequest(c, 'provider ' + integ.provider + ' sync not implemented yet');
   } catch (err: any) { return c.json({ error: 'sync_failed', message: err.message }, 502); }
+});
+
+// ═══ PWA PUSH + MOBILE COMPACT (Onda 24) ═══════════════════════════════
+app.get('/push/vapid-public-key', (c) => {
+  const key = push.getVapidPublicKey();
+  return key ? ok(c, { publicKey: key }) : c.json({ error: 'vapid_not_configured' }, 501);
+});
+
+app.post('/push/subscribe', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) return badRequest(c, 'endpoint + keys.{p256dh,auth} required');
+  const sub = push.subscribe(tid, {
+    endpoint: body.endpoint,
+    p256dh: body.keys.p256dh,
+    auth: body.keys.auth,
+    agentId: body.agentId,
+    ua: c.req.header('user-agent'),
+  });
+  return ok(c, { subscription: { id: sub.id, agentId: sub.agentId, enabled: sub.enabled } }, 201);
+});
+
+app.post('/push/unsubscribe', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.endpoint) return badRequest(c, 'endpoint required');
+  return push.unsubscribe(tid, body.endpoint) ? c.body(null, 204) : notFound(c, 'subscription');
+});
+
+app.post('/push/test', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId) return badRequest(c, 'agentId required');
+  const r = await push.sendToAgent(tid, body.agentId, {
+    title: body.title || 'Clow Test',
+    body: body.body || 'Notificacao de teste',
+    url: body.url || '/crm/',
+  });
+  return ok(c, r);
+});
+
+// Mobile compact endpoints
+app.get('/mobile/today', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, mobile.todayBundle(tid, c.req.query('agentId') || undefined));
+});
+
+app.get('/mobile/cards/:id', (c) => {
+  const card = mobile.cardCompact(tenantOf(c), c.req.param('id'));
+  return card ? ok(c, card) : notFound(c, 'card');
+});
+
+app.get('/mobile/agents/:id/dashboard', (c) => {
+  return ok(c, mobile.agentDashboard(tenantOf(c), c.req.param('id')));
 });
 
 app.post('/proposal-templates', async (c) => {

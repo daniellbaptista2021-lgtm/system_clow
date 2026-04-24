@@ -18,6 +18,7 @@ import * as emailMarketing from './emailMarketing.js';
 import * as tasks from './tasks.js';
 import * as cal from './calendar.js';
 import * as outboundWebhooks from './outboundWebhooks.js';
+import * as push from './push.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -72,7 +73,20 @@ async function tick(): Promise<void> {
           emailMarketing.promoteScheduledCampaigns();
           await emailMarketing.tick(process.env.PUBLIC_BASE_URL || '');
           await emailMarketing.tickSequences(process.env.PUBLIC_BASE_URL || '');
-          await tasks.tickAlerts();
+          {
+            const alerts = await tasks.tickAlerts();
+            for (const alert of alerts) {
+              if (alert.task.assignedToAgentId) {
+                try {
+                  await push.sendToAgent(alert.task.tenantId, alert.task.assignedToAgentId, {
+                    title: 'Tarefa vencendo',
+                    body: `${alert.task.title} — vence em ${alert.dueInMinutes} min`,
+                    url: '/crm/?card=' + (alert.task.cardId || ''),
+                  });
+                } catch (err: any) { /* non-blocking */ }
+              }
+            }
+          }
           await cal.tickReminders();
           await outboundWebhooks.tickRetries();
         } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }

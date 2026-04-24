@@ -1130,6 +1130,28 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 23 applied: outbound webhooks + external integrations');
   }
 
+  // ONDA 24 — Push notifications
+  const onda24Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(124);
+  if (!onda24Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_push_subscriptions (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        agent_id TEXT,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        ua TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_agent ON crm_push_subscriptions(tenant_id, agent_id, enabled);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(124, Date.now());
+    console.log('[crm-migrate] Onda 24 applied: push notifications');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

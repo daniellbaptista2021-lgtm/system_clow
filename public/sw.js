@@ -51,3 +51,34 @@ self.addEventListener('message', e => {
     })());
   }
 });
+
+
+// ═══ ONDA-24: Push notifications ═════════════════════════════════════════
+self.addEventListener('push', (e) => {
+  if (!e.data) return;
+  let payload = {};
+  try { payload = e.data.json(); }
+  catch { payload = { title: 'Clow', body: e.data.text() }; }
+  const opts = {
+    body: payload.body || '',
+    icon: payload.icon || '/assets/icon-192.png',
+    badge: '/assets/icon-192.png',
+    data: { url: payload.url || '/crm/', ...payload.data },
+    tag: payload.tag || 'clow-' + Date.now(),
+    requireInteraction: false,
+  };
+  e.waitUntil(self.registration.showNotification(payload.title || 'Clow', opts));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/crm/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (w.url.includes(url.split('?')[0]) && 'focus' in w) return w.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});

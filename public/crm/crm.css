@@ -589,3 +589,85 @@ body {
   cursor: pointer;
 }
 .rpt-actions button:hover { color: var(--text); border-color: var(--purple); }
+
+
+/* ═══ ONDA-24-MOBILE: mobile-first responsive enhancements ═══════════════ */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed !important;
+    left: -250px;
+    top: 0;
+    bottom: 0;
+    width: 220px;
+    z-index: 1000;
+    transition: left .25s ease;
+    background: var(--bg-2);
+    border-right: 1px solid var(--border);
+  }
+  .sidebar.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,.4); }
+  .sidebar-toggle {
+    display: block !important;
+    position: fixed;
+    top: 10px; left: 10px;
+    z-index: 999;
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    background: var(--purple);
+    color: #fff;
+    border: 0;
+    font-size: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .top-bar {
+    padding-left: 60px !important;
+    flex-wrap: wrap;
+  }
+  .top-bar h2 { font-size: 16px !important; }
+  .top-bar-right { gap: 6px !important; font-size: 12px; }
+  .top-bar-right button, .top-bar-right input, .top-bar-right select {
+    padding: 6px 10px !important; font-size: 12px !important;
+  }
+
+  /* Kanban mobile: horizontal scroll columns */
+  .kanban-columns {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 10px;
+    padding: 10px;
+  }
+  .kanban-col {
+    min-width: 85vw !important;
+    max-width: 85vw !important;
+    scroll-snap-align: start;
+  }
+
+  /* Side panel full-screen on mobile */
+  .side-panel {
+    width: 100vw !important;
+    right: -100vw;
+  }
+  .side-panel:not(.hide) { right: 0 !important; }
+
+  /* Reports: stack charts vertically */
+  #statsView > div:last-child {
+    grid-template-columns: 1fr !important;
+  }
+  #statsGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Modals full-screen */
+  .modal {
+    max-width: 95vw !important;
+    margin: 10px !important;
+  }
+
+  /* Touch-friendly minimum tap target */
+  button, .nav-item, .panel-tab { min-height: 44px; }
+}
+
+@media (max-width: 480px) {
+  #statsGrid { grid-template-columns: 1fr !important; }
+  .kpi-value { font-size: 20px !important; }
+  h2, h3 { font-size: 15px !important; }
+}
