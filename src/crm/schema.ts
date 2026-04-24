@@ -889,6 +889,91 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 20 applied: calendar + appointments + scheduling links + integrations');
   }
 
+  // ONDA 21 — Internal Chat + Comments + Notes + Mentions
+  const onda21Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(121);
+  if (!onda21Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_card_comments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        card_id TEXT NOT NULL REFERENCES crm_cards(id) ON DELETE CASCADE,
+        author_agent_id TEXT,
+        content TEXT NOT NULL,
+        mentions_json TEXT NOT NULL DEFAULT '[]',
+        parent_comment_id TEXT,
+        edited_at INTEGER,
+        deleted_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_cmts_card ON crm_card_comments(card_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_cmts_tenant ON crm_card_comments(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_chat_rooms (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'group',
+        card_id TEXT,
+        contact_id TEXT,
+        members_json TEXT NOT NULL DEFAULT '[]',
+        created_by_agent_id TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_rooms_tenant ON crm_chat_rooms(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_chat_messages (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES crm_chat_rooms(id) ON DELETE CASCADE,
+        author_agent_id TEXT,
+        content TEXT NOT NULL,
+        mentions_json TEXT NOT NULL DEFAULT '[]',
+        reply_to_id TEXT,
+        edited_at INTEGER,
+        deleted_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_msgs_room ON crm_chat_messages(room_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS crm_chat_reads (
+        room_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        last_read_message_id TEXT,
+        last_read_at INTEGER NOT NULL,
+        PRIMARY KEY (room_id, agent_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_contact_notes (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        author_agent_id TEXT,
+        content TEXT NOT NULL,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        mentions_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_notes_contact ON crm_contact_notes(contact_id, pinned DESC, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notes_tenant ON crm_contact_notes(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_agent_mentions (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        mentioned_agent_id TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        card_id TEXT,
+        contact_id TEXT,
+        snippet TEXT,
+        read_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mentions_agent ON crm_agent_mentions(tenant_id, mentioned_agent_id, read_at, created_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(121, Date.now());
+    console.log('[crm-migrate] Onda 21 applied: card comments + chat rooms + notes + mentions');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

@@ -28,6 +28,7 @@ import * as em from './emailMarketing.js';
 import * as forms from './forms.js';
 import * as tasksMod from './tasks.js';
 import * as cal from './calendar.js';
+import * as collab from './collaboration.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1623,6 +1624,145 @@ app.post('/calendar-integrations', async (c) => {
 
 app.delete('/calendar-integrations/:id', (c) => {
   return cal.deleteIntegration(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'integration');
+});
+
+// ═══ COLLABORATION (Onda 21) ══════════════════════════════════════════
+// Card comments
+app.get('/cards/:id/comments', (c) => {
+  return ok(c, { comments: collab.listCardComments(tenantOf(c), c.req.param('id')) });
+});
+
+app.post('/cards/:id/comments', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.content) return badRequest(c, 'content required');
+  return ok(c, { comment: collab.createCardComment(tid, { ...body, cardId: c.req.param('id') }) }, 201);
+});
+
+app.patch('/card-comments/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.content) return badRequest(c, 'content required');
+  const cm = collab.updateCardComment(tid, c.req.param('id'), body);
+  return cm ? ok(c, { comment: cm }) : notFound(c, 'comment');
+});
+
+app.delete('/card-comments/:id', (c) => {
+  return collab.deleteCardComment(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'comment');
+});
+
+// Chat rooms
+app.get('/chat/rooms', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { rooms: collab.listChatRooms(tid, c.req.query('agentId') || undefined) });
+});
+
+app.post('/chat/rooms', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !Array.isArray(body.members)) return badRequest(c, 'name + members[] required');
+  const type = body.type || 'group';
+  if (!['dm', 'group', 'card', 'contact'].includes(type)) return badRequest(c, 'invalid type');
+  return ok(c, { room: collab.createChatRoom(tid, { ...body, type }) }, 201);
+});
+
+app.get('/chat/rooms/:id', (c) => {
+  const r = collab.getChatRoom(tenantOf(c), c.req.param('id'));
+  return r ? ok(c, { room: r }) : notFound(c, 'room');
+});
+
+app.delete('/chat/rooms/:id', (c) => {
+  return collab.deleteChatRoom(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'room');
+});
+
+app.get('/chat/rooms/:id/messages', (c) => {
+  const tid = tenantOf(c);
+  const before = c.req.query('before');
+  const limit = Number(c.req.query('limit')) || 100;
+  const opts: any = { limit };
+  if (before && /^\d+$/.test(before)) opts.before = Number(before);
+  return ok(c, { messages: collab.listChatMessages(tid, c.req.param('id'), opts) });
+});
+
+app.post('/chat/rooms/:id/messages', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.content) return badRequest(c, 'content required');
+  const m = collab.postChatMessage(tid, { ...body, roomId: c.req.param('id') });
+  return m ? ok(c, { message: m }, 201) : notFound(c, 'room');
+});
+
+app.post('/chat/rooms/:id/read', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId || !body.lastMessageId) return badRequest(c, 'agentId + lastMessageId required');
+  collab.markRoomRead(tid, c.req.param('id'), body.agentId, body.lastMessageId);
+  return ok(c, { ok: true });
+});
+
+app.get('/chat/unread', (c) => {
+  const tid = tenantOf(c);
+  const agentId = c.req.query('agentId');
+  if (!agentId) return badRequest(c, 'agentId required');
+  return ok(c, { unread: collab.unreadCounts(tid, agentId) });
+});
+
+// Contact notes
+app.get('/contacts/:id/notes', (c) => {
+  return ok(c, { notes: collab.listContactNotes(tenantOf(c), c.req.param('id')) });
+});
+
+app.post('/contacts/:id/notes', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.content) return badRequest(c, 'content required');
+  return ok(c, { note: collab.createContactNote(tid, { ...body, contactId: c.req.param('id') }) }, 201);
+});
+
+app.patch('/contact-notes/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const n = collab.updateContactNote(tid, c.req.param('id'), body);
+  return n ? ok(c, { note: n }) : notFound(c, 'note');
+});
+
+app.delete('/contact-notes/:id', (c) => {
+  return collab.deleteContactNote(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'note');
+});
+
+// Mentions inbox
+app.get('/mentions', (c) => {
+  const tid = tenantOf(c);
+  const agentId = c.req.query('agentId');
+  if (!agentId) return badRequest(c, 'agentId required');
+  const unreadOnly = c.req.query('unreadOnly') === 'true';
+  const limit = Number(c.req.query('limit')) || 50;
+  return ok(c, {
+    mentions: collab.agentMentions(tid, agentId, { unreadOnly, limit }),
+    unreadCount: collab.unreadMentionsCount(tid, agentId),
+  });
+});
+
+app.post('/mentions/:id/read', (c) => {
+  const tid = tenantOf(c);
+  const body = c.req.header('x-agent-id') || c.req.query('agentId') || '';
+  if (!body) return badRequest(c, 'agentId required (query or x-agent-id header)');
+  return collab.markMentionRead(tid, body as string, c.req.param('id')) ? ok(c, { ok: true }) : notFound(c, 'mention');
+});
+
+app.post('/mentions/read-all', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId) return badRequest(c, 'agentId required');
+  const n = collab.markAllMentionsRead(tid, body.agentId);
+  return ok(c, { markedRead: n });
+});
+
+// Unified timeline per contact
+app.get('/contacts/:id/timeline', (c) => {
+  const tid = tenantOf(c);
+  const limit = Number(c.req.query('limit')) || 200;
+  return ok(c, { timeline: collab.contactTimeline(tid, c.req.param('id'), { limit }) });
 });
 
 app.post('/proposal-templates', async (c) => {
