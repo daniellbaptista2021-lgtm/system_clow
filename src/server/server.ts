@@ -16,6 +16,9 @@ globalThis.require = createRequire(import.meta.url);
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { compress } from 'hono/compress';
+import { cdnMiddleware } from '../crm/mediaCDN.js';
+import { applyPerformancePragmas as applyCrmPragmas } from '../crm/connectionInfo.js';
 import { cors } from 'hono/cors';
 import { config as loadEnv } from 'dotenv';
 import * as path from 'path';
@@ -203,7 +206,11 @@ async function main(): Promise<void> {
 
   // CORS is opt-in via allowlist. Same-origin requests work without these headers.
   if (allowedCorsOrigins.length > 0) {
-    app.use('*', cors({
+    app.use('*', compress());
+  app.use('*', cdnMiddleware());
+  // Apply DB pragmas on boot (idempotent)
+  try { applyCrmPragmas(); } catch { /* DB not open yet */ }
+  app.use('*', cors({
       origin: (origin) => isOriginAllowed(origin, allowedCorsOrigins) ? (origin || '') : '',
       allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],

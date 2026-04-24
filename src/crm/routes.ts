@@ -40,6 +40,9 @@ import * as lgpd from './lgpd.js';
 import * as softDel from './softDelete.js';
 import * as rl from './rateLimiter.js';
 import * as sec from './security.js';
+import { cache } from './queryCache.js';
+import { contactLoader, agentLoader } from './dataLoader.js';
+import { dbInfo, tableStats, explain, vacuum, applyPerformancePragmas } from './connectionInfo.js';
 import * as bulkOps from './bulkOps.js';
 import { fieldSelectionMiddleware } from './fieldSelector.js';
 import { encodeCursor, decodeCursor } from './cursor.js';
@@ -2732,6 +2735,78 @@ app.get('/security/audit', (c) => {
   if (c.req.query('to'))   opts.to = Number(c.req.query('to'));
   if (c.req.query('limit')) opts.limit = Number(c.req.query('limit'));
   return ok(c, { entries: sec.queryAudit(tid, opts) });
+});
+
+// ═══ PERFORMANCE (Onda 32) ═════════════════════════════════════════════
+app.get('/admin/perf-stats', (c) => {
+  return ok(c, {
+    cache: cache.stats(),
+    db: dbInfo(),
+    tables: tableStats(),
+  });
+});
+
+app.post('/admin/cache-clear', (c) => {
+  cache.clear();
+  return ok(c, { cleared: true });
+});
+
+app.post('/admin/cache-bust/:tag', (c) => {
+  const n = cache.bustTag(c.req.param('tag'));
+  return ok(c, { busted: n });
+});
+
+app.post('/admin/db-vacuum', (c) => {
+  try { return ok(c, vacuum()); }
+  catch (err: any) { return c.json({ error: 'vacuum_failed', message: err.message }, 500); }
+});
+
+app.post('/admin/db-apply-pragmas', (c) => {
+  applyPerformancePragmas();
+  return ok(c, { applied: true, info: dbInfo() });
+});
+
+app.post('/admin/explain', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.sql) return badRequest(c, 'sql required');
+  try { return ok(c, { plan: explain(body.sql, body.params || []) }); }
+  catch (err: any) { return c.json({ error: 'explain_failed', message: err.message }, 400); }
+});
+
+// Lazy-hydrated pipeline: uses DataLoader to batch contact fetch
+app.get('/boards/:id/pipeline-fast', async (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('id');
+  const board = store.getBoard(tid, boardId);
+  if (!board) return notFound(c, 'board');
+
+  // Cache the heavy query
+  const cacheKey = cache.keyOf('pipeline', tid, { boardId });
+  const result = await cache.wrap(cacheKey, async () => {
+    const columns = store.listColumns(tid, boardId);
+    const cards = store.listCardsByBoard(tid, boardId);
+
+    // Lazy hydration via DataLoader — single batched query
+    const loader = contactLoader(tid);
+    const contactIds = [...new Set(cards.map(c2 => c2.contactId).filter(Boolean) as string[])];
+    const contacts = await loader.loadMany(contactIds);
+    const contactMap = new Map<string, any>();
+    contacts.forEach((ct, i) => contactMap.set(contactIds[i], ct));
+
+    const cardsByColumn: Record<string, any[]> = {};
+    for (const col of columns) cardsByColumn[col.id] = [];
+    for (const card of cards) {
+      const ct = card.contactId ? contactMap.get(card.contactId) : null;
+      const enriched = {
+        ...card,
+        contact: ct ? { id: ct.id, name: ct.name, phone: ct.phone, avatarUrl: ct.avatar_url } : null,
+      };
+      if (cardsByColumn[card.columnId]) cardsByColumn[card.columnId].push(enriched);
+    }
+    return { board, columns, cardsByColumn };
+  }, { ttl: 30_000, tags: ['pipeline:' + tid, 'board:' + boardId] });
+
+  return ok(c, result);
 });
 
 app.post('/proposal-templates', async (c) => {
