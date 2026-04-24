@@ -3153,3 +3153,867 @@ window.openEditInventoryModal = openEditInventoryModal;
 window.openCardPanel = openCardPanel;
 window.fmtMoney = fmtMoney;
 
+
+// ═══ ONDA 37: 6 VIEWS RESTANTES + CARD SIDE PANEL TABS ═════════════════
+
+// ═════════ BUSCA GLOBAL ═════════════════════════════════════════════════
+let _searchTimer = null;
+function wireGlobalSearch() {
+  const input = $('#globalSearchInput');
+  if (!input || input._wired) return;
+  input._wired = true;
+  input.addEventListener('input', () => {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => doGlobalSearch(input.value), 300);
+  });
+}
+
+async function doGlobalSearch(q) {
+  const container = $('#globalSearchResults');
+  if (!container) return;
+  if (!q || q.length < 2) { container.innerHTML = '<div style="color:var(--text-dim);padding:20px;text-align:center">Digite ao menos 2 caracteres</div>'; return; }
+  try {
+    const data = await api(`/search?q=${encodeURIComponent(q)}&limit=50`);
+    container.innerHTML = '';
+    if (!data.hits || !data.hits.length) {
+      container.innerHTML = '<div style="color:var(--text-dim);padding:40px;text-align:center">Nenhum resultado para "' + q + '"</div>';
+      return;
+    }
+    const grouped = { contacts: [], cards: [], activities: [], notes: [] };
+    for (const h of data.hits) (grouped[h.entity] || (grouped[h.entity] = [])).push(h);
+    const labels = { contacts: '👤 Contatos', cards: '📋 Cards', activities: '⚡ Atividades', notes: '📝 Notas' };
+    for (const [entity, items] of Object.entries(grouped)) {
+      if (!items.length) continue;
+      container.append(el('h3', { style: 'margin:16px 0 8px;color:var(--text)' }, `${labels[entity] || entity} (${items.length})`));
+      for (const h of items) {
+        container.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px;cursor:pointer',
+          on: { click: () => navigateToHit(h) },
+        },
+          el('div', { style: 'font-weight:600' }, h.title),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);margin-top:4px', html: h.snippet || '' }),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' }, `Score: ${h.score.toFixed(2)}`),
+        ));
+      }
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+function navigateToHit(hit) {
+  if (hit.entity === 'contacts') { showView('contacts'); }
+  else if (hit.entity === 'cards') { showView('kanban'); setTimeout(() => openCardById(hit.id), 100); }
+  else if (hit.entity === 'activities') {
+    if (hit.metadata?.cardId) { showView('kanban'); setTimeout(() => openCardById(hit.metadata.cardId), 100); }
+  }
+}
+
+async function openCardById(id) {
+  try {
+    const r = await api(`/cards/${id}`);
+    if (r.card) openCardPanel(r.card);
+  } catch {}
+}
+
+// ═════════ INSIGHTS AI ═══════════════════════════════════════════════════
+async function renderInsightsView() {
+  const container = $('#insightsContent');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const forecast = await api('/ai/forecast').catch(() => ({}));
+    const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
+
+    container.innerHTML = '';
+    // Forecast hero
+    container.append(el('div', { style: 'background:linear-gradient(135deg,var(--purple),#6d28d9);color:#fff;padding:24px;border-radius:12px;margin-bottom:20px' },
+      el('div', { style: 'font-size:14px;opacity:.85;margin-bottom:6px' }, 'Forecast Pipeline (próximos 30 dias)'),
+      el('div', { style: 'font-size:36px;font-weight:700;margin-bottom:8px' }, fmtMoney(forecast.weightedCents || 0)),
+      el('div', { style: 'font-size:13px;opacity:.85' }, `Pipeline bruto: ${fmtMoney(forecast.pipelineTotalCents || 0)} • Vendas esperadas: ${forecast.expectedWinsCount || 0}`),
+    ));
+
+    if (forecast.byStage?.length) {
+      container.append(el('h3', { style: 'margin:0 0 12px' }, 'Por estágio'));
+      const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:24px' });
+      for (const s of forecast.byStage) {
+        grid.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px' },
+          el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:4px' }, s.stageName),
+          el('div', { style: 'font-size:18px;font-weight:600;color:var(--purple)' }, fmtMoney(s.weightedCents)),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, `${s.cardCount} cards • bruto ${fmtMoney(s.valueCents)}`),
+        ));
+      }
+      container.append(grid);
+    }
+
+    // Top cards by score
+    container.append(el('h3', { style: 'margin:24px 0 12px' }, 'Cards prioritários (clique pra ver insights)'));
+    const list = el('div', {});
+    for (const c of (cards.cards || []).slice(0, 30)) {
+      const row = el('div', {
+        style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center',
+        on: { click: () => openCardAIInsights(c.id) },
+      },
+        el('div', {},
+          el('div', { style: 'font-weight:600' }, c.title),
+          el('div', { style: 'font-size:11px;color:var(--text-dim)' }, fmtMoney(c.valueCents || 0)),
+        ),
+        el('button', { style: 'background:var(--purple);color:#fff;border:0;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px' }, '🧠 Analisar'),
+      );
+      list.append(row);
+    }
+    container.append(list);
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function openCardAIInsights(cardId) {
+  const body = el('div', {},
+    el('div', { id: 'aiInsightsLoad', style: 'padding:20px;text-align:center;color:var(--text-dim)' }, 'Calculando insights...'),
+  );
+  const { backdrop } = openModal({ title: '🧠 AI Insights', bodyEl: body, width: '640px' });
+
+  try {
+    const score = await api(`/ai/cards/${cardId}/score`).catch(() => null);
+    const classify = await api(`/ai/cards/${cardId}/classify`).catch(() => null);
+    const sentiment = await api(`/ai/cards/${cardId}/sentiment`).catch(() => null);
+
+    body.innerHTML = '';
+    if (score?.insight) {
+      const s = score.insight;
+      const bd = s.contentJson || {};
+      body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px' },
+        el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px' },
+          el('div', { style: 'font-weight:600' }, 'Lead Score'),
+          el('div', { style: `font-size:32px;font-weight:700;color:${s.scoreNumeric > 60 ? 'var(--green)' : s.scoreNumeric > 30 ? 'var(--amber)' : '#ef4444'}` }, s.scoreNumeric + '/100'),
+        ),
+        el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;color:var(--text-dim)' },
+          el('div', {}, `Atividade: ${bd.activity}/25`),
+          el('div', {}, `Resposta: ${bd.response}/20`),
+          el('div', {}, `Estágio: ${bd.stage}/20`),
+          el('div', {}, `Valor: ${bd.value}/15`),
+          el('div', {}, `Frescor: ${bd.freshness}/10`),
+          el('div', {}, `Proposta: ${bd.proposal}/10`),
+        ),
+      ));
+    }
+    if (classify?.insight) {
+      const lbl = classify.insight.contentText;
+      const colors = { hot: '#ef4444', warm: '#f59e0b', cold: '#3b82f6' };
+      body.append(el('div', { style: `background:${colors[lbl]}20;border:1px solid ${colors[lbl]};padding:14px;border-radius:6px;margin-bottom:14px` },
+        el('div', { style: 'font-weight:600;margin-bottom:4px' }, '🌡️ Classificação'),
+        el('div', { style: `font-size:24px;font-weight:700;color:${colors[lbl]};text-transform:uppercase` }, lbl),
+        classify.insight.contentJson?.reasoning ? el('div', { style: 'font-size:12px;color:var(--text-dim);margin-top:6px' }, classify.insight.contentJson.reasoning.join(' • ')) : null,
+      ));
+    }
+    if (sentiment?.insight?.contentJson) {
+      const sj = sentiment.insight.contentJson;
+      const sColor = { positive: '#10b981', neutral: '#64748b', negative: '#ef4444' }[sj.label];
+      body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px' },
+        el('div', { style: 'font-weight:600;margin-bottom:6px' }, '💭 Sentimento (mensagens recentes)'),
+        el('div', { style: `color:${sColor};font-size:18px;font-weight:600;text-transform:capitalize` }, `${sj.label} (${(sj.score * 100).toFixed(0)}%)`),
+        sj.triggers?.length ? el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:6px' }, 'Palavras-chave: ' + sj.triggers.slice(0, 5).join(', ')) : null,
+      ));
+    }
+
+    body.append(
+      el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px' },
+        el('button', {
+          style: 'padding:10px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-weight:600',
+          on: { click: async () => {
+            toast('Gerando próximo passo...', 'info');
+            try {
+              const r = await api(`/ai/cards/${cardId}/next-step`, { method: 'POST', body: {} });
+              if (r.insight?.contentText) alert('Sugestão IA:\n\n' + r.insight.contentText);
+            } catch (e) { toast('Erro: ' + e.message, 'error'); }
+          } },
+        }, '💡 Próximo passo (IA)'),
+        el('button', {
+          style: 'padding:10px;background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer',
+          on: { click: async () => {
+            toast('Gerando resumo...', 'info');
+            try {
+              const r = await api(`/ai/cards/${cardId}/summary`, { method: 'POST', body: {} });
+              if (r.insight?.contentText) alert('Resumo da conversa:\n\n' + r.insight.contentText);
+            } catch (e) { toast('Erro: ' + e.message, 'error'); }
+          } },
+        }, '📝 Resumo conversa'),
+      ),
+    );
+  } catch (e) { body.innerHTML = '<div style="color:#ef4444">' + e.message + '</div>'; }
+}
+
+// ═════════ PERFORMANCE / GAMIFICAÇÃO ═════════════════════════════════════
+async function renderPerformanceView() {
+  const period = $('#perfPeriod')?.value || 'month';
+  const container = $('#performanceContent');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const dashboard = await api(`/gamification/dashboard?period=${period}`).catch(() => ({ rows: [], leaderboards: {} }));
+    const goals = await api('/goals').catch(() => ({ goals: [] }));
+    const badges = await api('/badges').catch(() => ({ badges: [] }));
+
+    container.innerHTML = '';
+
+    // Top performers
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '🏆 Ranking de Vendedores'));
+    const board = dashboard.leaderboards?.revenue || [];
+    if (!board.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px;margin-bottom:24px' }, 'Sem dados no período'));
+    else {
+      const podium = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:24px' });
+      for (let i = 0; i < Math.min(3, board.length); i++) {
+        const r = board[i];
+        const medals = ['🥇', '🥈', '🥉'];
+        podium.append(el('div', { style: `background:var(--bg-2);border:2px solid ${i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : '#CD7F32'};border-radius:10px;padding:18px;text-align:center` },
+          el('div', { style: 'font-size:32px' }, medals[i]),
+          el('div', { style: 'font-weight:700;margin-top:8px' }, r.agentName),
+          el('div', { style: 'color:var(--purple);font-size:18px;font-weight:600;margin-top:4px' }, fmtMoney(r.value)),
+        ));
+      }
+      container.append(podium);
+    }
+
+    // All metrics dashboard
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '📊 Dashboard'));
+    const grid = el('div', { style: 'overflow-x:auto;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;margin-bottom:24px' });
+    const table = el('table', { style: 'width:100%;border-collapse:collapse' });
+    const thead = el('thead', {}, el('tr', { style: 'background:var(--bg-3)' },
+      el('th', { style: 'text-align:left;padding:10px;font-size:12px;color:var(--text-dim)' }, 'Agente'),
+      el('th', { style: 'text-align:right;padding:10px;font-size:12px;color:var(--text-dim)' }, 'Vendas'),
+      el('th', { style: 'text-align:right;padding:10px;font-size:12px;color:var(--text-dim)' }, 'Receita'),
+      el('th', { style: 'text-align:right;padding:10px;font-size:12px;color:var(--text-dim)' }, 'Atividades'),
+      el('th', { style: 'text-align:right;padding:10px;font-size:12px;color:var(--text-dim)' }, 'Tarefas'),
+    ));
+    const tbody = el('tbody', {});
+    for (const r of (dashboard.rows || [])) {
+      tbody.append(el('tr', { style: 'border-top:1px solid var(--border)' },
+        el('td', { style: 'padding:10px;font-weight:600' }, r.agentName),
+        el('td', { style: 'padding:10px;text-align:right' }, String(r.dealsWon || 0)),
+        el('td', { style: 'padding:10px;text-align:right;color:var(--green)' }, fmtMoney(r.revenueCents || 0)),
+        el('td', { style: 'padding:10px;text-align:right' }, String(r.activities || 0)),
+        el('td', { style: 'padding:10px;text-align:right' }, String(r.tasksCompleted || 0)),
+      ));
+    }
+    table.append(thead, tbody);
+    grid.append(table);
+    container.append(grid);
+
+    // Goals
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '🎯 Metas'));
+    if (!goals.goals?.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px;margin-bottom:24px' }, 'Nenhuma meta criada. Clique em "+ Meta"'));
+    else {
+      const gContainer = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:24px' });
+      for (const g of goals.goals) {
+        const prog = await api(`/goals/${g.id}/progress`).catch(() => ({ percent: 0, currentValue: 0 }));
+        gContainer.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px' },
+          el('div', { style: 'font-weight:600;margin-bottom:6px' }, g.title || `${g.kind} ${g.target}`),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:8px' }, `${prog.currentValue || 0} / ${g.target} • ${g.period}`),
+          el('div', { style: 'background:var(--bg-1);height:8px;border-radius:4px;overflow:hidden' },
+            el('div', { style: `background:var(--purple);height:100%;width:${Math.min(100, prog.percent || 0)}%` }),
+          ),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px;text-align:right' }, `${prog.percent || 0}%`),
+        ));
+      }
+      container.append(gContainer);
+    }
+
+    // Badges catalog
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '🏅 Conquistas Disponíveis'));
+    if (!badges.badges?.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px' }, 'Nenhum badge. Clique em "Badges Default"'));
+    else {
+      const bContainer = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px' });
+      for (const b of badges.badges) {
+        bContainer.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center' },
+          el('div', { style: 'font-size:32px;margin-bottom:6px' }, b.icon || '🏆'),
+          el('div', { style: 'font-weight:600' }, b.name),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' }, b.description || ''),
+        ));
+      }
+      container.append(bContainer);
+    }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+function openNewGoalModal() {
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/goals', { method: 'POST', body: {
+        title: fd.get('title'), kind: fd.get('kind'),
+        target: Number(fd.get('target')), period: fd.get('period'),
+        agentId: fd.get('agentId') || undefined,
+      } });
+      backdrop.remove(); renderPerformanceView();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    inputField('title', 'Título', { attrs: { placeholder: 'Ex: 10 vendas em janeiro' } }),
+    selectField('kind', 'Métrica', [
+      { value: 'deals_won', label: 'Vendas (deals_won)' },
+      { value: 'revenue', label: 'Receita' },
+      { value: 'activities', label: 'Atividades' },
+      { value: 'tasks_completed', label: 'Tarefas concluídas' },
+      { value: 'calls', label: 'Ligações' },
+      { value: 'meetings', label: 'Reuniões' },
+    ], 'deals_won'),
+    inputField('target', 'Meta numérica', { attrs: { type: 'number', required: true } }),
+    selectField('period', 'Período', [
+      { value: 'day', label: 'Diário' }, { value: 'week', label: 'Semanal' },
+      { value: 'month', label: 'Mensal' }, { value: 'quarter', label: 'Trimestral' },
+      { value: 'year', label: 'Anual' },
+    ], 'month'),
+    inputField('agentId', 'ID do agente (opcional, vazio = equipe)', {}),
+    el('button', { type: 'submit', style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer' }, 'Criar Meta'),
+  );
+  const { backdrop } = openModal({ title: 'Nova Meta', bodyEl: form });
+}
+
+// ═════════ SEGURANÇA ═════════════════════════════════════════════════════
+async function renderSecurityView() {
+  const container = $('#securityContent');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const roles = await api('/security/roles').catch(() => ({ roles: [] }));
+    const ipList = await api('/security/ip-whitelist').catch(() => ({ entries: [] }));
+
+    container.innerHTML = '';
+
+    // Roles
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '👥 Roles (RBAC)'));
+    if (!roles.roles?.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px;margin-bottom:24px' }, 'Nenhuma role. Clique em "Roles Default" pra criar owner/admin/agent/viewer'));
+    else {
+      for (const r of roles.roles) {
+        container.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer',
+          on: {
+            contextmenu: (e) => showContextMenu(e, [
+              { label: '👁️ Ver permissions', action: () => alert(JSON.stringify(r.permissions, null, 2)) },
+              { label: '🗑️ Deletar', danger: true, action: async () => {
+                if (!confirm('Deletar role?')) return;
+                await api(`/security/roles/${r.id}`, { method: 'DELETE' }); renderSecurityView();
+              } },
+            ]),
+          },
+        },
+          el('div', { style: 'display:flex;justify-content:space-between;align-items:center' },
+            el('div', {},
+              el('div', { style: 'font-weight:600' }, r.name + (r.isAdmin ? ' 👑' : '')),
+              el('div', { style: 'font-size:11px;color:var(--text-dim)' }, r.description || ''),
+            ),
+            el('span', { style: 'background:var(--purple);color:#fff;padding:3px 10px;border-radius:12px;font-size:11px' }, `${r.permissions.length} permissões`),
+          ),
+        ));
+      }
+    }
+
+    // IP Whitelist
+    container.append(el('h3', { style: 'margin:24px 0 12px' }, '🌐 IP Whitelist'));
+    if (!ipList.entries?.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px' }, 'Nenhum IP. Vazio = todos liberados.'));
+    else {
+      for (const ip of ipList.entries) {
+        container.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer',
+          on: {
+            contextmenu: (e) => showContextMenu(e, [
+              { label: '🗑️ Remover', danger: true, action: async () => {
+                await api(`/security/ip-whitelist/${ip.id}`, { method: 'DELETE' }); renderSecurityView();
+              } },
+            ]),
+          },
+        },
+          el('code', { style: 'font-family:monospace' }, ip.cidr),
+          el('span', { style: 'font-size:11px;color:var(--text-dim)' }, ip.label || ''),
+        ));
+      }
+    }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+function openNewRoleModal() {
+  const allPerms = [
+    'contacts.read', 'contacts.write', 'contacts.delete',
+    'cards.read', 'cards.write', 'cards.delete', 'cards.move',
+    'activities.read', 'activities.write',
+    'proposals.read', 'proposals.write', 'proposals.sign_admin',
+    'documents.read', 'documents.write', 'documents.sign_admin',
+    'campaigns.read', 'campaigns.write', 'campaigns.send',
+    'reports.read', 'reports.export',
+    'agents.read', 'agents.write',
+    'admin.full',
+  ];
+  const checks = el('div', { style: 'max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px' });
+  for (const p of allPerms) {
+    const id = 'perm_' + p.replace(/\./g, '_');
+    checks.append(el('label', { style: 'display:block;font-size:12px;padding:3px 0' },
+      el('input', { type: 'checkbox', value: p, id, style: 'margin-right:8px' }),
+      p,
+    ));
+  }
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const perms = [...checks.querySelectorAll('input:checked')].map(i => i.value);
+    try {
+      await api('/security/roles', { method: 'POST', body: {
+        name: fd.get('name'), description: fd.get('description'),
+        permissions: perms, isAdmin: perms.includes('admin.full'),
+      } });
+      backdrop.remove(); renderSecurityView();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    inputField('name', 'Nome *', { required: true, attrs: { placeholder: 'manager' } }),
+    inputField('description', 'Descrição', {}),
+    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:6px' }, 'Permissions:'),
+    checks,
+    el('button', { type: 'submit', style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer' }, 'Criar Role'),
+  );
+  const { backdrop } = openModal({ title: 'Nova Role', bodyEl: form, width: '560px' });
+}
+
+function openNewIpWhitelistModal() {
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/security/ip-whitelist', { method: 'POST', body: {
+        cidr: fd.get('cidr'), label: fd.get('label'),
+      } });
+      backdrop.remove(); renderSecurityView();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    inputField('cidr', 'CIDR ou IP *', { required: true, attrs: { placeholder: '192.168.1.0/24 ou 10.0.0.5' } }),
+    inputField('label', 'Label', { attrs: { placeholder: 'Escritório SP' } }),
+    el('button', { type: 'submit', style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer' }, 'Adicionar'),
+  );
+  const { backdrop } = openModal({ title: 'Nova entrada IP Whitelist', bodyEl: form });
+}
+
+async function openAuditLogModal() {
+  const data = await api('/security/audit?limit=100').catch(() => ({ entries: [] }));
+  const body = el('div', { style: 'max-height:500px;overflow:auto' });
+  if (!data.entries?.length) body.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim)' }, 'Audit log vazio'));
+  else {
+    for (const e of data.entries) {
+      body.append(el('div', { style: 'border-bottom:1px solid var(--border);padding:8px 0' },
+        el('div', { style: 'display:flex;gap:8px;align-items:center;font-size:12px' },
+          el('code', { style: 'background:var(--purple);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px' }, e.action),
+          el('span', { style: 'color:var(--text-dim)' }, new Date(e.created_at).toLocaleString('pt-BR')),
+        ),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' },
+          `${e.entity}: ${e.entity_id || '-'} • actor: ${e.actor_agent_id || 'sistema'} • IP: ${e.ip || '-'}`),
+      ));
+    }
+  }
+  openModal({ title: '📜 Audit Log (últimos 100)', bodyEl: body, width: '720px' });
+}
+
+// ═════════ PRIVACIDADE / LGPD ════════════════════════════════════════════
+async function renderPrivacyView() {
+  const container = $('#privacyContent');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const policies = await api('/compliance/retention-policies').catch(() => ({ policies: [] }));
+    const unsubs = await api('/unsubscribes').catch(() => ({ unsubscribes: [] }));
+
+    container.innerHTML = '';
+
+    // Banner LGPD
+    container.append(el('div', { style: 'background:linear-gradient(135deg,#3b82f6,#1e40af);color:#fff;padding:18px;border-radius:10px;margin-bottom:20px' },
+      el('div', { style: 'font-size:14px;font-weight:600;margin-bottom:4px' }, '⚖️ Conformidade LGPD'),
+      el('div', { style: 'font-size:12px;opacity:.9' }, 'Sistema cobre Art 7-8 (consentimento) · Art 15 (retenção) · Art 18 V (portabilidade) · Art 18 VI (esquecimento) · Art 37 (registros)'),
+    ));
+
+    // Retention policies
+    container.append(el('h3', { style: 'margin:0 0 12px' }, '🗄️ Políticas de Retenção'));
+    if (!policies.policies?.length) container.append(el('div', { style: 'color:var(--text-dim);padding:14px;background:var(--bg-2);border-radius:8px;margin-bottom:24px' }, 'Nenhuma política. Crie pra auto-deletar dados antigos.'));
+    else {
+      for (const p of policies.policies) {
+        container.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer',
+          on: {
+            contextmenu: (e) => showContextMenu(e, [
+              { label: '🗑️ Deletar', danger: true, action: async () => {
+                await api(`/compliance/retention-policies/${p.id}`, { method: 'DELETE' }); renderPrivacyView();
+              } },
+            ]),
+          },
+        },
+          el('div', {},
+            el('div', { style: 'font-weight:600' }, p.entity),
+            el('div', { style: 'font-size:11px;color:var(--text-dim)' }, `Manter por ${p.daysToKeep} dias` + (p.autoAnonymize ? ' • Anonimizar' : '')),
+          ),
+          el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${p.enabled ? '#10b98120' : '#64748b20'};color:${p.enabled ? '#10b981' : '#64748b'}` }, p.enabled ? 'ATIVO' : 'INATIVO'),
+        ));
+      }
+    }
+
+    // Per-contact tools
+    container.append(el('h3', { style: 'margin:24px 0 12px' }, '👤 Ferramentas por Contato'));
+    container.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px' },
+      el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:8px' }, 'Digite o ID do contato para acessar consentimentos, exportação ou direito ao esquecimento:'),
+      el('div', { style: 'display:flex;gap:8px' },
+        el('input', { type: 'text', id: 'lgpdContactInput', placeholder: 'crm_contact_xxx', style: 'flex:1;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px' }),
+        el('button', {
+          style: 'padding:10px 16px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-weight:600',
+          on: { click: () => {
+            const cid = $('#lgpdContactInput').value.trim();
+            if (cid) openLgpdContactModal(cid);
+          } },
+        }, 'Abrir'),
+      ),
+    ));
+
+    // Unsubs
+    container.append(el('h3', { style: 'margin:24px 0 12px' }, '🚫 Opt-outs (Unsubscribes)'));
+    container.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:14px' },
+      el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:6px' }, `${unsubs.unsubscribes?.length || 0} emails que cancelaram inscrição`),
+      ...(unsubs.unsubscribes || []).slice(0, 5).map(u => el('div', { style: 'font-size:11px;font-family:monospace;color:var(--text-dim);padding:2px 0' }, u.email + ' • ' + new Date(u.created_at).toLocaleDateString('pt-BR'))),
+    ));
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function openLgpdContactModal(contactId) {
+  const body = el('div', {});
+  try {
+    const consents = await api(`/contacts/${contactId}/consents`).catch(() => ({ consents: [] }));
+    body.append(el('h4', { style: 'margin:0 0 8px' }, '✅ Consentimentos'));
+    if (!consents.consents?.length) body.append(el('div', { style: 'color:var(--text-dim);font-size:12px;padding:8px' }, 'Nenhum consentimento registrado'));
+    else for (const c of consents.consents) {
+      body.append(el('div', { style: 'border:1px solid var(--border);border-radius:4px;padding:8px;margin-bottom:4px;font-size:12px' },
+        `${c.channel}/${c.purpose}: ${c.granted ? '✅' : '❌'} (${c.source})`));
+    }
+
+    body.append(el('h4', { style: 'margin:16px 0 8px' }, '🔧 Ações'));
+    body.append(el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px' },
+      el('button', {
+        style: 'padding:10px;background:var(--blue);color:#fff;border:0;border-radius:6px;cursor:pointer',
+        on: { click: () => window.open(API_BASE + `/contacts/${contactId}/portability?format=download`, '_blank') },
+      }, '📤 Exportar (JSON)'),
+      el('button', {
+        style: 'padding:10px;background:#f59e0b;color:#fff;border:0;border-radius:6px;cursor:pointer',
+        on: { click: async () => {
+          if (!confirm('Anonimizar este contato? PII será removida (nome, email, phone). Estrutura mantida.')) return;
+          try {
+            await api(`/contacts/${contactId}/forget`, { method: 'POST', body: { mode: 'anonymize' } });
+            toast('Contato anonimizado', 'success');
+            backdrop.remove();
+          } catch (err) { toast('Erro: ' + err.message, 'error'); }
+        } },
+      }, '🥸 Anonimizar'),
+      el('button', {
+        style: 'padding:10px;background:#ef4444;color:#fff;border:0;border-radius:6px;cursor:pointer;grid-column:span 2',
+        on: { click: async () => {
+          if (!confirm('DELETAR PERMANENTEMENTE este contato e TODOS os dados (cards/atividades/notas)? Sem volta.')) return;
+          try {
+            await api(`/contacts/${contactId}/forget`, { method: 'POST', body: { mode: 'delete' } });
+            toast('Contato deletado', 'success');
+            backdrop.remove();
+          } catch (err) { toast('Erro: ' + err.message, 'error'); }
+        } },
+      }, '🗑️ Direito ao Esquecimento (DELETE)'),
+    ));
+  } catch (e) { body.append(el('div', { style: 'color:#ef4444' }, e.message)); }
+  const { backdrop } = openModal({ title: 'LGPD: ' + contactId, bodyEl: body, width: '560px' });
+}
+
+function openNewRetentionModal() {
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      await api('/compliance/retention-policies', { method: 'POST', body: {
+        entity: fd.get('entity'),
+        daysToKeep: Number(fd.get('days')),
+        autoAnonymize: fd.get('autoAnon') === 'on',
+      } });
+      backdrop.remove(); renderPrivacyView();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    selectField('entity', 'Entidade', [
+      { value: 'activities', label: 'Atividades (mensagens, notas)' },
+      { value: 'consents', label: 'Consentimentos revogados' },
+      { value: 'data_access_log', label: 'Logs de acesso' },
+      { value: 'deletion_requests', label: 'Solicitações de deleção' },
+      { value: 'contacts_inactive', label: 'Contatos inativos' },
+    ], 'activities'),
+    inputField('days', 'Manter por (dias) *', { attrs: { type: 'number', required: true, placeholder: '180' } }),
+    el('label', { style: 'display:block;margin:8px 0 14px;font-size:13px' },
+      el('input', { type: 'checkbox', name: 'autoAnon', style: 'margin-right:6px' }),
+      'Auto-anonimizar (em vez de deletar)',
+    ),
+    el('button', { type: 'submit', style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer' }, 'Criar Política'),
+  );
+  const { backdrop } = openModal({ title: 'Nova Política de Retenção', bodyEl: form });
+}
+
+async function openDeletionsModal() {
+  const data = await api('/compliance/deletion-requests').catch(() => ({ requests: [] }));
+  const body = el('div', {});
+  if (!data.requests?.length) body.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim)' }, 'Nenhuma solicitação'));
+  else {
+    for (const r of data.requests) {
+      body.append(el('div', { style: 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px' },
+        el('div', { style: 'display:flex;justify-content:space-between' },
+          el('div', { style: 'font-weight:600' }, r.contactId),
+          el('span', { style: 'font-size:11px;color:var(--text-dim)' }, r.status),
+        ),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' },
+          `Solicitado por: ${r.requestedByEmail} • Modo: ${r.mode} • Executa: ${new Date(r.scheduledFor).toLocaleString('pt-BR')}`),
+      ));
+    }
+  }
+  openModal({ title: '🗑️ Solicitações de Deleção', bodyEl: body, width: '560px' });
+}
+
+// ═════════ LIXEIRA ═══════════════════════════════════════════════════════
+async function renderTrashView() {
+  const container = $('#trashContent');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const counts = await api('/trash');
+    container.innerHTML = '';
+    const entities = ['cards', 'contacts', 'activities', 'tasks', 'appointments', 'documents', 'proposals'];
+    container.append(el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:20px' },
+      ...entities.map(e => {
+        const tableName = 'crm_' + e;
+        const n = counts.counts?.[tableName] || 0;
+        return el('div', {
+          style: `background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;cursor:${n > 0 ? 'pointer' : 'default'};opacity:${n > 0 ? 1 : .5}`,
+          on: n > 0 ? { click: () => showTrashEntity(e) } : {},
+        },
+          el('div', { style: 'font-size:12px;color:var(--text-dim);text-transform:capitalize' }, e),
+          el('div', { style: 'font-size:24px;font-weight:700;color:var(--purple)' }, String(n)),
+        );
+      }),
+    ));
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function showTrashEntity(entity) {
+  const data = await api(`/trash/${entity}?limit=200`);
+  const body = el('div', { style: 'max-height:500px;overflow:auto' });
+  if (!data.items?.length) body.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim)' }, 'Vazio'));
+  else {
+    for (const it of data.items) {
+      body.append(el('div', { style: 'border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center' },
+        el('div', {},
+          el('div', { style: 'font-size:13px;font-weight:600' }, it.title || it.name || it.id),
+          el('div', { style: 'font-size:10px;color:var(--text-dim)' }, 'Deletado: ' + new Date(it.deleted_at).toLocaleString('pt-BR')),
+        ),
+        el('div', { style: 'display:flex;gap:6px' },
+          el('button', {
+            style: 'background:var(--green);color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
+            on: { click: async () => {
+              await api(`/trash/${entity}/${it.id}/restore`, { method: 'POST' });
+              renderTrashView();
+            } },
+          }, 'Restaurar'),
+          el('button', {
+            style: 'background:#ef4444;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
+            on: { click: async () => {
+              if (!confirm('DELETAR permanentemente?')) return;
+              await api(`/trash/${entity}/${it.id}/purge`, { method: 'DELETE' });
+              renderTrashView();
+            } },
+          }, 'Purgar'),
+        ),
+      ));
+    }
+  }
+  openModal({ title: `🗑️ Lixeira: ${entity}`, bodyEl: body, width: '640px' });
+}
+
+// ═════════ CARD SIDE PANEL: ABA AI / VÍNCULOS / COMENTÁRIOS ═══════════
+async function renderAITab(card) {
+  const sec = $('#aiSection');
+  if (!sec) return;
+  sec.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">Calculando...</div>';
+  try {
+    const score = await api(`/ai/cards/${card.id}/score`).catch(() => null);
+    const classify = await api(`/ai/cards/${card.id}/classify`).catch(() => null);
+    sec.innerHTML = '';
+    sec.append(el('div', { style: 'padding:14px' },
+      el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:8px;margin-bottom:10px' },
+        el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, 'Lead Score'),
+        el('div', { style: `font-size:28px;font-weight:700;color:${score?.insight?.scoreNumeric > 60 ? 'var(--green)' : score?.insight?.scoreNumeric > 30 ? 'var(--amber)' : '#ef4444'}` },
+          (score?.insight?.scoreNumeric || 0) + '/100'),
+      ),
+      classify?.insight ? el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:8px;margin-bottom:10px' },
+        el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, 'Classificação'),
+        el('div', { style: 'font-size:18px;font-weight:600;text-transform:uppercase;color:' + ({ hot: '#ef4444', warm: '#f59e0b', cold: '#3b82f6' }[classify.insight.contentText] || 'var(--text)') }, classify.insight.contentText),
+      ) : null,
+      el('button', {
+        style: 'width:100%;padding:10px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;margin-bottom:6px',
+        on: { click: () => openCardAIInsights(card.id) },
+      }, '🧠 Análise completa'),
+      el('button', {
+        style: 'width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer',
+        on: { click: async () => {
+          toast('Gerando próximo passo...', 'info');
+          const r = await api(`/ai/cards/${card.id}/next-step`, { method: 'POST', body: {} }).catch(() => null);
+          if (r?.insight?.contentText) alert('💡 ' + r.insight.contentText);
+        } },
+      }, '💡 Sugerir próximo passo'),
+    ));
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function renderLinksTab(card) {
+  const sec = $('#linksSection');
+  if (!sec) return;
+  sec.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">Carregando...</div>';
+  try {
+    const tasks = await api(`/cards/${card.id}/tasks`).catch(() => ({ tasks: [] }));
+    const docs = await api(`/cards/${card.id}/documents`).catch(() => ({ documents: [] }));
+    const props = await api(`/cards/${card.id}/proposals`).catch(() => ({ proposals: [] }));
+    sec.innerHTML = '';
+    const wrap = el('div', { style: 'padding:14px' });
+    wrap.append(el('h4', { style: 'margin:0 0 8px;font-size:13px' }, '✅ Tarefas (' + (tasks.tasks?.length || 0) + ')'));
+    if (tasks.tasks?.length) {
+      for (const t of tasks.tasks) {
+        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
+          el('div', { style: 'font-weight:600' }, t.title),
+          el('div', { style: 'color:var(--text-dim);font-size:11px' }, `${t.priority} • ${t.status}`),
+        ));
+      }
+    }
+    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '📄 Documentos (' + (docs.documents?.length || 0) + ')'));
+    if (docs.documents?.length) {
+      for (const d of docs.documents) {
+        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
+          el('div', { style: 'font-weight:600' }, d.title + ' v' + d.version),
+          el('div', { style: 'color:var(--text-dim);font-size:11px' }, d.status),
+        ));
+      }
+    }
+    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '💼 Propostas (' + (props.proposals?.length || 0) + ')'));
+    if (props.proposals?.length) {
+      for (const p of props.proposals) {
+        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
+          el('div', { style: 'font-weight:600' }, 'v' + p.version + ' — ' + fmtMoney(p.totalCents || 0)),
+          el('div', { style: 'color:var(--text-dim);font-size:11px' }, p.status),
+        ));
+      }
+    }
+    sec.append(wrap);
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function renderCommentsTab(card) {
+  const sec = $('#commentsSection');
+  if (!sec) return;
+  sec.innerHTML = '<div style="padding:20px;color:var(--text-dim)">Carregando...</div>';
+  try {
+    const r = await api(`/cards/${card.id}/comments`);
+    sec.innerHTML = '';
+    const wrap = el('div', { style: 'padding:14px' });
+    if (!r.comments?.length) wrap.append(el('div', { style: 'color:var(--text-dim);padding:14px;text-align:center;font-size:13px' }, 'Nenhum comentário'));
+    else for (const c of r.comments) {
+      wrap.append(el('div', { style: 'background:var(--bg-3);padding:10px;border-radius:6px;margin-bottom:6px' },
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:4px' },
+          (c.authorAgentId || 'sistema') + ' • ' + new Date(c.createdAt).toLocaleString('pt-BR')),
+        el('div', { style: 'font-size:13px' }, c.content),
+        c.mentions?.length ? el('div', { style: 'font-size:11px;color:var(--purple);margin-top:4px' }, '@ ' + c.mentions.join(', @')) : null,
+      ));
+    }
+    // New comment form
+    const form = el('form', { style: 'margin-top:14px', on: { submit: async (e) => {
+      e.preventDefault();
+      const ta = form.querySelector('textarea');
+      if (!ta.value.trim()) return;
+      try {
+        await api(`/cards/${card.id}/comments`, { method: 'POST', body: { content: ta.value } });
+        renderCommentsTab(card);
+      } catch (err) { toast('Erro: ' + err.message, 'error'); }
+    } } });
+    form.append(
+      el('textarea', { rows: 3, placeholder: 'Comentário (use @nome para mencionar agentes)', style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box' }),
+      el('button', { type: 'submit', style: 'margin-top:6px;padding:8px 16px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-size:13px' }, 'Comentar'),
+    );
+    wrap.append(form);
+    sec.append(wrap);
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+}
+
+// Hook: when openCardPanel runs, populate the new tabs
+const _origOpenCardPanel = window.openCardPanel;
+if (typeof openCardPanel === 'function' && !openCardPanel._wrapped) {
+  const origFn = openCardPanel;
+  window.openCardPanel = function(card) {
+    origFn.call(this, card);
+    state.currentCard = card;
+    setTimeout(() => {
+      renderAITab(card).catch(() => {});
+      renderLinksTab(card).catch(() => {});
+      renderCommentsTab(card).catch(() => {});
+    }, 100);
+  };
+  window.openCardPanel._wrapped = true;
+}
+
+// ═════════ HOOK: ROTAS NOVAS NO showView ════════════════════════════════
+const _origShowView = (typeof showView === 'function') ? showView : null;
+if (_origShowView && !_origShowView._wrappedV37) {
+  window.showView = async function(viewName) {
+    await _origShowView(viewName);
+    if (viewName === 'search') { wireGlobalSearch(); }
+    else if (viewName === 'insights') { renderInsightsView(); }
+    else if (viewName === 'performance') { renderPerformanceView(); }
+    else if (viewName === 'security') { renderSecurityView(); }
+    else if (viewName === 'privacy') { renderPrivacyView(); }
+    else if (viewName === 'trash') { renderTrashView(); }
+  };
+  window.showView._wrappedV37 = true;
+}
+
+// ═════════ WIRE BUTTONS NOVOS ═══════════════════════════════════════════
+function wireOnda37Buttons() {
+  $('#batchScoreBtn')?.addEventListener('click', async () => {
+    toast('Re-scorando 20 cards...', 'info');
+    try { await api('/ai/batch-score', { method: 'POST', body: { limit: 20 } }); toast('Pronto', 'success'); renderInsightsView(); }
+    catch (e) { toast('Erro: ' + e.message, 'error'); }
+  });
+  $('#perfPeriod')?.addEventListener('change', renderPerformanceView);
+  $('#newGoalBtn')?.addEventListener('click', openNewGoalModal);
+  $('#seedBadgesBtn')?.addEventListener('click', async () => {
+    try { await api('/badges/seed-defaults', { method: 'POST', body: {} }); toast('Badges criados', 'success'); renderPerformanceView(); }
+    catch (e) { toast('Erro: ' + e.message, 'error'); }
+  });
+  $('#seedRolesBtn')?.addEventListener('click', async () => {
+    try { await api('/security/roles/seed-defaults', { method: 'POST', body: {} }); toast('Roles criadas', 'success'); renderSecurityView(); }
+    catch (e) { toast('Erro: ' + e.message, 'error'); }
+  });
+  $('#newRoleBtn')?.addEventListener('click', openNewRoleModal);
+  $('#newIpBtn')?.addEventListener('click', openNewIpWhitelistModal);
+  $('#auditLogBtn')?.addEventListener('click', openAuditLogModal);
+  $('#newRetentionBtn')?.addEventListener('click', openNewRetentionModal);
+  $('#viewDeletionsBtn')?.addEventListener('click', openDeletionsModal);
+}
+
+document.addEventListener('DOMContentLoaded', wireOnda37Buttons);
+if (document.readyState !== 'loading') wireOnda37Buttons();
+
+// ═════════ KANBAN: RIGHT-CLICK NO CARD ══════════════════════════════════
+function wireKanbanContextMenu() {
+  document.addEventListener('contextmenu', (e) => {
+    const cardEl = e.target.closest('.kanban-card, [data-card-id]');
+    if (!cardEl) return;
+    const cardId = cardEl.dataset.cardId || cardEl.getAttribute('data-card-id');
+    if (!cardId) return;
+    const card = (state.cards || []).find(c => c.id === cardId);
+    if (!card) return;
+    showContextMenu(e, [
+      { label: '✏️ Abrir card', action: () => openCardPanel(card) },
+      { label: '🧠 AI Insights', action: () => openCardAIInsights(card.id) },
+      { label: '✅ Nova tarefa pra este card', action: () => openTaskEditModal({ cardId: card.id, contactId: card.contactId }) },
+      { label: '📄 Novo documento pra este card', action: () => openDocumentEditModal({ cardId: card.id, contactId: card.contactId }) },
+      '-',
+      { label: '🗑️ Deletar', danger: true, action: async () => {
+        if (!confirm('Deletar card?')) return;
+        await api(`/cards/${card.id}`, { method: 'DELETE' });
+        if (state.currentBoardId) { await loadPipeline(state.currentBoardId); renderKanban(); }
+      } },
+    ]);
+  });
+}
+wireKanbanContextMenu();

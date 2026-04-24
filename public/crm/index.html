@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>CRM Clow</title>
 <link rel="icon" href="/assets/favicon-gold.png">
-<link rel="stylesheet" href="/crm/crm.css?v=36">
+<link rel="stylesheet" href="/crm/crm.css?v=37">
 </head>
 <body>
 
@@ -46,8 +46,15 @@
       <button class="nav-item" data-view="documents"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="nav-label">Documentos</span></button>
       <button class="nav-item" data-view="forms"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span><span class="nav-label">Formulários</span></button>
       <button class="nav-item" data-view="campaigns"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span class="nav-label">Campanhas</span></button>
+      <button class="nav-item" data-view="search"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span class="nav-label">Busca</span></button>
+      <button class="nav-item" data-view="insights"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg></span><span class="nav-label">Insights AI</span></button>
+      <button class="nav-item" data-view="performance"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span><span class="nav-label">Performance</span></button>
+      <button class="nav-item" data-view="security"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span class="nav-label">Segurança</span></button>
+      <button class="nav-item" data-view="privacy"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 8l6-1z"/></svg></span><span class="nav-label">Privacidade</span></button>
     </nav>
     <div class="sidebar-foot">
+      <button class="nav-item" data-view="trash" style="opacity:.6;font-size:12px"><span class="nav-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></span><span class="nav-label">Lixeira</span></button>
+
       <div class="tenant-info">
         <div class="name" id="tenantName">—</div>
         <div class="tier" id="tenantTier">—</div>
@@ -250,6 +257,73 @@
       <div class="list" id="campaignsList" style="padding:20px"></div>
     </div>
 
+    <!-- ONDA 37: SEARCH / INSIGHTS / PERFORMANCE / SECURITY / PRIVACY / TRASH ═══════ -->
+
+    <div class="view" data-view="search" id="searchView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Busca Global</h2></div>
+      </header>
+      <div style="padding:20px">
+        <input id="globalSearchInput" type="search" placeholder="Buscar contatos, cards, notas, atividades..." style="width:100%;padding:14px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:14px;margin-bottom:16px">
+        <div id="globalSearchResults"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="insights" id="insightsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Insights AI</h2></div>
+        <div class="top-bar-right"><button id="batchScoreBtn">⚡ Re-scorar 20 cards</button></div>
+      </header>
+      <div id="insightsContent" style="padding:20px"></div>
+    </div>
+
+    <div class="view" data-view="performance" id="performanceView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Performance</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <select id="perfPeriod" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px">
+            <option value="day">Hoje</option><option value="week">Semana</option>
+            <option value="month" selected>Mês</option><option value="year">Ano</option>
+            <option value="all_time">Sempre</option>
+          </select>
+          <button id="newGoalBtn">+ Meta</button>
+          <button id="seedBadgesBtn">Badges Default</button>
+        </div>
+      </header>
+      <div id="performanceContent" style="padding:20px"></div>
+    </div>
+
+    <div class="view" data-view="security" id="securityView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Segurança</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <button id="seedRolesBtn">Roles Default</button>
+          <button id="newRoleBtn">+ Role</button>
+          <button id="newIpBtn">+ IP Whitelist</button>
+          <button id="auditLogBtn">📜 Audit Log</button>
+        </div>
+      </header>
+      <div id="securityContent" style="padding:20px"></div>
+    </div>
+
+    <div class="view" data-view="privacy" id="privacyView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Privacidade & LGPD</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <button id="newRetentionBtn">+ Política Retenção</button>
+          <button id="viewDeletionsBtn">🗑️ Solicitações</button>
+        </div>
+      </header>
+      <div id="privacyContent" style="padding:20px"></div>
+    </div>
+
+    <div class="view" data-view="trash" id="trashView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Lixeira</h2></div>
+      </header>
+      <div id="trashContent" style="padding:20px"></div>
+    </div>
+
   </main>
 
   <!-- SIDE PANEL (card detail + conversation) -->
@@ -267,6 +341,9 @@
     <div class="panel-tabs">
       <button class="panel-tab active" data-tab="conversation">Conversa</button>
       <button class="panel-tab" data-tab="info">Info</button>
+      <button class="panel-tab" data-tab="ai">🧠 AI</button>
+      <button class="panel-tab" data-tab="links">📎 Vínculos</button>
+      <button class="panel-tab" data-tab="comments">💬 Comentários</button>
       <button class="panel-tab" data-tab="edit">Editar</button>
     </div>
     <div class="panel-body">
@@ -290,6 +367,9 @@
       <!-- INFO (read) -->
       <section class="tab-section" data-tab="info" id="infoSection"></section>
       <!-- EDIT -->
+      <section class="tab-section" data-tab="ai" id="aiSection"></section>
+      <section class="tab-section" data-tab="links" id="linksSection"></section>
+      <section class="tab-section" data-tab="comments" id="commentsSection"></section>
       <section class="tab-section" data-tab="edit" id="editSection"></section>
     </div>
   </aside>
@@ -300,9 +380,9 @@
 
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/crm/clow-dialog.js?v=36"></script>
-<script type="module" src="/crm/crm.js?v=36"></script>
-<script src="/crm/crm-extras.js?v=36"></script>
+<script src="/crm/clow-dialog.js?v=37"></script>
+<script type="module" src="/crm/crm.js?v=37"></script>
+<script src="/crm/crm-extras.js?v=37"></script>
 <script src="/crm/crm-settings-ext.js"></script>
 </body>
 </html>
