@@ -14,6 +14,7 @@ import * as automations from './automations.js';
 import { processBillingTick } from './billing.js';
 import { rotateMonthlyAllTenants } from '../billing/quotaGuard.js';
 import * as reportsScheduler from './reportsScheduler.js';
+import * as emailMarketing from './emailMarketing.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -63,6 +64,13 @@ async function tick(): Promise<void> {
       detectDueApproaching(),
       processBillingTick(),
       reportsScheduler.tick(),
+      (async () => {
+        try {
+          emailMarketing.promoteScheduledCampaigns();
+          await emailMarketing.tick(process.env.PUBLIC_BASE_URL || '');
+          await emailMarketing.tickSequences(process.env.PUBLIC_BASE_URL || '');
+        } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
+      })(),
     ]);
     maybeRotateMonthly();
   } catch (e: any) {

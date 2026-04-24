@@ -13,6 +13,7 @@ import { Hono } from 'hono';
 import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import { buildContext, renderHTML, renderPDF, recordEvent, onAccept } from './proposals.js';
+import * as em from './emailMarketing.js';
 
 const app = new Hono();
 
@@ -89,5 +90,36 @@ app.post('/proposals/:token/sign', async (c) => {
   onAccept(t.tenantId, t.proposalId);
   return c.json({ ok: true, status: p.status });
 });
+
+
+// ─── Email marketing public tracking ────────────────────────────────────
+const PIXEL_GIF2 = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
+app.get('/e/o/:token', (c) => {
+  em.recordOpen(c.req.param('token'), clientIp(c));
+  return new Response(new Uint8Array(PIXEL_GIF2), {
+    status: 200,
+    headers: { 'content-type': 'image/gif', 'cache-control': 'no-store' },
+  });
+});
+
+app.get('/e/c/:token', (c) => {
+  const url = c.req.query('u');
+  if (!url) return c.text('missing u', 400);
+  const dest = em.recordClick(c.req.param('token'), url, clientIp(c));
+  return c.redirect(dest, 302);
+});
+
+app.get('/e/u/:token', (c) => {
+  const r = em.unsubscribe(c.req.param('token'));
+  if (!r.ok) return c.text('Link inválido ou expirado.', 404);
+  return c.html(`<!doctype html><meta charset="utf-8"><title>Inscrição cancelada</title>
+<body style="font-family:system-ui;max-width:520px;margin:80px auto;padding:24px;text-align:center;color:#1e293b">
+  <h1 style="color:#9B59FC">Inscrição cancelada</h1>
+  <p>${r.email ? 'O email ' + r.email + ' foi' : 'Você foi'} removido da lista. Não enviaremos mais mensagens.</p>
+  <p style="color:#64748b;font-size:13px">Se mudou de ideia, entre em contato conosco.</p>
+</body>`);
+});
+
 
 export default app;

@@ -1199,8 +1199,8 @@ export function runSegment(tenantId: string, filter: SegmentFilter, limit: numbe
   const conds: string[] = ['tenant_id = ?'];
   const args: any[] = [tenantId];
 
-  if (filter.hasPhone) conds.push('phone IS NOT NULL AND phone != ""');
-  if (filter.hasEmail) conds.push('email IS NOT NULL AND email != ""');
+  if (filter.hasPhone) conds.push("phone IS NOT NULL AND phone != ''");
+  if (filter.hasEmail) conds.push("email IS NOT NULL AND email != ''");
   if (filter.company) { conds.push('company LIKE ?'); args.push('%' + filter.company + '%'); }
   if (filter.source) { conds.push('source = ?'); args.push(filter.source); }
   if (filter.minLeadScore != null) { conds.push('COALESCE(lead_score,0) >= ?'); args.push(filter.minLeadScore); }

@@ -617,6 +617,103 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 16 applied: proposals tracking + events');
   }
 
+  // ONDA 17 — Email Marketing (campaigns + templates + drips + tracking + unsubs)
+  const onda17Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(117);
+  if (!onda17Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_email_templates (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body_html TEXT NOT NULL,
+        variables_json TEXT DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_email_tpl_tenant ON crm_email_templates(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_email_campaigns (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        segment_id TEXT,
+        template_id TEXT,
+        subject TEXT NOT NULL,
+        body_html TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        scheduled_at INTEGER,
+        started_at INTEGER,
+        finished_at INTEGER,
+        stats_queued INTEGER DEFAULT 0,
+        stats_sent INTEGER DEFAULT 0,
+        stats_opened INTEGER DEFAULT 0,
+        stats_clicked INTEGER DEFAULT 0,
+        stats_unsubscribed INTEGER DEFAULT 0,
+        stats_bounced INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_campaigns_tenant ON crm_email_campaigns(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS idx_campaigns_scheduled ON crm_email_campaigns(scheduled_at) WHERE status = 'scheduled';
+
+      CREATE TABLE IF NOT EXISTS crm_campaign_sends (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        contact_id TEXT,
+        email TEXT NOT NULL,
+        send_token TEXT NOT NULL UNIQUE,
+        unsub_token TEXT,
+        sent_at INTEGER,
+        opened_at INTEGER,
+        opened_count INTEGER DEFAULT 0,
+        opened_ip TEXT,
+        clicked_at INTEGER,
+        click_count INTEGER DEFAULT 0,
+        last_clicked_url TEXT,
+        bounced INTEGER DEFAULT 0,
+        error TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_csends_campaign ON crm_campaign_sends(campaign_id, sent_at);
+      CREATE INDEX IF NOT EXISTS idx_csends_token ON crm_campaign_sends(send_token);
+      CREATE INDEX IF NOT EXISTS idx_csends_unsub ON crm_campaign_sends(unsub_token);
+
+      CREATE TABLE IF NOT EXISTS crm_unsubscribes (
+        tenant_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        reason TEXT,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (tenant_id, email)
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_email_sequences (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        segment_id TEXT,
+        steps_json TEXT NOT NULL DEFAULT '[]',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_sequences_tenant ON crm_email_sequences(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_sequence_enrollments (
+        id TEXT PRIMARY KEY,
+        sequence_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL,
+        step_idx INTEGER NOT NULL DEFAULT 0,
+        next_run_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_enr_due ON crm_sequence_enrollments(next_run_at) WHERE finished_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_enr_lookup ON crm_sequence_enrollments(sequence_id, contact_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(117, Date.now());
+    console.log('[crm-migrate] Onda 17 applied: email marketing (campaigns + templates + sequences + unsubs)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
