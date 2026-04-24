@@ -35,6 +35,7 @@ import * as extint from './integrations.js';
 import * as push from './push.js';
 import * as ai from './ai.js';
 import * as docs from './documents.js';
+import * as gam from './gamification.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
@@ -2186,6 +2187,96 @@ app.get('/contacts/:id/documents', (c) => {
 app.get('/cards/:id/documents', (c) => {
   const tid = tenantOf(c);
   return ok(c, { documents: docs.listDocuments(tid, { cardId: c.req.param('id') }) });
+});
+
+// ═══ GAMIFICATION (Onda 27) ═══════════════════════════════════════════
+app.get('/gamification/leaderboard', (c) => {
+  const tid = tenantOf(c);
+  const kind = (c.req.query('kind') || 'deals_won') as any;
+  const period = (c.req.query('period') || 'month') as any;
+  if (!['deals_won','revenue','activities','tasks_completed','calls','meetings'].includes(kind)) return badRequest(c, 'invalid kind');
+  if (!['day','week','month','quarter','year','all_time'].includes(period)) return badRequest(c, 'invalid period');
+  return ok(c, { leaderboard: gam.computeLeaderboard(tid, kind, period), kind, period });
+});
+
+app.get('/gamification/dashboard', (c) => {
+  const tid = tenantOf(c);
+  const period = (c.req.query('period') || 'month') as any;
+  return ok(c, gam.performanceDashboard(tid, period));
+});
+
+// Goals CRUD
+app.get('/goals', (c) => {
+  const tid = tenantOf(c);
+  const opts: any = {};
+  if (c.req.query('agentId')) opts.agentId = c.req.query('agentId');
+  if (c.req.query('teamId'))  opts.teamId = c.req.query('teamId');
+  return ok(c, { goals: gam.listGoals(tid, opts) });
+});
+
+app.post('/goals', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.kind || !body.target || !body.period) return badRequest(c, 'kind + target + period required');
+  try {
+    return ok(c, { goal: gam.createGoal(tid, body) }, 201);
+  } catch (err: any) { return badRequest(c, err.message); }
+});
+
+app.get('/goals/:id', (c) => {
+  const g = gam.getGoal(tenantOf(c), c.req.param('id'));
+  return g ? ok(c, { goal: g }) : notFound(c, 'goal');
+});
+
+app.patch('/goals/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const g = gam.updateGoal(tid, c.req.param('id'), body);
+  return g ? ok(c, { goal: g }) : notFound(c, 'goal');
+});
+
+app.delete('/goals/:id', (c) => {
+  return gam.deleteGoal(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'goal');
+});
+
+app.get('/goals/:id/progress', (c) => {
+  const p = gam.goalProgress(tenantOf(c), c.req.param('id'));
+  return p ? ok(c, p) : notFound(c, 'goal');
+});
+
+// Badges catalog
+app.get('/badges', (c) => ok(c, { badges: gam.listBadges(tenantOf(c)) }));
+
+app.post('/badges', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.criteria) return badRequest(c, 'name + criteria required');
+  return ok(c, { badge: gam.createBadge(tid, body) }, 201);
+});
+
+app.delete('/badges/:id', (c) => {
+  return gam.deleteBadge(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'badge');
+});
+
+app.post('/badges/seed-defaults', (c) => {
+  gam.seedDefaultBadges(tenantOf(c));
+  return ok(c, { seeded: true });
+});
+
+app.post('/badges/evaluate', (c) => {
+  return ok(c, gam.evaluateAllBadges(tenantOf(c)));
+});
+
+// Agent badges
+app.get('/agents/:id/badges', (c) => {
+  return ok(c, { badges: gam.agentBadges(tenantOf(c), c.req.param('id')) });
+});
+
+app.post('/agents/:id/badges/:badgeId', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const awarded = gam.awardBadge(tid, c.req.param('id'), c.req.param('badgeId'), body.evidence);
+  return ok(c, { awarded });
 });
 
 app.post('/proposal-templates', async (c) => {

@@ -1242,6 +1242,53 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 26 applied: documents + templates + signature + events');
   }
 
+  // ONDA 27 — Gamification (goals + badges + leaderboard)
+  const onda27Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(127);
+  if (!onda27Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_goals (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        agent_id TEXT,
+        team_id TEXT,
+        kind TEXT NOT NULL,          -- deals_won | revenue | activities | tasks_completed | calls | meetings
+        target INTEGER NOT NULL,
+        period TEXT NOT NULL,        -- day | week | month | quarter | year | all_time
+        start_date INTEGER NOT NULL,
+        end_date INTEGER NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        title TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_goals_agent ON crm_goals(tenant_id, agent_id);
+      CREATE INDEX IF NOT EXISTS idx_goals_team ON crm_goals(tenant_id, team_id);
+
+      CREATE TABLE IF NOT EXISTS crm_badges (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        icon TEXT DEFAULT '🏆',
+        criteria_json TEXT NOT NULL DEFAULT '{}',
+        auto_award INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_badges_tenant ON crm_badges(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_agent_badges (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        badge_id TEXT NOT NULL REFERENCES crm_badges(id) ON DELETE CASCADE,
+        earned_at INTEGER NOT NULL,
+        evidence_json TEXT,
+        UNIQUE (agent_id, badge_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_abdg_agent ON crm_agent_badges(agent_id, earned_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(127, Date.now());
+    console.log('[crm-migrate] Onda 27 applied: gamification (goals + badges + leaderboard)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

@@ -20,6 +20,7 @@ import * as cal from './calendar.js';
 import * as outboundWebhooks from './outboundWebhooks.js';
 import * as push from './push.js';
 import * as ai from './ai.js';
+import * as gam from './gamification.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -92,6 +93,7 @@ async function tick(): Promise<void> {
           await outboundWebhooks.tickRetries();
           // AI: keep top 5 cards freshly scored (rotates through pipeline)
           await ai.tickAutoScore(5).catch(() => { /* non-blocking */ });
+          try { gam.tickDailyBadges(); } catch { /* non-blocking */ }
         } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
       })(),
     ]);
