@@ -1485,30 +1485,305 @@ function renderInventoryList() {
 }
 
 async function renderStats() {
+  // Lazy-init state for chart instances
+  if (!window._rptCharts) window._rptCharts = {};
+
+  // Wire header controls (only once)
+  if (!window._rptWired) {
+    window._rptWired = true;
+    const setDefaults = () => {
+      const to = new Date(); to.setUTCHours(23,59,59,999);
+      const from = new Date(); from.setUTCDate(from.getUTCDate() - 30); from.setUTCHours(0,0,0,0);
+      const f = $('#reportsFrom'); const t = $('#reportsTo');
+      if (f && !f.value) f.value = from.toISOString().slice(0,10);
+      if (t && !t.value) t.value = to.toISOString().slice(0,10);
+    };
+    setDefaults();
+    $('#reportsRefresh')?.addEventListener('click', () => renderStats());
+    $('#reportsSchedulesBtn')?.addEventListener('click', () => openSchedulesModal());
+    // Export buttons
+    document.querySelectorAll('.rpt-card').forEach(card => {
+      const kind = card.dataset.kind;
+      card.querySelector('.rpt-csv')?.addEventListener('click', () => exportReport(kind, 'csv'));
+      card.querySelector('.rpt-pdf')?.addEventListener('click', () => exportReport(kind, 'pdf'));
+    });
+  }
+
   try {
     const s = await loadStats();
     const grid = $('#statsGrid');
     grid.innerHTML = '';
     const cards = [
-      { label: 'Boards', value: s.boards, color: 'var(--purple)' },
       { label: 'Cards total', value: s.totalCards, color: 'var(--blue)' },
       { label: 'Pipeline bruto', value: fmtMoney(s.totalValueCents), color: 'var(--green)' },
       { label: 'Forecast ponderado', value: fmtMoney(s.weightedValueCents), color: 'var(--amber)' },
       { label: 'Contatos', value: s.totalContacts, color: 'var(--text)' },
       { label: 'Agentes', value: s.totalAgents, color: 'var(--text)' },
-      { label: 'Canais WA', value: s.totalChannels, color: 'var(--text)' },
       { label: 'Assinaturas ativas', value: s.totalSubscriptionsActive, color: 'var(--green)' },
     ];
     for (const c of cards) {
       grid.append(el('div', {
-        style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:18px',
+        style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px',
       },
-        el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px' }, c.label),
-        el('div', { style: `font-size:26px;font-weight:700;color:${c.color}` }, String(c.value)),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px' }, c.label),
+        el('div', { style: `font-size:22px;font-weight:700;color:${c.color}` }, String(c.value)),
       ));
     }
+  } catch (e) { toast('Erro nos cards: ' + e.message, 'error'); }
+
+  // Fetch and render all 4 reports in parallel
+  const win = reportWindowParams();
+  const bucket = $('#reportsBucket')?.value || 'week';
+  await Promise.allSettled([
+    fetchAndPlot('sales',       `/reports/sales?bucket=${bucket}&${win}`,    'chartSales',   plotSales),
+    fetchAndPlot('agents',      `/reports/agent-activities?${win}`,          'chartAgents',  plotAgents),
+    fetchAndPlot('sources',     `/reports/lead-sources?${win}`,              'chartSources', plotSources),
+    fetchAndPlot('lost-reasons',`/reports/lost-reasons?${win}`,              'chartLost',    plotLost),
+  ]);
+}
+
+function reportWindowParams() {
+  const from = $('#reportsFrom')?.value;
+  const to   = $('#reportsTo')?.value;
+  const p = [];
+  if (from) p.push('from=' + new Date(from + 'T00:00:00Z').getTime());
+  if (to)   p.push('to='   + new Date(to   + 'T23:59:59Z').getTime());
+  return p.join('&');
+}
+
+async function fetchAndPlot(kind, path, canvasId, plotter) {
+  try {
+    const data = await api(path);
+    plotter(canvasId, data.rows || []);
+  } catch (e) {
+    console.warn('[report]', kind, e.message);
+  }
+}
+
+function destroyChart(id) {
+  const c = window._rptCharts[id];
+  if (c) { c.destroy(); delete window._rptCharts[id]; }
+}
+
+function plotSales(canvasId, rows) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  if (rows.length === 0) { emptyMsg(ctx); return; }
+  window._rptCharts[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: rows.map(r => r.bucket),
+      datasets: [
+        { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#9B59FC', backgroundColor: 'rgba(155,89,252,.2)', yAxisID: 'y' },
+        { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#22C55E', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
+      ],
+    },
+    options: chartDefaults({ dualAxis: true }),
+  });
+}
+
+function plotAgents(canvasId, rows) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  if (rows.length === 0) { emptyMsg(ctx); return; }
+  const types = [...new Set(rows.flatMap(r => Object.keys(r.byType)))];
+  const palette = ['#9B59FC', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899'];
+  window._rptCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.agentName),
+      datasets: types.map((t, i) => ({
+        label: t,
+        data: rows.map(r => r.byType[t] || 0),
+        backgroundColor: palette[i % palette.length],
+      })),
+    },
+    options: chartDefaults({ stacked: true }),
+  });
+}
+
+function plotSources(canvasId, rows) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  if (rows.length === 0) { emptyMsg(ctx); return; }
+  window._rptCharts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: rows.map(r => r.source),
+      datasets: [{
+        data: rows.map(r => r.contactCount),
+        backgroundColor: ['#9B59FC', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899', '#64748B'],
+      }],
+    },
+    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } } },
+  });
+}
+
+function plotLost(canvasId, rows) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  if (rows.length === 0) { emptyMsg(ctx); return; }
+  window._rptCharts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.reason),
+      datasets: [{
+        label: 'Cards perdidos',
+        data: rows.map(r => r.cardCount),
+        backgroundColor: '#EF4444',
+      }],
+    },
+    options: chartDefaults({ horizontal: true }),
+  });
+}
+
+function chartDefaults(o = {}) {
+  const opts = {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#cbd5e1' } },
+    },
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,.1)' }, stacked: !!o.stacked },
+      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,.1)' }, stacked: !!o.stacked, beginAtZero: true },
+    },
+  };
+  if (o.dualAxis) {
+    opts.scales.y1 = { position: 'right', ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, beginAtZero: true };
+  }
+  if (o.horizontal) opts.indexAxis = 'y';
+  return opts;
+}
+
+function emptyMsg(ctx) {
+  ctx.save();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '13px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('Sem dados no período', ctx.canvas.width / 2, ctx.canvas.height / 2);
+  ctx.restore();
+}
+
+async function exportReport(kind, format) {
+  const win = reportWindowParams();
+  const bucket = $('#reportsBucket')?.value || 'week';
+  let path;
+  if (kind === 'sales')              path = `/reports/sales?bucket=${bucket}&${win}&format=${format}`;
+  else if (kind === 'agents')        path = `/reports/agent-activities?${win}&format=${format}`;
+  else if (kind === 'sources')       path = `/reports/lead-sources?${win}&format=${format}`;
+  else if (kind === 'lost-reasons')  path = `/reports/lost-reasons?${win}&format=${format}`;
+  else return;
+
+  try {
+    const r = await fetch(API_BASE + path, { headers: { Authorization: `Bearer ${state.apiKey}` } });
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${kind}-${Date.now()}.${format}`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
+
+async function openSchedulesModal() {
+  let schedules = [];
+  try { schedules = (await api('/scheduled-reports')).scheduledReports || []; }
+  catch (e) { toast('Erro: ' + e.message, 'error'); return; }
+
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const modal = el('div', { class: 'modal', style: 'max-width:640px' });
+  const renderList = () => {
+    const list = modal.querySelector('.sched-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (schedules.length === 0) {
+      list.append(el('div', { style: 'color:var(--text-dim);padding:20px;text-align:center' }, 'Nenhum agendamento.'));
+      return;
+    }
+    for (const s of schedules) {
+      const row = el('div', { style: 'display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px' },
+        el('div', { style: 'flex:1' },
+          el('div', { style: 'font-weight:600' }, s.name),
+          el('div', { style: 'font-size:12px;color:var(--text-dim)' },
+            `${s.kind} • ${s.interval} • ${s.format.toUpperCase()} → ${s.email_to}`,
+          ),
+        ),
+        el('button', { on: { click: async () => {
+          try { await api(`/scheduled-reports/${s.id}/run`, { method: 'POST' }); toast('Enviado!', 'success'); }
+          catch (e) { toast('Erro: ' + e.message, 'error'); }
+        } } }, 'Enviar agora'),
+        el('button', { on: { click: async () => {
+          try {
+            await api(`/scheduled-reports/${s.id}`, { method: 'DELETE' });
+            schedules = schedules.filter(x => x.id !== s.id);
+            renderList();
+          } catch (e) { toast('Erro: ' + e.message, 'error'); }
+        } }, style: 'color:#ef4444' }, 'Remover'),
+      );
+      list.append(row);
+    }
+  };
+
+  modal.append(
+    el('div', { class: 'modal-head' },
+      el('h3', {}, 'Agendamentos de relatórios'),
+      el('button', { class: 'close-modal', on: { click: () => backdrop.remove() } }, '×'),
+    ),
+    el('div', { class: 'modal-body' },
+      el('div', { class: 'sched-list', style: 'max-height:240px;overflow:auto;margin-bottom:14px' }),
+      el('h4', { style: 'margin:12px 0 8px' }, 'Novo agendamento'),
+      el('form', { class: 'sched-form', style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px', on: { submit: async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const body = {
+          name: fd.get('name'),
+          kind: fd.get('kind'),
+          interval: fd.get('interval'),
+          format: fd.get('format'),
+          emailTo: fd.get('emailTo'),
+        };
+        try {
+          const r = await api('/scheduled-reports', { method: 'POST', body });
+          toast('Agendado!', 'success');
+          schedules = (await api('/scheduled-reports')).scheduledReports || [];
+          renderList();
+          e.target.reset();
+        } catch (err) { toast('Erro: ' + err.message, 'error'); }
+      } } },
+        el('input', { name: 'name', placeholder: 'Nome (ex: Vendas semanais)', required: '', style: 'grid-column:span 2' }),
+        (() => { const s = el('select', { name: 'kind', required: '' });
+          s.append(el('option', { value: 'sales' }, 'Vendas por período'));
+          s.append(el('option', { value: 'agents' }, 'Atividades por agente'));
+          s.append(el('option', { value: 'sources' }, 'Origem de leads'));
+          s.append(el('option', { value: 'lost-reasons' }, 'Razões de perda'));
+          return s; })(),
+        (() => { const s = el('select', { name: 'interval', required: '' });
+          s.append(el('option', { value: 'daily' }, 'Diário'));
+          s.append(el('option', { value: 'weekly', selected: '' }, 'Semanal'));
+          s.append(el('option', { value: 'monthly' }, 'Mensal'));
+          return s; })(),
+        (() => { const s = el('select', { name: 'format', required: '' });
+          s.append(el('option', { value: 'pdf' }, 'PDF'));
+          s.append(el('option', { value: 'csv' }, 'CSV'));
+          return s; })(),
+        el('input', { name: 'emailTo', type: 'email', placeholder: 'email@exemplo.com', required: '' }),
+        el('button', { type: 'submit', style: 'grid-column:span 2;background:var(--purple);color:#fff;border:0;padding:10px;border-radius:8px;cursor:pointer' }, 'Criar agendamento'),
+      ),
+    ),
+  );
+  backdrop.append(modal);
+  document.body.append(backdrop);
+  renderList();
+}
+
 
 
 // ─── Missing modals (v2 — these were declared in wireEvents but never defined) ─

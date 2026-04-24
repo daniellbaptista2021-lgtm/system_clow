@@ -556,3 +556,36 @@ body {
   .nav-item span:not(.nav-icon) { display: none; }
   .brand-text, .sidebar-foot { display: none; }
 }
+
+
+/* ONDA 15 — Report cards on Dashboard view */
+.rpt-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.rpt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.rpt-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.rpt-actions { display: flex; gap: 6px; }
+.rpt-actions button {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.rpt-actions button:hover { color: var(--text); border-color: var(--purple); }
