@@ -576,6 +576,68 @@ app.post('/reminders/:id/done', (c) => {
 app.get('/reminders/:id/history', (c) =>
   ok(c, { history: store.getReminderHistory(tenantOf(c), c.req.param('id')) }));
 
+// ═══ AUTOMATIONS PRO ════════════════════════════════════════════════════
+app.patch('/automations/:id/schedule', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const cron = body.schedule_cron ?? null;
+  const nextRunAt = body.next_run_at ?? (cron ? Date.now() + 60000 : null);
+  return store.setAutomationSchedule(tenantOf(c), c.req.param('id'), cron, nextRunAt) ? ok(c, { ok: true }) : notFound(c, 'automation');
+});
+
+app.post('/automations/:id/webhook', (c) => {
+  const secret = store.setAutomationWebhook(tenantOf(c), c.req.param('id'));
+  const url = `/v1/crm/automations/webhook/${secret}`;
+  return ok(c, { url, secret });
+});
+
+app.post('/automations/webhook/:secret', async (c) => {
+  const auto = store.findAutomationByWebhook(c.req.param('secret'));
+  if (!auto) return notFound(c, 'automation');
+  const payload = await c.req.json().catch(() => ({}));
+  const start = Date.now();
+  try {
+    // dispara automation via seu engine existente (emit)
+    const automations = await import('./automations.js');
+    await automations.emit({ trigger: 'webhook', tenantId: auto.tenant_id, text: JSON.stringify(payload) });
+    store.logAutomationRun(auto.tenant_id, auto.id, { triggerPayload: payload, actionsExecuted: 1, success: true, durationMs: Date.now() - start });
+    return ok(c, { fired: true });
+  } catch (err: any) {
+    store.logAutomationRun(auto.tenant_id, auto.id, { triggerPayload: payload, actionsExecuted: 0, success: false, error: err.message, durationMs: Date.now() - start });
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/automations/:id/logs', (c) => {
+  const limit = parseInt(c.req.query('limit') || '50', 10);
+  return ok(c, { logs: store.listAutomationLogs(tenantOf(c), c.req.param('id'), limit) });
+});
+
+// ═══ ASSIGNMENT PRO (rules + SLA) ═══════════════════════════════════════
+app.post('/assignment-rules', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  return ok(c, { rule: store.createAssignmentRule(tenantOf(c), {
+    name: body.name, conditions: body.conditions || {},
+    assignToAgentId: body.assign_to_agent_id,
+    assignToTeamId: body.assign_to_team_id,
+    skillRequired: body.skill_required,
+    slaMinutes: body.sla_minutes,
+    escalateToAgentId: body.escalate_to_agent_id,
+    priority: body.priority || 0,
+    enabled: body.enabled !== false,
+  }) }, 201);
+});
+app.get('/assignment-rules', (c) => ok(c, { rules: store.listAssignmentRules(tenantOf(c)) }));
+app.delete('/assignment-rules/:id', (c) => store.deleteAssignmentRule(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'rule'));
+
+app.post('/assignment/evaluate', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.card) return badRequest(c, 'card required');
+  return ok(c, store.evaluateAssignment(tenantOf(c), { card: body.card, contact: body.contact, channel: body.channel, keyword: body.keyword }));
+});
+
+app.get('/assignment/sla-violations', (c) => ok(c, { violations: store.slaViolations(tenantOf(c)) }));
+
 // ═══ SUBSCRIPTIONS PRO + STRIPE CONNECT + INVOICES + COUPONS + MRR ══════════
 
 // Stripe Connect: tenant conecta SUA conta Stripe

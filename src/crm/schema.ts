@@ -460,6 +460,74 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 9 applied: subs pro + stripe connect + invoices + coupons + dunning');
   }
 
+  // ONDA 10 — Automacoes Pro
+  const onda10Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(110);
+  if (!onda10Applied) {
+    const autoCols = db.prepare("PRAGMA table_info(crm_automations)").all() as any[];
+    const autoColNames = new Set(autoCols.map((c: any) => c.name));
+    const addAuto = (n: string, t: string) => { if (!autoColNames.has(n)) db.exec(`ALTER TABLE crm_automations ADD COLUMN ${n} ${t}`); };
+    addAuto('schedule_cron', 'TEXT');
+    addAuto('last_run_at', 'INTEGER');
+    addAuto('next_run_at', 'INTEGER');
+    addAuto('run_count', 'INTEGER DEFAULT 0');
+    addAuto('webhook_secret', 'TEXT');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_automation_logs (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        automation_id TEXT NOT NULL,
+        fired_at INTEGER NOT NULL,
+        trigger_payload_json TEXT,
+        actions_executed INTEGER DEFAULT 0,
+        success INTEGER NOT NULL DEFAULT 1,
+        error TEXT,
+        duration_ms INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_autlog ON crm_automation_logs(automation_id, fired_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(110, Date.now());
+    console.log('[crm-migrate] Onda 10 applied: automation pro (cron/webhook/logs)');
+  }
+
+  // ONDA 11 — Assignment Pro
+  const onda11Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(111);
+  if (!onda11Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_assignment_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        conditions_json TEXT NOT NULL DEFAULT '{}',
+        assign_to_agent_id TEXT,
+        assign_to_team_id TEXT,
+        skill_required TEXT,
+        sla_minutes INTEGER,
+        escalate_to_agent_id TEXT,
+        priority INTEGER DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_asrules_tenant ON crm_assignment_rules(tenant_id, enabled, priority);
+
+      CREATE TABLE IF NOT EXISTS crm_assignment_log (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        rule_id TEXT,
+        card_id TEXT NOT NULL,
+        agent_id TEXT,
+        team_id TEXT,
+        escalated INTEGER NOT NULL DEFAULT 0,
+        sla_deadline_ts INTEGER,
+        resolved_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_aslog_card ON crm_assignment_log(card_id, created_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(111, Date.now());
+    console.log('[crm-migrate] Onda 11 applied: assignment rules + log');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

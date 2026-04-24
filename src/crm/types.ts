@@ -394,3 +394,40 @@ export interface MrrSnapshot {
   churnRate: number;
   averageRevenuePerUser: number;
 }
+
+// ONDA 10 — Automacoes Pro
+export interface AutomationLog {
+  id: string; tenantId: string; automationId: string;
+  firedAt: number; triggerPayload?: any;
+  actionsExecuted: number; success: boolean; error?: string; durationMs?: number;
+}
+
+// ONDA 11 — Assignment Pro
+export interface AssignmentConditions {
+  region?: string;
+  minValueCents?: number;
+  maxValueCents?: number;
+  tags?: string[];            // card labels OR contact tags
+  tier?: string;              // contact tier (e.g. lead_score based)
+  source?: string;            // contact.source
+  channel?: string;           // 'whatsapp_meta'|'whatsapp_zapi'|...
+  keyword?: string;           // body/text contains
+  timeWindow?: { start: string; end: string; weekdays?: number[] }; // HH:MM
+}
+export interface AssignmentRule {
+  id: string; tenantId: string; name: string;
+  conditions: AssignmentConditions;
+  assignToAgentId?: string; assignToTeamId?: string;
+  skillRequired?: string;
+  slaMinutes?: number;
+  escalateToAgentId?: string;
+  priority: number;
+  enabled: boolean;
+  createdAt: number;
+}
+export interface AssignmentLog {
+  id: string; tenantId: string; ruleId?: string;
+  cardId: string; agentId?: string; teamId?: string;
+  escalated: boolean; slaDeadlineTs?: number;
+  resolvedAt?: number; createdAt: number;
+}
