@@ -46,7 +46,8 @@ import type { Card, Contact, Activity, Automation } from './types.js';
 export type TriggerType =
   | 'inbound_message' | 'outbound_message'
   | 'card_created' | 'card_moved'
-  | 'card_stale' | 'due_approaching';
+  | 'card_stale' | 'due_approaching'
+  | 'webhook' | 'schedule';
 
 export interface AutomationEvent {
   trigger: TriggerType;
