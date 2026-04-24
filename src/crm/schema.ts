@@ -334,9 +334,9 @@ function migrate(db: Database.Database): void {
   // ONDA 8 — Line Items Pro
   const onda8Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(108);
   if (!onda8Applied) {
-    const liCols = db.prepare("PRAGMA table_info(crm_line_items)").all() as any[];
+    const liCols = db.prepare("PRAGMA table_info(crm_card_items)").all() as any[];
     const liColNames = new Set(liCols.map((c: any) => c.name));
-    const addLi = (n: string, t: string) => { if (!liColNames.has(n)) db.exec(`ALTER TABLE crm_line_items ADD COLUMN ${n} ${t}`); };
+    const addLi = (n: string, t: string) => { if (!liColNames.has(n)) db.exec(`ALTER TABLE crm_card_items ADD COLUMN ${n} ${t}`); };
     addLi('discount_cents', 'INTEGER DEFAULT 0');
     addLi('discount_percent', 'REAL');
     addLi('tax_cents', 'INTEGER DEFAULT 0');

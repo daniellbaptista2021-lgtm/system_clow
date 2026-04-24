@@ -203,6 +203,61 @@ app.post('/contacts', async (c) => {
   return ok(c, { contact }, 201);
 });
 
+// ═══ CONTACTS PRO ═══════════════════════════════════════════════════════
+app.get('/contacts/duplicates', (c) => {
+  const dups = store.findDuplicateContacts(tenantOf(c));
+  return ok(c, { duplicates: dups });
+});
+
+app.post('/contacts/:id/merge', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const targetId = (body as any).target_id || (body as any).targetId;
+  if (!targetId) return badRequest(c, 'target_id required');
+  const r = store.mergeContacts(tenantOf(c), c.req.param('id'), targetId);
+  return r.ok ? ok(c, { merged: true }) : c.json({ error: r.error }, 400);
+});
+
+app.post('/contacts/import', async (c) => {
+  const tid = tenantOf(c);
+  const ctype = c.req.header('content-type') || '';
+  let csv = '';
+  if (ctype.includes('multipart/form-data')) {
+    const fd = await c.req.formData();
+    const file = fd.get('file');
+    if (!file || typeof file === 'string') return badRequest(c, 'file required');
+    csv = Buffer.from(await (file as any).arrayBuffer()).toString('utf-8');
+  } else {
+    csv = await c.req.text();
+  }
+  const result = store.importContactsCsv(tid, csv);
+  return ok(c, result);
+});
+
+app.get('/contacts/export', (c) => {
+  const csv = store.exportContactsCsv(tenantOf(c));
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="contacts.csv"',
+    },
+  });
+});
+
+app.post('/contacts/bulk', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.action || !Array.isArray(body.ids)) return badRequest(c, 'action + ids[] required');
+  const r = store.bulkContactOp(tenantOf(c), body);
+  return ok(c, r);
+});
+
+app.get('/contacts/:id/history', (c) => {
+  const limit = parseInt(c.req.query('limit') || '500', 10);
+  const type = c.req.query('type') || undefined;
+  const h = store.getContactHistory(tenantOf(c), c.req.param('id'), { limit, type });
+  return ok(c, h);
+});
+
+
 app.get('/contacts/:id', (c) => {
   const tid = tenantOf(c);
   const contact = store.getContact(tid, c.req.param('id'));
@@ -996,60 +1051,6 @@ app.post('/checklists/:id/items/:itemId/toggle', (c) => {
 app.delete('/checklists/:id', (c) => {
   const ok2 = store.deleteChecklist(tenantOf(c), c.req.param('id'));
   return ok2 ? c.body(null, 204) : notFound(c, 'checklist');
-});
-
-// ═══ CONTACTS PRO ═══════════════════════════════════════════════════════
-app.get('/contacts/duplicates', (c) => {
-  const dups = store.findDuplicateContacts(tenantOf(c));
-  return ok(c, { duplicates: dups });
-});
-
-app.post('/contacts/:id/merge', async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const targetId = (body as any).target_id || (body as any).targetId;
-  if (!targetId) return badRequest(c, 'target_id required');
-  const r = store.mergeContacts(tenantOf(c), c.req.param('id'), targetId);
-  return r.ok ? ok(c, { merged: true }) : c.json({ error: r.error }, 400);
-});
-
-app.post('/contacts/import', async (c) => {
-  const tid = tenantOf(c);
-  const ctype = c.req.header('content-type') || '';
-  let csv = '';
-  if (ctype.includes('multipart/form-data')) {
-    const fd = await c.req.formData();
-    const file = fd.get('file');
-    if (!file || typeof file === 'string') return badRequest(c, 'file required');
-    csv = Buffer.from(await (file as any).arrayBuffer()).toString('utf-8');
-  } else {
-    csv = await c.req.text();
-  }
-  const result = store.importContactsCsv(tid, csv);
-  return ok(c, result);
-});
-
-app.get('/contacts/export', (c) => {
-  const csv = store.exportContactsCsv(tenantOf(c));
-  return new Response(csv, {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="contacts.csv"',
-    },
-  });
-});
-
-app.post('/contacts/bulk', async (c) => {
-  const body = await c.req.json().catch(() => ({})) as any;
-  if (!body.action || !Array.isArray(body.ids)) return badRequest(c, 'action + ids[] required');
-  const r = store.bulkContactOp(tenantOf(c), body);
-  return ok(c, r);
-});
-
-app.get('/contacts/:id/history', (c) => {
-  const limit = parseInt(c.req.query('limit') || '500', 10);
-  const type = c.req.query('type') || undefined;
-  const h = store.getContactHistory(tenantOf(c), c.req.param('id'), { limit, type });
-  return ok(c, h);
 });
 
 // ═══ SEGMENTS ═══════════════════════════════════════════════════════════
