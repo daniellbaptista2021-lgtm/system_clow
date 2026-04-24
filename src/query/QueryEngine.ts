@@ -63,6 +63,8 @@ export class QueryEngine {
   // HARD dedupe: rastreia tool calls ja vistas nesta sessao. Forca o modelo
   // a parar de re-ler arquivos que ja leu (GLM-5.1 ignora prompt + cache).
   private seenToolCalls = new Map<string, number>(); // key -> call count
+  private sessionBlockedTotal = 0; // total dedupe-blocked pro session
+  private forceNoTools = false; // quando true, proxima API call nao envia tools
 
   // Legacy compat: mutableMessages alias
   private get mutableMessages(): ClovMessage[] {
@@ -122,6 +124,8 @@ export class QueryEngine {
 
   async *submitMessage(prompt: string): AsyncGenerator<SDKMessage> {
     this.seenToolCalls.clear(); // reset hard-dedupe tracker a cada nova msg do user
+    this.forceNoTools = false; // nova msg -> reabilita tools
+    // sessionBlockedTotal NAO reseta — contador acumula pra detectar sessao tox
     const isFirstMessage = this.state.size() === 0;
     const baseMessageContent = isFirstMessage && this.config.dynamicContext
       ? `${this.config.dynamicContext}\n\n${prompt}`
@@ -249,10 +253,14 @@ export class QueryEngine {
 
       try {
         const currentMessages = this.state.snapshot().map(this.toApiMessage);
+        const toolsForThisCall = this.forceNoTools ? [] : this.config.tools;
+        if (this.forceNoTools) {
+          console.log('[hard-dedupe] forceNoTools=true -> enviando sem tools pra forcar resposta textual');
+        }
 
         for await (const chunk of callModel(
           currentMessages,
-          this.config.tools,
+          toolsForThisCall,
           this.config.systemPrompt,
           this.abortController.signal,
         )) {
@@ -369,6 +377,7 @@ export class QueryEngine {
 
       // ── Execute tools ──────────────────────────────────────────────
       const deferredSystemMessages: Array<{ subtype: SystemMessage['subtype']; content: string }> = [];
+      let blockedInThisTurn = 0; // contador de tool calls bloqueados por hard-dedupe neste turno
       for (const toolCall of toolCalls) {
         const tool = findToolByName(this.config.tools, toolCall.name);
 
@@ -405,12 +414,25 @@ export class QueryEngine {
               : typeof (validInput as any).pattern === 'string'
                 ? (validInput as any).pattern
                 : JSON.stringify(validInput).slice(0, 80);
-            console.warn('[hard-dedupe] BLOQUEADO ' + tool.name + '(' + inputPreview + ') — ja chamado ' + prevCount + 'x nesta sessao');
+            this.sessionBlockedTotal++;
+            console.warn('[hard-dedupe] BLOQUEADO ' + tool.name + '(' + inputPreview + ') — ja chamado ' + prevCount + 'x | turno=' + blockedInThisTurn + ' | sessao=' + this.sessionBlockedTotal);
             this.pushToolResult(
               toolCall.id,
               '⚠️ VOCE JA LEU ESSE RECURSO NESTA CONVERSA ('+prevCount+'x antes). O conteudo esta no historico acima. PARE de re-ler e RESPONDA agora com base no que voce ja tem. Nao chame mais Read/Glob/Grep — vá direto pra resposta escrita.',
               true,
             );
+            blockedInThisTurn++;
+            // KILL SWITCH pt1: se 3+ bloqueios no mesmo turno, proxima API call nao envia tools
+            if (blockedInThisTurn >= 3) {
+              console.warn('[hard-dedupe] KILL SWITCH turno: 3+ bloqueios — proxima call sem tools, forca resposta textual');
+              this.forceNoTools = true;
+            }
+            // KILL SWITCH pt2: sessao inteira com 8+ bloqueios — aborta submitMessage
+            if (this.sessionBlockedTotal >= 8) {
+              console.warn('[hard-dedupe] KILL SWITCH sessao: ' + this.sessionBlockedTotal + ' bloqueios — abortando submitMessage');
+              yield { type: 'result', subtype: 'tool_loop_aborted', content: 'Loop de leituras detectado. Analise interrompida automaticamente pra economizar tokens. Formule a pergunta de forma mais especifica (ex: "analise SO billing.ts") e tente de novo.', cost: this.budget.getTotalCost() } as any;
+              return;
+            }
             continue;
           }
         }
