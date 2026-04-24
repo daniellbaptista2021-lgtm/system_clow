@@ -587,6 +587,36 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 14 applied: lost_reason + scheduled reports');
   }
 
+  // ONDA 16 — Proposals Pro (send, track, sign, auto-convert)
+  const onda16Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(116);
+  if (!onda16Applied) {
+    const pCols = db.prepare("PRAGMA table_info(crm_proposals)").all() as any[];
+    const pColNames = new Set(pCols.map((c: any) => c.name));
+    if (!pColNames.has('public_token'))          db.exec("ALTER TABLE crm_proposals ADD COLUMN public_token TEXT");
+    if (!pColNames.has('viewed_at'))             db.exec("ALTER TABLE crm_proposals ADD COLUMN viewed_at INTEGER");
+    if (!pColNames.has('viewed_count'))          db.exec("ALTER TABLE crm_proposals ADD COLUMN viewed_count INTEGER DEFAULT 0");
+    if (!pColNames.has('first_viewed_ip'))       db.exec("ALTER TABLE crm_proposals ADD COLUMN first_viewed_ip TEXT");
+    if (!pColNames.has('sent_via'))              db.exec("ALTER TABLE crm_proposals ADD COLUMN sent_via TEXT");
+    if (!pColNames.has('sent_to'))               db.exec("ALTER TABLE crm_proposals ADD COLUMN sent_to TEXT");
+    if (!pColNames.has('sent_at'))               db.exec("ALTER TABLE crm_proposals ADD COLUMN sent_at INTEGER");
+    if (!pColNames.has('auto_convert_on_accept'))db.exec("ALTER TABLE crm_proposals ADD COLUMN auto_convert_on_accept INTEGER DEFAULT 1");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_proposals_token ON crm_proposals(public_token) WHERE public_token IS NOT NULL");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_proposal_events (
+        id TEXT PRIMARY KEY,
+        proposal_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        ts INTEGER NOT NULL,
+        ip TEXT,
+        ua TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_prop_events ON crm_proposal_events(proposal_id, ts);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(116, Date.now());
+    console.log('[crm-migrate] Onda 16 applied: proposals tracking + events');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

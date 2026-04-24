@@ -23,6 +23,7 @@ import * as analytics from './analytics.js';
 import * as reports from './reports.js';
 import { getCrmDb } from './schema.js';
 import { toCSV, toPDF, type ReportKind } from './reportsExport.js';
+import * as proposalsMod from './proposals.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1092,6 +1093,71 @@ app.post('/proposals/:id/sign', async (c) => {
   const signedIp = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || undefined;
   const p = store.updateProposalStatus(tenantOf(c), c.req.param('id'), 'accepted', { signedBy: body.signed_by, signedIp });
   return p ? ok(c, { proposal: p }) : notFound(c, 'proposal');
+});
+
+// ═══ PROPOSALS PRO (Onda 16) ══════════════════════════════════════════
+function baseUrlOf(c: any): string {
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return `${proto}://${host}`;
+}
+
+app.post('/proposals/:id/send-email', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const to = String(body.to || '').trim();
+  if (!to || !to.includes('@')) return badRequest(c, 'valid to email required');
+  try {
+    const r = await proposalsMod.sendByEmail(tid, c.req.param('id'), {
+      to, baseUrl: baseUrlOf(c), attachPdf: body.attachPdf !== false,
+    });
+    return r.ok ? ok(c, r) : c.json({ error: 'send_failed', message: r.error }, 502);
+  } catch (err: any) { return c.json({ error: 'exception', message: err.message }, 500); }
+});
+
+app.post('/proposals/:id/send-whatsapp', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const channelId = String(body.channelId || '').trim();
+  if (!channelId) return badRequest(c, 'channelId required');
+  try {
+    const r = await proposalsMod.sendByWhatsApp(tid, c.req.param('id'), {
+      channelId, toPhone: body.toPhone, baseUrl: baseUrlOf(c),
+    });
+    return r.ok ? ok(c, r) : c.json({ error: 'send_failed', message: r.error }, 502);
+  } catch (err: any) { return c.json({ error: 'exception', message: err.message }, 500); }
+});
+
+app.post('/proposals/:id/clone', (c) => {
+  const tid = tenantOf(c);
+  const p = proposalsMod.cloneAsNewVersion(tid, c.req.param('id'));
+  return p ? ok(c, { proposal: p }, 201) : notFound(c, 'proposal');
+});
+
+app.get('/proposals/:id/events', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { events: proposalsMod.listEvents(tid, c.req.param('id')) });
+});
+
+app.get('/proposals/:id/public-link', (c) => {
+  const tid = tenantOf(c);
+  try {
+    const token = proposalsMod.ensurePublicToken(tid, c.req.param('id'));
+    return ok(c, { token, url: `${baseUrlOf(c)}/p/proposals/${token}` });
+  } catch { return notFound(c, 'proposal'); }
+});
+
+// Keep onAccept hook in sync: when status is set to 'accepted' via admin
+// endpoint (not just public sign), also trigger conversion.
+app.post('/proposals/:id/accept-admin', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const p = store.updateProposalStatus(tid, c.req.param('id'), 'accepted', {
+    signedBy: body.signed_by || 'admin', signedIp: c.req.header('x-forwarded-for') || 'admin',
+  });
+  if (!p) return notFound(c, 'proposal');
+  proposalsMod.onAccept(tid, c.req.param('id'));
+  return ok(c, { proposal: p });
 });
 
 app.post('/proposal-templates', async (c) => {

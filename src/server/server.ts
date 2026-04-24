@@ -43,6 +43,7 @@ import { buildMetaWhatsAppRoutes } from '../adapters/whatsappMeta.js';
 import { buildBridgeRoutes } from './bridgeRoutes.js';
 import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
 import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
+import publicProposals from '../crm/publicRoutes.js';
 import { clowSonnetGuard } from './middleware/clowSonnetGuard.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
@@ -215,6 +216,7 @@ async function main(): Promise<void> {
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);
   app.use('/v1/sessions', tenantAuth);
+  app.route('/p', publicProposals);
   app.use('/v1/crm/*', tenantAuth);
   app.use('/v1/crm', tenantAuth);
   console.log('  ✓ Auth: Multi-tenant API key enabled');
