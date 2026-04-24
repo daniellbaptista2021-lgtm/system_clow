@@ -34,6 +34,7 @@ import * as ohk from './outboundWebhooks.js';
 import * as extint from './integrations.js';
 import * as push from './push.js';
 import * as ai from './ai.js';
+import * as docs from './documents.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
@@ -2053,6 +2054,138 @@ app.post('/ai/batch-score', async (c) => {
   const limit = Math.min(50, Number(body.limit) || 10);
   const r = await ai.tickAutoScore(limit);
   return ok(c, r);
+});
+
+// ═══ DOCUMENTS / CONTRACTS (Onda 26) ══════════════════════════════════
+// Templates
+app.get('/document-templates', (c) => {
+  const kind = c.req.query('kind') as any;
+  return ok(c, { templates: docs.listTemplates(tenantOf(c), kind) });
+});
+
+app.post('/document-templates', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.bodyHtml) return badRequest(c, 'name + bodyHtml required');
+  return ok(c, { template: docs.createTemplate(tid, body) }, 201);
+});
+
+app.get('/document-templates/:id', (c) => {
+  const t = docs.getTemplate(tenantOf(c), c.req.param('id'));
+  return t ? ok(c, { template: t }) : notFound(c, 'template');
+});
+
+app.patch('/document-templates/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const t = docs.updateTemplate(tid, c.req.param('id'), body);
+  return t ? ok(c, { template: t }) : notFound(c, 'template');
+});
+
+app.delete('/document-templates/:id', (c) => {
+  return docs.deleteTemplate(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'template');
+});
+
+// Documents CRUD
+app.get('/documents', (c) => {
+  const tid = tenantOf(c);
+  const opts: any = {};
+  if (c.req.query('contactId'))  opts.contactId = c.req.query('contactId');
+  if (c.req.query('cardId'))     opts.cardId = c.req.query('cardId');
+  if (c.req.query('templateId')) opts.templateId = c.req.query('templateId');
+  if (c.req.query('status'))     opts.status = c.req.query('status');
+  return ok(c, { documents: docs.listDocuments(tid, opts) });
+});
+
+app.post('/documents', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title) return badRequest(c, 'title required');
+  if (!body.bodyHtml && !body.templateId) return badRequest(c, 'bodyHtml or templateId required');
+  try {
+    return ok(c, { document: docs.createDocument(tid, body) }, 201);
+  } catch (err: any) { return badRequest(c, err.message); }
+});
+
+app.get('/documents/:id', (c) => {
+  const d = docs.getDocument(tenantOf(c), c.req.param('id'));
+  return d ? ok(c, { document: d }) : notFound(c, 'document');
+});
+
+app.patch('/documents/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const d = docs.updateDocument(tid, c.req.param('id'), body);
+  return d ? ok(c, { document: d }) : notFound(c, 'document');
+});
+
+app.delete('/documents/:id', (c) => {
+  return docs.deleteDocument(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'document');
+});
+
+app.post('/documents/:id/clone', (c) => {
+  const d = docs.cloneAsNewVersion(tenantOf(c), c.req.param('id'));
+  return d ? ok(c, { document: d }, 201) : notFound(c, 'document');
+});
+
+app.get('/documents/:id/events', (c) => {
+  return ok(c, { events: docs.listEvents(tenantOf(c), c.req.param('id')) });
+});
+
+app.get('/documents/:id/public-link', (c) => {
+  const d = docs.getDocument(tenantOf(c), c.req.param('id'));
+  if (!d) return notFound(c, 'document');
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return ok(c, { token: d.publicToken, url: `${proto}://${host}/p/docs/${d.publicToken}` });
+});
+
+app.post('/documents/:id/send-email', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.to) return badRequest(c, 'to required');
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  const r = await docs.sendByEmail(tid, c.req.param('id'), {
+    to: body.to, baseUrl: `${proto}://${host}`, attachPdf: body.attachPdf !== false,
+  });
+  return r.ok ? ok(c, r) : c.json({ error: 'send_failed', message: r.error }, 502);
+});
+
+app.post('/documents/:id/send-whatsapp', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.channelId) return badRequest(c, 'channelId required');
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  const r = await docs.sendByWhatsApp(tid, c.req.param('id'), {
+    channelId: body.channelId, toPhone: body.toPhone, baseUrl: `${proto}://${host}`,
+  });
+  return r.ok ? ok(c, r) : c.json({ error: 'send_failed', message: r.error }, 502);
+});
+
+app.get('/documents/:id/pdf', async (c) => {
+  const d = docs.getDocument(tenantOf(c), c.req.param('id'));
+  if (!d) return notFound(c, 'document');
+  const pdf = await docs.renderPDF(d);
+  return new Response(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      'content-type': 'application/pdf',
+      'content-disposition': `attachment; filename="${d.title.replace(/[^a-zA-Z0-9_\-]/g, '_')}-v${d.version}.pdf"`,
+    },
+  });
+});
+
+// Repository by contact
+app.get('/contacts/:id/documents', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { documents: docs.listDocuments(tid, { contactId: c.req.param('id') }) });
+});
+
+app.get('/cards/:id/documents', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { documents: docs.listDocuments(tid, { cardId: c.req.param('id') }) });
 });
 
 app.post('/proposal-templates', async (c) => {

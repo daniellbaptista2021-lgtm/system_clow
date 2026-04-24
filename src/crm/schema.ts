@@ -1178,6 +1178,70 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 25 applied: AI insights (score/next_step/summary/sentiment/forecast/classification)');
   }
 
+  // ONDA 26 — Documents / Contracts (templates + generate + sign + version)
+  const onda26Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(126);
+  if (!onda26Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_document_templates (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'custom',
+        body_html TEXT NOT NULL,
+        variables_json TEXT DEFAULT '[]',
+        default_terms TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_doctpl_tenant ON crm_document_templates(tenant_id, kind);
+
+      CREATE TABLE IF NOT EXISTS crm_documents (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        contact_id TEXT REFERENCES crm_contacts(id) ON DELETE SET NULL,
+        card_id TEXT REFERENCES crm_cards(id) ON DELETE SET NULL,
+        template_id TEXT,
+        title TEXT NOT NULL,
+        body_html TEXT NOT NULL,
+        variables_json TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'draft',
+        public_token TEXT NOT NULL UNIQUE,
+        version INTEGER NOT NULL DEFAULT 1,
+        parent_document_id TEXT,
+        signed_at INTEGER,
+        signed_by TEXT,
+        signed_ip TEXT,
+        signature_image_b64 TEXT,
+        file_url TEXT,
+        sent_via TEXT,
+        sent_to TEXT,
+        sent_at INTEGER,
+        viewed_at INTEGER,
+        viewed_count INTEGER DEFAULT 0,
+        created_by_agent_id TEXT,
+        ics_uid TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_docs_tenant ON crm_documents(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_docs_contact ON crm_documents(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_docs_card ON crm_documents(card_id);
+      CREATE INDEX IF NOT EXISTS idx_docs_token ON crm_documents(public_token);
+
+      CREATE TABLE IF NOT EXISTS crm_document_events (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL REFERENCES crm_documents(id) ON DELETE CASCADE,
+        event TEXT NOT NULL,
+        ts INTEGER NOT NULL,
+        ip TEXT,
+        ua TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_docevts ON crm_document_events(document_id, ts);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(126, Date.now());
+    console.log('[crm-migrate] Onda 26 applied: documents + templates + signature + events');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

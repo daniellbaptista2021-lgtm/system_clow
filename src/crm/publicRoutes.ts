@@ -16,6 +16,8 @@ import { buildContext, renderHTML, renderPDF, recordEvent, onAccept } from './pr
 import * as em from './emailMarketing.js';
 import * as forms from './forms.js';
 import * as cal from './calendar.js';
+import * as docs from './documents.js';
+import { buildDocumentHTML } from './documentPublic.js';
 import { buildBookingHTML } from './bookingPage.js';
 import { buildEmbedJS, buildHostedFormHTML } from './embedTemplate.js';
 
@@ -222,6 +224,30 @@ app.get('/cal/:tokenPath', (c) => {
       'content-disposition': `inline; filename="clow-${token.slice(0, 8)}.ics"`,
     },
   });
+});
+
+
+
+// ─── Document public view + sign ────────────────────────────────────────
+app.get('/docs/:token', (c) => {
+  const r = docs.getDocumentByToken(c.req.param('token'));
+  if (!r) return c.text('Documento não encontrado', 404);
+  docs.recordEvent(r.doc.id, 'viewed', { ip: clientIp(c), ua: c.req.header('user-agent') });
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return c.html(buildDocumentHTML(r.doc, `${proto}://${host}`));
+});
+
+app.post('/docs/:token/sign', async (c) => {
+  const r = docs.getDocumentByToken(c.req.param('token'));
+  if (!r) return c.json({ ok: false, error: 'not_found' }, 404);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const signedBy = String(body.signedBy || '').trim();
+  if (!signedBy) return c.json({ ok: false, error: 'signedBy required' }, 400);
+  const signed = docs.signDocument(r.tenantId, r.doc.id, {
+    signedBy, signedIp: clientIp(c), signatureImage: body.signatureImage,
+  });
+  return signed ? c.json({ ok: true, status: signed.status }) : c.json({ ok: false, error: 'sign_failed' }, 500);
 });
 
 
