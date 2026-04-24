@@ -60,6 +60,9 @@ export class QueryEngine {
   private currentModel: string = process.env.CLOW_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
   private sessionStarted = false;
   private toolCache = new ToolResultCache();
+  // HARD dedupe: rastreia tool calls ja vistas nesta sessao. Forca o modelo
+  // a parar de re-ler arquivos que ja leu (GLM-5.1 ignora prompt + cache).
+  private seenToolCalls = new Map<string, number>(); // key -> call count
 
   // Legacy compat: mutableMessages alias
   private get mutableMessages(): ClovMessage[] {
@@ -118,6 +121,7 @@ export class QueryEngine {
   // ════════════════════════════════════════════════════════════════════
 
   async *submitMessage(prompt: string): AsyncGenerator<SDKMessage> {
+    this.seenToolCalls.clear(); // reset hard-dedupe tracker a cada nova msg do user
     const isFirstMessage = this.state.size() === 0;
     const baseMessageContent = isFirstMessage && this.config.dynamicContext
       ? `${this.config.dynamicContext}\n\n${prompt}`
@@ -387,6 +391,29 @@ export class QueryEngine {
           continue;
         }
         let validInput = parseResult.data;
+
+        // HARD DEDUPE: bloqueia 2a chamada identica da mesma tool+input
+        // Apenas READ-ONLY tools (Read, Glob, Grep) — writes podem repetir com propósito
+        const DEDUPE_TOOLS = new Set(['Read', 'FileRead', 'Glob', 'Grep']);
+        if (DEDUPE_TOOLS.has(tool.name)) {
+          const dedupeKey = tool.name + '::' + JSON.stringify(validInput, Object.keys(validInput as object).sort());
+          const prevCount = this.seenToolCalls.get(dedupeKey) || 0;
+          this.seenToolCalls.set(dedupeKey, prevCount + 1);
+          if (prevCount >= 1) {
+            const inputPreview = typeof (validInput as any).file_path === 'string'
+              ? (validInput as any).file_path.split('/').pop()
+              : typeof (validInput as any).pattern === 'string'
+                ? (validInput as any).pattern
+                : JSON.stringify(validInput).slice(0, 80);
+            console.warn('[hard-dedupe] BLOQUEADO ' + tool.name + '(' + inputPreview + ') — ja chamado ' + prevCount + 'x nesta sessao');
+            this.pushToolResult(
+              toolCall.id,
+              '⚠️ VOCE JA LEU ESSE RECURSO NESTA CONVERSA ('+prevCount+'x antes). O conteudo esta no historico acima. PARE de re-ler e RESPONDA agora com base no que voce ja tem. Nao chame mais Read/Glob/Grep — vá direto pra resposta escrita.',
+              true,
+            );
+            continue;
+          }
+        }
 
         if (this.config.hookDispatcher) {
           const preToolResult = await this.config.hookDispatcher.firePreToolUse(
