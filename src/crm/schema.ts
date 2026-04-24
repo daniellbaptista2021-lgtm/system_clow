@@ -1152,6 +1152,32 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 24 applied: push notifications');
   }
 
+  // ONDA 25 — AI insights (score, next_step, summary, sentiment, forecast, classification)
+  const onda25Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(125);
+  if (!onda25Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_ai_insights (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        entity TEXT NOT NULL,           -- card | contact | board
+        entity_id TEXT NOT NULL,
+        kind TEXT NOT NULL,             -- score | next_step | summary | sentiment | forecast | classification
+        score_numeric REAL,
+        content_text TEXT,
+        content_json TEXT,
+        confidence REAL,
+        model TEXT,
+        computed_at INTEGER NOT NULL,
+        stale_at INTEGER,
+        UNIQUE (tenant_id, entity, entity_id, kind)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ai_lookup ON crm_ai_insights(tenant_id, entity, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_ai_stale ON crm_ai_insights(stale_at) WHERE stale_at IS NOT NULL;
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(125, Date.now());
+    console.log('[crm-migrate] Onda 25 applied: AI insights (score/next_step/summary/sentiment/forecast/classification)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

@@ -33,6 +33,7 @@ import * as search from './search.js';
 import * as ohk from './outboundWebhooks.js';
 import * as extint from './integrations.js';
 import * as push from './push.js';
+import * as ai from './ai.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
@@ -1986,6 +1987,72 @@ app.get('/mobile/cards/:id', (c) => {
 
 app.get('/mobile/agents/:id/dashboard', (c) => {
   return ok(c, mobile.agentDashboard(tenantOf(c), c.req.param('id')));
+});
+
+// ═══ AI INSIGHTS (Onda 25) ════════════════════════════════════════════
+app.get('/ai/cards/:id/score', (c) => {
+  const tid = tenantOf(c);
+  const force = c.req.query('refresh') === 'true';
+  const existing = force ? null : ai.getInsight(tid, 'card', c.req.param('id'), 'score');
+  const fresh = existing && existing.staleAt && existing.staleAt > Date.now() ? existing : ai.leadScore(tid, c.req.param('id'));
+  return fresh ? ok(c, { insight: fresh }) : notFound(c, 'card');
+});
+
+app.post('/ai/cards/:id/next-step', async (c) => {
+  const tid = tenantOf(c);
+  try {
+    const ins = await ai.nextStep(tid, c.req.param('id'));
+    return ins ? ok(c, { insight: ins }) : notFound(c, 'card');
+  } catch (err: any) { return c.json({ error: 'ai_failed', message: err.message }, 502); }
+});
+
+app.post('/ai/cards/:id/summary', async (c) => {
+  const tid = tenantOf(c);
+  try {
+    const ins = await ai.summarizeConversation(tid, c.req.param('id'));
+    return ins ? ok(c, { insight: ins }) : notFound(c, 'card');
+  } catch (err: any) { return c.json({ error: 'ai_failed', message: err.message }, 502); }
+});
+
+app.get('/ai/cards/:id/sentiment', (c) => {
+  const tid = tenantOf(c);
+  const ins = ai.sentimentForCard(tid, c.req.param('id'));
+  return ins ? ok(c, { insight: ins }) : notFound(c, 'card');
+});
+
+app.post('/ai/sentiment', async (c) => {
+  // Stateless sentiment on arbitrary text
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.text) return badRequest(c, 'text required');
+  return ok(c, ai.sentimentForText(body.text));
+});
+
+app.get('/ai/cards/:id/classify', (c) => {
+  const tid = tenantOf(c);
+  const ins = ai.classifyLead(tid, c.req.param('id'));
+  return ins ? ok(c, { insight: ins }) : notFound(c, 'card');
+});
+
+app.get('/ai/cards/:id/insights', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { insights: ai.getAllInsights(tid, 'card', c.req.param('id')) });
+});
+
+app.get('/ai/forecast', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.query('boardId');
+  const horizonDays = Number(c.req.query('horizonDays')) || 30;
+  const opts: any = { horizonDays };
+  if (boardId) opts.boardId = boardId;
+  return ok(c, ai.forecast(tid, opts));
+});
+
+// Batch scoring (useful after migration or dashboard open)
+app.post('/ai/batch-score', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const limit = Math.min(50, Number(body.limit) || 10);
+  const r = await ai.tickAutoScore(limit);
+  return ok(c, r);
 });
 
 app.post('/proposal-templates', async (c) => {
