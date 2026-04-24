@@ -356,3 +356,41 @@ export interface ProposalTemplate {
   validForDays?: number;
   createdAt: number;
 }
+
+// ONDA 9 — Subscriptions Pro
+export interface StripeConnectAccount {
+  tenantId: string; stripeAccountId: string;
+  status: 'pending' | 'active' | 'restricted' | 'disabled';
+  chargesEnabled: boolean; payoutsEnabled: boolean;
+  onboardedAt?: number; createdAt: number;
+}
+export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+export interface InvoicePro {
+  id: string; tenantId: string;
+  subscriptionId?: string; contactId?: string;
+  amountCents: number; status: InvoiceStatus;
+  dueAt?: number; paidAt?: number;
+  pdfUrl?: string; stripeInvoiceId?: string; paymentMethod?: string;
+  createdAt: number;
+}
+export interface Coupon {
+  id: string; tenantId: string; code: string;
+  discountPercent?: number; discountCents?: number;
+  maxRedemptions?: number; timesRedeemed: number;
+  validUntil?: number; active: boolean; createdAt: number;
+}
+export interface DunningLog {
+  id: string; tenantId: string; subscriptionId: string;
+  attempt: number; action: string; success: boolean;
+  error?: string; createdAt: number;
+}
+export interface MrrSnapshot {
+  totalMrrCents: number;
+  activeSubs: number;
+  trialSubs: number;
+  pastDueSubs: number;
+  cancelledMonth: number;
+  newMonth: number;
+  churnRate: number;
+  averageRevenuePerUser: number;
+}

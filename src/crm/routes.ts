@@ -576,6 +576,87 @@ app.post('/reminders/:id/done', (c) => {
 app.get('/reminders/:id/history', (c) =>
   ok(c, { history: store.getReminderHistory(tenantOf(c), c.req.param('id')) }));
 
+// ═══ SUBSCRIPTIONS PRO + STRIPE CONNECT + INVOICES + COUPONS + MRR ══════════
+
+// Stripe Connect: tenant conecta SUA conta Stripe
+app.post('/stripe-connect', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.stripe_account_id) return badRequest(c, 'stripe_account_id required');
+  const acc = store.setStripeConnect(tenantOf(c), body.stripe_account_id, {
+    status: body.status, chargesEnabled: body.charges_enabled,
+    payoutsEnabled: body.payouts_enabled, onboardedAt: body.onboarded_at ?? Date.now(),
+  });
+  return ok(c, { account: acc });
+});
+app.get('/stripe-connect', (c) => {
+  const acc = store.getStripeConnect(tenantOf(c));
+  return acc ? ok(c, { account: acc }) : c.json({ connected: false }, 200);
+});
+
+// Invoices
+app.post('/invoices', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (typeof body.amount_cents !== 'number') return badRequest(c, 'amount_cents required');
+  return ok(c, { invoice: store.createInvoice(tenantOf(c), {
+    subscriptionId: body.subscription_id, contactId: body.contact_id,
+    amountCents: body.amount_cents, dueAt: body.due_at,
+    stripeInvoiceId: body.stripe_invoice_id,
+  }) }, 201);
+});
+app.get('/invoices', (c) => ok(c, { invoices: store.listInvoices(tenantOf(c), {
+  status: c.req.query('status') as any,
+  subscriptionId: c.req.query('subscription_id') || undefined,
+  contactId: c.req.query('contact_id') || undefined,
+  limit: parseInt(c.req.query('limit') || '200', 10),
+}) }));
+app.post('/invoices/:id/mark-paid', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const inv = store.markInvoicePaid(tenantOf(c), c.req.param('id'), body.payment_method);
+  return inv ? ok(c, { invoice: inv }) : notFound(c, 'invoice');
+});
+
+// Coupons
+app.post('/coupons', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.code) return badRequest(c, 'code required');
+  return ok(c, { coupon: store.createCoupon(tenantOf(c), {
+    code: body.code,
+    discountPercent: body.discount_percent,
+    discountCents: body.discount_cents,
+    maxRedemptions: body.max_redemptions,
+    validUntil: body.valid_until,
+    active: body.active !== false,
+  }) }, 201);
+});
+app.get('/coupons', (c) => ok(c, { coupons: store.listCoupons(tenantOf(c)) }));
+app.post('/coupons/:code/redeem', (c) => {
+  const r = store.redeemCoupon(tenantOf(c), c.req.param('code'));
+  return r.ok ? ok(c, { coupon: r.coupon }) : c.json({ error: r.error }, 400);
+});
+app.delete('/coupons/:id', (c) => store.deleteCoupon(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'coupon'));
+
+// Dunning
+app.get('/subscriptions/:id/dunning', (c) => ok(c, { log: store.listDunning(tenantOf(c), c.req.param('id')) }));
+
+// Subscriptions Pro ops
+app.post('/subscriptions/:id/cancel', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  return store.cancelSubscription(tenantOf(c), c.req.param('id'), body.reason) ? ok(c, { ok: true }) : notFound(c, 'subscription');
+});
+app.patch('/subscriptions/:id/trial', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (typeof body.trial_until !== 'number') return badRequest(c, 'trial_until (ms) required');
+  return store.setSubscriptionTrial(tenantOf(c), c.req.param('id'), body.trial_until) ? ok(c, { ok: true }) : notFound(c, 'subscription');
+});
+app.patch('/subscriptions/:id/payment-link', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.link) return badRequest(c, 'link required');
+  return store.setPaymentLink(tenantOf(c), c.req.param('id'), body.link) ? ok(c, { ok: true }) : notFound(c, 'subscription');
+});
+
+// MRR Dashboard
+app.get('/mrr', (c) => ok(c, store.computeMrr(tenantOf(c))));
+
 // ═══ INVENTORY PRO ═══════════════════════════════════════════════════════
 app.post('/inventory/categories', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;

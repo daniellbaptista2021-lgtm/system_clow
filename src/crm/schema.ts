@@ -382,6 +382,84 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 8 applied: line-items pro + proposals');
   }
 
+  // ONDA 9 — Subscriptions Pro + Stripe Connect
+  const onda9Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(109);
+  if (!onda9Applied) {
+    const subCols = db.prepare("PRAGMA table_info(crm_subscriptions)").all() as any[];
+    const subColNames = new Set(subCols.map((c: any) => c.name));
+    const addSub = (n: string, t: string) => { if (!subColNames.has(n)) db.exec(`ALTER TABLE crm_subscriptions ADD COLUMN ${n} ${t}`); };
+    addSub('trial_until', 'INTEGER');
+    addSub('stripe_subscription_id', 'TEXT');
+    addSub('stripe_customer_id', 'TEXT');
+    addSub('stripe_price_id', 'TEXT');
+    addSub('cancel_reason', 'TEXT');
+    addSub('cancel_at', 'INTEGER');
+    addSub('cancelled_at', 'INTEGER');
+    addSub('upgrade_from_id', 'TEXT');
+    addSub('payment_link', 'TEXT');
+    addSub('last_invoice_id', 'TEXT');
+    addSub('coupon_code', 'TEXT');
+    addSub('mrr_cents', 'INTEGER DEFAULT 0');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_invoices (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        subscription_id TEXT,
+        contact_id TEXT,
+        amount_cents INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        due_at INTEGER,
+        paid_at INTEGER,
+        pdf_url TEXT,
+        stripe_invoice_id TEXT,
+        payment_method TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_invoices_tenant ON crm_invoices(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS idx_invoices_sub ON crm_invoices(subscription_id);
+
+      CREATE TABLE IF NOT EXISTS crm_stripe_connect (
+        tenant_id TEXT PRIMARY KEY,
+        stripe_account_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        charges_enabled INTEGER NOT NULL DEFAULT 0,
+        payouts_enabled INTEGER NOT NULL DEFAULT 0,
+        onboarded_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_coupons (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        discount_percent INTEGER,
+        discount_cents INTEGER,
+        max_redemptions INTEGER,
+        times_redeemed INTEGER NOT NULL DEFAULT 0,
+        valid_until INTEGER,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        UNIQUE(tenant_id, code)
+      );
+      CREATE INDEX IF NOT EXISTS idx_coupons_tenant ON crm_coupons(tenant_id, active);
+
+      CREATE TABLE IF NOT EXISTS crm_dunning_log (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        subscription_id TEXT NOT NULL,
+        attempt INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        success INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_dunning_sub ON crm_dunning_log(subscription_id, created_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(109, Date.now());
+    console.log('[crm-migrate] Onda 9 applied: subs pro + stripe connect + invoices + coupons + dunning');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
