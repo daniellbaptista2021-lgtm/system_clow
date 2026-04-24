@@ -327,6 +327,8 @@ export class QueryEngine {
       }
 
       // ── Push assistant message to state ────────────────────────────
+      // Preserve the real stop reason so continuation recovery works when model hits max_tokens
+      const realStopReason = toolCalls.length > 0 ? 'tool_use' : (finishReason === 'length' ? 'max_tokens' : 'end_turn');
       const assistantMsg: AssistantMessage = {
         type: 'assistant',
         uuid: randomUUID(),
@@ -335,7 +337,7 @@ export class QueryEngine {
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         turnNumber: this.budget.getTurnCount(),
         timestamp: Date.now(),
-        stopReason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
+        stopReason: realStopReason,
         usage: { input_tokens: turnUsage.inputTokens, output_tokens: turnUsage.outputTokens },
         model: this.currentModel,
       };
@@ -514,6 +516,27 @@ export class QueryEngine {
       for (const deferred of deferredSystemMessages) {
         this.pushSystemMessage(deferred.subtype, deferred.content);
         yield { type: 'system', subtype: deferred.subtype, content: deferred.content };
+      }
+
+      // Safety net: garantir pushToolResult pra TODO tool_call emitido.
+      // Se por qualquer motivo (excecao em hook/skill, yield abort, etc.)
+      // algum tool_call ficou orfao, a gente pusha error aqui pra manter
+      // pareamento tool_use <-> tool_result (Anthropic API rejeita mismatch
+      // e GLM-5.1 entra em loop re-emitindo os mesmos tool_uses).
+      const resolvedToolIds = new Set<string>();
+      const snapshot = this.state.snapshot();
+      for (let i = snapshot.length - 1; i >= 0; i--) {
+        const m = snapshot[i];
+        if ((m as any).type !== 'user') continue;
+        const tcid = (m as any).toolCallId;
+        if (tcid) resolvedToolIds.add(tcid);
+        else break;
+      }
+      for (const tc of toolCalls) {
+        if (!resolvedToolIds.has(tc.id)) {
+          console.warn('[safety-net] tool_use ' + tc.id + ' (' + tc.name + ') sem result — pushing error placeholder');
+          this.pushToolResult(tc.id, 'Error: tool execution did not produce a result (safety net)', true);
+        }
       }
 
       toolRounds++;
