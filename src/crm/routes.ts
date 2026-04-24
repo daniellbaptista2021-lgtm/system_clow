@@ -29,6 +29,7 @@ import * as forms from './forms.js';
 import * as tasksMod from './tasks.js';
 import * as cal from './calendar.js';
 import * as collab from './collaboration.js';
+import * as search from './search.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1763,6 +1764,86 @@ app.get('/contacts/:id/timeline', (c) => {
   const tid = tenantOf(c);
   const limit = Number(c.req.query('limit')) || 200;
   return ok(c, { timeline: collab.contactTimeline(tid, c.req.param('id'), { limit }) });
+});
+
+// ═══ SEARCH / VIEWS / BULK (Onda 22) ══════════════════════════════════
+// Global full-text search
+app.get('/search', (c) => {
+  const tid = tenantOf(c);
+  const q = c.req.query('q') || '';
+  const entities = (c.req.query('entities') || 'cards,contacts,activities,notes').split(',') as any[];
+  const limit = Number(c.req.query('limit')) || 25;
+  return ok(c, { hits: search.globalSearch(tid, q, { entities, limit }) });
+});
+
+// Structured card/contact search
+app.post('/search/cards', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  return ok(c, { cards: search.filteredCards(tid, body) });
+});
+
+app.post('/search/contacts', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  return ok(c, { contacts: search.filteredContacts(tid, body) });
+});
+
+// Admin utility: rebuild FTS indices
+app.post('/search/rebuild-fts', (c) => {
+  return ok(c, { rebuilt: search.backfillFTS() });
+});
+
+// Saved views CRUD
+app.get('/views', (c) => {
+  const tid = tenantOf(c);
+  const entity = c.req.query('entity');
+  const agentId = c.req.query('agentId');
+  const opts: any = {};
+  if (entity)  opts.entity = entity;
+  if (agentId) opts.agentId = agentId;
+  return ok(c, { views: search.listSavedViews(tid, opts) });
+});
+
+app.post('/views', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.entity) return badRequest(c, 'name + entity required');
+  if (!['cards', 'contacts', 'tasks', 'appointments'].includes(body.entity)) return badRequest(c, 'invalid entity');
+  return ok(c, { view: search.createSavedView(tid, body) }, 201);
+});
+
+app.get('/views/:id', (c) => {
+  const v = search.getSavedView(tenantOf(c), c.req.param('id'));
+  return v ? ok(c, { view: v }) : notFound(c, 'view');
+});
+
+app.patch('/views/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const v = search.updateSavedView(tid, c.req.param('id'), body);
+  return v ? ok(c, { view: v }) : notFound(c, 'view');
+});
+
+app.delete('/views/:id', (c) => {
+  return search.deleteSavedView(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'view');
+});
+
+// Bulk actions
+app.post('/bulk/cards', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.ids) || body.ids.length === 0) return badRequest(c, 'ids[] required');
+  if (!body.action) return badRequest(c, 'action required');
+  return ok(c, search.bulkCardAction(tid, body));
+});
+
+app.post('/bulk/contacts', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.ids) || body.ids.length === 0) return badRequest(c, 'ids[] required');
+  if (!body.action) return badRequest(c, 'action required');
+  return ok(c, search.bulkContactAction(tid, body));
 });
 
 app.post('/proposal-templates', async (c) => {

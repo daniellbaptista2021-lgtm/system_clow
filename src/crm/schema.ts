@@ -974,6 +974,109 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 21 applied: card comments + chat rooms + notes + mentions');
   }
 
+  // ONDA 22 — FTS5 full-text search + saved views
+  const onda22Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(122);
+  if (!onda22Applied) {
+    db.exec(`
+      -- FTS5 external content tables (rowid mirrors source id)
+      CREATE VIRTUAL TABLE IF NOT EXISTS crm_fts_cards USING fts5(
+        title, description,
+        content='crm_cards', content_rowid='rowid',
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS crm_fts_contacts USING fts5(
+        name, email, phone, notes,
+        content='crm_contacts', content_rowid='rowid',
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS crm_fts_activities USING fts5(
+        content,
+        content='crm_activities', content_rowid='rowid',
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS crm_fts_notes USING fts5(
+        content,
+        content='crm_contact_notes', content_rowid='rowid',
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+
+      -- Sync triggers
+      CREATE TRIGGER IF NOT EXISTS tg_fts_cards_ai AFTER INSERT ON crm_cards BEGIN
+        INSERT INTO crm_fts_cards(rowid, title, description) VALUES (new.rowid, new.title, COALESCE(new.description,''));
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_cards_ad AFTER DELETE ON crm_cards BEGIN
+        INSERT INTO crm_fts_cards(crm_fts_cards, rowid, title, description) VALUES ('delete', old.rowid, old.title, COALESCE(old.description,''));
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_cards_au AFTER UPDATE ON crm_cards BEGIN
+        INSERT INTO crm_fts_cards(crm_fts_cards, rowid, title, description) VALUES ('delete', old.rowid, old.title, COALESCE(old.description,''));
+        INSERT INTO crm_fts_cards(rowid, title, description) VALUES (new.rowid, new.title, COALESCE(new.description,''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS tg_fts_contacts_ai AFTER INSERT ON crm_contacts BEGIN
+        INSERT INTO crm_fts_contacts(rowid, name, email, phone, notes)
+        VALUES (new.rowid, new.name, COALESCE(new.email,''), COALESCE(new.phone,''), COALESCE(new.notes,''));
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_contacts_ad AFTER DELETE ON crm_contacts BEGIN
+        INSERT INTO crm_fts_contacts(crm_fts_contacts, rowid, name, email, phone, notes)
+        VALUES ('delete', old.rowid, old.name, COALESCE(old.email,''), COALESCE(old.phone,''), COALESCE(old.notes,''));
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_contacts_au AFTER UPDATE ON crm_contacts BEGIN
+        INSERT INTO crm_fts_contacts(crm_fts_contacts, rowid, name, email, phone, notes)
+        VALUES ('delete', old.rowid, old.name, COALESCE(old.email,''), COALESCE(old.phone,''), COALESCE(old.notes,''));
+        INSERT INTO crm_fts_contacts(rowid, name, email, phone, notes)
+        VALUES (new.rowid, new.name, COALESCE(new.email,''), COALESCE(new.phone,''), COALESCE(new.notes,''));
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS tg_fts_acts_ai AFTER INSERT ON crm_activities BEGIN
+        INSERT INTO crm_fts_activities(rowid, content) VALUES (new.rowid, new.content);
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_acts_ad AFTER DELETE ON crm_activities BEGIN
+        INSERT INTO crm_fts_activities(crm_fts_activities, rowid, content) VALUES ('delete', old.rowid, old.content);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS tg_fts_notes_ai AFTER INSERT ON crm_contact_notes BEGIN
+        INSERT INTO crm_fts_notes(rowid, content) VALUES (new.rowid, new.content);
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_notes_ad AFTER DELETE ON crm_contact_notes BEGIN
+        INSERT INTO crm_fts_notes(crm_fts_notes, rowid, content) VALUES ('delete', old.rowid, old.content);
+      END;
+      CREATE TRIGGER IF NOT EXISTS tg_fts_notes_au AFTER UPDATE ON crm_contact_notes BEGIN
+        INSERT INTO crm_fts_notes(crm_fts_notes, rowid, content) VALUES ('delete', old.rowid, old.content);
+        INSERT INTO crm_fts_notes(rowid, content) VALUES (new.rowid, new.content);
+      END;
+
+      -- Saved views
+      CREATE TABLE IF NOT EXISTS crm_saved_views (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        filter_json TEXT NOT NULL DEFAULT '{}',
+        sort_json TEXT,
+        shared INTEGER NOT NULL DEFAULT 0,
+        created_by_agent_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_views_tenant_entity ON crm_saved_views(tenant_id, entity);
+    `);
+
+    // Backfill existing rows into FTS tables
+    db.exec(`
+      INSERT INTO crm_fts_cards(rowid, title, description)
+        SELECT rowid, title, COALESCE(description,'') FROM crm_cards;
+      INSERT INTO crm_fts_contacts(rowid, name, email, phone, notes)
+        SELECT rowid, name, COALESCE(email,''), COALESCE(phone,''), COALESCE(notes,'') FROM crm_contacts;
+      INSERT INTO crm_fts_activities(rowid, content)
+        SELECT rowid, content FROM crm_activities;
+      INSERT INTO crm_fts_notes(rowid, content)
+        SELECT rowid, content FROM crm_contact_notes;
+    `);
+
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(122, Date.now());
+    console.log('[crm-migrate] Onda 22 applied: FTS5 full-text search + saved views');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
