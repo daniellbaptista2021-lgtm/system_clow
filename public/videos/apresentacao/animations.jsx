@@ -337,8 +337,18 @@ function Stage({
       return isFinite(v) ? clamp(v, 0, duration) : 0;
     } catch { return 0; }
   });
-  const [playing, setPlaying] = React.useState(autoplay);
+  // Record mode: ?record=1 desabilita autoplay + RAF + expoe window.__setStageTime
+  const _isRecording = typeof window !== 'undefined' && window.location.search.indexOf('record=1') !== -1;
+  const [playing, setPlaying] = React.useState(_isRecording ? false : autoplay);
   const [hoverTime, setHoverTime] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!_isRecording) return;
+    window.__setStageTime = (t) => setTime(Math.max(0, Math.min(duration, Number(t) || 0)));
+    window.__stageReady = true;
+    return () => { try { delete window.__setStageTime; delete window.__stageReady; } catch {} };
+  }, [_isRecording, duration]);
+
   const [scale, setScale] = React.useState(1);
 
   const stageRef = React.useRef(null);
