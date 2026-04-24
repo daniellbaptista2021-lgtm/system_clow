@@ -26,6 +26,7 @@ import { toCSV, toPDF, type ReportKind } from './reportsExport.js';
 import * as proposalsMod from './proposals.js';
 import * as em from './emailMarketing.js';
 import * as forms from './forms.js';
+import * as tasksMod from './tasks.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1445,6 +1446,95 @@ app.post('/public-api/contacts', async (c) => {
     customFields: body.customFields || {},
   } as any);
   return ok(c, { contact: created, created: true }, 201);
+});
+
+// ═══ TASKS PRO (Onda 19) ═══════════════════════════════════════════════
+function parseTaskOpts(c: any): any {
+  const opts: any = {};
+  const status = c.req.query('status');
+  const type = c.req.query('type');
+  const priority = c.req.query('priority');
+  const agentId = c.req.query('agentId');
+  const cardId = c.req.query('cardId');
+  const contactId = c.req.query('contactId');
+  const dueBefore = c.req.query('dueBefore');
+  const dueAfter = c.req.query('dueAfter');
+  if (status)     opts.status = status;
+  if (type)       opts.type = type;
+  if (priority)   opts.priority = priority;
+  if (agentId)    opts.agentId = agentId;
+  if (cardId)     opts.cardId = cardId;
+  if (contactId)  opts.contactId = contactId;
+  if (dueBefore && /^\d+$/.test(dueBefore)) opts.dueBefore = Number(dueBefore);
+  if (dueAfter && /^\d+$/.test(dueAfter))   opts.dueAfter = Number(dueAfter);
+  return opts;
+}
+
+app.get('/tasks', (c) => {
+  const tid = tenantOf(c);
+  const view = c.req.query('view');
+  if (view === 'overdue')  return ok(c, { tasks: tasksMod.overdueTasks(tid, parseTaskOpts(c)) });
+  if (view === 'upcoming') return ok(c, { tasks: tasksMod.upcomingTasks(tid, { ...parseTaskOpts(c), days: Number(c.req.query('days')) || 7 }) });
+  return ok(c, { tasks: tasksMod.listTasks(tid, parseTaskOpts(c)) });
+});
+
+app.post('/tasks', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title) return badRequest(c, 'title required');
+  if (body.type && !['call','email','meeting','followup','other'].includes(body.type)) return badRequest(c, 'invalid type');
+  if (body.priority && !['low','med','high','urgent'].includes(body.priority)) return badRequest(c, 'invalid priority');
+  const t = tasksMod.createTask(tid, body);
+  return ok(c, { task: t }, 201);
+});
+
+app.get('/tasks/stats', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { stats: tasksMod.tasksStats(tid, c.req.query('agentId') || undefined) });
+});
+
+app.get('/tasks/:id', (c) => {
+  const t = tasksMod.getTask(tenantOf(c), c.req.param('id'));
+  return t ? ok(c, { task: t }) : notFound(c, 'task');
+});
+
+app.patch('/tasks/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const t = tasksMod.updateTask(tid, c.req.param('id'), body);
+  return t ? ok(c, { task: t }) : notFound(c, 'task');
+});
+
+app.delete('/tasks/:id', (c) => {
+  return tasksMod.deleteTask(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'task');
+});
+
+app.post('/tasks/:id/complete', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const t = tasksMod.completeTask(tid, c.req.param('id'), body.agentId);
+  return t ? ok(c, { task: t }) : notFound(c, 'task');
+});
+
+// "Minhas tarefas" views
+app.get('/agents/:id/tasks', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { tasks: tasksMod.listTasks(tid, { ...parseTaskOpts(c), agentId: c.req.param('id') }) });
+});
+
+app.get('/agents/:id/tasks/stats', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { stats: tasksMod.tasksStats(tid, c.req.param('id')) });
+});
+
+app.get('/cards/:id/tasks', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { tasks: tasksMod.listTasks(tid, { ...parseTaskOpts(c), cardId: c.req.param('id'), status: 'all' }) });
+});
+
+app.get('/contacts/:id/tasks', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { tasks: tasksMod.listTasks(tid, { ...parseTaskOpts(c), contactId: c.req.param('id'), status: 'all' }) });
 });
 
 app.post('/proposal-templates', async (c) => {

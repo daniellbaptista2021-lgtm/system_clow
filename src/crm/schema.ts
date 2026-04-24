@@ -772,6 +772,42 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 18 applied: forms + submissions + inbound webhooks');
   }
 
+  // ONDA 19 — Tasks Pro (typed, prioritized, recurring, alerts)
+  const onda19Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(119);
+  if (!onda19Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_tasks (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL DEFAULT 'other',
+        priority TEXT NOT NULL DEFAULT 'med',
+        status TEXT NOT NULL DEFAULT 'open',
+        due_at INTEGER,
+        completed_at INTEGER,
+        assigned_to_agent_id TEXT,
+        card_id TEXT REFERENCES crm_cards(id) ON DELETE CASCADE,
+        contact_id TEXT REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        recurrence_json TEXT,
+        parent_task_id TEXT,
+        alert_minutes_before INTEGER,
+        alert_fired_at INTEGER,
+        created_by_agent_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tasks_tenant ON crm_tasks(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_agent_status ON crm_tasks(tenant_id, assigned_to_agent_id, status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due ON crm_tasks(tenant_id, due_at) WHERE status = 'open';
+      CREATE INDEX IF NOT EXISTS idx_tasks_card ON crm_tasks(card_id) WHERE card_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_contact ON crm_tasks(contact_id) WHERE contact_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_alerts ON crm_tasks(due_at, alert_fired_at) WHERE alert_fired_at IS NULL AND alert_minutes_before IS NOT NULL;
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(119, Date.now());
+    console.log('[crm-migrate] Onda 19 applied: tasks (typed + priority + recurrence + alerts)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
