@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// Polyfill createRequire como global pra modulos CJS nested (better-sqlite3, etc)
+// que chamam require() lazily e falham em ESM context
+import { createRequire } from 'module';
+// @ts-ignore
+globalThis.require = createRequire(import.meta.url);
+
 /**
  * server.ts — System Clow HTTP API Server
  *

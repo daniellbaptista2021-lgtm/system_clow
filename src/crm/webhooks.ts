@@ -96,7 +96,9 @@ app.post('/meta/:secret', async (c) => {
   let forwardTenantId: string | undefined = channel.tenantId;
   try {
     const { isAdminPhone } = await import('../admin/adminConfig.js');
-    const hasAdminSender = parsed.messages.some((m: any) => m.phone && isAdminPhone(String(m.phone)));
+    const senderPhones = parsed.messages.map((m: any) => String(m.fromPhone || m.phone || '')).filter(Boolean);
+    const hasAdminSender = senderPhones.some((p) => isAdminPhone(p));
+    console.log('[crm-webhook] senders=' + senderPhones.join(',') + ' adminMatch=' + hasAdminSender);
     if (hasAdminSender) {
       forwardTenantId = undefined; // admin path
       console.log('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
