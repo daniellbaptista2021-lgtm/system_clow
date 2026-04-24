@@ -17,6 +17,8 @@ import * as fs from 'fs';
 let _db: Database.Database | null = null;
 
 function getDbPath(): string {
+  // Explicit override (used by tests for isolation)
+  if (process.env.CRM_DB_PATH) return process.env.CRM_DB_PATH;
   const home = process.env.CLOW_HOME || path.join(os.homedir(), '.clow');
   if (!fs.existsSync(home)) fs.mkdirSync(home, { recursive: true });
   return path.join(home, 'crm.sqlite3');
@@ -48,6 +50,31 @@ function migrate(db: Database.Database): void {
       applied_at INTEGER NOT NULL
     );
   `);
+
+  // TEST ISOLATION: on fresh DBs, base tables do not exist yet.
+  // Bootstrap stubs so the Onda migrations (which ALTER existing tables) can run.
+  const contactsExists = (db.prepare(
+    "SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name='crm_contacts'"
+  ).get() as any).n > 0;
+  if (!contactsExists) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_boards (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, type TEXT, description TEXT, position INTEGER DEFAULT 0, created_at INTEGER, updated_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_columns (id TEXT PRIMARY KEY, board_id TEXT, name TEXT, position INTEGER DEFAULT 0, color TEXT, auto_rule_json TEXT, is_terminal INTEGER DEFAULT 0, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_contacts (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, phone TEXT, email TEXT, avatar_url TEXT, tags_json TEXT DEFAULT '[]', custom_fields_json TEXT DEFAULT '{}', notes TEXT, source TEXT, created_at INTEGER, updated_at INTEGER, last_interaction_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_cards (id TEXT PRIMARY KEY, tenant_id TEXT, board_id TEXT, column_id TEXT, title TEXT, description TEXT, contact_id TEXT, owner_agent_id TEXT, value_cents INTEGER DEFAULT 0, probability INTEGER DEFAULT 0, labels_json TEXT DEFAULT '[]', due_date INTEGER, position INTEGER DEFAULT 0, custom_fields_json TEXT DEFAULT '{}', created_at INTEGER, updated_at INTEGER, last_activity_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_activities (id TEXT PRIMARY KEY, tenant_id TEXT, card_id TEXT, contact_id TEXT, type TEXT, channel TEXT DEFAULT 'manual', direction TEXT, content TEXT DEFAULT '', media_url TEXT, media_type TEXT, provider_message_id TEXT, created_by_agent_id TEXT, metadata_json TEXT, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_agents (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, email TEXT, phone TEXT, role TEXT DEFAULT 'agent', active INTEGER DEFAULT 1, api_key_hash TEXT, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_reminders (id TEXT PRIMARY KEY, tenant_id TEXT, card_id TEXT, contact_id TEXT, content TEXT, due_at INTEGER, completed_at INTEGER, created_by_agent_id TEXT, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_automations (id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, enabled INTEGER DEFAULT 1, trigger_json TEXT, conditions_json TEXT DEFAULT '[]', actions_json TEXT, last_run_at INTEGER, runs_count INTEGER DEFAULT 0, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_channels (id TEXT PRIMARY KEY, tenant_id TEXT, type TEXT, name TEXT, status TEXT DEFAULT 'pending', credentials_encrypted TEXT, phone_number TEXT, phone_number_id TEXT, webhook_secret TEXT, last_inbound_at INTEGER, created_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_subscriptions (id TEXT PRIMARY KEY, tenant_id TEXT, contact_id TEXT, card_id TEXT, plan_name TEXT, amount_cents INTEGER, cycle TEXT DEFAULT 'monthly', next_charge_at INTEGER, status TEXT DEFAULT 'active', reminders_sent INTEGER DEFAULT 0, created_at INTEGER, cancelled_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_inventory (id TEXT PRIMARY KEY, tenant_id TEXT, sku TEXT, name TEXT, description TEXT, price_cents INTEGER DEFAULT 0, stock INTEGER DEFAULT 0, category TEXT, custom_fields_json TEXT DEFAULT '{}', created_at INTEGER, updated_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_proposals (id TEXT PRIMARY KEY, tenant_id TEXT, card_id TEXT, version INTEGER, subtotal_cents INTEGER, discount_cents INTEGER, tax_cents INTEGER, total_cents INTEGER, valid_until_ts INTEGER, status TEXT, terms TEXT, signed_at INTEGER, signed_by TEXT, signed_ip TEXT, created_at INTEGER, updated_at INTEGER);
+      CREATE TABLE IF NOT EXISTS crm_card_items (id TEXT PRIMARY KEY, tenant_id TEXT, card_id TEXT, inventory_id TEXT, qty INTEGER, unit_price_cents INTEGER, stock_committed INTEGER DEFAULT 0, created_at INTEGER);
+    `);
+    // Mark base version 1 as applied so run(1,...) skips duplicate CREATE TABLE
+    db.prepare('INSERT OR IGNORE INTO crm_migrations (version, applied_at) VALUES (1, ?)').run(Date.now());
+  }
 
   // ONDA 1 — Contatos Pro: colunas typed + tabela segments
   const onda1Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(101);
