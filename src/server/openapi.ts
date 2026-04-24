@@ -30,6 +30,144 @@ export const OPENAPI_SPEC = {
     { name: 'System', description: 'Health and metrics' },
   ],
   paths: {
+    // ═══ CRM ═══════════════════════════════════════════════════════════
+    '/v1/crm/init': {
+      post: { tags: ['crm'], summary: 'Initialize CRM (idempotent)', responses: { '201': { description: 'OK' } } },
+    },
+    '/v1/crm/boards': {
+      get:  { tags: ['crm'], summary: 'List boards', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm'], summary: 'Create board', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/boards/{id}/pipeline': {
+      get: { tags: ['crm'], summary: 'Hydrated kanban view', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/contacts': {
+      get:  { tags: ['crm'], summary: 'List contacts', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm'], summary: 'Create contact', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/cards': {
+      post: { tags: ['crm'], summary: 'Create card', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/cards/{id}/move': {
+      post: { tags: ['crm'], summary: 'Move card between columns', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Moved' } } },
+    },
+    '/v1/crm/cards/{id}/comments': {
+      get:  { tags: ['crm-collab'], summary: 'List card comments', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-collab'], summary: 'Create comment (supports @mentions)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/chat/rooms': {
+      get:  { tags: ['crm-collab'], summary: 'List chat rooms', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-collab'], summary: 'Create chat room (dm|group|card|contact)', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/chat/rooms/{id}/messages': {
+      get:  { tags: ['crm-collab'], summary: 'List messages in room', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-collab'], summary: 'Post message to room', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/mentions': {
+      get: { tags: ['crm-collab'], summary: 'Agent mentions inbox', parameters: [{ name: 'agentId', in: 'query', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/search': {
+      get: { tags: ['crm-search'], summary: 'Global full-text search (BM25)', parameters: [
+        { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+        { name: 'entities', in: 'query', schema: { type: 'string' }, description: 'cards,contacts,activities,notes' },
+      ], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/search/cards': {
+      post: { tags: ['crm-search'], summary: 'Structured card search with filters', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/search/contacts': {
+      post: { tags: ['crm-search'], summary: 'Structured contact search with filters', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/views': {
+      get:  { tags: ['crm-search'], summary: 'List saved views', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-search'], summary: 'Create saved view', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/bulk/cards': {
+      post: { tags: ['crm-search'], summary: 'Bulk action on cards (move/tag/assign/delete/archive)', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/appointments': {
+      get:  { tags: ['crm-calendar'], summary: 'List appointments', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-calendar'], summary: 'Create appointment', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/scheduling-links': {
+      get:  { tags: ['crm-calendar'], summary: 'List Calendly-style scheduling links', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-calendar'], summary: 'Create scheduling link', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/calendar/ics-url': {
+      get: { tags: ['crm-calendar'], summary: 'Get subscribable ICS feed URL', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/tasks': {
+      get:  { tags: ['crm-tasks'], summary: 'List tasks', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-tasks'], summary: 'Create task', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/tasks/{id}/complete': {
+      post: { tags: ['crm-tasks'], summary: 'Complete task (spawns next recurrence if configured)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/agents/{id}/tasks': {
+      get: { tags: ['crm-tasks'], summary: 'My tasks (per agent)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/proposals/{id}/send-email': {
+      post: { tags: ['crm-proposals'], summary: 'Send proposal by email (HTML + PDF attached)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/proposals/{id}/send-whatsapp': {
+      post: { tags: ['crm-proposals'], summary: 'Send proposal by WhatsApp (text + public link)', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/campaigns': {
+      get:  { tags: ['crm-email-marketing'], summary: 'List email campaigns', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-email-marketing'], summary: 'Create campaign', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/campaigns/{id}/send': {
+      post: { tags: ['crm-email-marketing'], summary: 'Send/enqueue campaign', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/sequences': {
+      get:  { tags: ['crm-email-marketing'], summary: 'List drip sequences', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-email-marketing'], summary: 'Create drip sequence', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/forms': {
+      get:  { tags: ['crm-forms'], summary: 'List forms', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-forms'], summary: 'Create form with field mapping', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/webhooks': {
+      get:  { tags: ['crm-forms'], summary: 'List inbound webhooks (Zapier, etc.)', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-forms'], summary: 'Create inbound webhook', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/public-api/contacts': {
+      post: { tags: ['crm-forms'], summary: 'Public API: create/update contact (upsert by email/phone)', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/outbound-webhooks': {
+      get:  { tags: ['crm-integrations'], summary: 'List outbound webhooks', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-integrations'], summary: 'Create outbound webhook with HMAC signing', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/external-integrations': {
+      get:  { tags: ['crm-integrations'], summary: 'List external integrations (HubSpot, RD Station, Gmail, Outlook)', responses: { '200': { description: 'OK' } } },
+      post: { tags: ['crm-integrations'], summary: 'Register integration with token', responses: { '201': { description: 'Created' } } },
+    },
+    '/v1/crm/external-integrations/{id}/sync': {
+      post: { tags: ['crm-integrations'], summary: 'Trigger one-way import sync', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/reports/sales': {
+      get: { tags: ['crm-reports'], summary: 'Sales report (day|week|month)', parameters: [
+        { name: 'bucket', in: 'query', schema: { type: 'string' } },
+        { name: 'format', in: 'query', schema: { type: 'string', enum: ['json', 'csv', 'pdf'] } },
+      ], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/reports/agent-activities': {
+      get: { tags: ['crm-reports'], summary: 'Activities per agent', parameters: [
+        { name: 'format', in: 'query', schema: { type: 'string', enum: ['json', 'csv', 'pdf'] } },
+      ], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/reports/lead-sources': {
+      get: { tags: ['crm-reports'], summary: 'Lead sources with conversion rate', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/reports/lost-reasons': {
+      get: { tags: ['crm-reports'], summary: 'Lost reasons breakdown', responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/boards/{boardId}/analytics/funnel': {
+      get: { tags: ['crm-analytics'], summary: 'Funnel (count + value per stage)', parameters: [{ name: 'boardId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
+    '/v1/crm/boards/{boardId}/analytics/win-rate': {
+      get: { tags: ['crm-analytics'], summary: 'Win rate + cycle time', parameters: [{ name: 'boardId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } },
+    },
     '/health': {
       get: {
         tags: ['System'],

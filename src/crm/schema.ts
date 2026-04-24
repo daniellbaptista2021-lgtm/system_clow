@@ -1077,6 +1077,59 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 22 applied: FTS5 full-text search + saved views');
   }
 
+  // ONDA 23 — Outbound webhooks + External integrations
+  const onda23Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(123);
+  if (!onda23Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_outbound_webhooks (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        events_json TEXT NOT NULL DEFAULT '[]',
+        secret TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        total_sent INTEGER DEFAULT 0,
+        total_failed INTEGER DEFAULT 0,
+        last_attempt_at INTEGER,
+        last_status INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_ohk_tenant ON crm_outbound_webhooks(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id TEXT NOT NULL REFERENCES crm_outbound_webhooks(id) ON DELETE CASCADE,
+        event TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        attempt_count INTEGER DEFAULT 0,
+        http_status INTEGER,
+        response_body TEXT,
+        last_tried_at INTEGER,
+        next_retry_at INTEGER,
+        succeeded_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_whd_retry ON crm_webhook_deliveries(next_retry_at) WHERE succeeded_at IS NULL AND next_retry_at IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_whd_hook ON crm_webhook_deliveries(webhook_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS crm_external_integrations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        agent_id TEXT,
+        config_json TEXT NOT NULL DEFAULT '{}',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        total_synced INTEGER DEFAULT 0,
+        last_sync_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_extint_tenant ON crm_external_integrations(tenant_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(123, Date.now());
+    console.log('[crm-migrate] Onda 23 applied: outbound webhooks + external integrations');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

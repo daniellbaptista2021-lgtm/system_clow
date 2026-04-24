@@ -30,6 +30,8 @@ import * as tasksMod from './tasks.js';
 import * as cal from './calendar.js';
 import * as collab from './collaboration.js';
 import * as search from './search.js';
+import * as ohk from './outboundWebhooks.js';
+import * as extint from './integrations.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1844,6 +1846,90 @@ app.post('/bulk/contacts', async (c) => {
   if (!Array.isArray(body.ids) || body.ids.length === 0) return badRequest(c, 'ids[] required');
   if (!body.action) return badRequest(c, 'action required');
   return ok(c, search.bulkContactAction(tid, body));
+});
+
+// ═══ OUTBOUND WEBHOOKS + EXTERNAL INTEGRATIONS (Onda 23) ═══════════════
+// Outbound webhooks CRUD
+app.get('/outbound-webhooks', (c) => ok(c, { webhooks: ohk.listOutboundWebhooks(tenantOf(c)) }));
+
+app.post('/outbound-webhooks', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.url || !Array.isArray(body.events)) return badRequest(c, 'name, url, events[] required');
+  return ok(c, { webhook: ohk.createOutboundWebhook(tid, body) }, 201);
+});
+
+app.get('/outbound-webhooks/:id', (c) => {
+  const w = ohk.getOutboundWebhook(tenantOf(c), c.req.param('id'));
+  return w ? ok(c, { webhook: w }) : notFound(c, 'webhook');
+});
+
+app.patch('/outbound-webhooks/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const w = ohk.updateOutboundWebhook(tid, c.req.param('id'), body);
+  return w ? ok(c, { webhook: w }) : notFound(c, 'webhook');
+});
+
+app.delete('/outbound-webhooks/:id', (c) => {
+  return ohk.deleteOutboundWebhook(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'webhook');
+});
+
+app.get('/outbound-webhooks/:id/deliveries', (c) => {
+  const tid = tenantOf(c);
+  const limit = Number(c.req.query('limit')) || 50;
+  return ok(c, { deliveries: ohk.listDeliveries(tid, c.req.param('id'), limit) });
+});
+
+app.post('/outbound-webhooks/:id/test', async (c) => {
+  const tid = tenantOf(c);
+  await ohk.emit(tid, 'contact.created', { test: true, contact: { id: 'test', name: 'Test' } });
+  return ok(c, { ok: true, event: 'contact.created' });
+});
+
+app.get('/outbound-webhooks-stats', (c) => {
+  return ok(c, ohk.deliveryStats(tenantOf(c)));
+});
+
+// External integrations
+app.get('/external-integrations', (c) => ok(c, { integrations: extint.listIntegrations(tenantOf(c)) }));
+
+app.post('/external-integrations', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.provider || !['gmail', 'outlook', 'hubspot', 'rdstation'].includes(body.provider)) {
+    return badRequest(c, 'invalid provider');
+  }
+  return ok(c, { integration: extint.createIntegration(tid, body) }, 201);
+});
+
+app.get('/external-integrations/:id', (c) => {
+  const i = extint.getIntegration(tenantOf(c), c.req.param('id'));
+  return i ? ok(c, { integration: i }) : notFound(c, 'integration');
+});
+
+app.patch('/external-integrations/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const i = extint.updateIntegration(tid, c.req.param('id'), body);
+  return i ? ok(c, { integration: i }) : notFound(c, 'integration');
+});
+
+app.delete('/external-integrations/:id', (c) => {
+  return extint.deleteIntegration(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'integration');
+});
+
+// Trigger sync (batch import)
+app.post('/external-integrations/:id/sync', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const integ = extint.getIntegration(tid, id);
+  if (!integ) return notFound(c, 'integration');
+  try {
+    if (integ.provider === 'hubspot')   return ok(c, await extint.importFromHubSpot(tid, id));
+    if (integ.provider === 'rdstation') return ok(c, await extint.importFromRDStation(tid, id));
+    return badRequest(c, 'provider ' + integ.provider + ' sync not implemented yet');
+  } catch (err: any) { return c.json({ error: 'sync_failed', message: err.message }, 502); }
 });
 
 app.post('/proposal-templates', async (c) => {
