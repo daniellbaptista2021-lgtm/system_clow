@@ -36,6 +36,7 @@ import * as push from './push.js';
 import * as ai from './ai.js';
 import * as docs from './documents.js';
 import * as gam from './gamification.js';
+import * as lgpd from './lgpd.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
@@ -2277,6 +2278,122 @@ app.post('/agents/:id/badges/:badgeId', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
   const awarded = gam.awardBadge(tid, c.req.param('id'), c.req.param('badgeId'), body.evidence);
   return ok(c, { awarded });
+});
+
+// ═══ LGPD / COMPLIANCE (Onda 28) ══════════════════════════════════════
+// Consents
+app.get('/contacts/:id/consents', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { consents: lgpd.listContactConsents(tid, c.req.param('id')) });
+});
+
+app.post('/contacts/:id/consents', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.channel || !body.purpose || body.granted === undefined) return badRequest(c, 'channel + purpose + granted required');
+  const consent = lgpd.recordConsent(tid, {
+    contactId: c.req.param('id'),
+    channel: body.channel, purpose: body.purpose,
+    granted: !!body.granted, source: body.source, evidence: body.evidence,
+  });
+  return ok(c, { consent }, 201);
+});
+
+app.get('/contacts/:id/has-consent', (c) => {
+  const tid = tenantOf(c);
+  const channel = c.req.query('channel') as any;
+  const purpose = c.req.query('purpose') as any;
+  if (!channel || !purpose) return badRequest(c, 'channel + purpose required');
+  return ok(c, { granted: lgpd.hasConsent(tid, c.req.param('id'), channel, purpose) });
+});
+
+// Portability — export
+app.get('/contacts/:id/portability', (c) => {
+  const tid = tenantOf(c);
+  const data = lgpd.exportContactData(tid, c.req.param('id'), c.req.header('x-actor-agent-id') || undefined);
+  if (!data) return notFound(c, 'contact');
+  const fmt = c.req.query('format');
+  if (fmt === 'download') {
+    return new Response(JSON.stringify(data, null, 2), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': `attachment; filename="portability-${c.req.param('id')}.json"`,
+      },
+    });
+  }
+  return ok(c, data);
+});
+
+// Right to erasure
+app.post('/contacts/:id/forget', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const mode = body.mode === 'delete' ? 'delete' : 'anonymize';
+  const result = lgpd.forgetContact(tid, c.req.param('id'), {
+    mode,
+    actorAgentId: c.req.header('x-actor-agent-id') || body.actorAgentId,
+    reason: body.reason,
+  });
+  return ok(c, result);
+});
+
+// Access log
+app.get('/contacts/:id/access-log', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { log: lgpd.queryAccessLog(tid, { contactId: c.req.param('id') }) });
+});
+
+app.get('/compliance/access-log', (c) => {
+  const tid = tenantOf(c);
+  const opts: any = {};
+  if (c.req.query('agentId'))     opts.agentId = c.req.query('agentId');
+  if (c.req.query('targetEntity')) opts.targetEntity = c.req.query('targetEntity');
+  if (c.req.query('action'))      opts.action = c.req.query('action');
+  if (c.req.query('from'))        opts.from = Number(c.req.query('from'));
+  if (c.req.query('to'))          opts.to = Number(c.req.query('to'));
+  if (c.req.query('limit'))       opts.limit = Number(c.req.query('limit'));
+  return ok(c, { log: lgpd.queryAccessLog(tid, opts) });
+});
+
+// Retention policies
+app.get('/compliance/retention-policies', (c) => {
+  return ok(c, { policies: lgpd.listRetentionPolicies(tenantOf(c)) });
+});
+
+app.post('/compliance/retention-policies', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.entity || !body.daysToKeep) return badRequest(c, 'entity + daysToKeep required');
+  return ok(c, { policy: lgpd.createRetentionPolicy(tid, body) }, 201);
+});
+
+app.patch('/compliance/retention-policies/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const p = lgpd.updateRetentionPolicy(tid, c.req.param('id'), body);
+  return p ? ok(c, { policy: p }) : notFound(c, 'policy');
+});
+
+app.delete('/compliance/retention-policies/:id', (c) => {
+  return lgpd.deleteRetentionPolicy(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'policy');
+});
+
+// Deletion requests
+app.get('/compliance/deletion-requests', (c) => {
+  return ok(c, { requests: lgpd.listDeletionRequests(tenantOf(c), c.req.query('status') || undefined) });
+});
+
+app.post('/compliance/deletion-requests', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.contactId || !body.requestedByEmail) return badRequest(c, 'contactId + requestedByEmail required');
+  return ok(c, { request: lgpd.createDeletionRequest(tid, body) }, 201);
+});
+
+app.post('/compliance/deletion-requests/:id/cancel', (c) => {
+  const ok2 = lgpd.cancelDeletionRequest(tenantOf(c), c.req.param('id'));
+  return ok2 ? ok(c, { ok: true }) : notFound(c, 'request');
 });
 
 app.post('/proposal-templates', async (c) => {

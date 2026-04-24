@@ -21,6 +21,7 @@ import * as outboundWebhooks from './outboundWebhooks.js';
 import * as push from './push.js';
 import * as ai from './ai.js';
 import * as gam from './gamification.js';
+import * as lgpd from './lgpd.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -94,6 +95,10 @@ async function tick(): Promise<void> {
           // AI: keep top 5 cards freshly scored (rotates through pipeline)
           await ai.tickAutoScore(5).catch(() => { /* non-blocking */ });
           try { gam.tickDailyBadges(); } catch { /* non-blocking */ }
+          try {
+            lgpd.processRetentionPolicies();
+            lgpd.processScheduledDeletions();
+          } catch { /* non-blocking */ }
         } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
       })(),
     ]);

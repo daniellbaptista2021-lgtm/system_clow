@@ -1289,6 +1289,69 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 27 applied: gamification (goals + badges + leaderboard)');
   }
 
+  // ONDA 28 — LGPD / Compliance
+  const onda28Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(128);
+  if (!onda28Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_consents (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        channel TEXT NOT NULL,         -- email | sms | whatsapp | phone | all
+        purpose TEXT NOT NULL,         -- marketing | transactional | all
+        granted INTEGER NOT NULL DEFAULT 1,
+        granted_at INTEGER,
+        revoked_at INTEGER,
+        source TEXT NOT NULL DEFAULT 'manual',
+        evidence_json TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_consents_lookup ON crm_consents(tenant_id, contact_id, channel, purpose, revoked_at);
+
+      CREATE TABLE IF NOT EXISTS crm_data_access_log (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        actor_agent_id TEXT,
+        action TEXT NOT NULL,           -- view | export | modify | delete
+        target_entity TEXT NOT NULL,    -- contact | card | activity | ...
+        target_id TEXT NOT NULL,
+        accessed_fields_json TEXT,
+        ip TEXT,
+        ua TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_acl_tenant ON crm_data_access_log(tenant_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_acl_target ON crm_data_access_log(target_entity, target_id);
+
+      CREATE TABLE IF NOT EXISTS crm_retention_policies (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        entity TEXT NOT NULL,           -- activities | consents | deletion_requests | data_access_log | contacts_inactive
+        days_to_keep INTEGER NOT NULL,
+        auto_anonymize INTEGER NOT NULL DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_retp_tenant ON crm_retention_policies(tenant_id, enabled);
+
+      CREATE TABLE IF NOT EXISTS crm_deletion_requests (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        contact_id TEXT NOT NULL,
+        requested_by_email TEXT NOT NULL,
+        reason TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        scheduled_for INTEGER NOT NULL,
+        completed_at INTEGER,
+        mode TEXT NOT NULL DEFAULT 'anonymize',
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_delreq_tenant ON crm_deletion_requests(tenant_id, status);
+      CREATE INDEX IF NOT EXISTS idx_delreq_due ON crm_deletion_requests(scheduled_for) WHERE status = 'pending';
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(128, Date.now());
+    console.log('[crm-migrate] Onda 28 applied: LGPD compliance (consents + access log + retention + deletion)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
