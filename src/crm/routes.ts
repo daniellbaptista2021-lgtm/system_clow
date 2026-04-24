@@ -39,6 +39,7 @@ import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
 import * as softDel from './softDelete.js';
 import * as rl from './rateLimiter.js';
+import * as sec from './security.js';
 import * as bulkOps from './bulkOps.js';
 import { fieldSelectionMiddleware } from './fieldSelector.js';
 import { encodeCursor, decodeCursor } from './cursor.js';
@@ -2569,6 +2570,168 @@ app.post('/bulk/:entity/soft-delete', async (c) => {
   const table = entityMap[c.req.param('entity')];
   if (!table) return badRequest(c, 'invalid entity');
   return ok(c, bulkOps.bulkSoftDelete(tid, table, body.ids));
+});
+
+// ═══ SECURITY (Onda 31) — RBAC + 2FA + Sessions + IP whitelist + Audit ═══
+function actorOf(c: any): string | undefined {
+  return c.req.header('x-actor-agent-id') || c.get?.('agentId') || undefined;
+}
+function ipOf(c: any): string {
+  return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown';
+}
+
+// ─── RBAC ───────────────────────────────────────────────────────────────
+app.get('/security/roles', (c) => ok(c, { roles: sec.listRoles(tenantOf(c)) }));
+
+app.post('/security/roles', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !Array.isArray(body.permissions)) return badRequest(c, 'name + permissions[] required');
+  const role = sec.createRole(tid, body);
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'role.created', entity: 'agent_role', entityId: role.id, after: role, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok(c, { role }, 201);
+});
+
+app.delete('/security/roles/:id', (c) => {
+  const tid = tenantOf(c);
+  const role = sec.getRole(tid, c.req.param('id'));
+  if (!role) return notFound(c, 'role');
+  sec.deleteRole(tid, c.req.param('id'));
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'role.deleted', entity: 'agent_role', entityId: c.req.param('id'), before: role, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return c.body(null, 204);
+});
+
+app.post('/security/roles/seed-defaults', (c) => {
+  sec.seedDefaultRoles(tenantOf(c));
+  return ok(c, { seeded: true });
+});
+
+app.post('/security/agents/:agentId/roles/:roleId', (c) => {
+  const tid = tenantOf(c);
+  const okR = sec.assignRoleToAgent(tid, c.req.param('agentId'), c.req.param('roleId'));
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'role.assigned', entity: 'agent_role_assignment', entityId: c.req.param('agentId'), after: { roleId: c.req.param('roleId') }, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return okR ? ok(c, { assigned: true }) : notFound(c, 'role');
+});
+
+app.delete('/security/agents/:agentId/roles/:roleId', (c) => {
+  const tid = tenantOf(c);
+  const okR = sec.revokeRoleFromAgent(tid, c.req.param('agentId'), c.req.param('roleId'));
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'role.revoked', entity: 'agent_role_assignment', entityId: c.req.param('agentId'), before: { roleId: c.req.param('roleId') }, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return okR ? c.body(null, 204) : notFound(c, 'assignment');
+});
+
+app.get('/security/agents/:agentId/permissions', (c) => {
+  const tid = tenantOf(c);
+  const agentId = c.req.param('agentId');
+  return ok(c, {
+    roles: sec.agentRoles(tid, agentId),
+    permissions: Array.from(sec.agentPermissions(tid, agentId)),
+  });
+});
+
+app.get('/security/check/:agentId/:permission', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, { granted: sec.hasPermission(tid, c.req.param('agentId'), c.req.param('permission') as any) });
+});
+
+// ─── 2FA ─────────────────────────────────────────────────────────────────
+app.post('/security/2fa/setup', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId) return badRequest(c, 'agentId required');
+  const setup = sec.setup2FA(tid, body.agentId, body.issuer);
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: '2fa.setup_initiated', entity: 'agent_2fa', entityId: body.agentId, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok(c, setup);
+});
+
+app.post('/security/2fa/verify', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId || !body.code) return badRequest(c, 'agentId + code required');
+  const r = sec.verify2FA(tid, body.agentId, body.code);
+  if (r.ok) sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: '2fa.verified', entity: 'agent_2fa', entityId: body.agentId, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return r.ok ? ok(c, { verified: true }) : c.json({ error: r.error }, 401);
+});
+
+app.get('/security/2fa/status/:agentId', (c) => {
+  return ok(c, { enabled: sec.is2FAEnabled(c.req.param('agentId')) });
+});
+
+app.delete('/security/2fa/:agentId', (c) => {
+  const tid = tenantOf(c);
+  const agentId = c.req.param('agentId');
+  const deleted = sec.disable2FA(tid, agentId);
+  if (deleted) sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: '2fa.disabled', entity: 'agent_2fa', entityId: agentId, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return deleted ? c.body(null, 204) : notFound(c, '2fa');
+});
+
+// ─── Sessions ───────────────────────────────────────────────────────────
+app.post('/security/sessions', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.agentId) return badRequest(c, 'agentId required');
+  const { session, token } = sec.createSession(body.agentId, {
+    ttlHours: body.ttlHours, ip: ipOf(c), ua: c.req.header('user-agent'),
+    deviceFingerprint: body.deviceFingerprint,
+  });
+  sec.audit({ tenantId: tenantOf(c), actorAgentId: body.agentId, action: 'session.created', entity: 'session', entityId: session.id, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok(c, { session, token }, 201);
+});
+
+app.get('/security/sessions/:agentId', (c) => {
+  const activeOnly = c.req.query('activeOnly') !== 'false';
+  return ok(c, { sessions: sec.listAgentSessions(c.req.param('agentId'), activeOnly) });
+});
+
+app.delete('/security/sessions/:id', (c) => {
+  const tid = tenantOf(c);
+  const ok2 = sec.revokeSession(c.req.param('id'));
+  if (ok2) sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'session.revoked', entity: 'session', entityId: c.req.param('id'), ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok2 ? c.body(null, 204) : notFound(c, 'session');
+});
+
+app.post('/security/agents/:agentId/revoke-all-sessions', (c) => {
+  const tid = tenantOf(c);
+  const n = sec.revokeAllAgentSessions(c.req.param('agentId'));
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'sessions.all_revoked', entity: 'agent', entityId: c.req.param('agentId'), after: { revokedCount: n }, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok(c, { revoked: n });
+});
+
+// ─── IP whitelist ────────────────────────────────────────────────────────
+app.get('/security/ip-whitelist', (c) => ok(c, { entries: sec.listWhitelist(tenantOf(c)) }));
+
+app.post('/security/ip-whitelist', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.cidr) return badRequest(c, 'cidr required');
+  const id = sec.addIpToWhitelist(tid, body.cidr, body.label);
+  sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'ip_whitelist.added', entity: 'ip_whitelist', entityId: id, after: { cidr: body.cidr }, ip: ipOf(c), ua: c.req.header('user-agent') });
+  return ok(c, { id }, 201);
+});
+
+app.delete('/security/ip-whitelist/:id', (c) => {
+  const tid = tenantOf(c);
+  const okR = sec.removeFromWhitelist(tid, c.req.param('id'));
+  if (okR) sec.audit({ tenantId: tid, actorAgentId: actorOf(c), action: 'ip_whitelist.removed', entity: 'ip_whitelist', entityId: c.req.param('id'), ip: ipOf(c), ua: c.req.header('user-agent') });
+  return okR ? c.body(null, 204) : notFound(c, 'entry');
+});
+
+app.get('/security/ip-check', (c) => {
+  const tid = tenantOf(c);
+  const ip = c.req.query('ip') || ipOf(c);
+  return ok(c, { ip, allowed: sec.isIpAllowed(tid, ip) });
+});
+
+// ─── Audit log ───────────────────────────────────────────────────────────
+app.get('/security/audit', (c) => {
+  const tid = tenantOf(c);
+  const opts: any = {};
+  for (const k of ['actorAgentId', 'action', 'entity', 'entityId']) {
+    if (c.req.query(k)) opts[k] = c.req.query(k);
+  }
+  if (c.req.query('from')) opts.from = Number(c.req.query('from'));
+  if (c.req.query('to'))   opts.to = Number(c.req.query('to'));
+  if (c.req.query('limit')) opts.limit = Number(c.req.query('limit'));
+  return ok(c, { entries: sec.queryAudit(tid, opts) });
 });
 
 app.post('/proposal-templates', async (c) => {

@@ -1416,6 +1416,88 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 30 applied: rate limiting + api tiers');
   }
 
+  // ONDA 31 — Security (RBAC + 2FA + sessions + IP whitelist + audit)
+  const onda31Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(131);
+  if (!onda31Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_agent_roles (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        permissions_json TEXT NOT NULL DEFAULT '[]',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        UNIQUE (tenant_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_roles_tenant ON crm_agent_roles(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_agent_role_assignments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        role_id TEXT NOT NULL REFERENCES crm_agent_roles(id) ON DELETE CASCADE,
+        assigned_at INTEGER NOT NULL,
+        UNIQUE (agent_id, role_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_asgn_agent ON crm_agent_role_assignments(agent_id);
+
+      CREATE TABLE IF NOT EXISTS crm_2fa (
+        agent_id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        secret_b32 TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        backup_codes_json TEXT DEFAULT '[]',
+        enabled_at INTEGER,
+        last_used_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_sessions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        ip TEXT,
+        ua TEXT,
+        device_fingerprint TEXT,
+        created_at INTEGER NOT NULL,
+        last_active_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        revoked_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_sessions_agent ON crm_sessions(agent_id, revoked_at, expires_at);
+
+      CREATE TABLE IF NOT EXISTS crm_ip_whitelist (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        cidr TEXT NOT NULL,
+        label TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_ipwl_tenant ON crm_ip_whitelist(tenant_id, enabled);
+
+      CREATE TABLE IF NOT EXISTS crm_audit_log (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        actor_agent_id TEXT,
+        action TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        entity_id TEXT,
+        before_json TEXT,
+        after_json TEXT,
+        ip TEXT,
+        ua TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_tenant ON crm_audit_log(tenant_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_entity ON crm_audit_log(entity, entity_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_actor ON crm_audit_log(actor_agent_id, created_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(131, Date.now());
+    console.log('[crm-migrate] Onda 31 applied: RBAC + 2FA + sessions + IP whitelist + audit log');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
