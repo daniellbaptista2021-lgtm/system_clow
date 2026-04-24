@@ -25,6 +25,7 @@ import { getCrmDb } from './schema.js';
 import { toCSV, toPDF, type ReportKind } from './reportsExport.js';
 import * as proposalsMod from './proposals.js';
 import * as em from './emailMarketing.js';
+import * as forms from './forms.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1347,6 +1348,103 @@ app.delete('/unsubscribes/:email', (c) => {
   const tid = tenantOf(c);
   const r = getCrmDb().prepare('DELETE FROM crm_unsubscribes WHERE tenant_id = ? AND email = ?').run(tid, c.req.param('email').toLowerCase());
   return r.changes > 0 ? c.body(null, 204) : notFound(c, 'unsubscribe');
+});
+
+// ═══ FORMS / LANDING PAGES / INBOUND WEBHOOKS (Onda 18) ═══════════════
+app.get('/forms', (c) => ok(c, { forms: forms.listForms(tenantOf(c)) }));
+
+app.post('/forms', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !Array.isArray(body.fields) || typeof body.mapping !== 'object') {
+    return badRequest(c, 'name, fields[], mapping required');
+  }
+  const f = forms.createForm(tid, body);
+  return ok(c, { form: f }, 201);
+});
+
+app.get('/forms/:id', (c) => {
+  const f = forms.getFormById(tenantOf(c), c.req.param('id'));
+  return f ? ok(c, { form: f }) : notFound(c, 'form');
+});
+
+app.patch('/forms/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const f = forms.updateForm(tid, c.req.param('id'), body);
+  return f ? ok(c, { form: f }) : notFound(c, 'form');
+});
+
+app.delete('/forms/:id', (c) => {
+  return forms.deleteForm(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'form');
+});
+
+app.get('/forms/:id/submissions', (c) => {
+  const tid = tenantOf(c);
+  const limit = Math.min(1000, Number(c.req.query('limit')) || 100);
+  return ok(c, { submissions: forms.listSubmissions(tid, c.req.param('id'), limit) });
+});
+
+// Inbound webhooks
+app.get('/webhooks', (c) => ok(c, { webhooks: forms.listHooks(tenantOf(c)) }));
+
+app.post('/webhooks', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || typeof body.mapping !== 'object') return badRequest(c, 'name + mapping required');
+  const hook = forms.createHook(tid, body);
+  return ok(c, { webhook: hook }, 201);
+});
+
+app.delete('/webhooks/:id', (c) => {
+  return forms.deleteHook(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'webhook');
+});
+
+app.post('/webhooks/:id/toggle', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const ok2 = forms.toggleHook(tid, c.req.param('id'), body.enabled !== false);
+  return ok2 ? ok(c, { ok: true }) : notFound(c, 'webhook');
+});
+
+// Public contact API — authenticated, simpler subset for integrations
+app.post('/public-api/contacts', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const name = String(body.name || '').trim();
+  if (!name) return badRequest(c, 'name required');
+
+  // Dedupe by email/phone
+  const db = getCrmDb();
+  let existing: any = null;
+  if (body.email) {
+    existing = db.prepare('SELECT id FROM crm_contacts WHERE tenant_id = ? AND LOWER(email) = LOWER(?)')
+      .get(tid, String(body.email).trim());
+  }
+  if (!existing && body.phone) {
+    existing = db.prepare('SELECT id FROM crm_contacts WHERE tenant_id = ? AND phone = ?')
+      .get(tid, String(body.phone).trim());
+  }
+
+  if (existing) {
+    const upd = store.updateContact(tid, existing.id, {
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.email ? { email: body.email } : {}),
+      ...(body.phone ? { phone: body.phone } : {}),
+      ...(body.source ? { source: body.source } : {}),
+      ...(body.tags ? { tags: body.tags } : {}),
+      ...(body.customFields ? { customFields: body.customFields } : {}),
+    } as any);
+    return ok(c, { contact: upd, created: false });
+  }
+
+  const created = store.createContact(tid, {
+    name, email: body.email, phone: body.phone,
+    source: body.source || 'api',
+    tags: body.tags || [],
+    customFields: body.customFields || {},
+  } as any);
+  return ok(c, { contact: created, created: true }, 201);
 });
 
 app.post('/proposal-templates', async (c) => {

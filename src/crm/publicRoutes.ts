@@ -14,6 +14,8 @@ import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import { buildContext, renderHTML, renderPDF, recordEvent, onAccept } from './proposals.js';
 import * as em from './emailMarketing.js';
+import * as forms from './forms.js';
+import { buildEmbedJS, buildHostedFormHTML } from './embedTemplate.js';
 
 const app = new Hono();
 
@@ -119,6 +121,59 @@ app.get('/e/u/:token', (c) => {
   <p>${r.email ? 'O email ' + r.email + ' foi' : 'Você foi'} removido da lista. Não enviaremos mais mensagens.</p>
   <p style="color:#64748b;font-size:13px">Se mudou de ideia, entre em contato conosco.</p>
 </body>`);
+});
+
+
+
+// ─── Public form endpoints ──────────────────────────────────────────────
+app.get('/forms/:slug/config.json', (c) => {
+  const f = forms.getFormBySlug(c.req.param('slug'));
+  if (!f) return c.json({ error: 'not_found' }, 404);
+  return c.json({
+    slug: f.slug, name: f.name, fields: f.fields,
+    redirectUrl: f.redirectUrl,
+  });
+});
+
+app.get('/forms/:slug/embed.js', (c) => {
+  const f = forms.getFormBySlug(c.req.param('slug'));
+  if (!f) return c.text('console.error("Clow form not found");', 404, { 'content-type': 'application/javascript' });
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  const base = `${proto}://${host}`;
+  const js = buildEmbedJS(f, base);
+  return new Response(js, { status: 200, headers: { 'content-type': 'application/javascript; charset=utf-8', 'cache-control': 'public, max-age=60' } });
+});
+
+app.get('/forms/:slug', (c) => {
+  const f = forms.getFormBySlug(c.req.param('slug'));
+  if (!f) return c.text('Form not found', 404);
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return c.html(buildHostedFormHTML(f, `${proto}://${host}`));
+});
+
+app.post('/forms/:slug', async (c) => {
+  const f = forms.getFormBySlug(c.req.param('slug'));
+  if (!f) return c.json({ ok: false, error: 'not_found' }, 404);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const r = forms.submitForm(f, body, { ip: clientIp(c), ua: c.req.header('user-agent') });
+  return c.json(r);
+});
+
+// Inbound webhook receiver — accepts arbitrary JSON, applies mapping
+app.post('/hooks/:hookKey', async (c) => {
+  const hook = forms.getHookByKey(c.req.param('hookKey'));
+  if (!hook) return c.json({ error: 'not_found' }, 404);
+  const rawBody = await c.req.text();
+  const providedSig = c.req.header('x-clow-signature') || c.req.header('x-webhook-signature');
+  if (hook.secret && !forms.verifyHookSignature(hook, rawBody, providedSig ?? null)) {
+    return c.json({ error: 'invalid_signature' }, 401);
+  }
+  let payload: any = {};
+  try { payload = JSON.parse(rawBody); } catch { payload = {}; }
+  const r = forms.processWebhookPayload(hook, payload, { ip: clientIp(c), ua: c.req.header('user-agent') });
+  return c.json(r);
 });
 
 

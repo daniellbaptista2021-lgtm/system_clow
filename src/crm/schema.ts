@@ -714,6 +714,64 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 17 applied: email marketing (campaigns + templates + sequences + unsubs)');
   }
 
+  // ONDA 18 — Forms / Landing Pages / Inbound Webhooks
+  const onda18Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(118);
+  if (!onda18Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_forms (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        public_key TEXT NOT NULL,
+        fields_json TEXT NOT NULL DEFAULT '[]',
+        mapping_json TEXT NOT NULL DEFAULT '{}',
+        redirect_url TEXT,
+        board_id TEXT,
+        column_id TEXT,
+        default_source TEXT DEFAULT 'form',
+        notify_emails_json TEXT DEFAULT '[]',
+        total_submissions INTEGER DEFAULT 0,
+        last_submission_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_forms_tenant ON crm_forms(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_forms_key ON crm_forms(public_key);
+
+      CREATE TABLE IF NOT EXISTS crm_form_submissions (
+        id TEXT PRIMARY KEY,
+        form_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        contact_id TEXT,
+        card_id TEXT,
+        ip TEXT,
+        ua TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_submissions_form ON crm_form_submissions(form_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS crm_inbound_webhooks (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        hook_key TEXT NOT NULL UNIQUE,
+        secret TEXT,
+        mapping_json TEXT NOT NULL DEFAULT '{}',
+        board_id TEXT,
+        column_id TEXT,
+        default_source TEXT DEFAULT 'webhook',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        total_received INTEGER DEFAULT 0,
+        last_received_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_hooks_tenant ON crm_inbound_webhooks(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_hooks_key ON crm_inbound_webhooks(hook_key);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(118, Date.now());
+    console.log('[crm-migrate] Onda 18 applied: forms + submissions + inbound webhooks');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
