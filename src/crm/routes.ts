@@ -576,6 +576,46 @@ app.post('/reminders/:id/done', (c) => {
 app.get('/reminders/:id/history', (c) =>
   ok(c, { history: store.getReminderHistory(tenantOf(c), c.req.param('id')) }));
 
+// ═══ CHANNELS UPGRADE (health, metrics, templates) ═══════════════════════
+app.get('/channels/:id/health', async (c) => {
+  return ok(c, { health: await store.channelHealthCheck(tenantOf(c), c.req.param('id')) });
+});
+
+app.get('/channels/:id/metrics', (c) => {
+  const m = store.getChannelMetrics(tenantOf(c), c.req.param('id'));
+  return m ? ok(c, { metrics: m }) : notFound(c, 'channel');
+});
+
+app.post('/channels/:id/templates/sync', async (c) => {
+  return ok(c, await store.syncMetaTemplates(tenantOf(c), c.req.param('id')));
+});
+
+app.get('/channels/:id/templates', (c) => {
+  return ok(c, { templates: store.listChannelTemplates(tenantOf(c), c.req.param('id')) });
+});
+
+// ═══ MIDIA UPGRADE: bulk process ═══════════════════════════════════════
+app.post('/media/bulk-process', async (c) => {
+  const fd = await c.req.formData();
+  const files = fd.getAll('files');
+  if (!files.length) return badRequest(c, 'files[] required');
+  const { processMedia } = await import('../notifications/openaiMedia.js');
+  const results: any[] = [];
+  for (const f of files) {
+    if (typeof f === 'string') continue;
+    const bytes = Buffer.from(await (f as any).arrayBuffer());
+    const filename = (f as any).name || 'upload.bin';
+    const mime = (f as any).type || 'application/octet-stream';
+    try {
+      const r = await processMedia(bytes, mime, filename);
+      results.push({ filename, kind: r.kind, content: r.content, bytes: bytes.length });
+    } catch (err: any) {
+      results.push({ filename, error: err.message });
+    }
+  }
+  return ok(c, { results });
+});
+
 // ═══ AUTOMATIONS PRO ════════════════════════════════════════════════════
 app.patch('/automations/:id/schedule', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;

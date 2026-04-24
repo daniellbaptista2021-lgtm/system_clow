@@ -2368,3 +2368,117 @@ export function slaViolations(tenantId: string): any[] {
     ORDER BY sla_deadline_ts ASC
   `).all(tenantId, Date.now()) as any[];
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 12 — Canais + SSE + Midia upgrade
+// ═══════════════════════════════════════════════════════════════════════
+import type { ChannelTemplate, ChannelHealth, ChannelMetrics } from './types.js';
+
+export async function channelHealthCheck(tenantId: string, channelId: string): Promise<ChannelHealth> {
+  const ch = getChannel(tenantId, channelId);
+  if (!ch) return { ok: false, lastCheck: Date.now(), apiReachable: false, tokenValid: false, errors: ['channel_not_found'] };
+
+  const errors: string[] = [];
+  let apiReachable = false, tokenValid = false, phoneActive = undefined as boolean | undefined;
+
+  try {
+    const { decryptJson } = await import('./crypto.js');
+    const creds = decryptJson<any>(ch.credentialsEncrypted);
+    if (ch.type === 'meta') {
+      const apiVersion = creds.apiVersion || 'v22.0';
+      const res = await fetch(`https://graph.facebook.com/${apiVersion}/${creds.phoneNumberId}?fields=display_phone_number,verified_name,status,quality_rating`, {
+        headers: { 'Authorization': 'Bearer ' + creds.accessToken },
+      });
+      apiReachable = true;
+      if (res.ok) {
+        const data: any = await res.json();
+        tokenValid = true;
+        phoneActive = data.status === 'CONNECTED';
+        if (!phoneActive) errors.push('phone_status=' + data.status);
+      } else {
+        errors.push(`meta_api_http_${res.status}`);
+      }
+    } else if (ch.type === 'zapi') {
+      // Z-API /status endpoint
+      const url = `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.instanceToken}/status`;
+      const res = await fetch(url);
+      apiReachable = true;
+      if (res.ok) {
+        const data: any = await res.json();
+        tokenValid = true;
+        phoneActive = !!(data.connected || data.session);
+      } else { errors.push(`zapi_http_${res.status}`); }
+    }
+  } catch (err: any) {
+    errors.push(err.message || 'health_check_failed');
+  }
+
+  const health: ChannelHealth = { ok: errors.length === 0, lastCheck: Date.now(),
+    apiReachable, tokenValid, phoneNumberActive: phoneActive, errors };
+  getCrmDb().prepare('UPDATE crm_channels SET health_json=?, last_health_check=?, last_error=? WHERE id=? AND tenant_id=?')
+    .run(JSON.stringify(health), health.lastCheck, errors[0] ?? null, channelId, tenantId);
+  return health;
+}
+
+export function getChannelMetrics(tenantId: string, channelId: string): ChannelMetrics | null {
+  const r = getCrmDb().prepare('SELECT id, messages_sent, messages_received, last_inbound_at, last_error FROM crm_channels WHERE id=? AND tenant_id=?').get(channelId, tenantId) as any;
+  if (!r) return null;
+  return { channelId: r.id, messagesSent: r.messages_sent || 0, messagesReceived: r.messages_received || 0,
+    lastInboundAt: r.last_inbound_at ?? undefined, lastError: r.last_error ?? undefined };
+}
+
+export function incChannelMsgCounter(tenantId: string, channelId: string, direction: 'sent' | 'received'): void {
+  const col = direction === 'sent' ? 'messages_sent' : 'messages_received';
+  getCrmDb().prepare(`UPDATE crm_channels SET ${col} = COALESCE(${col},0) + 1 WHERE id=? AND tenant_id=?`).run(channelId, tenantId);
+}
+
+// Templates registry
+export function upsertChannelTemplate(tenantId: string, input: Omit<ChannelTemplate,'id'|'tenantId'|'syncedAt'>): ChannelTemplate {
+  const db = getCrmDb();
+  const existing = db.prepare('SELECT * FROM crm_channel_templates WHERE channel_id=? AND template_name=? AND language_code=?')
+    .get(input.channelId, input.templateName, input.languageCode) as any;
+  const t = Date.now();
+  if (existing) {
+    db.prepare('UPDATE crm_channel_templates SET category=?, status=?, body=?, synced_at=? WHERE id=?')
+      .run(input.category ?? null, input.status, input.body ?? null, t, existing.id);
+    return { id: existing.id, tenantId: existing.tenant_id, channelId: existing.channel_id,
+      templateName: existing.template_name, languageCode: existing.language_code,
+      category: input.category, status: input.status, body: input.body, syncedAt: t };
+  }
+  const tmpl: ChannelTemplate = { id: nid('crm_tmpl'), tenantId, ...input, syncedAt: t };
+  db.prepare('INSERT INTO crm_channel_templates (id,tenant_id,channel_id,template_name,language_code,category,status,body,synced_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(tmpl.id, tenantId, tmpl.channelId, tmpl.templateName, tmpl.languageCode, tmpl.category ?? null, tmpl.status, tmpl.body ?? null, t);
+  return tmpl;
+}
+
+export function listChannelTemplates(tenantId: string, channelId: string): ChannelTemplate[] {
+  return (getCrmDb().prepare('SELECT * FROM crm_channel_templates WHERE tenant_id=? AND channel_id=? ORDER BY template_name').all(tenantId, channelId) as any[])
+    .map((r: any) => ({ id: r.id, tenantId: r.tenant_id, channelId: r.channel_id,
+      templateName: r.template_name, languageCode: r.language_code,
+      category: r.category ?? undefined, status: r.status,
+      body: r.body ?? undefined, syncedAt: r.synced_at ?? undefined }));
+}
+
+// Sync templates from Meta
+export async function syncMetaTemplates(tenantId: string, channelId: string): Promise<{ synced: number; errors: string[] }> {
+  const ch = getChannel(tenantId, channelId);
+  if (!ch || ch.type !== 'meta') return { synced: 0, errors: ['channel_not_meta'] };
+  const { decryptJson } = await import('./crypto.js');
+  const creds = decryptJson<any>(ch.credentialsEncrypted);
+  const apiVersion = creds.apiVersion || 'v22.0';
+  const url = `https://graph.facebook.com/${apiVersion}/${creds.businessAccountId}/message_templates?limit=50&fields=name,status,language,category,components`;
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + creds.accessToken } });
+  if (!res.ok) return { synced: 0, errors: [`meta_http_${res.status}`] };
+  const data: any = await res.json();
+  let synced = 0;
+  for (const t of (data.data || [])) {
+    const body = (t.components || []).find((c: any) => c.type === 'BODY')?.text;
+    upsertChannelTemplate(tenantId, {
+      channelId, templateName: t.name, languageCode: t.language,
+      category: t.category, status: t.status?.toLowerCase() === 'approved' ? 'approved' : t.status?.toLowerCase() === 'rejected' ? 'rejected' : 'pending',
+      body,
+    });
+    synced++;
+  }
+  return { synced, errors: [] };
+}

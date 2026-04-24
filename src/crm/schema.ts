@@ -528,6 +528,35 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 11 applied: assignment rules + log');
   }
 
+  // ONDA 12 — Canais + SSE + Midia upgrade
+  const onda12Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(112);
+  if (!onda12Applied) {
+    const chCols = db.prepare("PRAGMA table_info(crm_channels)").all() as any[];
+    const chColNames = new Set(chCols.map((c: any) => c.name));
+    if (!chColNames.has('health_json')) db.exec("ALTER TABLE crm_channels ADD COLUMN health_json TEXT DEFAULT '{}'");
+    if (!chColNames.has('messages_sent')) db.exec('ALTER TABLE crm_channels ADD COLUMN messages_sent INTEGER DEFAULT 0');
+    if (!chColNames.has('messages_received')) db.exec('ALTER TABLE crm_channels ADD COLUMN messages_received INTEGER DEFAULT 0');
+    if (!chColNames.has('last_error')) db.exec('ALTER TABLE crm_channels ADD COLUMN last_error TEXT');
+    if (!chColNames.has('last_health_check')) db.exec('ALTER TABLE crm_channels ADD COLUMN last_health_check INTEGER');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_channel_templates (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL REFERENCES crm_channels(id) ON DELETE CASCADE,
+        template_name TEXT NOT NULL,
+        language_code TEXT NOT NULL DEFAULT 'pt_BR',
+        category TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        body TEXT,
+        synced_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_chtmpl_channel ON crm_channel_templates(channel_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(112, Date.now());
+    console.log('[crm-migrate] Onda 12 applied: channel templates + health + metrics');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

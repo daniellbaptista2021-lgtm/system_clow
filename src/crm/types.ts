@@ -431,3 +431,20 @@ export interface AssignmentLog {
   escalated: boolean; slaDeadlineTs?: number;
   resolvedAt?: number; createdAt: number;
 }
+
+// ONDA 12 — Canais + SSE + Midia upgrade
+export interface ChannelTemplate {
+  id: string; tenantId: string; channelId: string;
+  templateName: string; languageCode: string;
+  category?: string; status: 'approved' | 'pending' | 'rejected';
+  body?: string; syncedAt?: number;
+}
+export interface ChannelHealth {
+  ok: boolean; lastCheck: number;
+  apiReachable: boolean; tokenValid: boolean;
+  phoneNumberActive?: boolean; errors: string[];
+}
+export interface ChannelMetrics {
+  channelId: string; messagesSent: number; messagesReceived: number;
+  lastInboundAt?: number; lastError?: string; deliveryRate?: number;
+}
