@@ -37,6 +37,8 @@ import * as ai from './ai.js';
 import * as docs from './documents.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
+import * as softDel from './softDelete.js';
+import { encodeCursor, decodeCursor } from './cursor.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
@@ -2394,6 +2396,121 @@ app.post('/compliance/deletion-requests', async (c) => {
 app.post('/compliance/deletion-requests/:id/cancel', (c) => {
   const ok2 = lgpd.cancelDeletionRequest(tenantOf(c), c.req.param('id'));
   return ok2 ? ok(c, { ok: true }) : notFound(c, 'request');
+});
+
+// ═══ DB ENHANCEMENTS (Onda 29) — soft delete + trash + cursor ═════════
+app.get('/trash', (c) => {
+  return ok(c, { counts: softDel.countTrash(tenantOf(c)) });
+});
+
+app.get('/trash/:entity', (c) => {
+  const tid = tenantOf(c);
+  const entityMap: Record<string, string> = {
+    cards: 'crm_cards', contacts: 'crm_contacts', activities: 'crm_activities',
+    tasks: 'crm_tasks', appointments: 'crm_appointments',
+    documents: 'crm_documents', proposals: 'crm_proposals',
+  };
+  const table = entityMap[c.req.param('entity')];
+  if (!table) return badRequest(c, 'invalid entity');
+  const limit = Number(c.req.query('limit')) || 100;
+  return ok(c, { items: softDel.listTrash(table, tid, limit) });
+});
+
+app.post('/trash/:entity/:id/restore', (c) => {
+  const tid = tenantOf(c);
+  const entityMap: Record<string, string> = {
+    cards: 'crm_cards', contacts: 'crm_contacts', activities: 'crm_activities',
+    tasks: 'crm_tasks', appointments: 'crm_appointments',
+    documents: 'crm_documents', proposals: 'crm_proposals',
+  };
+  const table = entityMap[c.req.param('entity')];
+  if (!table) return badRequest(c, 'invalid entity');
+  const ok2 = softDel.restore(table, tid, c.req.param('id'));
+  return ok2 ? ok(c, { restored: true }) : notFound(c, 'row');
+});
+
+app.delete('/trash/:entity/:id/purge', (c) => {
+  const tid = tenantOf(c);
+  const entityMap: Record<string, string> = {
+    cards: 'crm_cards', contacts: 'crm_contacts', activities: 'crm_activities',
+    tasks: 'crm_tasks', appointments: 'crm_appointments',
+    documents: 'crm_documents', proposals: 'crm_proposals',
+  };
+  const table = entityMap[c.req.param('entity')];
+  if (!table) return badRequest(c, 'invalid entity');
+  return softDel.purge(table, tid, c.req.param('id')) ? c.body(null, 204) : notFound(c, 'row');
+});
+
+// Cursor-paginated contact listing
+app.get('/contacts-paginated', (c) => {
+  const tid = tenantOf(c);
+  const cursor = c.req.query('cursor') || undefined;
+  const limit = Math.min(500, Number(c.req.query('limit')) || 50);
+  const sortField = 'updated_at';
+  const db = getCrmDb();
+  const decoded = decodeCursor(cursor);
+  let sql = 'SELECT * FROM crm_contacts WHERE tenant_id = ? AND deleted_at IS NULL';
+  const params: any[] = [tid];
+  if (decoded) {
+    sql += ` AND (${sortField} < ? OR (${sortField} = ? AND id < ?))`;
+    params.push(decoded.lastSort, decoded.lastSort, decoded.lastId);
+  }
+  sql += ` ORDER BY ${sortField} DESC, id DESC LIMIT ?`;
+  params.push(limit + 1);
+  const rows = db.prepare(sql).all(...params) as any[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore && items.length > 0
+    ? encodeCursor(items[items.length - 1][sortField], items[items.length - 1].id)
+    : null;
+  return ok(c, {
+    contacts: items.map((r: any) => ({
+      id: r.id, name: r.name, email: r.email, phone: r.phone,
+      source: r.source, tags: JSON.parse(r.tags_json || '[]'),
+      customFields: JSON.parse(r.custom_fields_json || '{}'),
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    })),
+    nextCursor, hasMore,
+  });
+});
+
+app.get('/cards-paginated', (c) => {
+  const tid = tenantOf(c);
+  const cursor = c.req.query('cursor') || undefined;
+  const limit = Math.min(500, Number(c.req.query('limit')) || 50);
+  const boardId = c.req.query('boardId');
+  const sortField = 'updated_at';
+  const db = getCrmDb();
+  const decoded = decodeCursor(cursor);
+  let sql = 'SELECT * FROM crm_cards WHERE tenant_id = ? AND deleted_at IS NULL';
+  const params: any[] = [tid];
+  if (boardId) { sql += ' AND board_id = ?'; params.push(boardId); }
+  if (decoded) {
+    sql += ` AND (${sortField} < ? OR (${sortField} = ? AND id < ?))`;
+    params.push(decoded.lastSort, decoded.lastSort, decoded.lastId);
+  }
+  sql += ` ORDER BY ${sortField} DESC, id DESC LIMIT ?`;
+  params.push(limit + 1);
+  const rows = db.prepare(sql).all(...params) as any[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore && items.length > 0
+    ? encodeCursor(items[items.length - 1][sortField], items[items.length - 1].id)
+    : null;
+  return ok(c, {
+    cards: items.map((r: any) => ({
+      id: r.id, boardId: r.board_id, columnId: r.column_id, title: r.title,
+      contactId: r.contact_id, valueCents: r.value_cents, probability: r.probability,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    })),
+    nextCursor, hasMore,
+  });
+});
+
+// Migration history view
+app.get('/system/migrations', (c) => {
+  const rows = getCrmDb().prepare('SELECT * FROM crm_migration_history').all() as any[];
+  return ok(c, { migrations: rows });
 });
 
 app.post('/proposal-templates', async (c) => {

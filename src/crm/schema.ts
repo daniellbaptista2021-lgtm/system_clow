@@ -1352,6 +1352,46 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 28 applied: LGPD compliance (consents + access log + retention + deletion)');
   }
 
+  // ONDA 29 — DB enhancements (soft delete + composite indices)
+  const onda29Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(129);
+  if (!onda29Applied) {
+    // Soft delete columns (IF NOT EXISTS-style via PRAGMA check)
+    const softTables = ['crm_cards', 'crm_contacts', 'crm_activities', 'crm_tasks', 'crm_appointments', 'crm_documents', 'crm_proposals'];
+    for (const t of softTables) {
+      try {
+        const cols = db.prepare(`PRAGMA table_info(${t})`).all() as any[];
+        if (!cols.some((c: any) => c.name === 'deleted_at')) {
+          db.exec(`ALTER TABLE ${t} ADD COLUMN deleted_at INTEGER`);
+        }
+      } catch (e: any) { console.warn('[onda29 soft]', t, e.message); }
+    }
+
+    // Composite indices for hot queries
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_cards_hot ON crm_cards(tenant_id, column_id, position) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_cards_owner_hot ON crm_cards(tenant_id, owner_agent_id, updated_at) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_contacts_hot ON crm_contacts(tenant_id, source, updated_at) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_activities_hot ON crm_activities(tenant_id, contact_id, created_at DESC) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_activities_card_hot ON crm_activities(tenant_id, card_id, created_at DESC) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_agent_hot ON crm_tasks(tenant_id, assigned_to_agent_id, status, due_at) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_appts_hot ON crm_appointments(tenant_id, agent_id, starts_at) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_docs_hot ON crm_documents(tenant_id, contact_id, updated_at) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_cards_pagination ON crm_cards(tenant_id, updated_at DESC, id DESC) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_contacts_pagination ON crm_contacts(tenant_id, updated_at DESC, id DESC) WHERE deleted_at IS NULL;
+    `);
+
+    // View for migration history introspection
+    db.exec(`
+      DROP VIEW IF EXISTS crm_migration_history;
+      CREATE VIEW crm_migration_history AS
+      SELECT version, applied_at, datetime(applied_at / 1000, 'unixepoch') AS applied_at_iso
+      FROM crm_migrations ORDER BY version;
+    `);
+
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(129, Date.now());
+    console.log('[crm-migrate] Onda 29 applied: soft delete + composite indices + migration view');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
