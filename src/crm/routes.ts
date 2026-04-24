@@ -170,6 +170,9 @@ app.patch('/cards/:id', async (c) => {
 app.post('/cards/:id/move', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!body.toColumnId) return badRequest(c, 'toColumnId required');
+  // Onda 2: respeita WIP limit se configurado (settings.wipEnforce=true + col.wip_limit)
+  const wip = store.checkWipLimit(tenantOf(c), body.toColumnId);
+  if (!wip.allowed) return c.json({ error: 'wip_limit_reached', message: 'Coluna cheia (' + wip.current + '/' + wip.limit + '). Aumente o WIP ou mova outro card antes.', current: wip.current, limit: wip.limit }, 409);
   const moved = store.moveCard(tenantOf(c), c.req.param('id'), body.toColumnId, body.position);
   return moved ? ok(c, { card: moved }) : notFound(c, 'card');
 });
@@ -520,6 +523,91 @@ app.post('/media/process', async (c) => {
   }
 });
 
+
+// ═══ KANBAN PRO ═════════════════════════════════════════════════════════
+
+app.patch('/columns/:id/wip-limit', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const limit = body.wip_limit === null ? null : (typeof body.wip_limit === 'number' ? body.wip_limit : null);
+  const ok2 = store.setColumnWipLimit(tenantOf(c), c.req.param('id'), limit);
+  return ok2 ? ok(c, { ok: true }) : notFound(c, 'column');
+});
+
+app.patch('/columns/:id/stage-type', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const st = body.stage_type as any;
+  if (!['open','won','lost','paused'].includes(st)) return badRequest(c, 'stage_type invalid');
+  const ok2 = store.setColumnStageType(tenantOf(c), c.req.param('id'), st);
+  return ok2 ? ok(c, { ok: true }) : notFound(c, 'column');
+});
+
+app.post('/cards/:id/archive', (c) => {
+  const r = store.archiveCard(tenantOf(c), c.req.param('id'));
+  return r ? ok(c, { card: r }) : notFound(c, 'card');
+});
+
+app.post('/cards/:id/unarchive', (c) => {
+  const r = store.unarchiveCard(tenantOf(c), c.req.param('id'));
+  return r ? ok(c, { card: r }) : notFound(c, 'card');
+});
+
+// ─── Board settings ──────────────────────────────────────────
+app.patch('/boards/:id/settings', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const r = store.updateBoardSettings(tenantOf(c), c.req.param('id'), body);
+  return r ? ok(c, { board: r }) : notFound(c, 'board');
+});
+
+// ─── Swimlanes ───────────────────────────────────────────────
+app.post('/boards/:id/swimlanes', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  const sl = store.createSwimlane(tenantOf(c), c.req.param('id'), body);
+  return sl ? ok(c, { swimlane: sl }, 201) : notFound(c, 'board');
+});
+
+app.get('/boards/:id/swimlanes', (c) => {
+  return ok(c, { swimlanes: store.listSwimlanes(tenantOf(c), c.req.param('id')) });
+});
+
+app.patch('/swimlanes/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const sl = store.updateSwimlane(tenantOf(c), c.req.param('id'), body);
+  return sl ? ok(c, { swimlane: sl }) : notFound(c, 'swimlane');
+});
+
+app.delete('/swimlanes/:id', (c) => {
+  const ok2 = store.deleteSwimlane(tenantOf(c), c.req.param('id'));
+  return ok2 ? c.body(null, 204) : notFound(c, 'swimlane');
+});
+
+// ─── Checklists ─────────────────────────────────────────────
+app.post('/cards/:id/checklists', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title) return badRequest(c, 'title required');
+  const cl = store.createChecklist(tenantOf(c), c.req.param('id'), body);
+  return cl ? ok(c, { checklist: cl }, 201) : notFound(c, 'card');
+});
+
+app.get('/cards/:id/checklists', (c) => {
+  return ok(c, { checklists: store.listChecklists(tenantOf(c), c.req.param('id')) });
+});
+
+app.patch('/checklists/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const cl = store.updateChecklist(tenantOf(c), c.req.param('id'), body);
+  return cl ? ok(c, { checklist: cl }) : notFound(c, 'checklist');
+});
+
+app.post('/checklists/:id/items/:itemId/toggle', (c) => {
+  const cl = store.toggleChecklistItem(tenantOf(c), c.req.param('id'), c.req.param('itemId'));
+  return cl ? ok(c, { checklist: cl }) : notFound(c, 'checklist_or_item');
+});
+
+app.delete('/checklists/:id', (c) => {
+  const ok2 = store.deleteChecklist(tenantOf(c), c.req.param('id'));
+  return ok2 ? c.body(null, 204) : notFound(c, 'checklist');
+});
 
 // ═══ CONTACTS PRO ═══════════════════════════════════════════════════════
 app.get('/contacts/duplicates', (c) => {

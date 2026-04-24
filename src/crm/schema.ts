@@ -82,6 +82,54 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 1 applied: +typed cols + crm_segments');
   }
 
+  // ONDA 2 — Kanban Pro: WIP, priority, swimlanes, checklists
+  const onda2Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(102);
+  if (!onda2Applied) {
+    const colsCol = db.prepare("PRAGMA table_info(crm_columns)").all() as any[];
+    const colsColNames = new Set(colsCol.map((c: any) => c.name));
+    if (!colsColNames.has('wip_limit')) db.exec('ALTER TABLE crm_columns ADD COLUMN wip_limit INTEGER');
+    if (!colsColNames.has('stage_type')) db.exec("ALTER TABLE crm_columns ADD COLUMN stage_type TEXT DEFAULT 'open'");
+
+    const cardsCol = db.prepare("PRAGMA table_info(crm_cards)").all() as any[];
+    const cardsColNames = new Set(cardsCol.map((c: any) => c.name));
+    if (!cardsColNames.has('priority')) db.exec('ALTER TABLE crm_cards ADD COLUMN priority INTEGER DEFAULT 3');
+    if (!cardsColNames.has('color')) db.exec('ALTER TABLE crm_cards ADD COLUMN color TEXT');
+    if (!cardsColNames.has('status')) db.exec("ALTER TABLE crm_cards ADD COLUMN status TEXT DEFAULT 'active'");
+    if (!cardsColNames.has('archived_at')) db.exec('ALTER TABLE crm_cards ADD COLUMN archived_at INTEGER');
+    if (!cardsColNames.has('swimlane_id')) db.exec('ALTER TABLE crm_cards ADD COLUMN swimlane_id TEXT');
+
+    const boardsCol = db.prepare("PRAGMA table_info(crm_boards)").all() as any[];
+    const boardsColNames = new Set(boardsCol.map((c: any) => c.name));
+    if (!boardsColNames.has('settings_json')) db.exec("ALTER TABLE crm_boards ADD COLUMN settings_json TEXT DEFAULT '{}'");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_swimlanes (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        board_id TEXT NOT NULL REFERENCES crm_boards(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT '#9B59FC',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_swimlanes_board ON crm_swimlanes(board_id, position);
+
+      CREATE TABLE IF NOT EXISTS crm_checklists (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        card_id TEXT NOT NULL REFERENCES crm_cards(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        items_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_checklists_card ON crm_checklists(card_id);
+    `);
+
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(102, Date.now());
+    console.log('[crm-migrate] Onda 2 applied: +wip/priority/color/swimlanes/checklists');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

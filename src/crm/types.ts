@@ -25,6 +25,7 @@ export type SubscriptionStatus = 'active' | 'paused' | 'past_due' | 'cancelled' 
 export type AgentRole = 'owner' | 'admin' | 'agent' | 'viewer';
 
 export interface Board {
+  settings?: BoardSettings;
   id: string;
   tenantId: string;
   name: string;
@@ -103,6 +104,27 @@ export interface Contact {
   lastInteractionAt?: number;
 }
 
+// ONDA 2 — Kanban Pro
+export interface Swimlane {
+  id: string; tenantId: string; boardId: string;
+  name: string; color: string; position: number; createdAt: number;
+}
+export interface ChecklistItem {
+  id: string; text: string; done: boolean; assignedAgentId?: string; dueDate?: number;
+}
+export interface Checklist {
+  id: string; tenantId: string; cardId: string;
+  title: string; items: ChecklistItem[]; createdAt: number; updatedAt: number;
+}
+export interface BoardSettings {
+  wipEnforce?: boolean;                   // se true, bloqueia move pra coluna cheia
+  swimlanesEnabled?: boolean;
+  defaultSort?: 'position' | 'due_asc' | 'value_desc' | 'priority_desc' | 'updated_desc';
+  autoArchiveWonAfterDays?: number;       // arquiva cards won apos N dias
+}
+export type CardStatus = 'active' | 'archived';
+export type ColumnStageType = 'open' | 'won' | 'lost' | 'paused';
+
 export interface Card {
   id: string;
   tenantId: string;
@@ -118,6 +140,12 @@ export interface Card {
   dueDate?: number;
   position: number;
   customFields: Record<string, unknown>;
+  // ONDA 2 Pro:
+  priority?: number;                      // 1-5
+  color?: string;                         // hex
+  status?: CardStatus;
+  archivedAt?: number;
+  swimlaneId?: string;
   createdAt: number;
   updatedAt: number;
   lastActivityAt?: number;
