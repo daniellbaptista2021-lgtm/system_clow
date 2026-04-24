@@ -289,3 +289,35 @@ export interface InboxRule {
   keyword?: string; assignToAgentId?: string; assignToTeamId?: string;
   labelId?: string; priority: number; enabled: boolean; createdAt: number;
 }
+
+// ONDA 5 — Timeline Pro
+export type ActivityTypePro = 'message_in' | 'message_out' | 'note' | 'call' | 'email' | 'meeting' | 'file' | 'system' | 'status_change' | 'card_moved';
+export interface ActivityFilter {
+  types?: string[];
+  agentId?: string;
+  contactId?: string;
+  cardId?: string;
+  dateFrom?: number;
+  dateTo?: number;
+  hasAttachment?: boolean;
+  mentionedAgent?: string;
+  isPrivate?: boolean;
+}
+
+// ONDA 6 — Lembretes Pro
+export type ReminderChannel = 'email' | 'whatsapp' | 'push' | 'in_app';
+export type ReminderStatus = 'active' | 'done' | 'skipped' | 'archived';
+export interface ReminderPro {
+  id: string; tenantId: string;
+  title: string; description?: string;
+  dueAt: number;
+  agentId?: string; contactId?: string; cardId?: string;
+  recurrenceRule?: string;           // e.g. 'FREQ=DAILY' 'FREQ=WEEKLY;BYDAY=MO,WE,FR'
+  recurrenceEndTs?: number;
+  snoozeUntil?: number;
+  channels: ReminderChannel[];
+  preNotifyMins?: number;
+  status: ReminderStatus;
+  createdAt: number;
+  completedAt?: number;
+}

@@ -1664,3 +1664,182 @@ export function snoozeActivity(tenantId: string, activityId: string, untilTs: nu
   return getCrmDb().prepare('UPDATE crm_activities SET snoozed_until=? WHERE id=? AND tenant_id=?')
     .run(untilTs, activityId, tenantId).changes > 0;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 5 — Timeline Pro
+// ═══════════════════════════════════════════════════════════════════════
+import type { ActivityFilter, ReminderChannel, ReminderStatus, ReminderPro } from './types.js';
+
+export function listActivitiesFiltered(tenantId: string, filter: ActivityFilter, limit: number = 200, offset: number = 0): any[] {
+  const db = getCrmDb();
+  const conds: string[] = ['tenant_id = ?'];
+  const args: any[] = [tenantId];
+  if (filter.types?.length) {
+    conds.push('type IN (' + filter.types.map(() => '?').join(',') + ')');
+    args.push(...filter.types);
+  }
+  if (filter.agentId) { conds.push('created_by_agent_id = ?'); args.push(filter.agentId); }
+  if (filter.contactId) { conds.push('contact_id = ?'); args.push(filter.contactId); }
+  if (filter.cardId) { conds.push('card_id = ?'); args.push(filter.cardId); }
+  if (filter.dateFrom) { conds.push('created_at >= ?'); args.push(filter.dateFrom); }
+  if (filter.dateTo) { conds.push('created_at <= ?'); args.push(filter.dateTo); }
+  if (filter.isPrivate != null) { conds.push('COALESCE(is_private,0) = ?'); args.push(filter.isPrivate ? 1 : 0); }
+  if (filter.mentionedAgent) { conds.push('mentions_json LIKE ?'); args.push('%"' + filter.mentionedAgent + '"%'); }
+  if (filter.hasAttachment) conds.push("COALESCE(attachments_json, '[]') != '[]'");
+
+  const sql = `SELECT * FROM crm_activities WHERE ${conds.join(' AND ')} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+  args.push(Math.min(limit, 1000), offset);
+  return db.prepare(sql).all(...args) as any[];
+}
+
+export function addMentionsToActivity(tenantId: string, activityId: string, agentIds: string[]): boolean {
+  const db = getCrmDb();
+  const a = db.prepare('SELECT mentions_json FROM crm_activities WHERE id=? AND tenant_id=?').get(activityId, tenantId) as any;
+  if (!a) return false;
+  const existing: string[] = JSON.parse(a.mentions_json || '[]');
+  for (const id of agentIds) if (!existing.includes(id)) existing.push(id);
+  db.prepare('UPDATE crm_activities SET mentions_json=? WHERE id=? AND tenant_id=?').run(JSON.stringify(existing), activityId, tenantId);
+  return true;
+}
+
+export function createActivityPro(tenantId: string, input: {
+  type: string; content: string; cardId?: string; contactId?: string;
+  channel?: string; direction?: string; createdByAgentId?: string;
+  durationSeconds?: number; callOutcome?: string; emailSubject?: string;
+  attachments?: string[]; mentions?: string[]; isPrivate?: boolean;
+  metadata?: Record<string, unknown>; mediaUrl?: string; mediaType?: string;
+  providerMessageId?: string;
+}): any {
+  const db = getCrmDb();
+  const id = nid('crm_act');
+  const t = now();
+  db.prepare(`INSERT INTO crm_activities
+    (id, tenant_id, card_id, contact_id, type, channel, direction, content,
+     media_url, media_type, provider_message_id, metadata_json, created_by_agent_id,
+     created_at, duration_seconds, call_outcome, email_subject, attachments_json,
+     mentions_json, is_private)
+    VALUES (?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?, ?,?)`)
+    .run(id, tenantId, input.cardId ?? null, input.contactId ?? null, input.type,
+         input.channel ?? null, input.direction ?? null, input.content,
+         input.mediaUrl ?? null, input.mediaType ?? null, input.providerMessageId ?? null,
+         JSON.stringify(input.metadata || {}), input.createdByAgentId ?? null, t,
+         input.durationSeconds ?? null, input.callOutcome ?? null, input.emailSubject ?? null,
+         JSON.stringify(input.attachments || []),
+         JSON.stringify(input.mentions || []), input.isPrivate ? 1 : 0);
+  return { id, tenantId, ...input, createdAt: t };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 6 — Lembretes Pro
+// ═══════════════════════════════════════════════════════════════════════
+
+function rowToReminderPro(r: any): ReminderPro {
+  return {
+    id: r.id, tenantId: r.tenant_id, title: r.title,
+    description: r.description ?? undefined, dueAt: r.due_at,
+    agentId: r.agent_id ?? undefined, contactId: r.contact_id ?? undefined,
+    cardId: r.card_id ?? undefined,
+    recurrenceRule: r.recurrence_rule ?? undefined,
+    recurrenceEndTs: r.recurrence_end_ts ?? undefined,
+    snoozeUntil: r.snooze_until ?? undefined,
+    channels: JSON.parse(r.channels_json || '["in_app"]'),
+    preNotifyMins: r.pre_notify_mins ?? undefined,
+    status: (r.status || 'active') as ReminderStatus,
+    createdAt: r.created_at,
+    completedAt: r.completed_at ?? undefined,
+  };
+}
+
+export function createReminderPro(tenantId: string, input: {
+  title: string; description?: string; dueAt: number;
+  agentId?: string; contactId?: string; cardId?: string;
+  recurrenceRule?: string; recurrenceEndTs?: number;
+  channels?: ReminderChannel[]; preNotifyMins?: number;
+}): ReminderPro {
+  const db = getCrmDb();
+  const id = nid('crm_rem');
+  const t = now();
+  const channels = input.channels || ['in_app'];
+  db.prepare(`INSERT INTO crm_reminders
+    (id, tenant_id, card_id, contact_id, agent_id, title, description, due_at,
+     status, created_at, completed_at, recurrence_rule, recurrence_end_ts,
+     snooze_until, channels_json, pre_notify_mins)
+    VALUES (?,?,?,?,?,?,?,?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, tenantId, input.cardId ?? null, input.contactId ?? null, input.agentId ?? null,
+         input.title, input.description ?? null, input.dueAt, 'active', t, null,
+         input.recurrenceRule ?? null, input.recurrenceEndTs ?? null,
+         null, JSON.stringify(channels), input.preNotifyMins ?? null);
+  return { id, tenantId, title: input.title, description: input.description, dueAt: input.dueAt,
+    agentId: input.agentId, contactId: input.contactId, cardId: input.cardId,
+    recurrenceRule: input.recurrenceRule, recurrenceEndTs: input.recurrenceEndTs,
+    channels, preNotifyMins: input.preNotifyMins, status: 'active', createdAt: t };
+}
+
+export function listRemindersPro(tenantId: string, opts: { agentId?: string; status?: ReminderStatus; dueBefore?: number; limit?: number } = {}): ReminderPro[] {
+  const db = getCrmDb();
+  const conds: string[] = ['tenant_id = ?'];
+  const args: any[] = [tenantId];
+  if (opts.agentId) { conds.push('agent_id = ?'); args.push(opts.agentId); }
+  if (opts.status) { conds.push('status = ?'); args.push(opts.status); }
+  if (opts.dueBefore) { conds.push('due_at <= ?'); args.push(opts.dueBefore); }
+  const sql = `SELECT * FROM crm_reminders WHERE ${conds.join(' AND ')} ORDER BY due_at ASC LIMIT ?`;
+  args.push(Math.min(opts.limit || 200, 1000));
+  return (db.prepare(sql).all(...args) as any[]).map(rowToReminderPro);
+}
+
+export function snoozeReminder(tenantId: string, id: string, untilTs: number): ReminderPro | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_reminders WHERE id=? AND tenant_id=?').get(id, tenantId) as any;
+  if (!r) return null;
+  db.prepare('UPDATE crm_reminders SET snooze_until=?, due_at=? WHERE id=? AND tenant_id=?')
+    .run(untilTs, untilTs, id, tenantId);
+  return rowToReminderPro({ ...r, snooze_until: untilTs, due_at: untilTs });
+}
+
+// Very lightweight RRULE-ish advancer:
+// Suporta FREQ=DAILY|WEEKLY|MONTHLY|YEARLY; INTERVAL=N
+function advanceRecurrence(rule: string, from: number): number | null {
+  try {
+    const parts: Record<string, string> = {};
+    rule.split(';').forEach(kv => {
+      const [k, v] = kv.split('=');
+      if (k) parts[k.trim().toUpperCase()] = (v || '').trim().toUpperCase();
+    });
+    const freq = parts['FREQ'];
+    const interval = parseInt(parts['INTERVAL'] || '1', 10) || 1;
+    const d = new Date(from);
+    if (freq === 'DAILY') d.setDate(d.getDate() + interval);
+    else if (freq === 'WEEKLY') d.setDate(d.getDate() + 7 * interval);
+    else if (freq === 'MONTHLY') d.setMonth(d.getMonth() + interval);
+    else if (freq === 'YEARLY') d.setFullYear(d.getFullYear() + interval);
+    else return null;
+    return d.getTime();
+  } catch { return null; }
+}
+
+export function completeReminderPro(tenantId: string, id: string): ReminderPro | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_reminders WHERE id=? AND tenant_id=?').get(id, tenantId) as any;
+  if (!r) return null;
+  if (r.recurrence_rule) {
+    const nextAt = advanceRecurrence(r.recurrence_rule, r.due_at);
+    if (nextAt && (!r.recurrence_end_ts || nextAt <= r.recurrence_end_ts)) {
+      db.prepare('UPDATE crm_reminders SET due_at=?, snooze_until=NULL, status=?, completed_at=? WHERE id=? AND tenant_id=?')
+        .run(nextAt, 'active', null, id, tenantId);
+      return rowToReminderPro({ ...r, due_at: nextAt, snooze_until: null, status: 'active', completed_at: null });
+    }
+  }
+  db.prepare('UPDATE crm_reminders SET status=?, completed_at=? WHERE id=? AND tenant_id=?')
+    .run('done', Date.now(), id, tenantId);
+  return rowToReminderPro({ ...r, status: 'done', completed_at: Date.now() });
+}
+
+export function logReminderFired(tenantId: string, reminderId: string, channel: string, delivered: boolean, error?: string): void {
+  getCrmDb().prepare('INSERT INTO crm_reminder_history (id, tenant_id, reminder_id, fired_at, channel, delivered, error) VALUES (?,?,?,?,?,?,?)')
+    .run(nid('crm_remh'), tenantId, reminderId, Date.now(), channel, delivered ? 1 : 0, error ?? null);
+}
+
+export function getReminderHistory(tenantId: string, reminderId: string, limit: number = 100): any[] {
+  return getCrmDb().prepare('SELECT * FROM crm_reminder_history WHERE tenant_id=? AND reminder_id=? ORDER BY fired_at DESC LIMIT ?')
+    .all(tenantId, reminderId, Math.min(limit, 500)) as any[];
+}

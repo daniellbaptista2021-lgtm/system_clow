@@ -230,6 +230,50 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 4 applied: +labels/quick-replies/inbox-rules/thread-id');
   }
 
+  // ONDA 5 — Timeline Pro
+  const onda5Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(105);
+  if (!onda5Applied) {
+    const actCols2 = db.prepare("PRAGMA table_info(crm_activities)").all() as any[];
+    const actColNames2 = new Set(actCols2.map((c: any) => c.name));
+    const addActCol2 = (n: string, t: string) => { if (!actColNames2.has(n)) db.exec(`ALTER TABLE crm_activities ADD COLUMN ${n} ${t}`); };
+    addActCol2('duration_seconds', 'INTEGER');
+    addActCol2('call_outcome', 'TEXT');
+    addActCol2('email_subject', 'TEXT');
+    addActCol2('attachments_json', "TEXT DEFAULT '[]'");
+    addActCol2('mentions_json', "TEXT DEFAULT '[]'");
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(105, Date.now());
+    console.log('[crm-migrate] Onda 5 applied: +activity call/email/mentions fields');
+  }
+
+  // ONDA 6 — Lembretes Pro
+  const onda6Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(106);
+  if (!onda6Applied) {
+    const remCols = db.prepare("PRAGMA table_info(crm_reminders)").all() as any[];
+    const remColNames = new Set(remCols.map((c: any) => c.name));
+    const addRemCol = (n: string, t: string) => { if (!remColNames.has(n)) db.exec(`ALTER TABLE crm_reminders ADD COLUMN ${n} ${t}`); };
+    addRemCol('recurrence_rule', 'TEXT');
+    addRemCol('recurrence_end_ts', 'INTEGER');
+    addRemCol('snooze_until', 'INTEGER');
+    addRemCol('channels_json', "TEXT DEFAULT '[\"in_app\"]'");
+    addRemCol('pre_notify_mins', 'INTEGER');
+    addRemCol('status', "TEXT DEFAULT 'active'");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_reminder_history (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        reminder_id TEXT NOT NULL,
+        fired_at INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        delivered INTEGER NOT NULL DEFAULT 1,
+        error TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_remhist_reminder ON crm_reminder_history(reminder_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(106, Date.now());
+    console.log('[crm-migrate] Onda 6 applied: +recurrence/snooze/channels/reminder-history');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

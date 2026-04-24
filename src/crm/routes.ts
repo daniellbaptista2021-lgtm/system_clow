@@ -524,6 +524,58 @@ app.post('/media/process', async (c) => {
 });
 
 
+// ═══ TIMELINE PRO ════════════════════════════════════════════════════════
+app.post('/activities/search', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const filter = (body.filter || {}) as any;
+  const limit = body.limit || 200;
+  const offset = body.offset || 0;
+  return ok(c, { activities: store.listActivitiesFiltered(tenantOf(c), filter, limit, offset) });
+});
+
+app.post('/activities/pro', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.type || !body.content) return badRequest(c, 'type + content required');
+  return ok(c, { activity: store.createActivityPro(tenantOf(c), body) }, 201);
+});
+
+app.post('/activities/:id/mention', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const ids = Array.isArray(body.agent_ids) ? body.agent_ids : [];
+  if (!ids.length) return badRequest(c, 'agent_ids[] required');
+  return store.addMentionsToActivity(tenantOf(c), c.req.param('id'), ids) ? ok(c, { ok: true }) : notFound(c, 'activity');
+});
+
+// ═══ REMINDERS PRO ═══════════════════════════════════════════════════════
+app.post('/reminders/pro', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title || !body.dueAt) return badRequest(c, 'title + dueAt required');
+  return ok(c, { reminder: store.createReminderPro(tenantOf(c), body) }, 201);
+});
+
+app.get('/reminders/pro', (c) => {
+  const agentId = c.req.query('agent_id') || undefined;
+  const status = c.req.query('status') as any || undefined;
+  const dueBefore = c.req.query('due_before') ? parseInt(c.req.query('due_before')!, 10) : undefined;
+  return ok(c, { reminders: store.listRemindersPro(tenantOf(c), { agentId, status, dueBefore }) });
+});
+
+app.post('/reminders/:id/snooze', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const until = body.until_ts || (body.until ? Date.parse(body.until) : null);
+  if (!until) return badRequest(c, 'until_ts or until iso required');
+  const r = store.snoozeReminder(tenantOf(c), c.req.param('id'), until);
+  return r ? ok(c, { reminder: r }) : notFound(c, 'reminder');
+});
+
+app.post('/reminders/:id/done', (c) => {
+  const r = store.completeReminderPro(tenantOf(c), c.req.param('id'));
+  return r ? ok(c, { reminder: r }) : notFound(c, 'reminder');
+});
+
+app.get('/reminders/:id/history', (c) =>
+  ok(c, { history: store.getReminderHistory(tenantOf(c), c.req.param('id')) }));
+
 // ═══ TEAMS + AGENTS PRO + SLA ═══════════════════════════════════════════
 app.post('/teams', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
