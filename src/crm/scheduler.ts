@@ -16,6 +16,7 @@ import { rotateMonthlyAllTenants } from '../billing/quotaGuard.js';
 import * as reportsScheduler from './reportsScheduler.js';
 import * as emailMarketing from './emailMarketing.js';
 import * as tasks from './tasks.js';
+import * as cal from './calendar.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -71,6 +72,7 @@ async function tick(): Promise<void> {
           await emailMarketing.tick(process.env.PUBLIC_BASE_URL || '');
           await emailMarketing.tickSequences(process.env.PUBLIC_BASE_URL || '');
           await tasks.tickAlerts();
+          await cal.tickReminders();
         } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
       })(),
     ]);

@@ -808,6 +808,87 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 19 applied: tasks (typed + priority + recurrence + alerts)');
   }
 
+  // ONDA 20 — Calendar / Scheduling
+  const onda20Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(120);
+  if (!onda20Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_meta (
+        tenant_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT,
+        updated_at INTEGER,
+        PRIMARY KEY (tenant_id, key)
+      );
+
+      CREATE TABLE IF NOT EXISTS crm_appointments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        starts_at INTEGER NOT NULL,
+        ends_at INTEGER NOT NULL,
+        timezone TEXT DEFAULT 'America/Sao_Paulo',
+        agent_id TEXT,
+        contact_id TEXT REFERENCES crm_contacts(id) ON DELETE SET NULL,
+        card_id TEXT REFERENCES crm_cards(id) ON DELETE SET NULL,
+        status TEXT NOT NULL DEFAULT 'scheduled',
+        meeting_url TEXT,
+        location TEXT,
+        reminder_minutes INTEGER DEFAULT 30,
+        reminder_fired_at INTEGER,
+        ics_uid TEXT NOT NULL,
+        external_provider TEXT,
+        external_event_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_appt_tenant_start ON crm_appointments(tenant_id, starts_at);
+      CREATE INDEX IF NOT EXISTS idx_appt_agent ON crm_appointments(agent_id, starts_at);
+      CREATE INDEX IF NOT EXISTS idx_appt_contact ON crm_appointments(contact_id);
+      CREATE INDEX IF NOT EXISTS idx_appt_reminder ON crm_appointments(starts_at, reminder_fired_at) WHERE reminder_fired_at IS NULL AND reminder_minutes IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS crm_scheduling_links (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        agent_id TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        duration_minutes INTEGER NOT NULL DEFAULT 30,
+        buffer_before_minutes INTEGER NOT NULL DEFAULT 0,
+        buffer_after_minutes INTEGER NOT NULL DEFAULT 0,
+        availability_json TEXT NOT NULL DEFAULT '{"weekdays":{}}',
+        timezone TEXT DEFAULT 'America/Sao_Paulo',
+        advance_notice_hours INTEGER NOT NULL DEFAULT 1,
+        max_days_ahead INTEGER NOT NULL DEFAULT 30,
+        require_email INTEGER NOT NULL DEFAULT 1,
+        require_phone INTEGER NOT NULL DEFAULT 0,
+        require_name INTEGER NOT NULL DEFAULT 1,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        total_bookings INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_slinks_tenant ON crm_scheduling_links(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_calendar_integrations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        agent_id TEXT,
+        provider TEXT NOT NULL,
+        access_token TEXT,
+        refresh_token TEXT,
+        calendar_id TEXT,
+        sync_direction TEXT DEFAULT 'both',
+        last_sync_at INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_calint_tenant ON crm_calendar_integrations(tenant_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(120, Date.now());
+    console.log('[crm-migrate] Onda 20 applied: calendar + appointments + scheduling links + integrations');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

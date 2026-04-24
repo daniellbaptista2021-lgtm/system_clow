@@ -27,6 +27,7 @@ import * as proposalsMod from './proposals.js';
 import * as em from './emailMarketing.js';
 import * as forms from './forms.js';
 import * as tasksMod from './tasks.js';
+import * as cal from './calendar.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -1535,6 +1536,93 @@ app.get('/cards/:id/tasks', (c) => {
 app.get('/contacts/:id/tasks', (c) => {
   const tid = tenantOf(c);
   return ok(c, { tasks: tasksMod.listTasks(tid, { ...parseTaskOpts(c), contactId: c.req.param('id'), status: 'all' }) });
+});
+
+// ═══ CALENDAR (Onda 20) ════════════════════════════════════════════════
+app.get('/appointments', (c) => {
+  const tid = tenantOf(c);
+  const opts: any = {};
+  const from = c.req.query('from'); const to = c.req.query('to');
+  if (from && /^\d+$/.test(from)) opts.from = Number(from);
+  if (to && /^\d+$/.test(to)) opts.to = Number(to);
+  if (c.req.query('agentId')) opts.agentId = c.req.query('agentId');
+  if (c.req.query('contactId')) opts.contactId = c.req.query('contactId');
+  if (c.req.query('cardId')) opts.cardId = c.req.query('cardId');
+  if (c.req.query('status')) opts.status = c.req.query('status');
+  return ok(c, { appointments: cal.listAppointments(tid, opts) });
+});
+
+app.post('/appointments', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title || !body.startsAt || !body.endsAt) return badRequest(c, 'title, startsAt, endsAt required');
+  if (body.endsAt <= body.startsAt) return badRequest(c, 'endsAt must be after startsAt');
+  return ok(c, { appointment: cal.createAppointment(tid, body) }, 201);
+});
+
+app.get('/appointments/:id', (c) => {
+  const a = cal.getAppointment(tenantOf(c), c.req.param('id'));
+  return a ? ok(c, { appointment: a }) : notFound(c, 'appointment');
+});
+
+app.patch('/appointments/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const a = cal.updateAppointment(tid, c.req.param('id'), body);
+  return a ? ok(c, { appointment: a }) : notFound(c, 'appointment');
+});
+
+app.delete('/appointments/:id', (c) => {
+  return cal.deleteAppointment(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'appointment');
+});
+
+// ICS feed URL (permission grant to sub to calendar app)
+app.get('/calendar/ics-url', (c) => {
+  const tid = tenantOf(c);
+  const tok = cal.ensureIcsToken(tid);
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return ok(c, { url: `${proto}://${host}/p/cal/${tok}.ics`, token: tok });
+});
+
+// Scheduling links (Calendly-style)
+app.get('/scheduling-links', (c) => ok(c, { links: cal.listSchedulingLinks(tenantOf(c)) }));
+
+app.post('/scheduling-links', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title || !body.availability || !body.durationMinutes) return badRequest(c, 'title, availability, durationMinutes required');
+  return ok(c, { link: cal.createSchedulingLink(tid, body) }, 201);
+});
+
+app.get('/scheduling-links/:id', (c) => {
+  const l = cal.getSchedulingLink(tenantOf(c), c.req.param('id'));
+  return l ? ok(c, { link: l }) : notFound(c, 'link');
+});
+
+app.patch('/scheduling-links/:id', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const l = cal.updateSchedulingLink(tid, c.req.param('id'), body);
+  return l ? ok(c, { link: l }) : notFound(c, 'link');
+});
+
+app.delete('/scheduling-links/:id', (c) => {
+  return cal.deleteSchedulingLink(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'link');
+});
+
+// Calendar integrations (Google/Outlook/CalDAV tokens)
+app.get('/calendar-integrations', (c) => ok(c, { integrations: cal.listIntegrations(tenantOf(c)) }));
+
+app.post('/calendar-integrations', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.provider || !['google','outlook','caldav','ics'].includes(body.provider)) return badRequest(c, 'invalid provider');
+  return ok(c, { integration: cal.createIntegration(tid, body) }, 201);
+});
+
+app.delete('/calendar-integrations/:id', (c) => {
+  return cal.deleteIntegration(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'integration');
 });
 
 app.post('/proposal-templates', async (c) => {

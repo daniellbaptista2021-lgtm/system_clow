@@ -15,6 +15,8 @@ import * as store from './store.js';
 import { buildContext, renderHTML, renderPDF, recordEvent, onAccept } from './proposals.js';
 import * as em from './emailMarketing.js';
 import * as forms from './forms.js';
+import * as cal from './calendar.js';
+import { buildBookingHTML } from './bookingPage.js';
 import { buildEmbedJS, buildHostedFormHTML } from './embedTemplate.js';
 
 const app = new Hono();
@@ -174,6 +176,52 @@ app.post('/hooks/:hookKey', async (c) => {
   try { payload = JSON.parse(rawBody); } catch { payload = {}; }
   const r = forms.processWebhookPayload(hook, payload, { ip: clientIp(c), ua: c.req.header('user-agent') });
   return c.json(r);
+});
+
+
+
+// ─── Public booking pages + ICS feed ────────────────────────────────────
+app.get('/book/:slug', (c) => {
+  const link = cal.getSchedulingLinkBySlug(c.req.param('slug'));
+  if (!link || !link.enabled) return c.text('Link de agendamento não encontrado', 404);
+  const proto = c.req.header('x-forwarded-proto') || 'https';
+  const host = c.req.header('host') || 'localhost';
+  return c.html(buildBookingHTML(link, `${proto}://${host}`));
+});
+
+app.get('/book/:slug/slots', (c) => {
+  const link = cal.getSchedulingLinkBySlug(c.req.param('slug'));
+  if (!link || !link.enabled) return c.json({ error: 'not_found' }, 404);
+  const from = Number(c.req.query('from') || Date.now());
+  const to = Number(c.req.query('to') || (Date.now() + 30 * 86400_000));
+  const slots = cal.computeAvailability(link, from, to);
+  return c.json({ slots });
+});
+
+app.post('/book/:slug/book', async (c) => {
+  const link = cal.getSchedulingLinkBySlug(c.req.param('slug'));
+  if (!link || !link.enabled) return c.json({ ok: false, error: 'not_found' }, 404);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.startsAt) return c.json({ ok: false, error: 'startsAt required' }, 400);
+  const r = cal.bookViaLink(link, body);
+  return c.json(r);
+});
+
+// ICS feed — subscribable via calendar apps
+app.get('/cal/:tokenPath', (c) => {
+  const raw = c.req.param('tokenPath');
+  const token = raw.endsWith('.ics') ? raw.slice(0, -4) : raw;
+  const tid = cal.findTenantByIcsToken(token);
+  if (!tid) return c.text('not found', 404);
+  const now = Date.now();
+  const appts = cal.listAppointments(tid, { from: now - 30 * 86400_000, to: now + 365 * 86400_000 });
+  return new Response(cal.renderICS(appts), {
+    status: 200,
+    headers: {
+      'content-type': 'text/calendar; charset=utf-8',
+      'content-disposition': `inline; filename="clow-${token.slice(0, 8)}.ics"`,
+    },
+  });
 });
 
 
