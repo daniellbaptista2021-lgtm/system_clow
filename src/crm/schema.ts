@@ -557,6 +557,36 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 12 applied: channel templates + health + metrics');
   }
 
+  // ONDA 14 — Reports & Dashboards (lost_reason + scheduled reports)
+  const onda14Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(114);
+  if (!onda14Applied) {
+    const cardCols = db.prepare("PRAGMA table_info(crm_cards)").all() as any[];
+    const cardColNames = new Set(cardCols.map((c: any) => c.name));
+    if (!cardColNames.has('lost_reason'))  db.exec("ALTER TABLE crm_cards ADD COLUMN lost_reason TEXT");
+    if (!cardColNames.has('won_reason'))   db.exec("ALTER TABLE crm_cards ADD COLUMN won_reason TEXT");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_scheduled_reports (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,           -- sales | agents | sources | lost-reasons
+        interval TEXT NOT NULL,       -- daily | weekly | monthly
+        format TEXT NOT NULL DEFAULT 'pdf',  -- pdf | csv
+        email_to TEXT NOT NULL,
+        board_id TEXT,
+        next_run_at INTEGER NOT NULL,
+        last_run_at INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_sched_reports_next ON crm_scheduled_reports(next_run_at) WHERE enabled = 1;
+      CREATE INDEX IF NOT EXISTS idx_sched_reports_tenant ON crm_scheduled_reports(tenant_id);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(114, Date.now());
+    console.log('[crm-migrate] Onda 14 applied: lost_reason + scheduled reports');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

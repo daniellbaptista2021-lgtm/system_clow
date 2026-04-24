@@ -13,6 +13,7 @@ import * as store from './store.js';
 import * as automations from './automations.js';
 import { processBillingTick } from './billing.js';
 import { rotateMonthlyAllTenants } from '../billing/quotaGuard.js';
+import * as reportsScheduler from './reportsScheduler.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -61,6 +62,7 @@ async function tick(): Promise<void> {
       detectStaleCards(),
       detectDueApproaching(),
       processBillingTick(),
+      reportsScheduler.tick(),
     ]);
     maybeRotateMonthly();
   } catch (e: any) {

@@ -9,11 +9,18 @@
  * Fallback: if none configured, logs the email body (dev mode) — never throws.
  */
 
+interface EmailAttachment {
+  filename: string;
+  content: Buffer | string;
+  contentType?: string;
+}
+
 interface EmailInput {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
 }
 
 const FROM_NAME = process.env.MAILER_FROM_NAME || 'System Clow';
@@ -91,6 +98,11 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
         to: input.to,
         subject: input.subject,
         text, html: input.html,
+        attachments: input.attachments?.map(a => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+        })),
       });
       return { ok: true, id: info.messageId };
     } catch (err: any) { return { ok: false, error: err.message }; }

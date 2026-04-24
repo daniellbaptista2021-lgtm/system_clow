@@ -20,6 +20,9 @@ import { markPaid } from './billing.js';
 import * as assignment from './assignment.js';
 import * as lineItems from './lineItems.js';
 import * as analytics from './analytics.js';
+import * as reports from './reports.js';
+import { getCrmDb } from './schema.js';
+import { toCSV, toPDF, type ReportKind } from './reportsExport.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -169,6 +172,144 @@ app.get('/boards/:boardId/analytics/compare', (c) => {
   return ok(c, { boardId, ...analytics.compare(tid, boardId, cur, prv) });
 });
 
+// ═══ REPORTS (Reports & Dashboards — Onda 14) ═════════════════════════
+function parseWin2(c: any): { from?: number; to?: number } {
+  const from = c.req.query('from');
+  const to   = c.req.query('to');
+  const w: { from?: number; to?: number } = {};
+  if (from && /^\d+$/.test(from)) w.from = Number(from);
+  if (to   && /^\d+$/.test(to))   w.to   = Number(to);
+  return w;
+}
+
+async function deliverReport(c: any, kind: ReportKind, rows: any[], title: string): Promise<Response> {
+  const fmt = (c.req.query('format') || 'json').toLowerCase();
+  if (fmt === 'csv') {
+    const csv = toCSV(kind, rows);
+    return new Response(csv, {
+      status: 200,
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${kind}-${Date.now()}.csv"`,
+      },
+    });
+  }
+  if (fmt === 'pdf') {
+    const pdf = await toPDF(kind, rows, { title });
+    return new Response(new Uint8Array(pdf), {
+      status: 200,
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': `attachment; filename="${kind}-${Date.now()}.pdf"`,
+      },
+    });
+  }
+  return ok(c, { kind, rows, count: rows.length });
+}
+
+app.get('/reports/sales', async (c) => {
+  const tid = tenantOf(c);
+  const win = parseWin2(c);
+  const bucket = (c.req.query('bucket') || 'day') as any;
+  if (!['day', 'week', 'month'].includes(bucket)) return badRequest(c, 'bucket must be day|week|month');
+  const rows = reports.salesByPeriod(tid, { ...win, bucket, boardId: c.req.query('boardId') || undefined });
+  return deliverReport(c, 'sales', rows, 'Relatório de Vendas');
+});
+
+app.get('/reports/agent-activities', async (c) => {
+  const tid = tenantOf(c);
+  const rows = reports.activitiesByAgent(tid, parseWin2(c));
+  return deliverReport(c, 'agents', rows, 'Atividades por Agente');
+});
+
+app.get('/reports/lead-sources', async (c) => {
+  const tid = tenantOf(c);
+  const rows = reports.leadSources(tid, parseWin2(c));
+  return deliverReport(c, 'sources', rows, 'Origem de Leads');
+});
+
+app.get('/reports/lost-reasons', async (c) => {
+  const tid = tenantOf(c);
+  const rows = reports.lostReasons(tid, c.req.query('boardId') || undefined, parseWin2(c));
+  return deliverReport(c, 'lost-reasons', rows, 'Razões de Perda');
+});
+
+// ─── Scheduled reports CRUD ─────────────────────────────────────────────
+app.get('/scheduled-reports', (c) => {
+  const tid = tenantOf(c);
+  const rows = getCrmDb().prepare(
+    'SELECT * FROM crm_scheduled_reports WHERE tenant_id = ? ORDER BY created_at DESC'
+  ).all(tid);
+  return ok(c, { scheduledReports: rows });
+});
+
+app.post('/scheduled-reports', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const name = String(body.name || '').trim();
+  const kind = String(body.kind || '');
+  const interval = String(body.interval || '');
+  const format = String(body.format || 'pdf');
+  const email = String(body.emailTo || '').trim();
+  if (!name) return badRequest(c, 'name required');
+  if (!['sales', 'agents', 'sources', 'lost-reasons'].includes(kind)) return badRequest(c, 'invalid kind');
+  if (!['daily', 'weekly', 'monthly'].includes(interval)) return badRequest(c, 'invalid interval');
+  if (!['pdf', 'csv'].includes(format)) return badRequest(c, 'format must be pdf or csv');
+  if (!email || !email.includes('@')) return badRequest(c, 'valid emailTo required');
+
+  const id = 'crm_sched_' + Math.random().toString(36).slice(2, 14);
+  const next = computeFirstRunAt(interval);
+  getCrmDb().prepare(`
+    INSERT INTO crm_scheduled_reports (id, tenant_id, name, kind, interval, format, email_to, board_id, next_run_at, enabled, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(id, tid, name, kind, interval, format, email, body.boardId || null, next, Date.now());
+  return ok(c, { id, nextRunAt: next }, 201);
+});
+
+app.patch('/scheduled-reports/:id', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const sets: string[] = [];
+  const params: any[] = [];
+  for (const [k, col] of [['name','name'],['emailTo','email_to'],['enabled','enabled'],['interval','interval'],['format','format']]) {
+    if (body[k] !== undefined) { sets.push(`${col} = ?`); params.push(body[k]); }
+  }
+  if (sets.length === 0) return badRequest(c, 'no fields to update');
+  params.push(id, tid);
+  const r = getCrmDb().prepare(`UPDATE crm_scheduled_reports SET ${sets.join(', ')} WHERE id = ? AND tenant_id = ?`).run(...params);
+  return r.changes > 0 ? ok(c, { ok: true }) : notFound(c, 'schedule');
+});
+
+app.delete('/scheduled-reports/:id', (c) => {
+  const tid = tenantOf(c);
+  const r = getCrmDb().prepare('DELETE FROM crm_scheduled_reports WHERE id = ? AND tenant_id = ?').run(c.req.param('id'), tid);
+  return r.changes > 0 ? c.body(null, 204) : notFound(c, 'schedule');
+});
+
+app.post('/scheduled-reports/:id/run', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const row = getCrmDb().prepare('SELECT * FROM crm_scheduled_reports WHERE id = ? AND tenant_id = ?').get(id, tid) as any;
+  if (!row) return notFound(c, 'schedule');
+  // Force next_run_at = now so next scheduler tick picks it up. Or call directly?
+  // Call directly for immediate feedback.
+  const { tick: runReports } = await import('./reportsScheduler.js');
+  getCrmDb().prepare('UPDATE crm_scheduled_reports SET next_run_at = ? WHERE id = ?').run(Date.now() - 1, id);
+  await runReports();
+  return ok(c, { ok: true, triggered: id });
+});
+
+function computeFirstRunAt(interval: string): number {
+  const d = new Date();
+  // Schedule first run at 08:00 UTC next day/week/month
+  d.setUTCHours(8, 0, 0, 0);
+  if (interval === 'daily')   d.setUTCDate(d.getUTCDate() + 1);
+  if (interval === 'weekly')  d.setUTCDate(d.getUTCDate() + 7);
+  if (interval === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.getTime();
+}
+
 app.get('/boards/:boardId/columns', (c) => {
   return ok(c, { columns: store.listColumns(tenantOf(c), c.req.param('boardId')) });
 });
@@ -232,6 +373,36 @@ app.post('/cards/:id/move', async (c) => {
   if (!wip.allowed) return c.json({ error: 'wip_limit_reached', message: 'Coluna cheia (' + wip.current + '/' + wip.limit + '). Aumente o WIP ou mova outro card antes.', current: wip.current, limit: wip.limit }, 409);
   const moved = store.moveCard(tenantOf(c), c.req.param('id'), body.toColumnId, body.position);
   return moved ? ok(c, { card: moved }) : notFound(c, 'card');
+});
+
+app.post('/cards/:id/lose', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const reason = String(body.reason || '').trim() || 'unknown';
+  const toColumnId = body.toColumnId as string | undefined;
+  const db = getCrmDb();
+  const card = db.prepare('SELECT id FROM crm_cards WHERE id = ? AND tenant_id = ?').get(id, tid);
+  if (!card) return notFound(c, 'card');
+  db.prepare('UPDATE crm_cards SET lost_reason = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
+    .run(reason, Date.now(), id, tid);
+  if (toColumnId) store.moveCard(tid, id, toColumnId);
+  return ok(c, { ok: true, cardId: id, reason });
+});
+
+app.post('/cards/:id/win', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const reason = String(body.reason || '').trim() || null;
+  const toColumnId = body.toColumnId as string | undefined;
+  const db = getCrmDb();
+  const card = db.prepare('SELECT id FROM crm_cards WHERE id = ? AND tenant_id = ?').get(id, tid);
+  if (!card) return notFound(c, 'card');
+  db.prepare('UPDATE crm_cards SET won_reason = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
+    .run(reason, Date.now(), id, tid);
+  if (toColumnId) store.moveCard(tid, id, toColumnId);
+  return ok(c, { ok: true, cardId: id, reason });
 });
 
 app.delete('/cards/:id', (c) => {
