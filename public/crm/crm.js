@@ -1173,7 +1173,316 @@ async function showView(viewName) {
   else if (viewName === 'agents') { await loadAgents(); renderAgentsList(); }
   else if (viewName === 'inventory') { await loadInventory(); renderInventoryList(); }
   else if (viewName === 'stats') renderStats();
+  else if (viewName === 'tasks') { await renderTasksView(); }
+  else if (viewName === 'agenda') { await renderAgendaView(); }
+  else if (viewName === 'documents') { await renderDocumentsView(); }
+  else if (viewName === 'forms') { await renderFormsView(); }
+  else if (viewName === 'campaigns') { await renderCampaignsView(); }
 }
+
+// ═══ ONDA 35: NEW VIEWS ═══════════════════════════════════════════════
+
+// ─── TAREFAS ────────────────────────────────────────────────────────────
+async function renderTasksView() {
+  try {
+    // Carregar stats
+    const stats = await api('/tasks/stats');
+    const s = stats.stats;
+    const statsEl = $('#tasksStats');
+    if (statsEl) {
+      statsEl.innerHTML = '';
+      for (const [label, val, color] of [
+        ['Abertas', s.open, 'var(--blue)'],
+        ['Atrasadas', s.overdue, '#EF4444'],
+        ['Hoje', s.dueToday, 'var(--amber)'],
+        ['Esta semana', s.dueThisWeek, 'var(--purple)'],
+        ['Concluídas 7d', s.completedLast7d, 'var(--green)'],
+      ]) {
+        statsEl.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:12px',
+        },
+          el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, label),
+          el('div', { style: `font-size:22px;font-weight:700;color:${color}` }, String(val)),
+        ));
+      }
+    }
+
+    const view = $('#tasksFilterView')?.value || 'all';
+    const priority = $('#tasksFilterPriority')?.value || '';
+    const q = [];
+    if (view === 'overdue') q.push('view=overdue');
+    else if (view === 'upcoming') q.push('view=upcoming');
+    else if (view === 'completed') q.push('status=completed');
+    if (priority) q.push('priority=' + priority);
+
+    const data = await api('/tasks' + (q.length ? '?' + q.join('&') : ''));
+    const l = $('#tasksList');
+    l.innerHTML = '';
+    if (!data.tasks || data.tasks.length === 0) {
+      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhuma tarefa'));
+      return;
+    }
+    for (const t of data.tasks) {
+      const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#F59E0B', low: '#64748B' }[t.priority] || '#64748B';
+      const typeIcon = { call: '📞', email: '✉️', meeting: '👥', followup: '🔄', other: '📌' }[t.type] || '📌';
+      const dueStr = t.dueAt ? new Date(t.dueAt).toLocaleString('pt-BR') : 'Sem prazo';
+      const overdue = t.dueAt && t.dueAt < Date.now() && t.status === 'open';
+      const row = el('div', {
+        style: `background:var(--bg-2);border:1px solid var(--border);border-left:4px solid ${priorityColor};border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center` + (t.status === 'completed' ? ';opacity:.5' : ''),
+      },
+        el('div', { style: 'font-size:22px' }, typeIcon),
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600;margin-bottom:2px' + (t.status === 'completed' ? ';text-decoration:line-through' : '') }, t.title),
+          el('div', { style: 'font-size:12px;color:var(--text-dim)' },
+            `${t.priority} • ${t.type} • ${dueStr}` + (overdue ? ' ⚠️ ATRASADA' : '')),
+        ),
+        t.status === 'open' ? el('button', {
+          style: 'background:var(--green);color:#fff;border:0;padding:6px 14px;border-radius:6px;cursor:pointer',
+          on: { click: async () => {
+            await api(`/tasks/${t.id}/complete`, { method: 'POST', body: {} });
+            renderTasksView();
+          } },
+        }, '✓ Concluir') : null,
+      );
+      l.append(row);
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function openNewTaskModal() {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const form = el('form', { class: 'modal-form', on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    try {
+      const due = fd.get('dueAt') ? new Date(fd.get('dueAt')).getTime() : null;
+      await api('/tasks', { method: 'POST', body: {
+        title: fd.get('title'),
+        type: fd.get('type'),
+        priority: fd.get('priority'),
+        dueAt: due,
+        description: fd.get('description'),
+        alertMinutesBefore: fd.get('alert') ? Number(fd.get('alert')) : null,
+      } });
+      backdrop.remove();
+      renderTasksView();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.innerHTML = `
+    <h3 style="margin:0 0 16px;color:var(--purple)">Nova Tarefa</h3>
+    <label>Título *</label><input name="title" required style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:10px">
+    <label>Tipo</label>
+    <select name="type" style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:10px">
+      <option value="other">Outro</option><option value="call">Ligação</option><option value="email">Email</option>
+      <option value="meeting">Reunião</option><option value="followup">Follow-up</option>
+    </select>
+    <label>Prioridade</label>
+    <select name="priority" style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:10px">
+      <option value="med">Média</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="low">Baixa</option>
+    </select>
+    <label>Prazo</label><input type="datetime-local" name="dueAt" style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:10px">
+    <label>Alerta (min antes)</label><input type="number" name="alert" placeholder="30" style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:10px">
+    <label>Descrição</label><textarea name="description" rows="3" style="width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:14px"></textarea>
+    <button type="submit" style="width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer">Criar</button>
+  `;
+  backdrop.append(form);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
+// ─── AGENDA ─────────────────────────────────────────────────────────────
+async function renderAgendaView() {
+  try {
+    const from = Date.now();
+    const to = from + 30 * 86400000;
+    const data = await api(`/appointments?from=${from}&to=${to}`);
+    const container = $('#agendaUpcoming');
+    container.innerHTML = '';
+    if (!data.appointments || data.appointments.length === 0) {
+      container.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhum compromisso nos próximos 30 dias'));
+      return;
+    }
+    for (const a of data.appointments) {
+      const when = new Date(a.startsAt);
+      const row = el('div', {
+        style: 'background:var(--bg-2);border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:16px;margin-bottom:10px',
+      },
+        el('div', { style: 'display:flex;gap:16px;align-items:flex-start' },
+          el('div', { style: 'text-align:center;background:var(--purple);color:#fff;padding:10px 14px;border-radius:8px;min-width:70px' },
+            el('div', { style: 'font-size:11px;text-transform:uppercase;opacity:.8' }, when.toLocaleDateString('pt-BR', { month: 'short' })),
+            el('div', { style: 'font-size:24px;font-weight:700' }, String(when.getDate())),
+            el('div', { style: 'font-size:11px;opacity:.8' }, when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })),
+          ),
+          el('div', { style: 'flex:1' },
+            el('div', { style: 'font-weight:600;font-size:16px;margin-bottom:4px' }, a.title),
+            a.description ? el('div', { style: 'color:var(--text-dim);font-size:13px;margin-bottom:6px' }, a.description) : null,
+            el('div', { style: 'font-size:12px;color:var(--text-dim)' },
+              `Status: ${a.status}` + (a.meetingUrl ? ` • ` : ''),
+              a.meetingUrl ? el('a', { href: a.meetingUrl, target: '_blank', style: 'color:var(--purple)' }, 'Link da reunião') : null,
+            ),
+          ),
+        ),
+      );
+      container.append(row);
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ─── DOCUMENTOS ─────────────────────────────────────────────────────────
+async function renderDocumentsView() {
+  try {
+    const status = $('#docsFilterStatus')?.value;
+    const data = await api('/documents' + (status ? '?status=' + status : ''));
+    const l = $('#documentsList');
+    l.innerHTML = '';
+    if (!data.documents || data.documents.length === 0) {
+      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhum documento. Crie um template e gere seu primeiro documento.'));
+      return;
+    }
+    for (const d of data.documents) {
+      const statusColor = { draft: '#64748B', sent: '#3B82F6', viewed: '#F59E0B', signed: '#10B981', cancelled: '#EF4444' }[d.status] || '#64748B';
+      const row = el('div', {
+        style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center',
+      },
+        el('div', { style: `background:${statusColor}20;color:${statusColor};padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase` }, d.status),
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600' }, d.title + ' v' + d.version),
+          el('div', { style: 'font-size:12px;color:var(--text-dim)' },
+            `${d.viewedCount || 0} views • ${new Date(d.createdAt).toLocaleDateString('pt-BR')}` +
+            (d.signedAt ? ` • Assinado por ${d.signedBy}` : '')),
+        ),
+        el('button', {
+          style: 'background:var(--bg-1);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
+          on: { click: async () => {
+            const r = await api(`/documents/${d.id}/public-link`);
+            await navigator.clipboard?.writeText(r.url);
+            toast('Link copiado: ' + r.url, 'success');
+          } },
+        }, '🔗 Link'),
+        el('button', {
+          style: 'background:var(--purple);color:#fff;border:0;padding:6px 12px;border-radius:6px;cursor:pointer',
+          on: { click: () => window.open(`/v1/crm/documents/${d.id}/pdf`, '_blank') },
+        }, 'PDF'),
+      );
+      l.append(row);
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ─── FORMULÁRIOS ────────────────────────────────────────────────────────
+async function renderFormsView() {
+  try {
+    const formsData = await api('/forms');
+    const hooksData = await api('/webhooks');
+    const l = $('#formsList');
+    l.innerHTML = '';
+
+    // Section: Forms
+    l.append(el('h3', { style: 'margin:0 0 12px;color:var(--text)' }, 'Formulários'));
+    if (!formsData.forms || formsData.forms.length === 0) {
+      l.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim);background:var(--bg-2);border-radius:8px;margin-bottom:20px' }, 'Nenhum formulário. Crie um e receba leads via landing page ou embed.'));
+    } else {
+      for (const f of formsData.forms) {
+        const origin = location.origin;
+        const embedUrl = `${origin}/p/forms/${f.slug}/embed.js`;
+        const hostedUrl = `${origin}/p/forms/${f.slug}`;
+        const row = el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px',
+        },
+          el('div', { style: 'display:flex;gap:14px;align-items:center;margin-bottom:8px' },
+            el('div', { style: 'flex:1' },
+              el('div', { style: 'font-weight:600' }, f.name),
+              el('div', { style: 'font-size:12px;color:var(--text-dim)' },
+                `${f.totalSubmissions || 0} submissões • slug: ${f.slug}`),
+            ),
+            el('button', {
+              style: 'background:var(--bg-1);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
+              on: { click: () => window.open(hostedUrl, '_blank') },
+            }, '🔗 Abrir'),
+            el('button', {
+              style: 'background:var(--purple);color:#fff;border:0;padding:6px 12px;border-radius:6px;cursor:pointer',
+              on: { click: async () => {
+                const snippet = `<script src="${embedUrl}" data-target="#clow-form"><\/script>`;
+                await navigator.clipboard?.writeText(snippet);
+                toast('Snippet copiado', 'success');
+              } },
+            }, '📋 Embed'),
+          ),
+          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-1);padding:4px 8px;border-radius:4px;display:block;word-break:break-all' },
+            `<script src="${embedUrl}" data-target="#clow-form"><\/script>`),
+        );
+        l.append(row);
+      }
+    }
+
+    // Section: Webhooks inbound
+    l.append(el('h3', { style: 'margin:24px 0 12px;color:var(--text)' }, 'Webhooks (Zapier / Make / n8n)'));
+    if (!hooksData.webhooks || hooksData.webhooks.length === 0) {
+      l.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim);background:var(--bg-2);border-radius:8px' }, 'Nenhum webhook. Crie um para receber leads via integrações.'));
+    } else {
+      for (const h of hooksData.webhooks) {
+        const hookUrl = `${location.origin}/p/hooks/${h.hookKey}`;
+        l.append(el('div', {
+          style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px',
+        },
+          el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px' },
+            el('div', { style: 'font-weight:600' }, h.name),
+            el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${h.enabled ? '#10B98120' : '#64748B20'};color:${h.enabled ? '#10B981' : '#64748B'}` }, h.enabled ? 'ATIVO' : 'INATIVO'),
+          ),
+          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-1);padding:6px 10px;border-radius:4px;display:block;word-break:break-all' }, hookUrl),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:6px' }, `${h.totalReceived || 0} recebidos`),
+        ));
+      }
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ─── CAMPANHAS ──────────────────────────────────────────────────────────
+async function renderCampaignsView() {
+  try {
+    const data = await api('/campaigns');
+    const l = $('#campaignsList');
+    l.innerHTML = '';
+    if (!data.campaigns || data.campaigns.length === 0) {
+      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhuma campanha criada'));
+      return;
+    }
+    for (const c of data.campaigns) {
+      const statusColor = { draft: '#64748B', scheduled: '#F59E0B', sending: '#3B82F6', sent: '#10B981', paused: '#F97316' }[c.status] || '#64748B';
+      const openRate = c.stats_sent > 0 ? ((c.stats_opened / c.stats_sent) * 100).toFixed(1) + '%' : '—';
+      const clickRate = c.stats_sent > 0 ? ((c.stats_clicked / c.stats_sent) * 100).toFixed(1) + '%' : '—';
+      l.append(el('div', {
+        style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px',
+      },
+        el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px' },
+          el('div', {},
+            el('div', { style: 'font-weight:600' }, c.name),
+            el('div', { style: 'font-size:12px;color:var(--text-dim)' }, c.subject),
+          ),
+          el('span', { style: `padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600;background:${statusColor}20;color:${statusColor};text-transform:uppercase` }, c.status),
+        ),
+        el('div', { style: 'display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-size:12px' },
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Enviados'), el('div', { style: 'font-weight:600;font-size:16px' }, String(c.stats_sent || 0))),
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Abertos'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--green)' }, `${c.stats_opened || 0} (${openRate})`)),
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Cliques'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--blue)' }, `${c.stats_clicked || 0} (${clickRate})`)),
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Bounced'), el('div', { style: 'font-weight:600;font-size:16px;color:#EF4444' }, String(c.stats_bounced || 0))),
+        ),
+      ));
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// Wire filtros de tarefas
+function wireTaskFilters() {
+  $('#tasksFilterView')?.addEventListener('change', renderTasksView);
+  $('#tasksFilterPriority')?.addEventListener('change', renderTasksView);
+  $('#newTaskBtn')?.addEventListener('click', openNewTaskModal);
+  $('#docsFilterStatus')?.addEventListener('change', renderDocumentsView);
+}
+
+// Registro ao carregar
+document.addEventListener('DOMContentLoaded', wireTaskFilters);
+if (document.readyState !== 'loading') wireTaskFilters();
 
 function renderContactsList() {
   const l = $('#contactsList');

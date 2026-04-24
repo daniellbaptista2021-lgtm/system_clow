@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>CRM Clow</title>
 <link rel="icon" href="/assets/favicon-gold.png">
-<link rel="stylesheet" href="/crm/crm.css">
+<link rel="stylesheet" href="/crm/crm.css?v=35">
 </head>
 <body>
 
@@ -41,6 +41,11 @@
       <button class="nav-item" data-view="agents"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="nav-label">Equipe</span></button>
       <button class="nav-item" data-view="inventory"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span><span class="nav-label">Produtos</span></button>
       <button class="nav-item" data-view="stats"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span><span class="nav-label">Relatórios</span></button>
+      <button class="nav-item" data-view="tasks"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="nav-label">Tarefas</span></button>
+      <button class="nav-item" data-view="agenda"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><span class="nav-label">Agenda</span></button>
+      <button class="nav-item" data-view="documents"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="nav-label">Documentos</span></button>
+      <button class="nav-item" data-view="forms"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span><span class="nav-label">Formulários</span></button>
+      <button class="nav-item" data-view="campaigns"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span class="nav-label">Campanhas</span></button>
     </nav>
     <div class="sidebar-foot">
       <div class="tenant-info">
@@ -160,6 +165,91 @@
         </div>
       </div>
     </div>
+    <!-- ONDA 35: NEW VIEWS ════════════════════════════════════════════ -->
+
+    <!-- TASKS VIEW -->
+    <div class="view" data-view="tasks" id="tasksView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Tarefas</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex;align-items:center">
+          <select id="tasksFilterView" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px">
+            <option value="all">Todas</option>
+            <option value="overdue">Atrasadas</option>
+            <option value="upcoming">Próximos 7 dias</option>
+            <option value="completed">Concluídas</option>
+          </select>
+          <select id="tasksFilterPriority" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px">
+            <option value="">Todas prioridades</option>
+            <option value="urgent">Urgente</option>
+            <option value="high">Alta</option>
+            <option value="med">Média</option>
+            <option value="low">Baixa</option>
+          </select>
+          <button id="newTaskBtn">+ Nova Tarefa</button>
+        </div>
+      </header>
+      <div id="tasksStats" style="padding:14px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px"></div>
+      <div class="list" id="tasksList" style="padding:0 20px 20px"></div>
+    </div>
+
+    <!-- AGENDA VIEW -->
+    <div class="view" data-view="agenda" id="agendaView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Agenda</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <button id="newAppointmentBtn">+ Novo Compromisso</button>
+          <button id="schedLinksBtn">Links de Agendamento</button>
+          <button id="icsFeedBtn">Feed ICS</button>
+        </div>
+      </header>
+      <div id="agendaUpcoming" style="padding:20px"></div>
+    </div>
+
+    <!-- DOCUMENTS VIEW -->
+    <div class="view" data-view="documents" id="documentsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Documentos & Contratos</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <select id="docsFilterStatus" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px">
+            <option value="">Todos status</option>
+            <option value="draft">Rascunho</option>
+            <option value="sent">Enviado</option>
+            <option value="viewed">Visualizado</option>
+            <option value="signed">Assinado</option>
+          </select>
+          <button id="newDocTemplateBtn">+ Template</button>
+          <button id="newDocBtn">+ Novo Documento</button>
+        </div>
+      </header>
+      <div class="list" id="documentsList" style="padding:20px"></div>
+    </div>
+
+    <!-- FORMS VIEW -->
+    <div class="view" data-view="forms" id="formsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Formulários & Webhooks</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <button id="newHookBtn">+ Webhook</button>
+          <button id="newFormBtn">+ Novo Formulário</button>
+        </div>
+      </header>
+      <div class="list" id="formsList" style="padding:20px"></div>
+    </div>
+
+    <!-- CAMPAIGNS VIEW -->
+    <div class="view" data-view="campaigns" id="campaignsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Campanhas de Email</h2></div>
+        <div class="top-bar-right" style="gap:8px;display:flex">
+          <button id="newEmailTemplateBtn">+ Template</button>
+          <button id="newCampaignBtn">+ Nova Campanha</button>
+          <button id="viewSequencesBtn">Sequências Drip</button>
+          <button id="viewUnsubsBtn">Opt-outs</button>
+        </div>
+      </header>
+      <div class="list" id="campaignsList" style="padding:20px"></div>
+    </div>
+
   </main>
 
   <!-- SIDE PANEL (card detail + conversation) -->
@@ -210,9 +300,9 @@
 
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/crm/clow-dialog.js"></script>
-<script type="module" src="/crm/crm.js"></script>
-<script src="/crm/crm-extras.js"></script>
+<script src="/crm/clow-dialog.js?v=35"></script>
+<script type="module" src="/crm/crm.js?v=35"></script>
+<script src="/crm/crm-extras.js?v=35"></script>
 <script src="/crm/crm-settings-ext.js"></script>
 </body>
 </html>
