@@ -1951,7 +1951,7 @@ export function createProposal(tenantId: string, input: { cardId: string; validU
   const card = db.prepare('SELECT id FROM crm_cards WHERE id=? AND tenant_id=?').get(input.cardId, tenantId);
   if (!card) return null;
   const prevVersion = (db.prepare('SELECT COALESCE(MAX(version),0) m FROM crm_proposals WHERE tenant_id=? AND card_id=?').get(tenantId, input.cardId) as any).m;
-  const items = db.prepare('SELECT unit_price_cents, quantity, discount_cents, discount_percent, tax_cents, tax_percent FROM crm_line_items WHERE tenant_id=? AND card_id=?').all(tenantId, input.cardId) as any[];
+  const items = db.prepare('SELECT unit_price_cents, qty as quantity, 0 as discount_cents, 0 as discount_percent, 0 as tax_cents, 0 as tax_percent FROM crm_card_items WHERE tenant_id=? AND card_id=?').all(tenantId, input.cardId) as any[];
   const totals = calcProposalTotals(items.map(i => ({
     unitPriceCents: i.unit_price_cents, quantity: i.quantity,
     discountCents: i.discount_cents ?? 0, discountPercent: i.discount_percent ?? 0,

@@ -19,6 +19,7 @@ import * as automations from './automations.js';
 import { markPaid } from './billing.js';
 import * as assignment from './assignment.js';
 import * as lineItems from './lineItems.js';
+import * as analytics from './analytics.js';
 import { subscribe, formatSseFrame } from './events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import { readMedia } from './media.js';
@@ -112,6 +113,62 @@ app.get('/boards/:id/pipeline', (c) => {
 });
 
 // ═══ COLUMNS ════════════════════════════════════════════════════════════
+// ═══ ANALYTICS (Pipeline Analytics — Onda 13) ══════════════════════════
+function parseWin(c: any): { from?: number; to?: number } {
+  const from = c.req.query('from');
+  const to   = c.req.query('to');
+  const w: { from?: number; to?: number } = {};
+  if (from && /^\d+$/.test(from)) w.from = Number(from);
+  if (to   && /^\d+$/.test(to))   w.to   = Number(to);
+  return w;
+}
+
+app.get('/boards/:boardId/analytics/funnel', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('boardId');
+  if (!store.getBoard(tid, boardId)) return notFound(c, 'board');
+  const rows = analytics.funnel(tid, boardId, parseWin(c));
+  const totalCards = rows.reduce((s, r) => s + r.cardCount, 0);
+  const totalValueCents = rows.reduce((s, r) => s + r.totalValueCents, 0);
+  return ok(c, { boardId, stages: rows, totalCards, totalValueCents });
+});
+
+app.get('/boards/:boardId/analytics/stage-times', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('boardId');
+  if (!store.getBoard(tid, boardId)) return notFound(c, 'board');
+  return ok(c, { boardId, stages: analytics.stageTimes(tid, boardId, parseWin(c)) });
+});
+
+app.get('/boards/:boardId/analytics/velocity', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('boardId');
+  if (!store.getBoard(tid, boardId)) return notFound(c, 'board');
+  const b = (c.req.query('bucket') || 'day') as 'day' | 'week' | 'month';
+  if (!['day', 'week', 'month'].includes(b)) return badRequest(c, 'bucket must be day|week|month');
+  return ok(c, { boardId, bucket: b, points: analytics.velocity(tid, boardId, b, parseWin(c)) });
+});
+
+app.get('/boards/:boardId/analytics/win-rate', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('boardId');
+  if (!store.getBoard(tid, boardId)) return notFound(c, 'board');
+  return ok(c, { boardId, ...analytics.winRate(tid, boardId, parseWin(c)) });
+});
+
+app.get('/boards/:boardId/analytics/compare', (c) => {
+  const tid = tenantOf(c);
+  const boardId = c.req.param('boardId');
+  if (!store.getBoard(tid, boardId)) return notFound(c, 'board');
+  const cur = parseWin(c);
+  const prv: { from?: number; to?: number } = {};
+  const prvFrom = c.req.query('prevFrom');
+  const prvTo   = c.req.query('prevTo');
+  if (prvFrom && /^\d+$/.test(prvFrom)) prv.from = Number(prvFrom);
+  if (prvTo   && /^\d+$/.test(prvTo))   prv.to   = Number(prvTo);
+  return ok(c, { boardId, ...analytics.compare(tid, boardId, cur, prv) });
+});
+
 app.get('/boards/:boardId/columns', (c) => {
   return ok(c, { columns: store.listColumns(tenantOf(c), c.req.param('boardId')) });
 });
