@@ -471,10 +471,29 @@ body {
 
 /* ─── Views (contacts / channels / etc) ─────────────────────────────── */
 .view {
-  padding: 20px; overflow-y: auto; flex: 1;
+  flex: 1;
   display: none;
+  min-height: 0;  /* permite que filhos com overflow funcionem */
 }
-.view.active { display: block; }
+.view.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Top bar dentro de view nao encolhe */
+.view > .top-bar { flex-shrink: 0; }
+/* Conteudo abaixo do top-bar pode rolar verticalmente */
+.view > *:not(.top-bar):not(#kanban) {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 20px;
+}
+/* Kanban tem regras proprias (overflow-x na kanban-board) */
+#kanban {
+  flex: 1;
+  min-height: 0;
+}
 .view h2 { margin: 0 0 16px; font-size: 18px; }
 .list {
   display: flex; flex-direction: column; gap: 8px;
