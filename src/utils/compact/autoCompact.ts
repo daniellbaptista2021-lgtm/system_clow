@@ -23,26 +23,18 @@ import { DEFAULT_CONFIG } from './types.js';
 
 /** Known context window sizes for supported models. */
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  'claude-sonnet-4-6': 200_000,
-  'claude-sonnet-4-5': 200_000,
-  'claude-3-7-sonnet-latest': 200_000,
-  'claude-3-opus': 200_000,
-  'claude-3-sonnet': 200_000,
-  'claude-3-haiku': 200_000,
-  'claude-haiku-4-5': 200_000,
-  'claude-3.5-sonnet': 200_000,
+  'glm-5.1': 128_000,
+  'glm-5': 128_000,
+  'glm-4.5': 128_000,
+  'glm-4': 128_000,
 };
 
 /** Known max output token limits for supported models. */
 const MODEL_MAX_OUTPUT: Record<string, number> = {
-  'claude-sonnet-4-6': 8_192,
-  'claude-sonnet-4-5': 8_192,
-  'claude-3-7-sonnet-latest': 8_192,
-  'claude-3-opus': 4_096,
-  'claude-3-sonnet': 4_096,
-  'claude-3-haiku': 8_192,
-  'claude-haiku-4-5': 8_192,
-  'claude-3.5-sonnet': 8_192,
+  'glm-5.1': 8_192,
+  'glm-5': 8_192,
+  'glm-4.5': 8_192,
+  'glm-4': 8_192,
 };
 
 export function getContextWindowForModel(model: string): number {
@@ -90,7 +82,7 @@ export interface TokenWarningState {
 
 export function getTokenWarningState(
   messages: ClovMessage[],
-  model: string = 'claude-sonnet-4-6',
+  model: string = 'glm-5.1',
   config: CompactionConfig = DEFAULT_CONFIG,
 ): TokenWarningState {
   const tokens = estimateMessageTokens(messages);
@@ -150,7 +142,7 @@ export interface TierSelectionResult {
  */
 export function selectCompactionTier(
   messages: ClovMessage[],
-  model: string = 'claude-sonnet-4-6',
+  model: string = 'glm-5.1',
   hasSessionMemory: boolean = false,
   config: CompactionConfig = DEFAULT_CONFIG,
 ): TierSelectionResult {
@@ -358,7 +350,7 @@ export function clearCompactHistory(sessionId: string = 'default'): void {
 export function calculateAdaptiveThreshold(
   messages: ClovMessage[],
   baseBufferTokens: number = DEFAULT_CONFIG.autoCompactBufferTokens,
-  model: string = 'claude-sonnet-4-6',
+  model: string = 'glm-5.1',
 ): number {
   const effective = getEffectiveWindow(model);
 
@@ -396,7 +388,7 @@ export interface AutoCompactResult {
 
 export function shouldAutoCompact(
   messages: ClovMessage[],
-  model: string = 'claude-sonnet-4-6',
+  model: string = 'glm-5.1',
   sessionId: string = 'default',
   querySource: string = 'user',
   config: CompactionConfig = DEFAULT_CONFIG,

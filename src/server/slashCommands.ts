@@ -215,7 +215,7 @@ Use \`/mission <tarefa>\` para orquestrar multiplas skills juntas.`;
 function connectionsResponse(): string {
   return `## Integracoes Ativas
 
-- **Anthropic Claude** (Sonnet 4) — conectado
+- **GLM-5.1** via OpenRouter — conectado
 - **Memoria Persistente** (SQLite + FTS5) — ativa
 - **RAG Semantico** (256-dim embeddings) — ativo
 - **Marketplace** — 8 plugins disponiveis

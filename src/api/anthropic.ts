@@ -19,28 +19,14 @@ export interface AnthropicConfig {
 let client: Anthropic | null = null;
 let config: AnthropicConfig | null = null;
 
-const DEFAULT_MODEL = 'claude-3-haiku-20240307';
+const DEFAULT_MODEL = 'glm-5.1';
 
 const PRICING: Record<string, { input_miss: number; input_hit: number; output: number }> = {
-  'claude-3-haiku-20240307': {
-    input_miss: 0.25 / 1_000_000,
-    input_hit: 0.025 / 1_000_000,
-    output: 1.25 / 1_000_000,
-  },
-  'claude-sonnet-4-6': {
-    input_miss: 3.0 / 1_000_000,
-    input_hit: 0.3 / 1_000_000,
-    output: 15.0 / 1_000_000,
-  },
-  'claude-sonnet-4-5': {
-    input_miss: 3.0 / 1_000_000,
-    input_hit: 0.3 / 1_000_000,
-    output: 15.0 / 1_000_000,
-  },
-  'claude-3-7-sonnet-latest': {
-    input_miss: 3.0 / 1_000_000,
-    input_hit: 0.3 / 1_000_000,
-    output: 15.0 / 1_000_000,
+  // GLM-5.1 via OpenRouter (preco aproximado - cobrado na key OR)
+  'glm-5.1': {
+    input_miss: 0.30 / 1_000_000,
+    input_hit: 0.03 / 1_000_000,
+    output: 1.10 / 1_000_000,
   },
 };
 
@@ -354,6 +340,8 @@ function extractUsage(raw: any): ModelUsage {
 function normalizeStopReason(reason: string | null | undefined): string {
   if (!reason) return 'stop';
   if (reason === 'end_turn') return 'stop';
+  // Preserve 'max_tokens' as 'length' so QueryEngine's continuation recovery works
+  if (reason === 'max_tokens') return 'length';
   return reason;
 }
 
@@ -372,16 +360,11 @@ export async function* callModel(
   setLastAPIRequestTimestamp(startTime);
 
   try {
-    // Prompt caching: mark system prompt blocks with cache_control
-    // The system prompt is stable within a session — caching saves ~90% on input tokens
-    const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
-      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
-    ];
-
+    // GLM-5.1 via LiteLLM — sem cache_control (Anthropic-only, GLM rejeita)
     const stream = await withRetry(
       () => api.messages.create({
         model: cfg.model,
-        system: systemBlocks as any,
+        system: systemPrompt,
         messages: anthropicMessages,
         tools: anthropicTools,
         max_tokens: cfg.maxOutputTokens || 16384,

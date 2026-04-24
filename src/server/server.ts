@@ -137,13 +137,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const selectedModel = process.env.CLOW_MODEL
-    || 'claude-sonnet-4-6';
+  const selectedModel = process.env.CLOW_MODEL || 'glm-5.1';
 
   initAnthropic({
     apiKey,
     model: selectedModel,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 16384,
   });
 
   // Init session storage
