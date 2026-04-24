@@ -44,6 +44,7 @@ import { buildBridgeRoutes } from './bridgeRoutes.js';
 import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
 import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './middleware/tenantAuth.js';
 import publicProposals from '../crm/publicRoutes.js';
+import v2Routes from './v2Routes.js';
 import { clowSonnetGuard } from './middleware/clowSonnetGuard.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
@@ -218,6 +219,10 @@ async function main(): Promise<void> {
   app.use('/v1/sessions', tenantAuth);
   app.route('/p', publicProposals);
   app.use('/v1/crm/*', tenantAuth);
+  // ONDA 30 — API v2 (mounts after tenantAuth for same auth model)
+  app.use('/v2/crm/*', tenantAuth);
+  app.use('/v2/crm', tenantAuth);
+  app.route('/v2/crm', v2Routes);
   app.use('/v1/crm', tenantAuth);
   console.log('  ✓ Auth: Multi-tenant API key enabled');
 

@@ -38,6 +38,9 @@ import * as docs from './documents.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
 import * as softDel from './softDelete.js';
+import * as rl from './rateLimiter.js';
+import * as bulkOps from './bulkOps.js';
+import { fieldSelectionMiddleware } from './fieldSelector.js';
 import { encodeCursor, decodeCursor } from './cursor.js';
 import * as mobile from './mobile.js';
 import { subscribe, formatSseFrame } from './events.js';
@@ -46,6 +49,11 @@ import { readMedia } from './media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from './types.js';
 
 const app = new Hono();
+
+// ═══ ONDA 30: Rate limit + field selection middlewares ════════════════
+app.use('*', rl.rateLimitMiddleware());
+app.use('*', fieldSelectionMiddleware());
+
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function tenantOf(c: any): string {
@@ -2511,6 +2519,56 @@ app.get('/cards-paginated', (c) => {
 app.get('/system/migrations', (c) => {
   const rows = getCrmDb().prepare('SELECT * FROM crm_migration_history').all() as any[];
   return ok(c, { migrations: rows });
+});
+
+// ═══ API TIERS + BULK OPS (Onda 30) ════════════════════════════════════
+app.get('/admin/rate-limit/tier', (c) => {
+  const tid = tenantOf(c);
+  return ok(c, rl.getTenantTier(tid));
+});
+
+app.post('/admin/rate-limit/tier', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.tier) return badRequest(c, 'tier required');
+  if (!['free', 'pro', 'business', 'unlimited'].includes(body.tier)) return badRequest(c, 'invalid tier');
+  rl.setTenantTier(tid, body.tier, { perMin: body.perMin, perHour: body.perHour });
+  return ok(c, rl.getTenantTier(tid));
+});
+
+// Bulk operations
+app.post('/bulk/contacts/create', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.contacts)) return badRequest(c, 'contacts[] required');
+  return ok(c, bulkOps.bulkCreateContacts(tid, body.contacts));
+});
+
+app.post('/bulk/contacts/update', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.updates)) return badRequest(c, 'updates[] required');
+  return ok(c, bulkOps.bulkUpdateContacts(tid, body.updates));
+});
+
+app.post('/bulk/cards/create', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.cards)) return badRequest(c, 'cards[] required');
+  return ok(c, bulkOps.bulkCreateCards(tid, body.cards));
+});
+
+app.post('/bulk/:entity/soft-delete', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!Array.isArray(body.ids)) return badRequest(c, 'ids[] required');
+  const entityMap: Record<string, string> = {
+    cards: 'crm_cards', contacts: 'crm_contacts', activities: 'crm_activities',
+    tasks: 'crm_tasks', appointments: 'crm_appointments',
+  };
+  const table = entityMap[c.req.param('entity')];
+  if (!table) return badRequest(c, 'invalid entity');
+  return ok(c, bulkOps.bulkSoftDelete(tid, table, body.ids));
 });
 
 app.post('/proposal-templates', async (c) => {

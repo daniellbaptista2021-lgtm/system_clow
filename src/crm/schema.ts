@@ -1392,6 +1392,30 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 29 applied: soft delete + composite indices + migration view');
   }
 
+  // ONDA 30 — API enhancements (rate limiting + tiers)
+  const onda30Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(130);
+  if (!onda30Applied) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_rate_limit_buckets (
+        tenant_id TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (tenant_id, window_start)
+      );
+      CREATE INDEX IF NOT EXISTS idx_rl_prune ON crm_rate_limit_buckets(window_start);
+
+      CREATE TABLE IF NOT EXISTS crm_api_tiers (
+        tenant_id TEXT PRIMARY KEY,
+        tier_name TEXT NOT NULL DEFAULT 'free',
+        max_req_per_min INTEGER,
+        max_req_per_hour INTEGER,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(130, Date.now());
+    console.log('[crm-migrate] Onda 30 applied: rate limiting + api tiers');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
