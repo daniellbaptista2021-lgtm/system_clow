@@ -524,6 +524,100 @@ app.post('/media/process', async (c) => {
 });
 
 
+// ═══ TEAMS + AGENTS PRO + SLA ═══════════════════════════════════════════
+app.post('/teams', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  return ok(c, { team: store.createTeam(tenantOf(c), body) }, 201);
+});
+app.get('/teams', (c) => ok(c, { teams: store.listTeams(tenantOf(c)) }));
+app.get('/teams/:id', (c) => {
+  const t = store.getTeam(tenantOf(c), c.req.param('id'));
+  return t ? ok(c, { team: t }) : notFound(c, 'team');
+});
+app.patch('/teams/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const t = store.updateTeam(tenantOf(c), c.req.param('id'), body);
+  return t ? ok(c, { team: t }) : notFound(c, 'team');
+});
+app.delete('/teams/:id', (c) => store.deleteTeam(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'team'));
+
+app.patch('/agents/:id/permissions', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  return store.setAgentPermissions(tenantOf(c), c.req.param('id'), body) ? ok(c, { ok: true }) : notFound(c, 'agent');
+});
+app.patch('/agents/:id/team', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  return store.setAgentTeam(tenantOf(c), c.req.param('id'), body.team_id || null) ? ok(c, { ok: true }) : notFound(c, 'agent');
+});
+app.patch('/agents/:id/status', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const st = body.status;
+  if (!['online','away','offline'].includes(st)) return badRequest(c, 'invalid status');
+  return store.setAgentStatus(tenantOf(c), c.req.param('id'), st) ? ok(c, { ok: true }) : notFound(c, 'agent');
+});
+app.get('/agents/metrics/pro', (c) => ok(c, { metrics: store.getAgentMetricsPro(tenantOf(c)) }));
+app.get('/agents/:id/metrics/pro', (c) => ok(c, { metrics: store.getAgentMetricsPro(tenantOf(c), c.req.param('id')) }));
+
+app.post('/sla-rules', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.maxResponseMins) return badRequest(c, 'name + maxResponseMins required');
+  return ok(c, { rule: store.createSlaRule(tenantOf(c), { ...body, enabled: body.enabled !== false }) }, 201);
+});
+app.get('/sla-rules', (c) => ok(c, { rules: store.listSlaRules(tenantOf(c)) }));
+app.delete('/sla-rules/:id', (c) => store.deleteSlaRule(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'rule'));
+
+// ═══ INBOX PRO: labels, quick-replies, inbox-rules ══════════════════════
+app.post('/labels', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  return ok(c, { label: store.createLabel(tenantOf(c), body) }, 201);
+});
+app.get('/labels', (c) => ok(c, { labels: store.listLabels(tenantOf(c), c.req.query('scope') as any) }));
+app.patch('/labels/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const l = store.updateLabel(tenantOf(c), c.req.param('id'), body);
+  return l ? ok(c, { label: l }) : notFound(c, 'label');
+});
+app.delete('/labels/:id', (c) => store.deleteLabel(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'label'));
+
+app.post('/activities/:id/labels/:labelId', (c) =>
+  store.addLabelToActivity(tenantOf(c), c.req.param('id'), c.req.param('labelId')) ? ok(c, { ok: true }) : notFound(c, 'activity'));
+app.delete('/activities/:id/labels/:labelId', (c) =>
+  store.removeLabelFromActivity(tenantOf(c), c.req.param('id'), c.req.param('labelId')) ? c.body(null, 204) : notFound(c, 'activity'));
+app.post('/activities/:id/read', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  return store.markActivityRead(tenantOf(c), c.req.param('id'), body.agent_id || 'system') ? ok(c, { ok: true }) : notFound(c, 'activity');
+});
+app.post('/activities/:id/snooze', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const until = typeof body.until_ts === 'number' ? body.until_ts : Date.parse(body.until || '');
+  if (!Number.isFinite(until)) return badRequest(c, 'until_ts (ms) or until (iso) required');
+  return store.snoozeActivity(tenantOf(c), c.req.param('id'), until) ? ok(c, { ok: true }) : notFound(c, 'activity');
+});
+
+app.post('/quick-replies', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.title || !body.body) return badRequest(c, 'title + body required');
+  return ok(c, { quickReply: store.createQuickReply(tenantOf(c), body) }, 201);
+});
+app.get('/quick-replies', (c) => ok(c, { quickReplies: store.listQuickReplies(tenantOf(c), c.req.query('category') || undefined) }));
+app.patch('/quick-replies/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const q = store.updateQuickReply(tenantOf(c), c.req.param('id'), body);
+  return q ? ok(c, { quickReply: q }) : notFound(c, 'quick-reply');
+});
+app.delete('/quick-replies/:id', (c) => store.deleteQuickReply(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'quick-reply'));
+app.post('/quick-replies/:id/use', (c) => { store.bumpQuickReplyUse(tenantOf(c), c.req.param('id')); return ok(c, { ok: true }); });
+
+app.post('/inbox-rules', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  return ok(c, { rule: store.createInboxRule(tenantOf(c), { ...body, priority: body.priority || 0, enabled: body.enabled !== false }) }, 201);
+});
+app.get('/inbox-rules', (c) => ok(c, { rules: store.listInboxRules(tenantOf(c)) }));
+app.delete('/inbox-rules/:id', (c) => store.deleteInboxRule(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'rule'));
+
 // ═══ KANBAN PRO ═════════════════════════════════════════════════════════
 
 app.patch('/columns/:id/wip-limit', async (c) => {

@@ -130,6 +130,106 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 2 applied: +wip/priority/color/swimlanes/checklists');
   }
 
+  // ONDA 3 — Agentes Pro
+  const onda3Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(103);
+  if (!onda3Applied) {
+    const agCols = db.prepare("PRAGMA table_info(crm_agents)").all() as any[];
+    const agColNames = new Set(agCols.map((c: any) => c.name));
+    const addAgCol = (n: string, t: string) => { if (!agColNames.has(n)) db.exec(`ALTER TABLE crm_agents ADD COLUMN ${n} ${t}`); };
+    addAgCol('permissions_json', "TEXT DEFAULT '{}'");
+    addAgCol('team_id', 'TEXT');
+    addAgCol('avatar_url', 'TEXT');
+    addAgCol('working_hours_json', "TEXT DEFAULT '{}'");
+    addAgCol('status', "TEXT DEFAULT 'offline'");
+    addAgCol('last_seen_at', 'INTEGER');
+    addAgCol('skills_json', "TEXT DEFAULT '[]'");
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_teams (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        color TEXT DEFAULT '#9B59FC',
+        description TEXT,
+        manager_agent_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_teams_tenant ON crm_teams(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_sla_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        team_id TEXT,
+        agent_id TEXT,
+        name TEXT NOT NULL,
+        max_response_mins INTEGER NOT NULL,
+        escalate_to_agent_id TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_sla_tenant ON crm_sla_rules(tenant_id, enabled);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(103, Date.now());
+    console.log('[crm-migrate] Onda 3 applied: +agent perms/teams/SLA');
+  }
+
+  // ONDA 4 — Inbox Pro
+  const onda4Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(104);
+  if (!onda4Applied) {
+    const actCols = db.prepare("PRAGMA table_info(crm_activities)").all() as any[];
+    const actColNames = new Set(actCols.map((c: any) => c.name));
+    const addActCol = (n: string, t: string) => { if (!actColNames.has(n)) db.exec(`ALTER TABLE crm_activities ADD COLUMN ${n} ${t}`); };
+    addActCol('thread_id', 'TEXT');
+    addActCol('read_by_json', "TEXT DEFAULT '[]'");
+    addActCol('is_private', 'INTEGER DEFAULT 0');
+    addActCol('labels_json', "TEXT DEFAULT '[]'");
+    addActCol('snoozed_until', 'INTEGER');
+    addActCol('priority', 'INTEGER DEFAULT 0');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_labels (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        color TEXT DEFAULT '#9B59FC',
+        scope TEXT NOT NULL DEFAULT 'inbox',
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_labels_tenant ON crm_labels(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_quick_replies (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        shortcut TEXT,
+        category TEXT,
+        use_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_qr_tenant ON crm_quick_replies(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_qr_shortcut ON crm_quick_replies(tenant_id, shortcut);
+
+      CREATE TABLE IF NOT EXISTS crm_inbox_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        keyword TEXT,
+        assign_to_agent_id TEXT,
+        assign_to_team_id TEXT,
+        label_id TEXT,
+        priority INTEGER DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_inbox_rules_tenant ON crm_inbox_rules(tenant_id, enabled);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(104, Date.now());
+    console.log('[crm-migrate] Onda 4 applied: +labels/quick-replies/inbox-rules/thread-id');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

@@ -236,3 +236,56 @@ export interface InventoryItem {
   createdAt: number;
   updatedAt: number;
 }
+
+// ONDA 3 — Agentes Pro
+export interface Team {
+  id: string; tenantId: string; name: string; color: string;
+  description?: string; managerAgentId?: string;
+  createdAt: number; updatedAt: number;
+}
+export interface AgentPermissions {
+  cards?: { create?: boolean; edit?: boolean; delete?: boolean; move?: boolean };
+  contacts?: { create?: boolean; edit?: boolean; delete?: boolean; export?: boolean };
+  channels?: { manage?: boolean; send?: boolean };
+  agents?: { manage?: boolean };
+  automations?: { manage?: boolean };
+  subscriptions?: { manage?: boolean; markPaid?: boolean };
+  inventory?: { manage?: boolean };
+  reports?: { view?: boolean };
+}
+export interface AgentMetricsPro {
+  agentId: string;
+  agentName: string;
+  cardsOpen: number;
+  cardsWon: number;
+  cardsLost: number;
+  conversionRate: number;
+  totalValueCents: number;
+  avgResponseMins: number;
+  messagesToday: number;
+  lastSeenAt?: number;
+  status: 'online' | 'away' | 'offline';
+}
+export interface SlaRule {
+  id: string; tenantId: string;
+  teamId?: string; agentId?: string;
+  name: string; maxResponseMins: number;
+  escalateToAgentId?: string;
+  enabled: boolean; createdAt: number;
+}
+
+// ONDA 4 — Inbox Pro
+export interface Label {
+  id: string; tenantId: string; name: string; color: string;
+  scope: 'inbox' | 'contact' | 'both'; createdAt: number;
+}
+export interface QuickReply {
+  id: string; tenantId: string;
+  title: string; body: string; shortcut?: string; category?: string;
+  useCount: number; createdAt: number; updatedAt: number;
+}
+export interface InboxRule {
+  id: string; tenantId: string; name: string;
+  keyword?: string; assignToAgentId?: string; assignToTeamId?: string;
+  labelId?: string; priority: number; enabled: boolean; createdAt: number;
+}

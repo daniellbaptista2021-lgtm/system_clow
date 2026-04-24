@@ -1410,3 +1410,257 @@ export function deleteChecklist(tenantId: string, id: string): boolean {
   const r = db.prepare('DELETE FROM crm_checklists WHERE id=? AND tenant_id=?').run(id, tenantId);
   return r.changes > 0;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 3 — Agentes Pro: teams, perms, status, SLA, metrics
+// ═══════════════════════════════════════════════════════════════════════
+import type { Team, AgentPermissions, AgentMetricsPro, SlaRule,
+              Label, QuickReply, InboxRule } from './types.js';
+
+function rowToTeam(r: any): Team {
+  return { id: r.id, tenantId: r.tenant_id, name: r.name, color: r.color || '#9B59FC',
+    description: r.description ?? undefined, managerAgentId: r.manager_agent_id ?? undefined,
+    createdAt: r.created_at, updatedAt: r.updated_at };
+}
+export function createTeam(tenantId: string, input: { name: string; color?: string; description?: string; managerAgentId?: string }): Team {
+  const db = getCrmDb();
+  const t: Team = { id: nid('crm_team'), tenantId, name: input.name,
+    color: input.color || '#9B59FC', description: input.description,
+    managerAgentId: input.managerAgentId, createdAt: now(), updatedAt: now() };
+  db.prepare('INSERT INTO crm_teams (id,tenant_id,name,color,description,manager_agent_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
+    .run(t.id, tenantId, t.name, t.color, t.description ?? null, t.managerAgentId ?? null, t.createdAt, t.updatedAt);
+  return t;
+}
+export function listTeams(tenantId: string): Team[] {
+  const db = getCrmDb();
+  return (db.prepare('SELECT * FROM crm_teams WHERE tenant_id=? ORDER BY name').all(tenantId) as any[]).map(rowToTeam);
+}
+export function getTeam(tenantId: string, id: string): Team | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_teams WHERE id=? AND tenant_id=?').get(id, tenantId) as any;
+  return r ? rowToTeam(r) : null;
+}
+export function updateTeam(tenantId: string, id: string, patch: Partial<Omit<Team,'id'|'tenantId'|'createdAt'>>): Team | null {
+  const existing = getTeam(tenantId, id);
+  if (!existing) return null;
+  const upd = { ...existing, ...patch, updatedAt: now() };
+  getCrmDb().prepare('UPDATE crm_teams SET name=?, color=?, description=?, manager_agent_id=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(upd.name, upd.color, upd.description ?? null, upd.managerAgentId ?? null, upd.updatedAt, id, tenantId);
+  return upd;
+}
+export function deleteTeam(tenantId: string, id: string): boolean {
+  const db = getCrmDb();
+  db.prepare('UPDATE crm_agents SET team_id=NULL WHERE team_id=? AND tenant_id=?').run(id, tenantId);
+  return db.prepare('DELETE FROM crm_teams WHERE id=? AND tenant_id=?').run(id, tenantId).changes > 0;
+}
+
+export function setAgentPermissions(tenantId: string, agentId: string, perms: AgentPermissions): boolean {
+  const db = getCrmDb();
+  return db.prepare('UPDATE crm_agents SET permissions_json=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(JSON.stringify(perms), Date.now(), agentId, tenantId).changes > 0;
+}
+export function setAgentTeam(tenantId: string, agentId: string, teamId: string | null): boolean {
+  return getCrmDb().prepare('UPDATE crm_agents SET team_id=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(teamId, Date.now(), agentId, tenantId).changes > 0;
+}
+export function setAgentStatus(tenantId: string, agentId: string, status: 'online' | 'away' | 'offline'): boolean {
+  return getCrmDb().prepare('UPDATE crm_agents SET status=?, last_seen_at=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(status, Date.now(), Date.now(), agentId, tenantId).changes > 0;
+}
+
+export function getAgentMetricsPro(tenantId: string, agentId?: string): AgentMetricsPro[] {
+  const db = getCrmDb();
+  const agents = agentId
+    ? (db.prepare('SELECT * FROM crm_agents WHERE tenant_id=? AND id=?').all(tenantId, agentId) as any[])
+    : (db.prepare('SELECT * FROM crm_agents WHERE tenant_id=?').all(tenantId) as any[]);
+  const now24h = Date.now() - 24*60*60*1000;
+  return agents.map((a: any) => {
+    const opened = (db.prepare("SELECT COUNT(*) n FROM crm_cards WHERE tenant_id=? AND owner_agent_id=? AND COALESCE(status,'active')='active'").get(tenantId, a.id) as any).n;
+    // won/lost precisam de stage_type
+    const won = (db.prepare("SELECT COUNT(*) n FROM crm_cards c JOIN crm_columns col ON col.id=c.column_id WHERE c.tenant_id=? AND c.owner_agent_id=? AND col.stage_type='won'").get(tenantId, a.id) as any).n;
+    const lost = (db.prepare("SELECT COUNT(*) n FROM crm_cards c JOIN crm_columns col ON col.id=c.column_id WHERE c.tenant_id=? AND c.owner_agent_id=? AND col.stage_type='lost'").get(tenantId, a.id) as any).n;
+    const totalValue = (db.prepare("SELECT COALESCE(SUM(c.value_cents),0) v FROM crm_cards c JOIN crm_columns col ON col.id=c.column_id WHERE c.tenant_id=? AND c.owner_agent_id=? AND col.stage_type='won'").get(tenantId, a.id) as any).v;
+    const msgsToday = (db.prepare("SELECT COUNT(*) n FROM crm_activities WHERE tenant_id=? AND created_by_agent_id=? AND created_at>=?").get(tenantId, a.id, now24h) as any).n;
+    const total = won + lost;
+    return {
+      agentId: a.id, agentName: a.name,
+      cardsOpen: opened, cardsWon: won, cardsLost: lost,
+      conversionRate: total > 0 ? won / total : 0,
+      totalValueCents: totalValue,
+      avgResponseMins: 0, // heuristica futura
+      messagesToday: msgsToday,
+      lastSeenAt: a.last_seen_at ?? undefined,
+      status: (a.status || 'offline') as any,
+    };
+  });
+}
+
+// SLA
+function rowToSla(r: any): SlaRule {
+  return { id: r.id, tenantId: r.tenant_id, teamId: r.team_id ?? undefined,
+    agentId: r.agent_id ?? undefined, name: r.name, maxResponseMins: r.max_response_mins,
+    escalateToAgentId: r.escalate_to_agent_id ?? undefined,
+    enabled: !!r.enabled, createdAt: r.created_at };
+}
+export function createSlaRule(tenantId: string, input: Omit<SlaRule,'id'|'tenantId'|'createdAt'>): SlaRule {
+  const rule: SlaRule = { id: nid('crm_sla'), tenantId, ...input, createdAt: now() };
+  getCrmDb().prepare('INSERT INTO crm_sla_rules (id,tenant_id,team_id,agent_id,name,max_response_mins,escalate_to_agent_id,enabled,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(rule.id, tenantId, rule.teamId ?? null, rule.agentId ?? null, rule.name, rule.maxResponseMins,
+         rule.escalateToAgentId ?? null, rule.enabled ? 1 : 0, rule.createdAt);
+  return rule;
+}
+export function listSlaRules(tenantId: string): SlaRule[] {
+  return (getCrmDb().prepare('SELECT * FROM crm_sla_rules WHERE tenant_id=? ORDER BY created_at DESC').all(tenantId) as any[]).map(rowToSla);
+}
+export function deleteSlaRule(tenantId: string, id: string): boolean {
+  return getCrmDb().prepare('DELETE FROM crm_sla_rules WHERE id=? AND tenant_id=?').run(id, tenantId).changes > 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 4 — Inbox Pro
+// ═══════════════════════════════════════════════════════════════════════
+function rowToLabel(r: any): Label {
+  return { id: r.id, tenantId: r.tenant_id, name: r.name, color: r.color || '#9B59FC', scope: (r.scope || 'inbox') as any, createdAt: r.created_at };
+}
+export function createLabel(tenantId: string, input: { name: string; color?: string; scope?: 'inbox'|'contact'|'both' }): Label {
+  const l: Label = { id: nid('crm_lbl'), tenantId, name: input.name,
+    color: input.color || '#9B59FC', scope: input.scope || 'inbox', createdAt: now() };
+  getCrmDb().prepare('INSERT INTO crm_labels (id,tenant_id,name,color,scope,created_at) VALUES (?,?,?,?,?,?)')
+    .run(l.id, tenantId, l.name, l.color, l.scope, l.createdAt);
+  return l;
+}
+export function listLabels(tenantId: string, scope?: 'inbox'|'contact'|'both'): Label[] {
+  const db = getCrmDb();
+  let sql = 'SELECT * FROM crm_labels WHERE tenant_id=?';
+  const args: any[] = [tenantId];
+  if (scope) { sql += " AND (scope=? OR scope='both')"; args.push(scope); }
+  return (db.prepare(sql + ' ORDER BY name').all(...args) as any[]).map(rowToLabel);
+}
+export function updateLabel(tenantId: string, id: string, patch: Partial<Omit<Label,'id'|'tenantId'|'createdAt'>>): Label | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_labels WHERE id=? AND tenant_id=?').get(id, tenantId) as any;
+  if (!r) return null;
+  const upd = { name: patch.name ?? r.name, color: patch.color ?? r.color, scope: patch.scope ?? r.scope };
+  db.prepare('UPDATE crm_labels SET name=?, color=?, scope=? WHERE id=? AND tenant_id=?')
+    .run(upd.name, upd.color, upd.scope, id, tenantId);
+  return { id, tenantId, ...upd, createdAt: r.created_at } as Label;
+}
+export function deleteLabel(tenantId: string, id: string): boolean {
+  return getCrmDb().prepare('DELETE FROM crm_labels WHERE id=? AND tenant_id=?').run(id, tenantId).changes > 0;
+}
+
+// Attach label to activity
+export function addLabelToActivity(tenantId: string, activityId: string, labelId: string): boolean {
+  const db = getCrmDb();
+  const a = db.prepare('SELECT labels_json FROM crm_activities WHERE id=? AND tenant_id=?').get(activityId, tenantId) as any;
+  if (!a) return false;
+  const labels: string[] = JSON.parse(a.labels_json || '[]');
+  if (!labels.includes(labelId)) {
+    labels.push(labelId);
+    db.prepare('UPDATE crm_activities SET labels_json=? WHERE id=? AND tenant_id=?').run(JSON.stringify(labels), activityId, tenantId);
+  }
+  return true;
+}
+export function removeLabelFromActivity(tenantId: string, activityId: string, labelId: string): boolean {
+  const db = getCrmDb();
+  const a = db.prepare('SELECT labels_json FROM crm_activities WHERE id=? AND tenant_id=?').get(activityId, tenantId) as any;
+  if (!a) return false;
+  const labels: string[] = JSON.parse(a.labels_json || '[]').filter((x: string) => x !== labelId);
+  db.prepare('UPDATE crm_activities SET labels_json=? WHERE id=? AND tenant_id=?').run(JSON.stringify(labels), activityId, tenantId);
+  return true;
+}
+
+// Quick replies
+function rowToQr(r: any): QuickReply {
+  return { id: r.id, tenantId: r.tenant_id, title: r.title, body: r.body,
+    shortcut: r.shortcut ?? undefined, category: r.category ?? undefined,
+    useCount: r.use_count, createdAt: r.created_at, updatedAt: r.updated_at };
+}
+export function createQuickReply(tenantId: string, input: { title: string; body: string; shortcut?: string; category?: string }): QuickReply {
+  const q: QuickReply = { id: nid('crm_qr'), tenantId, ...input, useCount: 0, createdAt: now(), updatedAt: now() };
+  getCrmDb().prepare('INSERT INTO crm_quick_replies (id,tenant_id,title,body,shortcut,category,use_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(q.id, tenantId, q.title, q.body, q.shortcut ?? null, q.category ?? null, 0, q.createdAt, q.updatedAt);
+  return q;
+}
+export function listQuickReplies(tenantId: string, category?: string): QuickReply[] {
+  const db = getCrmDb();
+  let sql = 'SELECT * FROM crm_quick_replies WHERE tenant_id=?';
+  const args: any[] = [tenantId];
+  if (category) { sql += ' AND category=?'; args.push(category); }
+  return (db.prepare(sql + ' ORDER BY use_count DESC, title ASC').all(...args) as any[]).map(rowToQr);
+}
+export function updateQuickReply(tenantId: string, id: string, patch: Partial<Omit<QuickReply,'id'|'tenantId'|'createdAt'|'useCount'>>): QuickReply | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_quick_replies WHERE id=? AND tenant_id=?').get(id, tenantId) as any;
+  if (!r) return null;
+  const upd = { title: patch.title ?? r.title, body: patch.body ?? r.body,
+    shortcut: patch.shortcut ?? r.shortcut, category: patch.category ?? r.category,
+    updatedAt: now() };
+  db.prepare('UPDATE crm_quick_replies SET title=?, body=?, shortcut=?, category=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(upd.title, upd.body, upd.shortcut ?? null, upd.category ?? null, upd.updatedAt, id, tenantId);
+  return { id, tenantId, title: upd.title, body: upd.body, shortcut: upd.shortcut, category: upd.category, useCount: r.use_count, createdAt: r.created_at, updatedAt: upd.updatedAt };
+}
+export function deleteQuickReply(tenantId: string, id: string): boolean {
+  return getCrmDb().prepare('DELETE FROM crm_quick_replies WHERE id=? AND tenant_id=?').run(id, tenantId).changes > 0;
+}
+export function bumpQuickReplyUse(tenantId: string, id: string): void {
+  getCrmDb().prepare('UPDATE crm_quick_replies SET use_count=use_count+1 WHERE id=? AND tenant_id=?').run(id, tenantId);
+}
+
+// Inbox rules + engine
+function rowToInboxRule(r: any): InboxRule {
+  return { id: r.id, tenantId: r.tenant_id, name: r.name,
+    keyword: r.keyword ?? undefined, assignToAgentId: r.assign_to_agent_id ?? undefined,
+    assignToTeamId: r.assign_to_team_id ?? undefined, labelId: r.label_id ?? undefined,
+    priority: r.priority ?? 0, enabled: !!r.enabled, createdAt: r.created_at };
+}
+export function createInboxRule(tenantId: string, input: Omit<InboxRule,'id'|'tenantId'|'createdAt'>): InboxRule {
+  const rule: InboxRule = { id: nid('crm_irule'), tenantId, ...input, createdAt: now() };
+  getCrmDb().prepare('INSERT INTO crm_inbox_rules (id,tenant_id,name,keyword,assign_to_agent_id,assign_to_team_id,label_id,priority,enabled,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(rule.id, tenantId, rule.name, rule.keyword ?? null, rule.assignToAgentId ?? null, rule.assignToTeamId ?? null, rule.labelId ?? null, rule.priority, rule.enabled ? 1 : 0, rule.createdAt);
+  return rule;
+}
+export function listInboxRules(tenantId: string): InboxRule[] {
+  return (getCrmDb().prepare('SELECT * FROM crm_inbox_rules WHERE tenant_id=? ORDER BY priority DESC').all(tenantId) as any[]).map(rowToInboxRule);
+}
+export function deleteInboxRule(tenantId: string, id: string): boolean {
+  return getCrmDb().prepare('DELETE FROM crm_inbox_rules WHERE id=? AND tenant_id=?').run(id, tenantId).changes > 0;
+}
+
+// Auto-assign: passa texto + cardId, aplica rules em ordem de priority
+export function applyInboxRules(tenantId: string, text: string, cardId: string): { applied: string[]; assignedAgent?: string; appliedLabel?: string } {
+  const rules = listInboxRules(tenantId).filter(r => r.enabled);
+  const applied: string[] = [];
+  let assignedAgent: string | undefined;
+  let appliedLabel: string | undefined;
+  const lc = (text || '').toLowerCase();
+  for (const r of rules) {
+    const matches = !r.keyword || lc.includes(r.keyword.toLowerCase());
+    if (!matches) continue;
+    applied.push(r.id);
+    if (r.assignToAgentId && !assignedAgent) {
+      getCrmDb().prepare('UPDATE crm_cards SET owner_agent_id=?, updated_at=? WHERE id=? AND tenant_id=?')
+        .run(r.assignToAgentId, Date.now(), cardId, tenantId);
+      assignedAgent = r.assignToAgentId;
+    }
+    if (r.labelId && !appliedLabel) appliedLabel = r.labelId;
+  }
+  return { applied, assignedAgent, appliedLabel };
+}
+
+// Mark read/unread
+export function markActivityRead(tenantId: string, activityId: string, agentId: string): boolean {
+  const db = getCrmDb();
+  const a = db.prepare('SELECT read_by_json FROM crm_activities WHERE id=? AND tenant_id=?').get(activityId, tenantId) as any;
+  if (!a) return false;
+  const readBy: string[] = JSON.parse(a.read_by_json || '[]');
+  if (!readBy.includes(agentId)) {
+    readBy.push(agentId);
+    db.prepare('UPDATE crm_activities SET read_by_json=? WHERE id=? AND tenant_id=?').run(JSON.stringify(readBy), activityId, tenantId);
+  }
+  return true;
+}
+export function snoozeActivity(tenantId: string, activityId: string, untilTs: number): boolean {
+  return getCrmDb().prepare('UPDATE crm_activities SET snoozed_until=? WHERE id=? AND tenant_id=?')
+    .run(untilTs, activityId, tenantId).changes > 0;
+}
