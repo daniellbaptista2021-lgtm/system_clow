@@ -321,3 +321,38 @@ export interface ReminderPro {
   createdAt: number;
   completedAt?: number;
 }
+
+// ONDA 7 — Inventario Pro
+export interface InventoryCategory { id: string; tenantId: string; name: string; parentId?: string; createdAt: number; }
+export interface InventoryVariant {
+  id: string; tenantId: string; inventoryId: string;
+  sku: string; name: string; attrs: Record<string, string>;
+  stock: number; priceCents?: number; barcode?: string; createdAt: number;
+}
+export interface InventoryMovement {
+  id: string; tenantId: string; inventoryId: string; variantId?: string;
+  delta: number; reason?: string; reference?: string; createdByAgentId?: string; createdAt: number;
+}
+
+// ONDA 8 — Proposals + Line Items Pro
+export type ProposalStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired';
+export interface Proposal {
+  id: string; tenantId: string; cardId: string;
+  version: number;
+  subtotalCents: number; discountCents: number; taxCents: number; totalCents: number;
+  validUntilTs?: number;
+  status: ProposalStatus;
+  terms?: string;
+  signedAt?: number; signedBy?: string; signedIp?: string;
+  pdfUrl?: string;
+  createdAt: number; updatedAt: number;
+}
+export interface ProposalTemplate {
+  id: string; tenantId: string; name: string;
+  items: Array<{ productId?: string; name: string; quantity: number; unitPriceCents: number }>;
+  defaultTerms?: string;
+  taxPercent?: number;
+  discountPercent?: number;
+  validForDays?: number;
+  createdAt: number;
+}

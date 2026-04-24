@@ -274,6 +274,114 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 6 applied: +recurrence/snooze/channels/reminder-history');
   }
 
+  // ONDA 7 — Inventario Pro
+  const onda7Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(107);
+  if (!onda7Applied) {
+    const invCols = db.prepare("PRAGMA table_info(crm_inventory)").all() as any[];
+    const invColNames = new Set(invCols.map((c: any) => c.name));
+    const addIv = (n: string, t: string) => { if (!invColNames.has(n)) db.exec(`ALTER TABLE crm_inventory ADD COLUMN ${n} ${t}`); };
+    addIv('category_id', 'TEXT');
+    addIv('barcode', 'TEXT');
+    addIv('images_json', "TEXT DEFAULT '[]'");
+    addIv('min_stock', 'INTEGER DEFAULT 0');
+    addIv('max_stock', 'INTEGER');
+    addIv('cost_cents', 'INTEGER DEFAULT 0');
+    addIv('price_wholesale_cents', 'INTEGER');
+    addIv('brand', 'TEXT');
+    addIv('weight_grams', 'INTEGER');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_inv_categories (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        parent_id TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_invcat_tenant ON crm_inv_categories(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS crm_inv_variants (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        inventory_id TEXT NOT NULL REFERENCES crm_inventory(id) ON DELETE CASCADE,
+        sku TEXT NOT NULL,
+        name TEXT NOT NULL,
+        attrs_json TEXT NOT NULL DEFAULT '{}',
+        stock INTEGER NOT NULL DEFAULT 0,
+        price_cents INTEGER,
+        barcode TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_invvar_item ON crm_inv_variants(inventory_id);
+
+      CREATE TABLE IF NOT EXISTS crm_inv_movements (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        inventory_id TEXT NOT NULL,
+        variant_id TEXT,
+        delta INTEGER NOT NULL,
+        reason TEXT,
+        reference TEXT,
+        created_by_agent_id TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_invmov_item ON crm_inv_movements(inventory_id, created_at);
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(107, Date.now());
+    console.log('[crm-migrate] Onda 7 applied: inventory variants/categories/movements');
+  }
+
+  // ONDA 8 — Line Items Pro
+  const onda8Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(108);
+  if (!onda8Applied) {
+    const liCols = db.prepare("PRAGMA table_info(crm_line_items)").all() as any[];
+    const liColNames = new Set(liCols.map((c: any) => c.name));
+    const addLi = (n: string, t: string) => { if (!liColNames.has(n)) db.exec(`ALTER TABLE crm_line_items ADD COLUMN ${n} ${t}`); };
+    addLi('discount_cents', 'INTEGER DEFAULT 0');
+    addLi('discount_percent', 'REAL');
+    addLi('tax_cents', 'INTEGER DEFAULT 0');
+    addLi('tax_percent', 'REAL');
+    addLi('notes', 'TEXT');
+    addLi('variant_id', 'TEXT');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_proposals (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        card_id TEXT NOT NULL REFERENCES crm_cards(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL DEFAULT 1,
+        subtotal_cents INTEGER NOT NULL DEFAULT 0,
+        discount_cents INTEGER NOT NULL DEFAULT 0,
+        tax_cents INTEGER NOT NULL DEFAULT 0,
+        total_cents INTEGER NOT NULL DEFAULT 0,
+        valid_until_ts INTEGER,
+        status TEXT NOT NULL DEFAULT 'draft',
+        terms TEXT,
+        signed_at INTEGER,
+        signed_by TEXT,
+        signed_ip TEXT,
+        pdf_url TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_prop_tenant ON crm_proposals(tenant_id, card_id);
+
+      CREATE TABLE IF NOT EXISTS crm_proposal_templates (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        items_json TEXT NOT NULL DEFAULT '[]',
+        default_terms TEXT,
+        tax_percent REAL,
+        discount_percent REAL,
+        valid_for_days INTEGER,
+        created_at INTEGER NOT NULL
+      );
+    `);
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(108, Date.now());
+    console.log('[crm-migrate] Onda 8 applied: line-items pro + proposals');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

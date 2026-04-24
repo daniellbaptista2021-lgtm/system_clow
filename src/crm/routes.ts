@@ -576,6 +576,66 @@ app.post('/reminders/:id/done', (c) => {
 app.get('/reminders/:id/history', (c) =>
   ok(c, { history: store.getReminderHistory(tenantOf(c), c.req.param('id')) }));
 
+// ═══ INVENTORY PRO ═══════════════════════════════════════════════════════
+app.post('/inventory/categories', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name) return badRequest(c, 'name required');
+  return ok(c, { category: store.createInvCategory(tenantOf(c), body) }, 201);
+});
+app.get('/inventory/categories', (c) => ok(c, { categories: store.listInvCategories(tenantOf(c)) }));
+app.delete('/inventory/categories/:id', (c) => store.deleteInvCategory(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'category'));
+
+app.post('/inventory/:id/variants', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.sku || !body.name) return badRequest(c, 'sku + name required');
+  return ok(c, { variant: store.createVariant(tenantOf(c), { ...body, inventoryId: c.req.param('id') }) }, 201);
+});
+app.get('/inventory/:id/variants', (c) => ok(c, { variants: store.listVariants(tenantOf(c), c.req.param('id')) }));
+app.delete('/inventory/variants/:id', (c) => store.deleteVariant(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'variant'));
+
+app.post('/inventory/:id/movements', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (typeof body.delta !== 'number') return badRequest(c, 'delta (number) required');
+  return ok(c, { movement: store.recordMovement(tenantOf(c), { ...body, inventoryId: c.req.param('id') }) }, 201);
+});
+app.get('/inventory/:id/movements', (c) => ok(c, { movements: store.listMovements(tenantOf(c), c.req.param('id'), parseInt(c.req.query('limit') || '100', 10)) }));
+
+app.get('/inventory/alerts/low-stock', (c) => ok(c, { items: store.lowStockAlerts(tenantOf(c)) }));
+
+// ═══ PROPOSALS (Line Items Pro) ══════════════════════════════════════════
+app.post('/cards/:id/proposals', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const p = store.createProposal(tenantOf(c), { ...body, cardId: c.req.param('id') });
+  return p ? ok(c, { proposal: p }, 201) : notFound(c, 'card');
+});
+app.get('/cards/:id/proposals', (c) => ok(c, { proposals: store.listProposals(tenantOf(c), c.req.param('id')) }));
+app.get('/proposals/:id', (c) => {
+  const p = store.getProposal(tenantOf(c), c.req.param('id'));
+  return p ? ok(c, { proposal: p }) : notFound(c, 'proposal');
+});
+app.post('/proposals/:id/status', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const st = body.status;
+  if (!['draft','sent','viewed','accepted','rejected','expired'].includes(st)) return badRequest(c, 'invalid status');
+  const p = store.updateProposalStatus(tenantOf(c), c.req.param('id'), st, { signedBy: body.signed_by, signedIp: body.signed_ip });
+  return p ? ok(c, { proposal: p }) : notFound(c, 'proposal');
+});
+app.post('/proposals/:id/sign', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.signed_by) return badRequest(c, 'signed_by (nome/email) required');
+  const signedIp = c.req.header('x-forwarded-for') || c.req.header('cf-connecting-ip') || undefined;
+  const p = store.updateProposalStatus(tenantOf(c), c.req.param('id'), 'accepted', { signedBy: body.signed_by, signedIp });
+  return p ? ok(c, { proposal: p }) : notFound(c, 'proposal');
+});
+
+app.post('/proposal-templates', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !Array.isArray(body.items)) return badRequest(c, 'name + items[] required');
+  return ok(c, { template: store.createProposalTemplate(tenantOf(c), body) }, 201);
+});
+app.get('/proposal-templates', (c) => ok(c, { templates: store.listProposalTemplates(tenantOf(c)) }));
+app.delete('/proposal-templates/:id', (c) => store.deleteProposalTemplate(tenantOf(c), c.req.param('id')) ? c.body(null, 204) : notFound(c, 'template'));
+
 // ═══ TEAMS + AGENTS PRO + SLA ═══════════════════════════════════════════
 app.post('/teams', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
