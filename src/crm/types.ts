@@ -46,6 +46,39 @@ export interface BoardColumn {
   createdAt: number;
 }
 
+// ONDA 1 - Contatos Pro: Segments e bulk ops
+export interface Segment {
+  id: string;
+  tenantId: string;
+  name: string;
+  description?: string;
+  filter: SegmentFilter;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface SegmentFilter {
+  tags?: string[];
+  tagsMode?: 'any' | 'all';
+  hasPhone?: boolean;
+  hasEmail?: boolean;
+  company?: string;
+  source?: string;
+  minLeadScore?: number;
+  maxLeadScore?: number;
+  createdAfter?: number;
+  createdBefore?: number;
+  lastInteractionAfter?: number;
+  lastInteractionBefore?: number;
+  customFieldEquals?: Record<string, string | number | boolean>;
+  nameContains?: string;
+}
+export type BulkContactAction = 'addTag' | 'removeTag' | 'delete' | 'updateField';
+export interface BulkContactOp {
+  action: BulkContactAction;
+  ids: string[];
+  payload?: { tag?: string; field?: string; value?: unknown };
+}
+
 export interface Contact {
   id: string;
   tenantId: string;
@@ -57,6 +90,14 @@ export interface Contact {
   customFields: Record<string, unknown>;
   notes?: string;
   source?: string; // how the lead came in
+  // ONDA 1 Pro — typed fields
+  company?: string;
+  title?: string;
+  website?: string;
+  address?: string;
+  birthdateTs?: number;
+  cpfCnpj?: string;
+  leadScore?: number;
   createdAt: number;
   updatedAt: number;
   lastInteractionAt?: number;

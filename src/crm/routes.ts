@@ -521,6 +521,95 @@ app.post('/media/process', async (c) => {
 });
 
 
+// ═══ CONTACTS PRO ═══════════════════════════════════════════════════════
+app.get('/contacts/duplicates', (c) => {
+  const dups = store.findDuplicateContacts(tenantOf(c));
+  return ok(c, { duplicates: dups });
+});
+
+app.post('/contacts/:id/merge', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const targetId = (body as any).target_id || (body as any).targetId;
+  if (!targetId) return badRequest(c, 'target_id required');
+  const r = store.mergeContacts(tenantOf(c), c.req.param('id'), targetId);
+  return r.ok ? ok(c, { merged: true }) : c.json({ error: r.error }, 400);
+});
+
+app.post('/contacts/import', async (c) => {
+  const tid = tenantOf(c);
+  const ctype = c.req.header('content-type') || '';
+  let csv = '';
+  if (ctype.includes('multipart/form-data')) {
+    const fd = await c.req.formData();
+    const file = fd.get('file');
+    if (!file || typeof file === 'string') return badRequest(c, 'file required');
+    csv = Buffer.from(await (file as any).arrayBuffer()).toString('utf-8');
+  } else {
+    csv = await c.req.text();
+  }
+  const result = store.importContactsCsv(tid, csv);
+  return ok(c, result);
+});
+
+app.get('/contacts/export', (c) => {
+  const csv = store.exportContactsCsv(tenantOf(c));
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="contacts.csv"',
+    },
+  });
+});
+
+app.post('/contacts/bulk', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.action || !Array.isArray(body.ids)) return badRequest(c, 'action + ids[] required');
+  const r = store.bulkContactOp(tenantOf(c), body);
+  return ok(c, r);
+});
+
+app.get('/contacts/:id/history', (c) => {
+  const limit = parseInt(c.req.query('limit') || '500', 10);
+  const type = c.req.query('type') || undefined;
+  const h = store.getContactHistory(tenantOf(c), c.req.param('id'), { limit, type });
+  return ok(c, h);
+});
+
+// ═══ SEGMENTS ═══════════════════════════════════════════════════════════
+app.post('/segments', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  if (!body.name || !body.filter) return badRequest(c, 'name + filter required');
+  const seg = store.createSegment(tenantOf(c), body);
+  return ok(c, { segment: seg }, 201);
+});
+
+app.get('/segments', (c) => ok(c, { segments: store.listSegments(tenantOf(c)) }));
+
+app.get('/segments/:id', (c) => {
+  const seg = store.getSegment(tenantOf(c), c.req.param('id'));
+  return seg ? ok(c, { segment: seg }) : notFound(c, 'segment');
+});
+
+app.patch('/segments/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const seg = store.updateSegment(tenantOf(c), c.req.param('id'), body);
+  return seg ? ok(c, { segment: seg }) : notFound(c, 'segment');
+});
+
+app.delete('/segments/:id', (c) => {
+  const ok2 = store.deleteSegment(tenantOf(c), c.req.param('id'));
+  return ok2 ? c.body(null, 204) : notFound(c, 'segment');
+});
+
+app.post('/segments/:id/run', (c) => {
+  const tid = tenantOf(c);
+  const seg = store.getSegment(tid, c.req.param('id'));
+  if (!seg) return notFound(c, 'segment');
+  const limit = parseInt(c.req.query('limit') || '500', 10);
+  const contacts = store.runSegment(tid, seg.filter, limit);
+  return ok(c, { contacts, total: contacts.length });
+});
+
 // ═══ AUTOMATIONS ═══════════════════════════════════════════════════════
 app.get('/automations', (c) => {
   return ok(c, { automations: automations.listAutomations(tenantOf(c)) });

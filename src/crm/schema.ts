@@ -49,6 +49,40 @@ function migrate(db: Database.Database): void {
     );
   `);
 
+  // ONDA 1 — Contatos Pro: colunas typed + tabela segments
+  const onda1Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(101);
+  if (!onda1Applied) {
+    const existingCols = db.prepare("PRAGMA table_info(crm_contacts)").all() as any[];
+    const colNames = new Set(existingCols.map((c: any) => c.name));
+    const addCol = (name: string, type: string) => {
+      if (!colNames.has(name)) db.exec(`ALTER TABLE crm_contacts ADD COLUMN ${name} ${type}`);
+    };
+    addCol('company', 'TEXT');
+    addCol('title', 'TEXT');
+    addCol('website', 'TEXT');
+    addCol('address', 'TEXT');
+    addCol('birthdate_ts', 'INTEGER');
+    addCol('cpf_cnpj', 'TEXT');
+    addCol('lead_score', 'INTEGER DEFAULT 0');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS crm_segments (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        filter_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_segments_tenant ON crm_segments(tenant_id);
+    `);
+
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(101, Date.now());
+    console.log('[crm-migrate] Onda 1 applied: +typed cols + crm_segments');
+  }
+
+
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),
   );

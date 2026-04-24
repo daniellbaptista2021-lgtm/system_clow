@@ -859,3 +859,380 @@ export function seedDefaultBoards(tenantId: string): Board {
 
   return salesBoard;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONDA 1 — Contatos Pro: duplicates, merge, import/export, bulk, segments
+// ═══════════════════════════════════════════════════════════════════════
+
+import type { Segment, SegmentFilter, BulkContactOp } from './types.js';
+
+function rowToContactPro(r: any): Contact {
+  const base = rowToContact(r);
+  return {
+    ...base,
+    company: r.company ?? undefined,
+    title: r.title ?? undefined,
+    website: r.website ?? undefined,
+    address: r.address ?? undefined,
+    birthdateTs: r.birthdate_ts ?? undefined,
+    cpfCnpj: r.cpf_cnpj ?? undefined,
+    leadScore: r.lead_score ?? 0,
+  } as any;
+}
+
+// Re-list com os campos typed inclusos
+export function listContactsPro(tenantId: string, opts: { limit?: number; offset?: number; tag?: string } = {}): Contact[] {
+  const db = getCrmDb();
+  const limit = Math.min(opts.limit ?? 100, 1000);
+  const offset = opts.offset ?? 0;
+  let sql = 'SELECT * FROM crm_contacts WHERE tenant_id = ?';
+  const args: any[] = [tenantId];
+  if (opts.tag) { sql += ' AND tags_json LIKE ?'; args.push('%"' + opts.tag + '"%'); }
+  sql += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+  args.push(limit, offset);
+  const rows = db.prepare(sql).all(...args) as any[];
+  return rows.map(rowToContactPro);
+}
+
+export function findDuplicateContacts(tenantId: string): Array<{ by: 'phone' | 'email' | 'name'; key: string; ids: string[] }> {
+  const db = getCrmDb();
+  const dups: Array<{ by: 'phone' | 'email' | 'name'; key: string; ids: string[] }> = [];
+
+  // por phone
+  const phoneDups = db.prepare(`
+    SELECT phone, GROUP_CONCAT(id) as ids, COUNT(*) as cnt
+    FROM crm_contacts WHERE tenant_id = ? AND phone IS NOT NULL AND phone != ''
+    GROUP BY phone HAVING cnt > 1
+  `).all(tenantId) as any[];
+  for (const p of phoneDups) dups.push({ by: 'phone', key: p.phone, ids: String(p.ids).split(',') });
+
+  // por email
+  const emailDups = db.prepare(`
+    SELECT email, GROUP_CONCAT(id) as ids, COUNT(*) as cnt
+    FROM crm_contacts WHERE tenant_id = ? AND email IS NOT NULL AND email != ''
+    GROUP BY LOWER(email) HAVING cnt > 1
+  `).all(tenantId) as any[];
+  for (const e of emailDups) dups.push({ by: 'email', key: e.email, ids: String(e.ids).split(',') });
+
+  return dups;
+}
+
+export function mergeContacts(tenantId: string, keepId: string, mergeId: string): { ok: boolean; error?: string } {
+  const db = getCrmDb();
+  const keep = db.prepare('SELECT * FROM crm_contacts WHERE id = ? AND tenant_id = ?').get(keepId, tenantId) as any;
+  const merge = db.prepare('SELECT * FROM crm_contacts WHERE id = ? AND tenant_id = ?').get(mergeId, tenantId) as any;
+  if (!keep || !merge) return { ok: false, error: 'contact_not_found' };
+  if (keepId === mergeId) return { ok: false, error: 'same_contact' };
+
+  // Merge fields: keep tem prioridade, fill missing with merge's
+  const mergedTags = Array.from(new Set([...JSON.parse(keep.tags_json || '[]'), ...JSON.parse(merge.tags_json || '[]')]));
+  const mergedCustom = { ...JSON.parse(merge.custom_fields_json || '{}'), ...JSON.parse(keep.custom_fields_json || '{}') };
+
+  const merged = {
+    name: keep.name || merge.name,
+    phone: keep.phone || merge.phone,
+    email: keep.email || merge.email,
+    avatar_url: keep.avatar_url || merge.avatar_url,
+    tags_json: JSON.stringify(mergedTags),
+    custom_fields_json: JSON.stringify(mergedCustom),
+    notes: [keep.notes, merge.notes].filter(Boolean).join('\n\n---\n\n') || null,
+    company: keep.company || merge.company,
+    title: keep.title || merge.title,
+    website: keep.website || merge.website,
+    address: keep.address || merge.address,
+    birthdate_ts: keep.birthdate_ts || merge.birthdate_ts,
+    cpf_cnpj: keep.cpf_cnpj || merge.cpf_cnpj,
+    lead_score: Math.max(keep.lead_score || 0, merge.lead_score || 0),
+  };
+
+  const tx = db.transaction(() => {
+    // Atualiza keep com campos merged
+    db.prepare(`
+      UPDATE crm_contacts SET name=?, phone=?, email=?, avatar_url=?, tags_json=?, custom_fields_json=?,
+        notes=?, company=?, title=?, website=?, address=?, birthdate_ts=?, cpf_cnpj=?, lead_score=?, updated_at=?
+      WHERE id=? AND tenant_id=?
+    `).run(merged.name, merged.phone, merged.email, merged.avatar_url, merged.tags_json, merged.custom_fields_json,
+      merged.notes, merged.company, merged.title, merged.website, merged.address, merged.birthdate_ts,
+      merged.cpf_cnpj, merged.lead_score, Date.now(), keepId, tenantId);
+
+    // Transfere cards e activities
+    db.prepare('UPDATE crm_cards SET contact_id = ? WHERE contact_id = ? AND tenant_id = ?').run(keepId, mergeId, tenantId);
+    db.prepare('UPDATE crm_activities SET contact_id = ? WHERE contact_id = ? AND tenant_id = ?').run(keepId, mergeId, tenantId);
+    db.prepare('UPDATE crm_subscriptions SET contact_id = ? WHERE contact_id = ? AND tenant_id = ?').run(keepId, mergeId, tenantId);
+
+    // Deleta o merge
+    db.prepare('DELETE FROM crm_contacts WHERE id = ? AND tenant_id = ?').run(mergeId, tenantId);
+  });
+
+  try { tx(); return { ok: true }; }
+  catch (err: any) { return { ok: false, error: err.message }; }
+}
+
+// CSV utils — parser manual pra nao depender de lib externa
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { result.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function csvEscape(v: unknown): string {
+  if (v == null) return '';
+  const s = String(v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+export interface ImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  errors: Array<{ line: number; error: string }>;
+}
+
+export function importContactsCsv(tenantId: string, csvText: string): ImportResult {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return { total: 0, created: 0, updated: 0, errors: [{ line: 0, error: 'csv vazio ou sem header' }] };
+
+  const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  const result: ImportResult = { total: 0, created: 0, updated: 0, errors: [] };
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const row = parseCsvLine(lines[i]);
+      const obj: Record<string, string> = {};
+      for (let j = 0; j < header.length && j < row.length; j++) obj[header[j]] = row[j];
+      result.total++;
+
+      const name = obj['name'] || obj['nome'] || obj['full_name'];
+      if (!name) { result.errors.push({ line: i + 1, error: 'name obrigatorio' }); continue; }
+
+      const phone = obj['phone'] || obj['telefone'] || obj['whatsapp'] || undefined;
+      const email = obj['email'] || undefined;
+
+      // Upsert por phone ou email
+      const existing = phone
+        ? findContactByPhone(tenantId, phone)
+        : email
+          ? (getCrmDb().prepare('SELECT * FROM crm_contacts WHERE tenant_id=? AND LOWER(email)=LOWER(?)').get(tenantId, email) as any)
+          : null;
+
+      const tags = obj['tags'] ? obj['tags'].split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+      const fields = {
+        name, phone, email,
+        company: obj['company'] || obj['empresa'] || undefined,
+        title: obj['title'] || obj['cargo'] || undefined,
+        website: obj['website'] || obj['site'] || undefined,
+        address: obj['address'] || obj['endereco'] || undefined,
+        cpfCnpj: obj['cpf'] || obj['cnpj'] || obj['cpf_cnpj'] || undefined,
+        notes: obj['notes'] || obj['observacoes'] || undefined,
+        source: obj['source'] || 'import',
+        tags,
+      };
+
+      if (existing) {
+        updateContact(tenantId, existing.id, fields as any);
+        result.updated++;
+      } else {
+        createContact(tenantId, fields as any);
+        result.created++;
+      }
+    } catch (err: any) {
+      result.errors.push({ line: i + 1, error: err.message });
+    }
+  }
+  return result;
+}
+
+export function exportContactsCsv(tenantId: string): string {
+  const db = getCrmDb();
+  const rows = db.prepare('SELECT * FROM crm_contacts WHERE tenant_id = ? ORDER BY created_at DESC').all(tenantId) as any[];
+  const header = ['name', 'phone', 'email', 'company', 'title', 'website', 'address', 'cpf_cnpj', 'lead_score', 'tags', 'source', 'notes', 'created_at'];
+  const lines: string[] = [header.join(',')];
+  for (const r of rows) {
+    const tags = JSON.parse(r.tags_json || '[]').join(';');
+    lines.push([
+      csvEscape(r.name),
+      csvEscape(r.phone),
+      csvEscape(r.email),
+      csvEscape(r.company),
+      csvEscape(r.title),
+      csvEscape(r.website),
+      csvEscape(r.address),
+      csvEscape(r.cpf_cnpj),
+      csvEscape(r.lead_score),
+      csvEscape(tags),
+      csvEscape(r.source),
+      csvEscape(r.notes),
+      csvEscape(new Date(r.created_at).toISOString()),
+    ].join(','));
+  }
+  return lines.join('\n');
+}
+
+export function bulkContactOp(tenantId: string, op: BulkContactOp): { affected: number; errors: string[] } {
+  const db = getCrmDb();
+  const errors: string[] = [];
+  let affected = 0;
+
+  const tx = db.transaction(() => {
+    for (const id of op.ids) {
+      try {
+        if (op.action === 'delete') {
+          const r = db.prepare('DELETE FROM crm_contacts WHERE id = ? AND tenant_id = ?').run(id, tenantId);
+          if (r.changes > 0) affected++;
+          continue;
+        }
+        const c = db.prepare('SELECT * FROM crm_contacts WHERE id = ? AND tenant_id = ?').get(id, tenantId) as any;
+        if (!c) { errors.push(`${id}: not_found`); continue; }
+
+        if (op.action === 'addTag' && op.payload?.tag) {
+          const tags: string[] = JSON.parse(c.tags_json || '[]');
+          if (!tags.includes(op.payload.tag)) {
+            tags.push(op.payload.tag);
+            db.prepare('UPDATE crm_contacts SET tags_json=?, updated_at=? WHERE id=? AND tenant_id=?')
+              .run(JSON.stringify(tags), Date.now(), id, tenantId);
+            affected++;
+          }
+        } else if (op.action === 'removeTag' && op.payload?.tag) {
+          const tags: string[] = JSON.parse(c.tags_json || '[]');
+          const filtered = tags.filter(t => t !== op.payload!.tag);
+          if (filtered.length !== tags.length) {
+            db.prepare('UPDATE crm_contacts SET tags_json=?, updated_at=? WHERE id=? AND tenant_id=?')
+              .run(JSON.stringify(filtered), Date.now(), id, tenantId);
+            affected++;
+          }
+        } else if (op.action === 'updateField' && op.payload?.field) {
+          const field = op.payload.field;
+          const value = op.payload.value;
+          const allowed = new Set(['name','phone','email','company','title','website','address','cpf_cnpj','lead_score','notes','source']);
+          if (!allowed.has(field)) { errors.push(`${id}: field ${field} not allowed`); continue; }
+          db.prepare(`UPDATE crm_contacts SET ${field}=?, updated_at=? WHERE id=? AND tenant_id=?`)
+            .run(value as any, Date.now(), id, tenantId);
+          affected++;
+        }
+      } catch (err: any) { errors.push(`${id}: ${err.message}`); }
+    }
+  });
+  tx();
+  return { affected, errors };
+}
+
+export function getContactHistory(tenantId: string, contactId: string, opts: { limit?: number; type?: string } = {}): { activities: any[]; cards: any[]; subscriptions: any[] } {
+  const db = getCrmDb();
+  const limit = opts.limit ?? 500;
+  let sql = 'SELECT * FROM crm_activities WHERE tenant_id = ? AND contact_id = ?';
+  const args: any[] = [tenantId, contactId];
+  if (opts.type) { sql += ' AND type = ?'; args.push(opts.type); }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  args.push(limit);
+  const activities = db.prepare(sql).all(...args) as any[];
+  const cards = db.prepare('SELECT * FROM crm_cards WHERE tenant_id = ? AND contact_id = ?').all(tenantId, contactId) as any[];
+  const subs = db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND contact_id = ?').all(tenantId, contactId) as any[];
+  return { activities, cards, subscriptions: subs };
+}
+
+// ─── Segments ──────────────────────────────────────────────
+export function createSegment(tenantId: string, input: { name: string; description?: string; filter: SegmentFilter }): Segment {
+  const db = getCrmDb();
+  const s: Segment = {
+    id: nid('crm_seg'), tenantId, name: input.name, description: input.description,
+    filter: input.filter, createdAt: now(), updatedAt: now(),
+  };
+  db.prepare(`INSERT INTO crm_segments (id,tenant_id,name,description,filter_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`)
+    .run(s.id, s.tenantId, s.name, s.description ?? null, JSON.stringify(s.filter), s.createdAt, s.updatedAt);
+  return s;
+}
+
+export function listSegments(tenantId: string): Segment[] {
+  const db = getCrmDb();
+  const rows = db.prepare('SELECT * FROM crm_segments WHERE tenant_id = ? ORDER BY updated_at DESC').all(tenantId) as any[];
+  return rows.map(rowToSegment);
+}
+
+export function getSegment(tenantId: string, id: string): Segment | null {
+  const db = getCrmDb();
+  const r = db.prepare('SELECT * FROM crm_segments WHERE id = ? AND tenant_id = ?').get(id, tenantId) as any;
+  return r ? rowToSegment(r) : null;
+}
+
+export function updateSegment(tenantId: string, id: string, patch: Partial<Omit<Segment,'id'|'tenantId'|'createdAt'>>): Segment | null {
+  const existing = getSegment(tenantId, id);
+  if (!existing) return null;
+  const upd = { ...existing, ...patch, updatedAt: now() };
+  const db = getCrmDb();
+  db.prepare('UPDATE crm_segments SET name=?, description=?, filter_json=?, updated_at=? WHERE id=? AND tenant_id=?')
+    .run(upd.name, upd.description ?? null, JSON.stringify(upd.filter), upd.updatedAt, id, tenantId);
+  return upd;
+}
+
+export function deleteSegment(tenantId: string, id: string): boolean {
+  const db = getCrmDb();
+  const r = db.prepare('DELETE FROM crm_segments WHERE id=? AND tenant_id=?').run(id, tenantId);
+  return r.changes > 0;
+}
+
+function rowToSegment(r: any): Segment {
+  return {
+    id: r.id, tenantId: r.tenant_id, name: r.name,
+    description: r.description ?? undefined,
+    filter: JSON.parse(r.filter_json || '{}') as SegmentFilter,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+export function runSegment(tenantId: string, filter: SegmentFilter, limit: number = 500): Contact[] {
+  const db = getCrmDb();
+  const conds: string[] = ['tenant_id = ?'];
+  const args: any[] = [tenantId];
+
+  if (filter.hasPhone) conds.push('phone IS NOT NULL AND phone != ""');
+  if (filter.hasEmail) conds.push('email IS NOT NULL AND email != ""');
+  if (filter.company) { conds.push('company LIKE ?'); args.push('%' + filter.company + '%'); }
+  if (filter.source) { conds.push('source = ?'); args.push(filter.source); }
+  if (filter.minLeadScore != null) { conds.push('COALESCE(lead_score,0) >= ?'); args.push(filter.minLeadScore); }
+  if (filter.maxLeadScore != null) { conds.push('COALESCE(lead_score,0) <= ?'); args.push(filter.maxLeadScore); }
+  if (filter.createdAfter) { conds.push('created_at >= ?'); args.push(filter.createdAfter); }
+  if (filter.createdBefore) { conds.push('created_at <= ?'); args.push(filter.createdBefore); }
+  if (filter.lastInteractionAfter) { conds.push('last_interaction_at >= ?'); args.push(filter.lastInteractionAfter); }
+  if (filter.lastInteractionBefore) { conds.push('last_interaction_at <= ?'); args.push(filter.lastInteractionBefore); }
+  if (filter.nameContains) { conds.push('name LIKE ?'); args.push('%' + filter.nameContains + '%'); }
+
+  // Tags via LIKE (aproximacao)
+  if (filter.tags && filter.tags.length) {
+    const mode = filter.tagsMode || 'any';
+    const tagConds = filter.tags.map(() => 'tags_json LIKE ?').join(mode === 'all' ? ' AND ' : ' OR ');
+    conds.push('(' + tagConds + ')');
+    for (const t of filter.tags) args.push('%"' + t + '"%');
+  }
+
+  const sql = `SELECT * FROM crm_contacts WHERE ${conds.join(' AND ')} ORDER BY updated_at DESC LIMIT ?`;
+  args.push(Math.min(limit, 2000));
+  const rows = db.prepare(sql).all(...args) as any[];
+
+  // customFieldEquals filter na memoria (JSON match)
+  let results = rows;
+  if (filter.customFieldEquals) {
+    results = results.filter(r => {
+      const cf = JSON.parse(r.custom_fields_json || '{}');
+      for (const [k, v] of Object.entries(filter.customFieldEquals!)) {
+        if (cf[k] !== v) return false;
+      }
+      return true;
+    });
+  }
+  return results.map(rowToContactPro);
+}
