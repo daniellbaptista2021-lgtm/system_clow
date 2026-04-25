@@ -829,53 +829,77 @@ app.post('/reminders', async (c) => {
 // Onda 53: /me — info do tenant atual + limites WhatsApp
 app.get('/me', async (c) => {
   const tid = tenantOf(c);
-  const { getTenant } = await import('../tenancy/tenantStore.js');
-  const { TIERS } = await import('../tenancy/tiers.js');
-  const t = getTenant(tid);
-  if (!t) return c.json({ error: 'tenant_not_found' }, 404);
-  const tierCfg = TIERS[t.tier as keyof typeof TIERS];
+  try {
+    const { getTenant } = await import('../tenancy/tenantStore.js');
+    const { TIERS } = await import('../tenancy/tiers.js');
+    const t = getTenant(tid);
+    const channels = store.listChannels(tid);
+    const zapiCount = channels.filter((ch: any) => ch.type === 'zapi').length;
+    const metaCount = channels.filter((ch: any) => ch.type === 'meta').length;
+    const totalUsed = zapiCount + metaCount;
 
-  // Contar canais ativos
-  const channels = store.listChannels(tid);
-  const zapiCount = channels.filter((ch: any) => ch.type === 'zapi').length;
-  const metaCount = channels.filter((ch: any) => ch.type === 'meta').length;
-  const totalUsed = zapiCount + metaCount;
-
-  // Buscar add-on Stripe (numero extras pagos)
-  let extraPaid = 0;
-  if (t.stripe_subscription_id && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_WHATSAPP_ADDON) {
-    try {
-      const Stripe = (await import('stripe')).default;
-      const sk = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' as any });
-      const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
-      const addonItem = sub.items.data.find((it: any) => it.price.id === process.env.STRIPE_PRICE_WHATSAPP_ADDON);
-      if (addonItem) extraPaid = addonItem.quantity || 0;
-    } catch (err: any) {
-      console.warn('[/me] subscription check failed:', err.message);
+    // Tenant nao encontrado: retorna fallback 200 (nunca derruba o front)
+    if (!t) {
+      console.warn('[/me] tenant not found tid=' + tid + ' — using fallback');
+      return c.json({
+        ok: true,
+        _fallback: true,
+        tenant: { id: tid, email: null, name: null, tier: 'unknown', status: 'unknown', hasStripe: false },
+        whatsapp: { included: 1, max: 999, zapiCount, metaCount, totalUsed, extraPaid: 0, available: Math.max(0, 999 - totalUsed), pricePerExtraBrl: 100 },
+      });
     }
-  }
 
-  return c.json({
-    ok: true,
-    tenant: {
-      id: t.id,
-      email: t.email,
-      name: t.name,
-      tier: t.tier,
-      status: t.status,
-      hasStripe: !!t.stripe_customer_id,
-    },
-    whatsapp: tierCfg ? {
-      included: tierCfg.included_whatsapp_numbers || 1,
-      max: tierCfg.max_whatsapp_numbers || 1,
-      zapiCount,
-      metaCount,
-      totalUsed,
-      extraPaid,
-      available: Math.max(0, (tierCfg.max_whatsapp_numbers || 1) - totalUsed),
-      pricePerExtraBrl: 100,
-    } : null,
-  });
+    const tierCfg = TIERS[t.tier as keyof typeof TIERS];
+
+    // Buscar add-on Stripe (numero extras pagos) com timeout 3s
+    let extraPaid = 0;
+    if (t.stripe_subscription_id && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_WHATSAPP_ADDON) {
+      try {
+        const Stripe = (await import('stripe')).default;
+        const sk = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' as any, timeout: 3000 });
+        const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
+        const addonItem = sub.items.data.find((it: any) => it.price.id === process.env.STRIPE_PRICE_WHATSAPP_ADDON);
+        if (addonItem) extraPaid = addonItem.quantity || 0;
+      } catch (err: any) {
+        console.warn('[/me] subscription check failed:', err.message);
+      }
+    }
+
+    // Tier desconhecido: tambem retorna fallback amplo (assume business)
+    const max = tierCfg?.max_whatsapp_numbers || 999;
+    const included = tierCfg?.included_whatsapp_numbers || 1;
+
+    return c.json({
+      ok: true,
+      tenant: {
+        id: t.id,
+        email: t.email,
+        name: t.name,
+        tier: t.tier,
+        status: t.status,
+        hasStripe: !!t.stripe_customer_id,
+      },
+      whatsapp: {
+        included,
+        max,
+        zapiCount,
+        metaCount,
+        totalUsed,
+        extraPaid,
+        available: Math.max(0, max + extraPaid - totalUsed),
+        pricePerExtraBrl: 100,
+      },
+    });
+  } catch (err: any) {
+    console.error('[/me] handler error:', err && err.stack || err);
+    return c.json({
+      ok: true,
+      _fallback: true,
+      _error: err?.message || 'internal',
+      tenant: { id: tid, email: null, name: null, tier: 'unknown', status: 'unknown', hasStripe: false },
+      whatsapp: { included: 1, max: 999, zapiCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
+    });
+  }
 });
 
 app.get('/stats', (c) => {

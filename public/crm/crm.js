@@ -4823,7 +4823,17 @@ async function loadMyInfo() {
     const r = await api('/me');
     window.state.me = r;
     return r;
-  } catch (e) { console.warn('[onda53] loadMyInfo failed:', e); return null; }
+  } catch (e) {
+    console.warn('[onda53] loadMyInfo failed:', e && e.message || e);
+    // Fallback resiliente: nunca derrubar fluxo do front
+    const fb = {
+      _fallback: true,
+      tenant: { id: null, tier: 'unknown', status: 'unknown', hasStripe: false },
+      whatsapp: { included: 1, max: 999, zapiCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
+    };
+    window.state.me = fb;
+    return fb;
+  }
 }
 
 function renderChannelsLimitsBadge() {
@@ -4845,16 +4855,11 @@ function renderChannelsLimitsBadge() {
 
 // Pre-modal de escolha Z-API vs Meta
 async function openChannelTypePicker() {
-  const me = await loadMyInfo();
-  if (!me) {
-    toast('Erro ao carregar info do plano. Tente recarregar a pagina.', 'error');
-    return;
+  const me = (await loadMyInfo()) || { _fallback: true, whatsapp: { included: 1, max: 999, totalUsed: 0, available: 999, extraPaid: 0, pricePerExtraBrl: 100 } };
+  if (me._fallback) {
+    console.warn('[onda53] picker em modo fallback — info do plano indisponivel');
   }
-  if (!me.whatsapp) {
-    toast('Tier do plano nao reconhecido (' + (me.tenant?.tier || 'desconhecido') + '). Contate o suporte.', 'error');
-    return;
-  }
-  const wa = me.whatsapp;
+  const wa = me.whatsapp || { included: 1, max: 999, totalUsed: 0, available: 999, extraPaid: 0, pricePerExtraBrl: 100 };
 
   // Limite atingido?
   if (wa.available <= 0) {
