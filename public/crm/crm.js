@@ -3019,13 +3019,21 @@ function wireEvents() {
   wire('#newAgentBtn', 'click', openNewAgentModal);
   wire('#newInventoryBtn', 'click', openNewInventoryModal);
 
-  // Side panel — close + tabs
+  // Side panel — close + tabs (delegation pra pegar abas adicionadas dinamicamente)
   wire('#closePanelBtn', 'click', closeCardPanel);
-  wireAll('.panel-tab', 'click', (e) => {
-    const tab = e.currentTarget;
+  document.body.addEventListener('click', (e) => {
+    const tab = e.target.closest('.panel-tab');
+    if (!tab) return;
     const tabId = tab.dataset.tab;
     document.querySelectorAll('.panel-tab').forEach(x => x.classList.toggle('active', x === tab));
     document.querySelectorAll('.tab-section').forEach(s => s.classList.toggle('active', s.dataset.tab === tabId));
+    // Render fresh content para abas Onda 37
+    const card = state.currentCard?.card;
+    if (card) {
+      if (tabId === 'ai' && typeof renderAITab === 'function') renderAITab(card).catch(() => {});
+      else if (tabId === 'links' && typeof renderLinksTab === 'function') renderLinksTab(card).catch(() => {});
+      else if (tabId === 'comments' && typeof renderCommentsTab === 'function') renderCommentsTab(card).catch(() => {});
+    }
   });
 
   // Composer
