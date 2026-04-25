@@ -548,7 +548,7 @@ export function logActivity(tenantId: string, input: {
     if (a.type === 'message_in' && a.cardId) {
       const card = db.prepare('SELECT id, title, column_id, unread_count, contact_id FROM crm_cards WHERE id=? AND tenant_id=?').get(a.cardId, tenantId) as any;
       const contact = a.contactId ? db.prepare('SELECT name, phone FROM crm_contacts WHERE id=?').get(a.contactId) as any : null;
-      pub(tenantId, 'message.in', {
+      const pushPayload = {
         cardId: a.cardId,
         columnId: card?.column_id,
         unreadCount: card?.unread_count || 0,
@@ -558,7 +558,21 @@ export function logActivity(tenantId: string, input: {
         preview: String(a.content || '').slice(0, 120),
         mediaType: a.mediaType,
         activityId: a.id,
-      });
+      };
+      pub(tenantId, 'message.in', pushPayload);
+      // Onda 49: push notification pra mobile (app closed tambem)
+      try {
+        const { broadcastToTenant } = await import('./push.js');
+        const previewText = a.mediaType && a.mediaType !== 'text'
+          ? `[${String(a.mediaType).toUpperCase()}] ${pushPayload.preview || ''}`.trim()
+          : (pushPayload.preview || 'Mensagem nova');
+        void broadcastToTenant(tenantId, {
+          title: contact?.name || card?.title || 'Nova mensagem WhatsApp',
+          body: previewText,
+          url: `/crm/#card=${a.cardId}`,
+          data: { cardId: a.cardId, type: 'message_in' },
+        }).catch(() => {});
+      } catch (err) { /* push optional */ }
     } else if (a.type === 'message_out' && a.cardId) {
       pub(tenantId, 'message.read', { cardId: a.cardId });
     }

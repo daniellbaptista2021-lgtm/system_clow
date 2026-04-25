@@ -4432,12 +4432,13 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   }
 
   function connect() {
-    const token = window.__CRM_API_KEY__ || localStorage.getItem('crm_api_key') || '';
+    const token = (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || window.__CRM_API_KEY__ || '';
     if (!token) { setTimeout(connect, 3000); return; }
     try {
       if (state48.es) state48.es.close();
       state48.es = new EventSource(`/v1/crm/events?token=${encodeURIComponent(token)}`);
       state48.es.addEventListener('message.in', (ev) => {
+        if (window.__onda49) window.__onda49.lastSseMsg = Date.now();
         try {
           const data = JSON.parse(ev.data);
           // Tocar beep so se o card NAO esta aberto agora (evita spam quando
@@ -4487,5 +4488,173 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
 
   // Expor pra debugging
   window.__onda48 = { beep, showNotification, connect };
+})();
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══ ONDA 49: MOBILE SYNC + PUSH NOTIFICATIONS ═══════════════════════
+(function onda49Mobile() {
+  const sync49 = { lastRefresh: 0, pollTimer: null, sseAlive: false };
+
+  function getToken() {
+    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+  }
+
+  async function forceRefresh(reason) {
+    const now = Date.now();
+    // throttle: no minimo 2s entre refreshes
+    if (now - sync49.lastRefresh < 2000) return;
+    sync49.lastRefresh = now;
+    try {
+      if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
+        await loadPipeline(window.state.currentBoardId);
+        if (typeof renderKanban === 'function') renderKanban();
+      }
+      if (window.state?.currentCard && typeof refreshCurrentCard === 'function') {
+        await refreshCurrentCard();
+      }
+      console.log('[onda49] refresh:', reason);
+    } catch (e) { console.warn('[onda49] refresh failed:', e); }
+  }
+
+  // Auto-refresh quando usuario volta pro app (mobile suspende tabs em bg)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      forceRefresh('visibility');
+      // Reconnect SSE se estava morto
+      if (!sync49.sseAlive && window.__onda48?.connect) {
+        try { window.__onda48.connect(); } catch {}
+      }
+    }
+  });
+
+  // Polling fallback — 30s quando SSE nao confirma vivo
+  function startPolling() {
+    if (sync49.pollTimer) return;
+    sync49.pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible' && !sync49.sseAlive) {
+        forceRefresh('polling');
+      }
+    }, 30000);
+  }
+  startPolling();
+
+  // Marcar SSE vivo quando recebe evento
+  ['message.in', 'message.read', 'activity'].forEach(ev => {
+    window.addEventListener('_onda49_sse_' + ev, () => { sync49.sseAlive = true; });
+  });
+
+  // Hook: re-emitir eventos SSE como custom events pra que onda49 saiba
+  // que SSE ta recebendo (indicador de conexao viva)
+  setTimeout(() => {
+    if (window.__onda48 && !window.__onda49_hooked) {
+      window.__onda49_hooked = true;
+      // Monkey-patch: sempre que onda48 SSE dispara, marcar vivo
+      const origConnect = window.__onda48.connect;
+      if (origConnect) {
+        window.__onda48.connect = function() {
+          origConnect.call(this);
+          // Piggyback no EventSource — checar sseAlive periodicamente
+          setInterval(() => {
+            // Heartbeat check: se recebemos qualquer dado nos ultimos 60s
+            // (eventos OU comments do server), sse esta vivo
+            const now = Date.now();
+            sync49.sseAlive = (now - sync49.lastSseMsg) < 60000;
+          }, 10000);
+        };
+      }
+    }
+  }, 3000);
+
+  // ═══ PUSH NOTIFICATIONS ═══════════════════════════════════════════
+  async function registerPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('[onda49] push nao suportado');
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+
+      if (!sub) {
+        // Fetch VAPID pub key
+        const token = getToken();
+        if (!token) { setTimeout(registerPush, 5000); return; }
+        const r = await fetch('/v1/crm/push/vapid-public-key', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (!r.ok) { console.warn('[onda49] sem VAPID'); return; }
+        const { publicKey } = await r.json();
+        if (!publicKey) { console.warn('[onda49] VAPID vazio'); return; }
+
+        // Converter b64url → Uint8Array
+        const padded = publicKey.replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(padded + '='.repeat((4 - padded.length % 4) % 4));
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: arr,
+        });
+      }
+
+      // POST pra subscribe
+      const subJson = sub.toJSON();
+      await fetch('/v1/crm/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getToken(),
+        },
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth,
+          ua: navigator.userAgent,
+        }),
+      });
+      console.log('[onda49] push subscription registrada');
+    } catch (e) {
+      console.warn('[onda49] push register falhou:', e);
+    }
+  }
+
+  // Registrar SW + push (so depois de login)
+  async function initPush() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      // Garantir SW registrado
+      const regs = await navigator.serviceWorker.getRegistrations();
+      if (!regs.some(r => r.active && (r.scope.endsWith('/') || r.scope.includes('/crm')))) {
+        await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      }
+      // Esperar login (state.apiKey existir)
+      const waitLogin = setInterval(() => {
+        if (getToken()) {
+          clearInterval(waitLogin);
+          // Esperar permission granted (Onda 48 ja pede)
+          if (Notification.permission === 'granted') {
+            registerPush();
+          } else {
+            const check = setInterval(() => {
+              if (Notification.permission === 'granted') {
+                clearInterval(check);
+                registerPush();
+              }
+            }, 2000);
+          }
+        }
+      }, 500);
+    } catch (e) { console.warn('[onda49] SW init failed:', e); }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPush);
+  } else {
+    initPush();
+  }
+
+  window.__onda49 = { registerPush, forceRefresh };
 })();
 // ═══════════════════════════════════════════════════════════════════════
