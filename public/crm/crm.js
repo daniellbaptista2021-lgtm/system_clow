@@ -4855,10 +4855,19 @@ function renderChannelsLimitsBadge() {
 
 // Pre-modal de escolha Z-API vs Meta
 async function openChannelTypePicker() {
-  const me = (await loadMyInfo()) || { _fallback: true, whatsapp: { included: 1, max: 999, totalUsed: 0, available: 999, extraPaid: 0, pricePerExtraBrl: 100 } };
-  if (me._fallback) {
-    console.warn('[onda53] picker em modo fallback — info do plano indisponivel');
+  console.log('[picker] openChannelTypePicker chamado');
+  let me;
+  try {
+    me = await loadMyInfo();
+  } catch (e) {
+    console.error('[picker] loadMyInfo throw:', e);
+    me = null;
   }
+  if (!me || typeof me !== 'object') {
+    me = { _fallback: true, tenant: { id: null, tier: 'unknown', status: 'unknown', hasStripe: false }, whatsapp: null };
+  }
+  if (!me.tenant) me.tenant = { id: null, tier: 'unknown', status: 'unknown', hasStripe: false };
+  if (me._fallback) console.warn('[onda53] picker em modo fallback');
   const wa = me.whatsapp || { included: 1, max: 999, totalUsed: 0, available: 999, extraPaid: 0, pricePerExtraBrl: 100 };
 
   // Limite atingido?
@@ -4867,7 +4876,7 @@ async function openChannelTypePicker() {
     const modal = el('div', { class: 'modal', style: 'max-width:460px' },
       el('h3', {}, 'Limite de numeros atingido'),
       el('p', { style: 'color:var(--text-dim);line-height:1.6;font-size:13.5px' },
-        'Seu plano ', el('b', {}, (me.tenant.tier || '').toUpperCase()),
+        'Seu plano ', el('b', {}, (me?.tenant?.tier || 'desconhecido').toUpperCase()),
         ' permite no maximo ', el('b', {}, String(wa.max)),
         ' numero(s) WhatsApp. Voce ja tem ', el('b', {}, String(wa.totalUsed)),
         ' conectado(s).'
@@ -4894,7 +4903,7 @@ async function openChannelTypePicker() {
     el('h3', {}, 'Adicionar numero WhatsApp'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 18px' },
       'Voce tem ', el('b', { style: 'color:var(--text)' }, String(wa.available)),
-      ' vaga(s) disponivel(is) no plano ', el('b', { style: 'color:var(--text)' }, (me.tenant.tier || '').toUpperCase()),
+      ' vaga(s) disponivel(is) no plano ', el('b', { style: 'color:var(--text)' }, (me?.tenant?.tier || 'desconhecido').toUpperCase()),
       '. Escolha o tipo de conexao:'
     ),
 
@@ -4946,8 +4955,13 @@ async function openChannelTypePicker() {
       el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Cancelar'),
     ),
   );
-  dialog.append(modal);
-  document.body.append(dialog);
+  try {
+    dialog.append(modal);
+    document.body.append(dialog);
+  } catch (e) {
+    console.error('[picker] erro ao montar modal:', e);
+    toast('Erro ao abrir picker. Veja o console.', 'error');
+  }
 }
 
 // Onda 53h: fluxo Stripe Checkout pra Z-API adicional
