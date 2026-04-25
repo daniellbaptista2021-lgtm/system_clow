@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   initAnthropic({
     apiKey,
     model: selectedModel,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 16384,
   });
   startupNotices.push(`Model ready: ${selectedModel}`);
 

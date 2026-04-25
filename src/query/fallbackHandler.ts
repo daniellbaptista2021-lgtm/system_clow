@@ -23,7 +23,7 @@ import type { UserMessage } from './types.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const MAX_OUTPUT_TOKENS_RECOVERY_LIMIT = 3;
+export const MAX_OUTPUT_TOKENS_RECOVERY_LIMIT = 5;
 const FALLBACK_COOLDOWN_MS = 60_000; // 1 minute cooldown after fallback
 
 // ─── Types ──────────────────────────────────────────────────────────────────
