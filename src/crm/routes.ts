@@ -826,6 +826,58 @@ app.post('/reminders', async (c) => {
 });
 
 // ═══ STATS / DASHBOARD ══════════════════════════════════════════════════
+// Onda 53: /me — info do tenant atual + limites WhatsApp
+app.get('/me', async (c) => {
+  const tid = tenantOf(c);
+  const { getTenant } = await import('../tenancy/tenantStore.js');
+  const { TIERS } = await import('../tenancy/tiers.js');
+  const t = getTenant(tid);
+  if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+  const tierCfg = TIERS[t.tier as keyof typeof TIERS];
+
+  // Contar canais ativos
+  const channels = store.listChannels(tid);
+  const zapiCount = channels.filter((ch: any) => ch.type === 'zapi').length;
+  const metaCount = channels.filter((ch: any) => ch.type === 'meta').length;
+  const totalUsed = zapiCount + metaCount;
+
+  // Buscar add-on Stripe (numero extras pagos)
+  let extraPaid = 0;
+  if (t.stripe_subscription_id && process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_WHATSAPP_ADDON) {
+    try {
+      const Stripe = (await import('stripe')).default;
+      const sk = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' as any });
+      const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
+      const addonItem = sub.items.data.find((it: any) => it.price.id === process.env.STRIPE_PRICE_WHATSAPP_ADDON);
+      if (addonItem) extraPaid = addonItem.quantity || 0;
+    } catch (err: any) {
+      console.warn('[/me] subscription check failed:', err.message);
+    }
+  }
+
+  return c.json({
+    ok: true,
+    tenant: {
+      id: t.id,
+      email: t.email,
+      name: t.name,
+      tier: t.tier,
+      status: t.status,
+      hasStripe: !!t.stripe_customer_id,
+    },
+    whatsapp: tierCfg ? {
+      included: tierCfg.included_whatsapp_numbers || 1,
+      max: tierCfg.max_whatsapp_numbers || 1,
+      zapiCount,
+      metaCount,
+      totalUsed,
+      extraPaid,
+      available: Math.max(0, (tierCfg.max_whatsapp_numbers || 1) - totalUsed),
+      pricePerExtraBrl: 100,
+    } : null,
+  });
+});
+
 app.get('/stats', (c) => {
   const tid = tenantOf(c);
   const boards = store.listBoards(tid);

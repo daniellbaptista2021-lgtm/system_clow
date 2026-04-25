@@ -38,6 +38,11 @@ function priceIds(): Record<string, string | undefined> {
   };
 }
 
+// Onda 53: Add-on WhatsApp (Z-API extra), R$ 100/mes recorrente por numero
+function whatsappAddonPriceId(): string | undefined {
+  return process.env.STRIPE_PRICE_WHATSAPP_ADDON;
+}
+
 function publicBase(): string {
   return process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
 }
@@ -323,5 +328,154 @@ app.get('/signup/success', (c) => {
   ].join('');
   return c.html(html);
 });
+
+
+
+// ═══ ONDA 53: WhatsApp Add-on (Z-API extras a R$ 100/mes recorrente) ═══
+
+import { getTenant as _getTenantOnda53 } from '../tenancy/tenantStore.js';
+import { TIERS as _TIERS_O53, type TierName as _TierName_O53 } from '../tenancy/tiers.js';
+
+// GET /api/billing/whatsapp-addon/status?tenantId=...
+app.get('/api/billing/whatsapp-addon/status', async (c) => {
+  const tenantId = c.req.query('tenantId') || c.req.header('x-clow-tenant-id');
+  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const t = _getTenantOnda53(tenantId);
+  if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+  const tierCfg = _TIERS_O53[t.tier as _TierName_O53];
+  if (!tierCfg) return c.json({ error: 'tier_not_found' }, 404);
+
+  let currentExtraCount = 0;
+  if (t.stripe_subscription_id) {
+    try {
+      const sk = await stripe();
+      const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
+      const addonItem = sub.items.data.find((it: any) => it.price.id === whatsappAddonPriceId());
+      if (addonItem) currentExtraCount = addonItem.quantity || 0;
+    } catch (err: any) {
+      console.warn('[wa-addon status] subscription fetch failed:', err.message);
+    }
+  }
+
+  return c.json({
+    ok: true,
+    tier: t.tier,
+    included: tierCfg.included_whatsapp_numbers,
+    max: tierCfg.max_whatsapp_numbers,
+    currentExtraCount,
+    totalConnected: tierCfg.included_whatsapp_numbers + currentExtraCount,
+    available: Math.max(0, tierCfg.max_whatsapp_numbers - tierCfg.included_whatsapp_numbers - currentExtraCount),
+    pricePerExtraBrl: 100,
+  });
+});
+
+// POST /api/billing/whatsapp-addon/add  body: { tenantId }
+app.post('/api/billing/whatsapp-addon/add', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
+  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const t = _getTenantOnda53(tenantId);
+  if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+  if (!t.stripe_subscription_id) return c.json({ error: 'no_subscription', message: 'Cliente sem assinatura ativa.' }, 400);
+
+  const tierCfg = _TIERS_O53[t.tier as _TierName_O53];
+  if (!tierCfg) return c.json({ error: 'tier_not_found' }, 404);
+
+  const addonPid = whatsappAddonPriceId();
+  if (!addonPid) return c.json({ error: 'addon_not_configured' }, 500);
+
+  try {
+    const sk = await stripe();
+    const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
+    const addonItem = sub.items.data.find((it: any) => it.price.id === addonPid);
+    const currentExtra = addonItem?.quantity || 0;
+    const totalAfter = tierCfg.included_whatsapp_numbers + currentExtra + 1;
+
+    if (totalAfter > tierCfg.max_whatsapp_numbers) {
+      return c.json({
+        error: 'limit_reached',
+        message: 'Plano ' + t.tier + ' permite no maximo ' + tierCfg.max_whatsapp_numbers + ' numeros.',
+      }, 403);
+    }
+
+    if (addonItem) {
+      await sk.subscriptionItems.update(addonItem.id, {
+        quantity: currentExtra + 1,
+        proration_behavior: 'create_prorations',
+      });
+    } else {
+      await sk.subscriptionItems.create({
+        subscription: t.stripe_subscription_id,
+        price: addonPid,
+        quantity: 1,
+        proration_behavior: 'create_prorations',
+      });
+    }
+
+    return c.json({
+      ok: true,
+      newExtraCount: currentExtra + 1,
+      totalConnected: tierCfg.included_whatsapp_numbers + currentExtra + 1,
+      message: '+1 numero WhatsApp adicionado. Cobranca recorrente R$ 100/mes (proporcional ate fim do ciclo atual).',
+    });
+  } catch (err: any) {
+    console.error('[wa-addon add] error:', err.message);
+    return c.json({ error: 'addon_add_failed', message: err.message }, 502);
+  }
+});
+
+// POST /api/billing/whatsapp-addon/remove  body: { tenantId }
+app.post('/api/billing/whatsapp-addon/remove', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
+  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const t = _getTenantOnda53(tenantId);
+  if (!t || !t.stripe_subscription_id) return c.json({ error: 'no_subscription' }, 400);
+
+  const addonPid = whatsappAddonPriceId();
+  if (!addonPid) return c.json({ error: 'addon_not_configured' }, 500);
+
+  try {
+    const sk = await stripe();
+    const sub = await sk.subscriptions.retrieve(t.stripe_subscription_id);
+    const addonItem = sub.items.data.find((it: any) => it.price.id === addonPid);
+    if (!addonItem || (addonItem.quantity || 0) <= 0) {
+      return c.json({ error: 'no_addon', message: 'Cliente nao tem numeros adicionais.' }, 400);
+    }
+    const newQty = (addonItem.quantity || 0) - 1;
+    if (newQty <= 0) {
+      await sk.subscriptionItems.del(addonItem.id, { proration_behavior: 'create_prorations' });
+    } else {
+      await sk.subscriptionItems.update(addonItem.id, {
+        quantity: newQty,
+        proration_behavior: 'create_prorations',
+      });
+    }
+    return c.json({ ok: true, newExtraCount: newQty });
+  } catch (err: any) {
+    console.error('[wa-addon remove] error:', err.message);
+    return c.json({ error: 'addon_remove_failed', message: err.message }, 502);
+  }
+});
+
+// POST /api/billing/portal — abre Customer Portal pra atualizar cartao
+app.post('/api/billing/portal', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
+  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const t = _getTenantOnda53(tenantId);
+  if (!t || !t.stripe_customer_id) return c.json({ error: 'no_customer' }, 400);
+  try {
+    const sk = await stripe();
+    const portal = await sk.billingPortal.sessions.create({
+      customer: t.stripe_customer_id,
+      return_url: publicBase() + '/crm/',
+    });
+    return c.json({ ok: true, url: portal.url });
+  } catch (err: any) {
+    return c.json({ error: 'portal_failed', message: err.message }, 502);
+  }
+});
+
 
 export default app;

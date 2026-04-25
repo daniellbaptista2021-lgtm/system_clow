@@ -39,6 +39,17 @@ export interface Tenant {
   external_customer_id?: string;
   last_payment_at?: string;
   next_billing_at?: string;
+
+  // Stripe (Onda 53)
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  password_hash?: string;
+  full_name?: string;
+  cpf?: string;
+  phone_e164?: string;
+  authorized_phones?: string[];
+  temp_password_for_email?: string;
+  cancelled_at?: string;
 }
 
 export interface ApiKey {

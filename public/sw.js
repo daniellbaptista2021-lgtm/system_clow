@@ -2,7 +2,7 @@
 // Bypass: /v1/* /auth/* /webhooks/* /crm/* /downloads/* — sempre fresh do server
 // Cache: assets estaticos do shell (icons, manifest)
 
-const CACHE = 'clow-v52-scroll-stable';
+const CACHE = 'clow-v53-pricing-wa';
 const STATIC = ['/assets/logo.png', '/assets/favicon.png', '/assets/icon-192.png', '/assets/icon-512.png', '/assets/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', e => {

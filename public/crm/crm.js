@@ -2276,10 +2276,10 @@ function showWebhookSetup(channel, isNew) {
 }
 
 
-async function openNewChannelModal() {
+async function openNewChannelModal(presetType) {
   // Pre-generate webhook secret so we can show the URL inside the form
   const presetSecret = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
-  let currentType = 'zapi';
+  let currentType = presetType || 'zapi';
 
   const backdrop = el('div', { class: 'modal-backdrop' });
 
@@ -4814,4 +4814,226 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   // direto — proximo evento, vao usar __smartRefresh em vez disso.
   window.__onda52 = { snapshotScrolls, restoreScrolls, isInteracting, markInteracting, pipelineHash };
 })();
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══ ONDA 53: WhatsApp limits + pre-modal de escolha ═══════════════════
+async function loadMyInfo() {
+  try {
+    const r = await api('/me');
+    window.state.me = r;
+    return r;
+  } catch (e) { console.warn('[onda53] loadMyInfo failed:', e); return null; }
+}
+
+function renderChannelsLimitsBadge() {
+  const me = window.state.me;
+  if (!me?.whatsapp) return null;
+  const wa = me.whatsapp;
+  const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
+  const tierLabel = (me.tenant?.tier || '').toUpperCase();
+  const color = wa.available === 0 ? '#EF4444' : (wa.available <= 1 ? '#F59E0B' : '#22C55E');
+  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
+    el('div', { style: 'display:flex;align-items:center;gap:6px' },
+      el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
+      el('span', { style: 'color:var(--text)' }, fullLabel),
+    ),
+    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(155,89,252,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
+    me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Z-API ativo(s)') : null,
+  );
+}
+
+// Pre-modal de escolha Z-API vs Meta
+async function openChannelTypePicker() {
+  const me = await loadMyInfo();
+  if (!me?.whatsapp) {
+    toast('Erro: nao foi possivel carregar info do plano', 'error');
+    return;
+  }
+  const wa = me.whatsapp;
+
+  // Limite atingido?
+  if (wa.available <= 0) {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const modal = el('div', { class: 'modal', style: 'max-width:460px' },
+      el('h3', {}, 'Limite de numeros atingido'),
+      el('p', { style: 'color:var(--text-dim);line-height:1.6;font-size:13.5px' },
+        'Seu plano ', el('b', {}, (me.tenant.tier || '').toUpperCase()),
+        ' permite no maximo ', el('b', {}, String(wa.max)),
+        ' numero(s) WhatsApp. Voce ja tem ', el('b', {}, String(wa.totalUsed)),
+        ' conectado(s).'
+      ),
+      wa.max < 10 ? el('p', { style: 'color:var(--text-dim);font-size:13px;margin-top:10px' },
+        'Pra conectar mais numeros, faca upgrade pro plano superior:'
+      ) : null,
+      el('div', { class: 'modal-actions', style: 'gap:8px;flex-direction:column' },
+        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
+        el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
+      ),
+    );
+    dialog.append(modal);
+    document.body.append(dialog);
+    return;
+  }
+
+  // Mostrar picker (Z-API vs Meta)
+  const isFirstNumber = wa.totalUsed === 0;
+  const willCharge = !isFirstNumber; // primeiro numero e gratis (incluso); seguintes via Z-API custam R$100
+
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const modal = el('div', { class: 'modal', style: 'max-width:560px' },
+    el('h3', {}, 'Adicionar numero WhatsApp'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 18px' },
+      'Voce tem ', el('b', { style: 'color:var(--text)' }, String(wa.available)),
+      ' vaga(s) disponivel(is) no plano ', el('b', { style: 'color:var(--text)' }, (me.tenant.tier || '').toUpperCase()),
+      '. Escolha o tipo de conexao:'
+    ),
+
+    // OPÇÃO Z-API
+    el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(37,211,102,0.08),rgba(18,140,126,0.04));border:2px solid rgba(37,211,102,0.3);padding:18px;border-radius:14px;margin-bottom:12px;cursor:pointer;color:inherit;font-family:inherit',
+      on: { click: async () => {
+        if (willCharge) {
+          // Confirmar cobranca
+          const confirmed = await confirmDialog(
+            'Confirmar adicao de numero Z-API',
+            el('div', {},
+              el('p', { style: 'margin:0 0 10px' }, 'Este sera seu numero adicional Z-API.'),
+              el('div', { style: 'background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px;margin:14px 0' },
+                el('div', { style: 'font-weight:700;color:#F59E0B;margin-bottom:6px;font-size:13px' }, '⚠ Cobranca recorrente'),
+                el('p', { style: 'margin:0;font-size:13px;line-height:1.55' },
+                  'Sera cobrado ', el('b', {}, 'R$ 100,00/mes'),
+                  ' no cartao de credito cadastrado, com proracao no ciclo atual. Cobranca renovara automaticamente todo mes ate voce remover este numero.'
+                ),
+              ),
+              el('p', { style: 'font-size:12px;color:var(--text-dim);margin:0' },
+                'O cartao ja cadastrado no Stripe sera usado. Sem cartao? ',
+                el('a', { href: '#', style: 'color:#9B59FC', on: { click: async (ev) => { ev.preventDefault(); await openBillingPortal(); } } }, 'cadastrar agora')
+              ),
+            ),
+            'Sim, adicionar (cobrar R$ 100/mes)'
+          );
+          if (!confirmed) return;
+          // Chamar add-on
+          try {
+            const addRes = await fetch('/api/billing/whatsapp-addon/add', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+              body: JSON.stringify({ tenantId: me.tenant.id }),
+            });
+            const addData = await addRes.json();
+            if (!addRes.ok) {
+              if (addData.error === 'no_subscription') {
+                toast('Sua conta nao tem assinatura ativa no Stripe. Configure no /pricing.', 'error');
+              } else {
+                toast('Erro ao adicionar: ' + (addData.message || addData.error), 'error');
+              }
+              return;
+            }
+            toast('+1 numero Z-API adicionado a sua fatura. Configure abaixo.', 'success');
+          } catch (e) {
+            toast('Erro de rede: ' + e.message, 'error');
+            return;
+          }
+        }
+        dialog.remove();
+        // Abrir modal de criacao de canal (forcar tipo zapi)
+        await openNewChannelModal('zapi');
+      } } },
+      el('div', { style: 'display:flex;align-items:center;gap:14px' },
+        el('div', { style: 'width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#25D366,#128C7E);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;flex:0 0 auto' }, 'Z'),
+        el('div', { style: 'flex:1' },
+          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Z-API ' + (isFirstNumber ? '(incluso no plano)' : '— adicional R$ 100/mes')),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
+            isFirstNumber
+              ? 'Seu numero incluso no plano. Conecta via QR Code, sem cobranca extra.'
+              : 'Numero adicional gerenciado por nos. Cobranca recorrente R$ 100/mes via Stripe.'
+          ),
+        ),
+      ),
+    ),
+
+    // OPÇÃO Meta Cloud API
+    el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(24,119,242,0.08),rgba(13,86,184,0.04));border:2px solid rgba(24,119,242,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
+      on: { click: async () => {
+        dialog.remove();
+        await openNewChannelModal('meta');
+      } } },
+      el('div', { style: 'display:flex;align-items:center;gap:14px' },
+        el('div', { style: 'width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1877F2,#0d56b8);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;flex:0 0 auto' }, 'M'),
+        el('div', { style: 'flex:1' },
+          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Meta Cloud API oficial — gratis'),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
+            'Voce traz suas credenciais da Meta. Sem custo nosso (paga so as taxas da Meta direto, ~R$ 0,30/conversa iniciada).'
+          ),
+        ),
+      ),
+    ),
+
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Cancelar'),
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
+
+async function openBillingPortal() {
+  try {
+    const me = window.state.me || await loadMyInfo();
+    if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
+    const r = await fetch('/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      body: JSON.stringify({ tenantId: me.tenant.id }),
+    });
+    const data = await r.json();
+    if (data.url) {
+      window.open(data.url, '_blank');
+    } else {
+      toast('Erro ao abrir portal: ' + (data.message || data.error), 'error');
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// Wrap renderChannelsList pra adicionar badge no topo
+const _originalRenderChannelsList_o53 = window.renderChannelsList;
+window.renderChannelsList = function() {
+  if (typeof _originalRenderChannelsList_o53 === 'function') _originalRenderChannelsList_o53();
+  // Inserir badge no topo da view Channels (acima do #channelsList)
+  const list = document.getElementById('channelsList');
+  if (!list) return;
+  const existing = document.getElementById('chLimitsBadge');
+  if (existing) existing.remove();
+  const badge = renderChannelsLimitsBadge();
+  if (badge) {
+    badge.id = 'chLimitsBadge';
+    list.parentNode.insertBefore(badge, list);
+  }
+};
+
+// Hook: quando entrar na view channels, recarregar /me primeiro
+const _originalShowView_o53 = window.showView;
+if (typeof _originalShowView_o53 === 'function') {
+  window.showView = async function(name) {
+    if (name === 'channels') {
+      await loadMyInfo();
+    }
+    return _originalShowView_o53.apply(this, arguments);
+  };
+}
+
+// Patch newChannelBtn pra abrir picker em vez de modal direto
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const btn = document.getElementById('newChannelBtn');
+    if (btn) {
+      // Remove handler antigo clonando o botao
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      newBtn.addEventListener('click', openChannelTypePicker);
+    }
+  }, 1500);
+});
+
+window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, renderChannelsLimitsBadge };
 // ═══════════════════════════════════════════════════════════════════════
