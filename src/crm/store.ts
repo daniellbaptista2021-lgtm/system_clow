@@ -513,6 +513,18 @@ export function logActivity(tenantId: string, input: {
   if (a.cardId) {
     db.prepare('UPDATE crm_cards SET last_activity_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
       .run(a.createdAt, a.createdAt, a.cardId, tenantId);
+    // Onda 46: WhatsApp-style — qualquer mensagem (in/out) bumpa o card pro
+    // TOPO da coluna atual. Funciona em qualquer aba (Lead novo, Qualificado,
+    // Negociacao, etc). Ordering ASC + position negativo decrescente garante
+    // que o card mais recentemente ativo fica no topo.
+    if (a.type === 'message_in' || a.type === 'message_out') {
+      const cardRow = db.prepare('SELECT column_id FROM crm_cards WHERE id = ? AND tenant_id = ?').get(a.cardId, tenantId) as { column_id?: string } | undefined;
+      if (cardRow?.column_id) {
+        const minPosRow = db.prepare('SELECT COALESCE(MIN(position), 0) as m FROM crm_cards WHERE column_id = ?').get(cardRow.column_id) as { m: number };
+        const newPos = (minPosRow?.m ?? 0) - 1;
+        db.prepare('UPDATE crm_cards SET position = ? WHERE id = ? AND tenant_id = ?').run(newPos, a.cardId, tenantId);
+      }
+    }
   }
   if (a.contactId) {
     db.prepare('UPDATE crm_contacts SET last_interaction_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
