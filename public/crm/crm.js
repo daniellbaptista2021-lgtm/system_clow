@@ -4088,3 +4088,85 @@ if (typeof closeCardPanel === 'function' && !closeCardPanel._cleanupWired) {
   };
   window.closeCardPanel._cleanupWired = true;
 }
+
+
+// ═══ ONDA 39: CHANNEL/INSTANCE FILTER NO KANBAN ════════════════════════
+let _channelFilter = '';
+
+async function populateChannelFilter() {
+  const sel = $('#channelFilterSelect');
+  if (!sel) return;
+  // Keep current selection
+  const current = sel.value || '';
+  // Remove previously dynamic options (keep "Todas")
+  while (sel.options.length > 1) sel.remove(1);
+  try {
+    const channels = state.channels || (await api('/channels')).channels || [];
+    state.channels = channels;
+    for (const ch of channels) {
+      const opt = document.createElement('option');
+      opt.value = ch.id;
+      const statusEmoji = ch.status === 'active' ? '🟢' : ch.status === 'pending' ? '🟡' : '🔴';
+      opt.textContent = `${statusEmoji} ${ch.name}` + (ch.phoneNumber ? ` (${ch.phoneNumber})` : '');
+      sel.append(opt);
+    }
+    if (current && [...sel.options].some(o => o.value === current)) {
+      sel.value = current;
+    }
+  } catch (e) { console.warn('[channelFilter] load failed:', e.message); }
+}
+
+// Override loadPipeline to honor _channelFilter
+const _origLoadPipeline = (typeof loadPipeline === 'function') ? loadPipeline : null;
+if (_origLoadPipeline && !_origLoadPipeline._wrappedV39) {
+  window.loadPipeline = async function(boardId) {
+    if (!boardId) return;
+    const q = _channelFilter ? `?channelId=${encodeURIComponent(_channelFilter)}` : '';
+    const r = await api(`/boards/${boardId}/pipeline${q}`);
+    state.pipeline = r;
+  };
+  window.loadPipeline._wrappedV39 = true;
+}
+
+function wireChannelFilter() {
+  const sel = $('#channelFilterSelect');
+  if (!sel || sel._wired) return;
+  sel._wired = true;
+  sel.addEventListener('change', async () => {
+    _channelFilter = sel.value;
+    if (state.currentBoardId) {
+      await loadPipeline(state.currentBoardId);
+      renderKanban();
+      // Visual feedback
+      const txt = _channelFilter ? sel.options[sel.selectedIndex].textContent : 'Todas as instâncias';
+      toast(`Filtro: ${txt}`, 'info');
+    }
+  });
+}
+
+// Hook: ao iniciar e cada vez que voltar pro kanban, popular o seletor
+const _origShowViewV39 = (typeof showView === 'function') ? showView : null;
+if (_origShowViewV39 && !_origShowViewV39._wrappedV39) {
+  window.showView = async function(viewName) {
+    await _origShowViewV39(viewName);
+    if (viewName === 'kanban') {
+      await populateChannelFilter();
+      wireChannelFilter();
+    }
+  };
+  window.showView._wrappedV39 = true;
+}
+
+// Tambem popular logo apos boot
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    populateChannelFilter().catch(() => {});
+    wireChannelFilter();
+  }, 1500);
+});
+if (document.readyState !== 'loading') {
+  setTimeout(() => {
+    populateChannelFilter().catch(() => {});
+    wireChannelFilter();
+  }, 1500);
+}

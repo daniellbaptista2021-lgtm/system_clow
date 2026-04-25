@@ -119,7 +119,21 @@ app.get('/boards/:id/pipeline', (c) => {
   const board = store.getBoard(tid, boardId);
   if (!board) return notFound(c, 'board');
   const columns = store.listColumns(tid, boardId);
-  const cards = store.listCardsByBoard(tid, boardId);
+  let cards = store.listCardsByBoard(tid, boardId);
+
+  // ONDA 39 — channel filter: keep only cards with activities from selected channel
+  const channelFilter = c.req.query('channelId');
+  if (channelFilter) {
+    const db = getCrmDb();
+    const cardIdsWithChannel = new Set(
+      (db.prepare(`
+        SELECT DISTINCT card_id FROM crm_activities
+        WHERE tenant_id = ? AND card_id IS NOT NULL AND metadata_json LIKE ?
+      `).all(tid, '%"channelId":"' + channelFilter + '"%') as any[])
+        .map((r: any) => r.card_id),
+    );
+    cards = cards.filter(card => cardIdsWithChannel.has(card.id));
+  }
   // Hydrate contact names for each card (single pass, indexed)
   const contactIds = [...new Set(cards.map(c => c.contactId).filter(Boolean) as string[])];
   const contactsById: Record<string, ReturnType<typeof store.getContact>> = {};
