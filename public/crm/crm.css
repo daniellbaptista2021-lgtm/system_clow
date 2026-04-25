@@ -384,7 +384,10 @@ body {
   max-width: 75%; padding: 8px 12px;
   border-radius: 14px;
   font-size: 13px; line-height: 1.4;
-  word-wrap: break-word;
+  /* Onda 51: preserva newlines + quebra palavras longas + URLs longos */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .msg.in {
   align-self: flex-start;
@@ -883,3 +886,28 @@ body {
     height: 40px !important;
   }
 }
+
+
+/* ═══ ONDA 51: markdown WhatsApp na bolha de mensagem ═══════════════ */
+.msg .msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg a {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 500;
+}
+.msg.in a { color: #4A9EFF; }
+.msg.out a { color: #fff; text-decoration: underline; }
+.msg b { font-weight: 700; }
+.msg i { font-style: italic; }
+.msg s { text-decoration: line-through; opacity: .8; }
+.msg code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+}
+.msg.out code { background: rgba(255, 255, 255, 0.2); }
+
+/* Espaco entre media e caption */
+.msg .msg-media + .msg-text { margin-top: 6px; }

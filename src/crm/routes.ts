@@ -398,7 +398,7 @@ app.get('/cards/:id', (c) => {
   if (!card) return notFound(c, 'card');
   // Include contact + recent activities for the side panel
   const contact = card.contactId ? store.getContact(tid, card.contactId) : null;
-  const activities = store.listActivitiesByCard(tid, card.id, 200);
+  const activities = store.listActivitiesByCard(tid, card.id, 1000);
   return ok(c, { card, contact, activities });
 });
 
@@ -541,7 +541,7 @@ app.get('/contacts/:id', (c) => {
   const contact = store.getContact(tid, c.req.param('id'));
   if (!contact) return notFound(c, 'contact');
   const cards = store.listCardsByContact(tid, contact.id);
-  const activities = store.listActivitiesByContact(tid, contact.id, 200);
+  const activities = store.listActivitiesByContact(tid, contact.id, 1000);
   return ok(c, { contact, cards, activities });
 });
 

@@ -243,9 +243,20 @@ export function parseWebhook(payload: any): WebhookValue {
     // Normalize timestamp (Z-API returns seconds OR ms)
     if (base.timestamp < 1e12) base.timestamp *= 1000;
 
-    if (item.text?.message) {
+    // Onda 51: aceitar todas as formas que Z-API manda texto
+    const textCandidate = item.text?.message
+      || item.text?.body
+      || item.text?.text
+      || item.message?.body
+      || item.body
+      || (typeof item.text === 'string' ? item.text : null)
+      || item.buttonsResponseMessage?.message
+      || item.listResponseMessage?.title
+      || item.templateMessage?.message
+      || item.extendedTextMessage?.text;
+    if (textCandidate) {
       base.type = 'text';
-      base.text = item.text.message;
+      base.text = String(textCandidate);
     } else if (item.image) {
       base.type = 'image';
       base.mediaUrl = item.image.imageUrl || item.image.url;
@@ -272,6 +283,15 @@ export function parseWebhook(payload: any): WebhookValue {
     } else if (item.contact) {
       base.type = 'text';
       base.text = `[Contato: ${item.contact.displayName || item.contact.vcard?.slice(0, 100)}]`;
+    } else if (item.reaction) {
+      // Onda 51: reacao em mensagem
+      base.type = 'text';
+      base.text = `${item.reaction.value || '👍'} (reagiu)`;
+    } else if (item.sticker) {
+      // Onda 51: sticker
+      base.type = 'image';
+      base.mediaUrl = item.sticker.stickerUrl || item.sticker.url;
+      base.mediaMime = item.sticker.mimeType || 'image/webp';
     } else {
       // Unknown type — log as text
       base.type = 'text';

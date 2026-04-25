@@ -73,16 +73,17 @@ export async function ingestInbound(channel: Channel2, msg: {
   }
 
   // 5. Build activity content (visible string for timeline preview)
+  // Onda 51: caption agora vai PURO (sem prefixo [Imagem]) — frontend
+  // renderiza media + caption separadamente.
   let content = '';
   if (msg.type === 'text' || msg.type === 'interactive') {
     content = msg.text || '';
   } else if (msg.type === 'location') {
     content = `[Localização compartilhada]`;
   } else {
-    const labelMap: Record<string, string> = {
-      image: 'Imagem', audio: 'Áudio', video: 'Vídeo', document: msg.mediaFilename || 'Documento',
-    };
-    content = `[${labelMap[msg.type] || msg.type}]${msg.caption ? ': ' + msg.caption : ''}`;
+    // Pra media: se tem caption, content = caption puro (mostra abaixo da media)
+    // Se nao tem caption, content vazio (so a media renderiza)
+    content = msg.caption || '';
   }
 
   // 6. Log activity

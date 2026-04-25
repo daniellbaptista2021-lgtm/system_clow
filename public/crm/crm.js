@@ -829,6 +829,34 @@ function renderPanel() {
   renderEditTab();
 }
 
+
+// Onda 51: renderizar texto WhatsApp-style (escape + markdown + urls)
+function renderTextHTML(text) {
+  if (!text) return '';
+  // 1. Escape HTML (XSS safety)
+  let s = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  // 2. Markdown WhatsApp:
+  //    *bold* _italic_ ~strike~ ```code```
+  // Code blocks PRIMEIRO (pra nao ser interpretado como bold/italic)
+  s = s.replace(/```([\s\S]+?)```/g, '<code>$1</code>');
+  // Bold *abc* (nao deve estar no meio de palavra)
+  s = s.replace(/(^|\s)\*([^\s*][^*]*[^\s*]|[^\s*])\*(?=\s|$|[.,!?;:])/g, '$1<b>$2</b>');
+  // Italic _abc_
+  s = s.replace(/(^|\s)_([^\s_][^_]*[^\s_]|[^\s_])_(?=\s|$|[.,!?;:])/g, '$1<i>$2</i>');
+  // Strike ~abc~
+  s = s.replace(/(^|\s)~([^\s~][^~]*[^\s~]|[^\s~])~(?=\s|$|[.,!?;:])/g, '$1<s>$2</s>');
+  // 3. URLs clicaveis (http/https/www)
+  s = s.replace(/((?:https?:\/\/|www\.)[^\s<]+[^\s<.,!?;:)])/g, (url) => {
+    const href = url.startsWith('http') ? url : 'https://' + url;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  });
+  return s;
+}
+
 function renderMessages() {
   const list = $('#messagesList');
   list.innerHTML = '';
@@ -864,9 +892,17 @@ function renderMessages() {
       });
       bubble.append(el('div', { class: 'msg-media' }, docLink));
     }
-    if (a.content && (!a.mediaUrl || a.content !== `[${a.mediaType}]`)) {
-      const textLine = el('div', {}, a.content);
-      bubble.append(textLine);
+    // Onda 51: renderizar texto/caption SEM truncar — preserva
+    // newlines via white-space:pre-wrap no CSS, e markdown WhatsApp
+    // via renderTextHTML.
+    if (a.content) {
+      // Skip se for o label antigo "[Image]" — legado pre-Onda 51
+      const isOldLabel = /^\[[A-Za-zÀ-ÿ]+\]$/.test(a.content) && a.mediaUrl;
+      if (!isOldLabel) {
+        const textLine = el('div', { class: 'msg-text' });
+        textLine.innerHTML = renderTextHTML(a.content);
+        bubble.append(textLine);
+      }
     }
     bubble.append(el('div', { class: 'msg-meta' }, fmtDate(a.createdAt)));
     list.append(bubble);
