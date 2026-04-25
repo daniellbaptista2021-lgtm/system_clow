@@ -4828,7 +4828,7 @@ async function loadMyInfo() {
 
 function renderChannelsLimitsBadge() {
   const me = window.state.me;
-  if (!me?.whatsapp) return null;
+  if (!me?.whatsapp || me._fallback) return null; // Onda 53j: nao renderizar badge se /me falhou
   const wa = me.whatsapp;
   const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
   const tierLabel = (me.tenant?.tier || '').toUpperCase();
