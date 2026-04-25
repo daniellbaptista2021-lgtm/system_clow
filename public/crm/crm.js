@@ -274,6 +274,11 @@ function cardEl(card) {
       over ? '⚠ ' : '📅 ',
       new Date(card.dueDate).toLocaleDateString('pt-BR'),
     ) : null,
+    // Onda 48: badge WhatsApp — aparece quando tem mensagens nao respondidas
+    (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
+      el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="16" height="16" fill="#25D366"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
+      el('span', { class: 'wa-count' }, String(card.unreadCount)),
+    ) : null,
   );
   c.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/card-id', card.id);
@@ -775,6 +780,9 @@ function showInventoryContextMenu(item, x, y) {
 
 // ─── Side panel ────────────────────────────────────────────────────────
 async function openCardPanel(cardId) {
+  // Onda 48: zerar badge WhatsApp ao abrir o card (fire-and-forget)
+  try { api(`/cards/${cardId}/mark-read`, { method: 'POST' }).catch(()=>{}); } catch {}
+
   try {
     const r = await api(`/cards/${cardId}`);
     state.currentCard = { card: r.card, contact: r.contact, activities: r.activities };
@@ -4367,3 +4375,117 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   };
   window.renderChannelsList._wrappedV42 = true;
 }
+
+
+// ═══ ONDA 48: SSE + NOTIFICATIONS + BEEP ═══════════════════════════════
+(function onda48Realtime() {
+  const state48 = { es: null, audioCtx: null, notifPerm: Notification.permission };
+
+  function beep() {
+    try {
+      if (!state48.audioCtx) state48.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = state48.audioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      // Tom estilo WhatsApp: 2 beeps curtos 800Hz/1000Hz
+      [800, 1000].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
+        gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + i * 0.15 + 0.02);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + i * 0.15 + 0.12);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.15);
+        osc.stop(ctx.currentTime + i * 0.15 + 0.13);
+      });
+    } catch {}
+  }
+
+  function askNotifPerm() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => { state48.notifPerm = p; });
+    }
+  }
+
+  function showNotification(data) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const title = data.contactName || data.cardTitle || 'Nova mensagem WhatsApp';
+    const bodyPreview = data.mediaType && data.mediaType !== 'text'
+      ? `[${data.mediaType.toUpperCase()}] ${data.preview || ''}`.trim()
+      : (data.preview || 'Mensagem nova');
+    try {
+      const n = new Notification(title, {
+        body: bodyPreview,
+        icon: '/crm/icon-192.png',
+        badge: '/crm/icon-192.png',
+        tag: 'wa-' + (data.cardId || ''),
+        renotify: true,
+      });
+      n.onclick = () => {
+        window.focus();
+        if (data.cardId && typeof openCardPanel === 'function') openCardPanel(data.cardId);
+        n.close();
+      };
+    } catch (e) { console.warn('[onda48] notif failed', e); }
+  }
+
+  function connect() {
+    const token = window.__CRM_API_KEY__ || localStorage.getItem('crm_api_key') || '';
+    if (!token) { setTimeout(connect, 3000); return; }
+    try {
+      if (state48.es) state48.es.close();
+      state48.es = new EventSource(`/v1/crm/events?token=${encodeURIComponent(token)}`);
+      state48.es.addEventListener('message.in', (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          // Tocar beep so se o card NAO esta aberto agora (evita spam quando
+          // voce ta conversando com o cara)
+          const openCardId = window.state?.currentCard?.card?.id;
+          if (data.cardId !== openCardId) {
+            beep();
+            showNotification(data);
+          }
+          // Refresh pipeline pra mostrar badge atualizado
+          if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
+            loadPipeline(window.state.currentBoardId).then(() => {
+              if (typeof renderKanban === 'function') renderKanban();
+            }).catch(()=>{});
+          }
+        } catch (e) { console.warn('[onda48] message.in parse', e); }
+      });
+      state48.es.addEventListener('message.read', (ev) => {
+        try {
+          if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
+            loadPipeline(window.state.currentBoardId).then(() => {
+              if (typeof renderKanban === 'function') renderKanban();
+            }).catch(()=>{});
+          }
+        } catch {}
+      });
+      state48.es.onerror = () => {
+        try { state48.es.close(); } catch {}
+        setTimeout(connect, 5000); // reconnect
+      };
+    } catch (e) {
+      console.warn('[onda48] SSE connect failed', e);
+      setTimeout(connect, 5000);
+    }
+  }
+
+  function init() {
+    askNotifPerm();
+    connect();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Expor pra debugging
+  window.__onda48 = { beep, showNotification, connect };
+})();
+// ═══════════════════════════════════════════════════════════════════════

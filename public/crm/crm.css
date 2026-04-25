@@ -766,3 +766,46 @@ body {
     z-index: 1500 !important;
   }
 }
+
+
+/* ═══ ONDA 48: WhatsApp badge no card ═══════════════════════════════ */
+.card-wa-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 211, 102, 0.4);
+  animation: wa-pulse 1.6s ease-in-out infinite;
+  z-index: 5;
+  pointer-events: none;
+}
+.card-wa-badge .wa-icon {
+  display: flex;
+  align-items: center;
+}
+.card-wa-badge .wa-icon svg {
+  fill: #fff;
+  width: 14px;
+  height: 14px;
+}
+.card-wa-badge .wa-count {
+  font-size: 11px;
+  line-height: 1;
+}
+@keyframes wa-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 2px 6px rgba(37, 211, 102, 0.4); }
+  50% { transform: scale(1.08); box-shadow: 0 4px 12px rgba(37, 211, 102, 0.7); }
+}
+
+/* Card container precisa de position:relative pro badge absoluto funcionar */
+.kanban-col .card, .kanban-board .card {
+  position: relative;
+}

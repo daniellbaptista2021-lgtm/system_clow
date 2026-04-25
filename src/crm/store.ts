@@ -475,6 +475,9 @@ function rowToCard(r: any): Card {
     customFields: J.parse(r.custom_fields_json, {}),
     createdAt: r.created_at, updatedAt: r.updated_at,
     lastActivityAt: r.last_activity_at ?? undefined,
+    // Onda 48
+    unreadCount: r.unread_count ?? 0,
+    lastInboundAt: r.last_inbound_at ?? undefined,
   };
 }
 
@@ -524,14 +527,56 @@ export function logActivity(tenantId: string, input: {
         const newPos = (minPosRow?.m ?? 0) - 1;
         db.prepare('UPDATE crm_cards SET position = ? WHERE id = ? AND tenant_id = ?').run(newPos, a.cardId, tenantId);
       }
+      // Onda 48: contador de mensagens nao respondidas (estilo WhatsApp)
+      if (a.type === 'message_in') {
+        db.prepare('UPDATE crm_cards SET unread_count = COALESCE(unread_count,0) + 1, last_inbound_at = ? WHERE id = ? AND tenant_id = ?')
+          .run(a.createdAt, a.cardId, tenantId);
+      } else if (a.type === 'message_out') {
+        db.prepare('UPDATE crm_cards SET unread_count = 0 WHERE id = ? AND tenant_id = ?')
+          .run(a.cardId, tenantId);
+      }
     }
   }
   if (a.contactId) {
     db.prepare('UPDATE crm_contacts SET last_interaction_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
       .run(a.createdAt, a.createdAt, a.contactId, tenantId);
   }
-  void (async () => { (await getPublish())(tenantId, 'activity', { activityId: a.id, cardId: a.cardId, contactId: a.contactId, type: a.type }); })();
+  void (async () => {
+    const pub = await getPublish();
+    pub(tenantId, 'activity', { activityId: a.id, cardId: a.cardId, contactId: a.contactId, type: a.type });
+    // Onda 48: evento rico pra notificar UI de mensagem nova
+    if (a.type === 'message_in' && a.cardId) {
+      const card = db.prepare('SELECT id, title, column_id, unread_count, contact_id FROM crm_cards WHERE id=? AND tenant_id=?').get(a.cardId, tenantId) as any;
+      const contact = a.contactId ? db.prepare('SELECT name, phone FROM crm_contacts WHERE id=?').get(a.contactId) as any : null;
+      pub(tenantId, 'message.in', {
+        cardId: a.cardId,
+        columnId: card?.column_id,
+        unreadCount: card?.unread_count || 0,
+        cardTitle: card?.title,
+        contactName: contact?.name,
+        contactPhone: contact?.phone,
+        preview: String(a.content || '').slice(0, 120),
+        mediaType: a.mediaType,
+        activityId: a.id,
+      });
+    } else if (a.type === 'message_out' && a.cardId) {
+      pub(tenantId, 'message.read', { cardId: a.cardId });
+    }
+  })();
   return a;
+}
+
+
+
+// Onda 48: marcar card como lido (zera unread_count)
+export function markCardRead(tenantId: string, cardId: string): boolean {
+  const db = getCrmDb();
+  const r = db.prepare('UPDATE crm_cards SET unread_count = 0 WHERE id = ? AND tenant_id = ? AND unread_count > 0')
+    .run(cardId, tenantId);
+  if (r.changes > 0) {
+    void (async () => { (await getPublish())(tenantId, 'message.read', { cardId }); })();
+  }
+  return r.changes > 0;
 }
 
 export function listActivitiesByCard(tenantId: string, cardId: string, limit = 100): Activity[] {

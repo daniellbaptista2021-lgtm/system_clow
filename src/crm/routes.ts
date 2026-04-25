@@ -408,6 +408,13 @@ app.patch('/cards/:id', async (c) => {
   return upd ? ok(c, { card: upd }) : notFound(c, 'card');
 });
 
+// Onda 48: marcar card como lido (zera badge WhatsApp)
+app.post('/cards/:id/mark-read', async (c) => {
+  const tid = tenantOf(c);
+  const ok2 = store.markCardRead(tid, c.req.param('id'));
+  return ok(c, { ok: ok2 });
+});
+
 app.post('/cards/:id/move', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!body.toColumnId) return badRequest(c, 'toColumnId required');

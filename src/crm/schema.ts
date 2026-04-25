@@ -1526,6 +1526,22 @@ function migrate(db: Database.Database): void {
   }
 
   // ONDA 42 — Channel inbox config (auto-create lead cards)
+  // ONDA 48 — WhatsApp badge: unread_count por card
+  const onda48Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(148);
+  if (!onda48Applied) {
+    const cards48 = db.prepare("PRAGMA table_info(crm_cards)").all() as any[];
+    const col48 = new Set(cards48.map((c: any) => c.name));
+    if (!col48.has('unread_count')) {
+      db.exec('ALTER TABLE crm_cards ADD COLUMN unread_count INTEGER NOT NULL DEFAULT 0');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_cards_unread ON crm_cards(tenant_id, unread_count) WHERE unread_count > 0');
+    }
+    if (!col48.has('last_inbound_at')) {
+      db.exec('ALTER TABLE crm_cards ADD COLUMN last_inbound_at INTEGER');
+    }
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(148, Date.now());
+    console.log('[crm-migrate] Onda 48 applied: +unread_count +last_inbound_at (WhatsApp badge)');
+  }
+
   const onda42Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(132);
   if (!onda42Applied) {
     const chCols = db.prepare("PRAGMA table_info(crm_channels)").all() as any[];
@@ -1738,3 +1754,4 @@ function migrate(db: Database.Database): void {
     CREATE INDEX idx_reminders_tenant ON crm_reminders(tenant_id, due_at);
   `);
 }
+

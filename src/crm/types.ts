@@ -149,6 +149,9 @@ export interface Card {
   createdAt: number;
   updatedAt: number;
   lastActivityAt?: number;
+  // Onda 48
+  unreadCount?: number;
+  lastInboundAt?: number;
 }
 
 export interface Activity {
