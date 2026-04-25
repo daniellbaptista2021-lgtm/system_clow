@@ -4897,50 +4897,14 @@ async function openChannelTypePicker() {
     el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(37,211,102,0.08),rgba(18,140,126,0.04));border:2px solid rgba(37,211,102,0.3);padding:18px;border-radius:14px;margin-bottom:12px;cursor:pointer;color:inherit;font-family:inherit',
       on: { click: async () => {
         if (willCharge) {
-          // Confirmar cobranca
-          const confirmed = await confirmDialog(
-            'Confirmar adicao de numero Z-API',
-            el('div', {},
-              el('p', { style: 'margin:0 0 10px' }, 'Este sera seu numero adicional Z-API.'),
-              el('div', { style: 'background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px;margin:14px 0' },
-                el('div', { style: 'font-weight:700;color:#F59E0B;margin-bottom:6px;font-size:13px' }, '⚠ Cobranca recorrente'),
-                el('p', { style: 'margin:0;font-size:13px;line-height:1.55' },
-                  'Sera cobrado ', el('b', {}, 'R$ 100,00/mes'),
-                  ' no cartao de credito cadastrado, com proracao no ciclo atual. Cobranca renovara automaticamente todo mes ate voce remover este numero.'
-                ),
-              ),
-              el('p', { style: 'font-size:12px;color:var(--text-dim);margin:0' },
-                'O cartao ja cadastrado no Stripe sera usado. Sem cartao? ',
-                el('a', { href: '#', style: 'color:#9B59FC', on: { click: async (ev) => { ev.preventDefault(); await openBillingPortal(); } } }, 'cadastrar agora')
-              ),
-            ),
-            'Sim, adicionar (cobrar R$ 100/mes)'
-          );
-          if (!confirmed) return;
-          // Chamar add-on
-          try {
-            const addRes = await fetch('/api/billing/whatsapp-addon/add', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
-              body: JSON.stringify({ tenantId: me.tenant.id }),
-            });
-            const addData = await addRes.json();
-            if (!addRes.ok) {
-              if (addData.error === 'no_subscription') {
-                toast('Sua conta nao tem assinatura ativa no Stripe. Configure no /pricing.', 'error');
-              } else {
-                toast('Erro ao adicionar: ' + (addData.message || addData.error), 'error');
-              }
-              return;
-            }
-            toast('+1 numero Z-API adicionado a sua fatura. Configure abaixo.', 'success');
-          } catch (e) {
-            toast('Erro de rede: ' + e.message, 'error');
-            return;
-          }
+          // Onda 53h: ABRIR STRIPE CHECKOUT em nova aba; polling
+          // ate cliente pagar; depois libera modal de cadastro.
+          dialog.remove();
+          await openZapiCheckoutFlow(me);
+          return;
         }
+        // Primeiro numero (free) — abre modal direto
         dialog.remove();
-        // Abrir modal de criacao de canal (forcar tipo zapi)
         await openNewChannelModal('zapi');
       } } },
       el('div', { style: 'display:flex;align-items:center;gap:14px' },
@@ -4950,14 +4914,14 @@ async function openChannelTypePicker() {
           el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
             isFirstNumber
               ? 'Seu numero incluso no plano. Conecta via QR Code, sem cobranca extra.'
-              : 'Numero adicional gerenciado por nos. Cobranca recorrente R$ 100/mes via Stripe.'
+              : 'Numero adicional gerenciado por nos. Cobranca recorrente R$ 100/mes via Stripe Checkout.'
           ),
         ),
       ),
     ),
 
     // OPÇÃO Meta Cloud API
-    el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(24,119,242,0.08),rgba(13,86,184,0.04));border:2px solid rgba(24,119,242,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
+    el('button', { type: 'button', class: 'channel-type-btn-NEW', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(24,119,242,0.08),rgba(13,86,184,0.04));border:2px solid rgba(24,119,242,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
       on: { click: async () => {
         dialog.remove();
         await openNewChannelModal('meta');
@@ -4978,6 +4942,106 @@ async function openChannelTypePicker() {
     ),
   );
   dialog.append(modal);
+  document.body.append(dialog);
+}
+
+// Onda 53h: fluxo Stripe Checkout pra Z-API adicional
+async function openZapiCheckoutFlow(me) {
+  if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
+
+  // Caso admin/sem-subscription: cobra direto sem checkout (modo legacy)
+  if (!me.tenant.hasStripe) {
+    const confirmed = await confirmDialog(
+      'Adicionar numero (modo admin)',
+      'Sua conta nao tem assinatura Stripe ativa. Adicionando direto sem cobranca.',
+      'Adicionar'
+    );
+    if (!confirmed) return;
+    await openNewChannelModal('zapi');
+    return;
+  }
+
+  // Mostrar overlay de carregamento
+  const loadingDialog = el('div', { class: 'modal-backdrop' });
+  const loadingModal = el('div', { class: 'modal', style: 'max-width:420px;text-align:center' },
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('h3', {}, 'Abrindo pagamento...'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px' }, 'Voce sera redirecionado pro Stripe Checkout.'),
+  );
+  loadingDialog.append(loadingModal);
+  document.body.append(loadingDialog);
+
+  let sessionId;
+  try {
+    const r = await fetch('/api/billing/whatsapp-addon/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      body: JSON.stringify({ tenantId: me.tenant.id, currentTotal: me.whatsapp.totalUsed }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.url) {
+      loadingDialog.remove();
+      toast('Erro ao criar checkout: ' + (data.message || data.error || 'desconhecido'), 'error');
+      return;
+    }
+    sessionId = data.session_id;
+    // Abrir Stripe em nova aba
+    window.open(data.url, '_blank', 'noopener,noreferrer');
+  } catch (e) {
+    loadingDialog.remove();
+    toast('Erro de rede: ' + e.message, 'error');
+    return;
+  }
+
+  loadingDialog.remove();
+
+  // Modal de "aguardando pagamento" com polling
+  const waitDialog = el('div', { class: 'modal-backdrop' });
+  let cancelled = false;
+  const waitModal = el('div', { class: 'modal', style: 'max-width:480px;text-align:center' },
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:#22C55E;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('h3', {}, 'Aguardando pagamento...'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;line-height:1.6' },
+      'Complete o pagamento na aba do Stripe que acabou de abrir.',
+      el('br', {}),
+      'Apos confirmacao, esta tela libera o cadastro do numero automaticamente.'
+    ),
+    el('div', { class: 'modal-actions', style: 'margin-top:20px' },
+      el('button', { class: 'cancel', on: { click: () => { cancelled = true; waitDialog.remove(); } } }, 'Cancelar'),
+    ),
+  );
+  waitDialog.append(waitModal);
+  document.body.append(waitDialog);
+
+  // Polling: a cada 3s checa se o pagamento foi confirmado
+  let attempts = 0;
+  const maxAttempts = 200; // 10 minutos
+  const poll = setInterval(async () => {
+    if (cancelled) { clearInterval(poll); return; }
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(poll);
+      waitDialog.remove();
+      toast('Tempo esgotado. Recarregue a pagina e tente de novo.', 'error');
+      return;
+    }
+    try {
+      const r = await fetch('/api/billing/whatsapp-addon/checkout-status?session_id=' + encodeURIComponent(sessionId), {
+        headers: { 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      });
+      const data = await r.json();
+      if (data.paid) {
+        clearInterval(poll);
+        waitDialog.remove();
+        toast('Pagamento confirmado! Configure agora seu numero.', 'success');
+        await openNewChannelModal('zapi');
+      }
+    } catch {}
+  }, 3000);
+}
+
+
+dialog.append(modal);
   document.body.append(dialog);
 }
 

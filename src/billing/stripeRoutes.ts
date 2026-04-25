@@ -478,4 +478,92 @@ app.post('/api/billing/portal', async (c) => {
 });
 
 
+
+
+// ═══ ONDA 53h: Stripe Checkout pra adicionar Z-API ═══════════════════
+
+// POST /api/billing/whatsapp-addon/checkout
+// Cria Checkout Session em modo subscription pra cobrar +R$ 100/mes.
+// Apos pagamento, webhook adiciona item a subscription principal.
+app.post('/api/billing/whatsapp-addon/checkout', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
+  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const t = _getTenantOnda53(tenantId);
+  if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+
+  const tierCfg = _TIERS_O53[t.tier as _TierName_O53];
+  if (!tierCfg) return c.json({ error: 'tier_not_found' }, 404);
+
+  const addonPid = whatsappAddonPriceId();
+  if (!addonPid) return c.json({ error: 'addon_not_configured' }, 500);
+
+  // Checar limite ANTES de criar checkout
+  const channelsCount = body.currentTotal || 0;
+  if (channelsCount + 1 > tierCfg.max_whatsapp_numbers) {
+    return c.json({
+      error: 'limit_reached',
+      message: 'Plano ' + t.tier + ' permite no maximo ' + tierCfg.max_whatsapp_numbers + ' numeros.',
+    }, 403);
+  }
+
+  try {
+    const sk = await stripe();
+    const sessionParams: any = {
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: addonPid, quantity: 1 }],
+      locale: 'pt-BR',
+      success_url: publicBase() + '/crm/?wa_addon_paid=1&session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: publicBase() + '/crm/?wa_addon_cancelled=1',
+      metadata: {
+        type: 'whatsapp_addon_zapi',
+        tenant_id: t.id,
+        tenant_email: t.email,
+      },
+      subscription_data: {
+        metadata: {
+          type: 'whatsapp_addon_zapi',
+          tenant_id: t.id,
+          parent_subscription_id: t.stripe_subscription_id || '',
+        },
+      },
+    };
+    // Reusar customer existente se ja tem (cartao salvo)
+    if (t.stripe_customer_id) {
+      sessionParams.customer = t.stripe_customer_id;
+    } else if (t.email) {
+      sessionParams.customer_email = t.email;
+    }
+
+    const session = await sk.checkout.sessions.create(sessionParams);
+    return c.json({ ok: true, url: session.url, session_id: session.id });
+  } catch (err: any) {
+    console.error('[wa-addon checkout] error:', err.message);
+    return c.json({ error: 'checkout_failed', message: err.message }, 502);
+  }
+});
+
+// GET /api/billing/whatsapp-addon/checkout-status?session_id=cs_...
+// Polling pra UI saber quando o cliente terminou de pagar.
+app.get('/api/billing/whatsapp-addon/checkout-status', async (c) => {
+  const sessionId = c.req.query('session_id');
+  if (!sessionId || !sessionId.startsWith('cs_')) {
+    return c.json({ error: 'invalid_session' }, 400);
+  }
+  try {
+    const sk = await stripe();
+    const session = await sk.checkout.sessions.retrieve(sessionId);
+    return c.json({
+      ok: true,
+      paid: session.payment_status === 'paid',
+      payment_status: session.payment_status,
+      status: session.status,
+    });
+  } catch (err: any) {
+    return c.json({ error: 'fetch_failed', message: err.message }, 502);
+  }
+});
+
+
 export default app;
