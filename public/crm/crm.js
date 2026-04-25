@@ -4846,8 +4846,12 @@ function renderChannelsLimitsBadge() {
 // Pre-modal de escolha Z-API vs Meta
 async function openChannelTypePicker() {
   const me = await loadMyInfo();
-  if (!me?.whatsapp) {
-    toast('Erro: nao foi possivel carregar info do plano', 'error');
+  if (!me) {
+    toast('Erro ao carregar info do plano. Tente recarregar a pagina.', 'error');
+    return;
+  }
+  if (!me.whatsapp) {
+    toast('Tier do plano nao reconhecido (' + (me.tenant?.tier || 'desconhecido') + '). Contate o suporte.', 'error');
     return;
   }
   const wa = me.whatsapp;
@@ -5022,18 +5026,26 @@ if (typeof _originalShowView_o53 === 'function') {
   };
 }
 
-// Patch newChannelBtn pra abrir picker em vez de modal direto
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    const btn = document.getElementById('newChannelBtn');
-    if (btn) {
-      // Remove handler antigo clonando o botao
-      const newBtn = btn.cloneNode(true);
-      btn.parentNode.replaceChild(newBtn, btn);
-      newBtn.addEventListener('click', openChannelTypePicker);
-    }
-  }, 1500);
-});
-
 window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, renderChannelsLimitsBadge };
 // ═══════════════════════════════════════════════════════════════════════
+
+// Onda 53f: monkey-patch openNewChannelModal pra abrir picker quando
+// chamado sem args (usado por wire('#newChannelBtn')). Quando chamado
+// COM presetType, abre o modal de criacao direto (usado pelo picker
+// depois que o user escolhe Z-API ou Meta).
+(function patchNewChannel() {
+  if (window.__newChannelPatched_o53f) return;
+  window.__newChannelPatched_o53f = true;
+  const _origOpen = window.openNewChannelModal;
+  if (typeof _origOpen !== 'function') return;
+  window.openNewChannelModal = async function(presetType) {
+    if (presetType) {
+      // Vem do picker — abre modal de criacao
+      return _origOpen.call(this, presetType);
+    }
+    // Vem direto do botao "+ Novo Canal" — abre picker primeiro
+    return openChannelTypePicker();
+  };
+  console.log('[onda53f] openNewChannelModal interceptado pra abrir picker');
+})();
+

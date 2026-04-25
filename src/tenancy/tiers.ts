@@ -61,8 +61,8 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 5,
     max_spreadsheets_per_month: 50,
     max_n8n_flows_active: 2,
-    included_whatsapp_numbers: 1,
-    max_whatsapp_numbers: 1,
+    included_whatsapp_numbers: 3,
+    max_whatsapp_numbers: 3,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_basic'],
   },
   profissional: {
@@ -89,8 +89,8 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 30,
     max_spreadsheets_per_month: 300,
     max_n8n_flows_active: 8,
-    included_whatsapp_numbers: 1,
-    max_whatsapp_numbers: 1,
+    included_whatsapp_numbers: 999,
+    max_whatsapp_numbers: 999,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'priority', 'custom_skills'],
   },
   starter: {
