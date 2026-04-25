@@ -1525,6 +1525,18 @@ function migrate(db: Database.Database): void {
     console.log('[crm-migrate] Onda 31 applied: RBAC + 2FA + sessions + IP whitelist + audit log');
   }
 
+  // ONDA 42 — Channel inbox config (auto-create lead cards)
+  const onda42Applied = db.prepare('SELECT 1 FROM crm_migrations WHERE version = ?').get(132);
+  if (!onda42Applied) {
+    const chCols = db.prepare("PRAGMA table_info(crm_channels)").all() as any[];
+    const colNames = new Set(chCols.map((c: any) => c.name));
+    if (!colNames.has('auto_create_cards')) db.exec("ALTER TABLE crm_channels ADD COLUMN auto_create_cards INTEGER DEFAULT 1");
+    if (!colNames.has('inbox_board_id'))    db.exec("ALTER TABLE crm_channels ADD COLUMN inbox_board_id TEXT");
+    if (!colNames.has('inbox_column_id'))   db.exec("ALTER TABLE crm_channels ADD COLUMN inbox_column_id TEXT");
+    db.prepare('INSERT INTO crm_migrations (version, applied_at) VALUES (?, ?)').run(132, Date.now());
+    console.log('[crm-migrate] Onda 42 applied: channel inbox config (auto-create + target column)');
+  }
+
 
   const applied = new Set(
     db.prepare('SELECT version FROM crm_migrations').all().map((r: any) => r.version as number),

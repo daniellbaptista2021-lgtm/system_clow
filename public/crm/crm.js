@@ -4213,3 +4213,152 @@ function wireMobileSidebar() {
 
 document.addEventListener('DOMContentLoaded', wireMobileSidebar);
 if (document.readyState !== 'loading') wireMobileSidebar();
+
+
+// ═══ ONDA 42: CHANNEL INBOX CONFIG (auto-create leads) ════════════════
+async function openChannelInboxConfig(channel) {
+  const body = el('div', { id: 'inbox-config-body', style: 'min-height:200px' },
+    el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim)' }, 'Carregando...'),
+  );
+  const { backdrop } = openModal({ title: '⚙️ Inbox: ' + channel.name, bodyEl: body, width: '640px' });
+
+  try {
+    const info = await api(`/channels/${channel.id}/webhook-info`);
+    const boards = (await api('/boards').catch(() => ({ boards: [] }))).boards || [];
+
+    body.innerHTML = '';
+
+    // Webhook URL — copiavel
+    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '🔗 URL do Webhook (cole na Z-API / Meta)'),
+      el('div', { style: 'display:flex;gap:6px;align-items:center' },
+        el('input', { type: 'text', value: info.url, readonly: '', style: 'flex:1;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:monospace;font-size:11px', on: { click: (e) => e.target.select() } }),
+        el('button', { style: 'padding:8px 14px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer', on: { click: async () => {
+          try { await navigator.clipboard.writeText(info.url); toast('Copiado!', 'success'); } catch { toast('Selecione e copie manualmente', 'info'); }
+        } } }, '📋'),
+      ),
+      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px' },
+        'Última mensagem recebida: ',
+        el('span', { style: info.lastInboundAt ? 'color:var(--green)' : 'color:#ef4444' },
+          info.lastInboundAt ? new Date(info.lastInboundAt).toLocaleString('pt-BR') : '⚠️ Nunca (webhook não configurado?)'),
+      ),
+    ));
+
+    // Auto-create toggle
+    const autoCreateCheckbox = el('input', { type: 'checkbox', id: 'autoCreateChk', style: 'margin-right:8px' });
+    autoCreateCheckbox.checked = info.autoCreateCards !== false;
+    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+      el('label', { style: 'display:flex;align-items:center;cursor:pointer' },
+        autoCreateCheckbox,
+        el('div', {},
+          el('div', { style: 'font-weight:600' }, '🤖 Criar card automaticamente para novo lead'),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'Toda mensagem nova de contato sem card aberto vira um card na coluna "Lead novo"'),
+        ),
+      ),
+    ));
+
+    // Board + column selector
+    const boardSel = el('select', { id: 'inboxBoardSel', style: 'width:100%;padding:10px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:8px' });
+    boardSel.append(el('option', { value: '' }, '— Padrão (Pipeline de Vendas) —'));
+    for (const b of boards) {
+      const opt = el('option', { value: b.id }, b.name);
+      if (b.id === info.inboxBoardId) opt.selected = true;
+      boardSel.append(opt);
+    }
+
+    const colSel = el('select', { id: 'inboxColSel', style: 'width:100%;padding:10px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px' });
+
+    async function reloadCols() {
+      colSel.innerHTML = '';
+      colSel.append(el('option', { value: '' }, '— Padrão (Lead novo) —'));
+      const bid = boardSel.value || boards[0]?.id;
+      if (!bid) return;
+      try {
+        const r = await api(`/boards/${bid}/columns`).catch(() => ({ columns: [] }));
+        for (const col of (r.columns || [])) {
+          const opt = el('option', { value: col.id }, col.name);
+          if (col.id === info.inboxColumnId) opt.selected = true;
+          colSel.append(opt);
+        }
+      } catch {}
+    }
+    boardSel.addEventListener('change', reloadCols);
+    reloadCols();
+
+    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+      el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '📍 Onde criar novos leads'),
+      el('label', { style: 'font-size:13px;display:block;margin-bottom:4px' }, 'Quadro'),
+      boardSel,
+      el('label', { style: 'font-size:13px;display:block;margin-bottom:4px' }, 'Coluna'),
+      colSel,
+    ));
+
+    // Save button
+    body.append(el('button', {
+      style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer;margin-bottom:14px',
+      on: { click: async () => {
+        try {
+          await api(`/channels/${channel.id}/inbox-config`, { method: 'PATCH', body: {
+            autoCreateCards: autoCreateCheckbox.checked,
+            inboxBoardId: boardSel.value || null,
+            inboxColumnId: colSel.value || null,
+          } });
+          toast('Salvo!', 'success');
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+      } },
+    }, '💾 Salvar configuração'));
+
+    // Diagnostics: simulate inbound
+    body.append(el('hr', { style: 'border:0;border-top:1px solid var(--border);margin:14px 0' }));
+    body.append(el('h4', { style: 'margin:0 0 8px;font-size:13px' }, '🧪 Simular mensagem recebida'));
+    body.append(el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:10px' }, 'Útil pra testar se a auto-criação está funcionando'));
+
+    const simPhone = el('input', { type: 'text', placeholder: '5511900000000', value: '5511' + Math.floor(Math.random() * 900000000 + 100000000), style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
+    const simName = el('input', { type: 'text', placeholder: 'Nome do contato', value: 'Lead Teste ' + Date.now().toString().slice(-4), style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
+    const simText = el('input', { type: 'text', placeholder: 'Mensagem', value: 'Olá, vim pelo site!', style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
+    const simBtn = el('button', {
+      style: 'width:100%;padding:10px;background:transparent;border:1px solid var(--purple);color:var(--purple);border-radius:6px;cursor:pointer',
+      on: { click: async () => {
+        simBtn.disabled = true; simBtn.textContent = 'Disparando...';
+        try {
+          const r = await api(`/channels/${channel.id}/test-inbound`, { method: 'POST', body: {
+            fromPhone: simPhone.value, fromName: simName.value, text: simText.value,
+          } });
+          if (r?.result?.cardId) toast('✅ Card criado: ' + r.result.cardId, 'success');
+          else if (r?.result?.contactId) toast('✅ Activity logada (sem card por config)', 'success');
+          else toast('Disparado, ver resultado', 'info');
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+        finally { simBtn.disabled = false; simBtn.textContent = '🚀 Disparar simulação'; }
+      } },
+    }, '🚀 Disparar simulação');
+    body.append(simPhone, simName, simText, simBtn);
+  } catch (e) {
+    body.innerHTML = '<div style="padding:20px;color:#ef4444">Erro: ' + e.message + '</div>';
+  }
+}
+
+// Patch renderChannelsList: adicionar botao "⚙️ Config Inbox" em cada canal
+const _origRenderChannelsList = (typeof renderChannelsList === 'function') ? renderChannelsList : null;
+if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
+  window.renderChannelsList = function(...args) {
+    _origRenderChannelsList.apply(this, args);
+    // Apos renderizar, injeta botao em cada list-item
+    setTimeout(() => {
+      document.querySelectorAll('#channelsList .list-item').forEach((item, idx) => {
+        if (item.querySelector('.inbox-config-btn')) return;
+        const ch = state.channels?.[idx];
+        if (!ch) return;
+        const btn = document.createElement('button');
+        btn.className = 'inbox-config-btn';
+        btn.textContent = '⚙️ Inbox';
+        btn.style.cssText = 'background:var(--purple);color:#fff;border:0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;margin-left:6px';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openChannelInboxConfig(ch);
+        });
+        item.appendChild(btn);
+      });
+    }, 50);
+  };
+  window.renderChannelsList._wrappedV42 = true;
+}

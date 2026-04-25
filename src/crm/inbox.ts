@@ -59,7 +59,7 @@ export async function ingestInbound(channel: Channel2, msg: {
   });
 
   // 3. Find or create card on the default sales board
-  const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone);
+  const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
 
   // 4. Download/save media if applicable
   let mediaUrl: string | undefined;
@@ -142,28 +142,49 @@ function checkProviderId(tenantId: string, pid: string): boolean {
  * If none exists, create a fresh one on the first non-terminal column of the
  * default sales board.
  */
-async function findOrCreateOpenCardForContact(tenantId: string, contactId: string, displayTitle: string) {
+async function findOrCreateOpenCardForContact(tenantId: string, contactId: string, displayTitle: string, channel?: any) {
+  // Onda 42: respeitar config do channel
+  // - Se channel.auto_create_cards === 0, nao criar; so retornar card existente
+  // - Se channel.inbox_column_id setado, criar card LA (mesmo se contato ja tem card em outra coluna)
+  const channelTargetColumn = channel?.inboxColumnId || channel?.inbox_column_id;
+  const channelTargetBoard = channel?.inboxBoardId || channel?.inbox_board_id;
+  const autoCreate = channel ? (channel.autoCreateCards !== false && channel.auto_create_cards !== 0) : true;
+
   const cards = store.listCardsByContact(tenantId, contactId);
-  // Try to find a card whose column isn't terminal
-  for (const card of cards) {
-    const cols = store.listColumns(tenantId, card.boardId);
-    const col = cols.find(c => c.id === card.columnId);
-    if (col && !col.isTerminal) return card;
+
+  // Se channel forca uma coluna especifica, verificar se ja existe card naquela coluna
+  if (channelTargetColumn) {
+    const existing = cards.find(c => c.columnId === channelTargetColumn);
+    if (existing) return existing;
+  } else {
+    // Padrao: reutilizar qualquer card em coluna nao-terminal
+    for (const card of cards) {
+      const cols = store.listColumns(tenantId, card.boardId);
+      const col = cols.find(c => c.id === card.columnId);
+      if (col && !col.isTerminal) return card;
+    }
   }
-  // Create new card on default board (Sales)
-  const boards = store.listBoards(tenantId);
-  let board = boards.find(b => b.type === 'sales') || boards[0];
-  if (!board) {
-    board = store.seedDefaultBoards(tenantId);
+
+  if (!autoCreate) return null;
+
+  // Criar card novo
+  let boardId = channelTargetBoard;
+  let columnId = channelTargetColumn;
+
+  if (!boardId || !columnId) {
+    const boards = store.listBoards(tenantId);
+    let board = boards.find(b => b.type === 'sales') || boards[0];
+    if (!board) board = store.seedDefaultBoards(tenantId);
+    boardId = board.id;
+    const cols = store.listColumns(tenantId, board.id);
+    // Preferir coluna chamada "Lead novo" ou "Novo" ou primeira nao-terminal
+    const leadCol = cols.find(c => /^lead\s*novo/i.test(c.name) || /^novo/i.test(c.name)) || cols.find(c => !c.isTerminal) || cols[0];
+    if (!leadCol) return null;
+    columnId = leadCol.id;
   }
-  const cols = store.listColumns(tenantId, board.id);
-  const firstCol = cols.find(c => !c.isTerminal) || cols[0];
-  if (!firstCol) return null;
+
   return store.createCard(tenantId, {
-    boardId: board.id,
-    columnId: firstCol.id,
-    title: displayTitle,
-    contactId,
+    boardId, columnId, title: displayTitle, contactId,
   });
 }
 

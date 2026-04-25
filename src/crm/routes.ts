@@ -706,6 +706,60 @@ app.patch('/channels/:id', async (c) => {
   return upd ? ok(c, { channel: maskedChannel(upd) }) : notFound(c, 'channel');
 });
 
+app.get('/channels/:id/webhook-info', (c) => {
+  const tid = tenantOf(c);
+  const ch = store.getChannel(tid, c.req.param('id'));
+  if (!ch) return notFound(c, 'channel');
+  const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://localhost:3001';
+  const path = ch.type === 'meta' ? `/webhooks/crm/meta/${ch.webhookSecret}` : `/webhooks/crm/zapi/${ch.webhookSecret}`;
+  return ok(c, {
+    url: baseUrl.replace(/\/$/, '') + path,
+    secret: ch.webhookSecret,
+    lastInboundAt: (ch as any).lastInboundAt || null,
+    autoCreateCards: (ch as any).auto_create_cards !== 0,
+    inboxBoardId: (ch as any).inbox_board_id || null,
+    inboxColumnId: (ch as any).inbox_column_id || null,
+  });
+});
+
+app.patch('/channels/:id/inbox-config', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const ch = store.getChannel(tid, id);
+  if (!ch) return notFound(c, 'channel');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const db = getCrmDb();
+  const sets: string[] = []; const params: any[] = [];
+  if (body.autoCreateCards !== undefined) { sets.push('auto_create_cards = ?'); params.push(body.autoCreateCards ? 1 : 0); }
+  if (body.inboxBoardId !== undefined)    { sets.push('inbox_board_id = ?');    params.push(body.inboxBoardId || null); }
+  if (body.inboxColumnId !== undefined)   { sets.push('inbox_column_id = ?');   params.push(body.inboxColumnId || null); }
+  if (!sets.length) return badRequest(c, 'no fields');
+  params.push(id, tid);
+  db.prepare(`UPDATE crm_channels SET ${sets.join(', ')} WHERE id = ? AND tenant_id = ?`).run(...params);
+  return ok(c, { ok: true });
+});
+
+app.post('/channels/:id/test-inbound', async (c) => {
+  const tid = tenantOf(c);
+  const id = c.req.param('id');
+  const ch = store.getChannel(tid, id);
+  if (!ch) return notFound(c, 'channel');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const fromPhone = String(body.fromPhone || '5511900000000');
+  const fromName = String(body.fromName || 'Teste Lead');
+  const text = String(body.text || 'Mensagem de teste — gerada via UI');
+  const { ingestInbound } = await import('./inbox.js');
+  try {
+    const r = await ingestInbound(ch, {
+      fromPhone, fromName, messageId: 'test_' + Date.now(),
+      type: 'text' as any, text, timestamp: Date.now(),
+    });
+    return ok(c, { ok: true, result: r });
+  } catch (err: any) {
+    return c.json({ error: 'test_failed', message: err.message }, 500);
+  }
+});
+
 app.delete('/channels/:id', (c) => {
   const ok2 = store.deleteChannel(tenantOf(c), c.req.param('id'));
   return ok2 ? c.body(null, 204) : notFound(c, 'channel');
