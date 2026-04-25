@@ -150,8 +150,13 @@ export function parseWebhook(payload: any): WebhookValue {
 
   for (const item of items) {
     if (!item) continue;
-    // Skip status callbacks
-    if (item.type === 'MessageStatusCallback' || item.status) continue;
+    // Skip status-update callbacks (delivery/sent/read events from outbound messages)
+    // Z-API sends: type='MessageStatusCallback' for these.
+    // ReceivedCallback messages also have a status field ('RECEIVED') — DO NOT skip those.
+    if (item.type === 'MessageStatusCallback') continue;
+    // Skip notification status updates (SENT/DELIVERED/READ) without text payload
+    const updStatus = String(item.status || '').toUpperCase();
+    if (['SENT', 'DELIVERED', 'READ', 'PLAYED'].includes(updStatus)) continue;
     if (item.fromMe === true) continue; // ignore our own outbound (we already log it on send)
 
     const phone = item.phone || item.from || '';
