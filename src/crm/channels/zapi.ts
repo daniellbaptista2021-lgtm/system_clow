@@ -59,23 +59,62 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
   // Z-API nao consegue baixar URLs internas (auth-protected), entao
   // enviamos o conteudo inline como base64 quando o mediaUrl aponta pro
   // nosso endpoint interno.
-  async function resolveMediaForZapi(mediaUrl: string, mediaMime?: string): Promise<string> {
+  async function resolveMediaForZapi(mediaUrl: string, mediaMime?: string, mediaType?: string): Promise<string> {
+    let bytes: Buffer | null = null;
+    let mime = mediaMime || 'application/octet-stream';
     // Se for URL externa (https://...), passar direto — Z-API faz fetch
     if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
     // URL interna: extrair tenantId/date/filename e ler do disk
     const m = mediaUrl.match(/\/v1\/crm\/media\/([^/]+)\/([^/]+)\/([^/?]+)/);
-    if (!m) return mediaUrl; // formato desconhecido — tentar como veio
+    if (!m) return mediaUrl;
     const [, tid, date, filename] = m;
     try {
       const { readMedia } = await import('../media.js');
       const file = readMedia(tid, date, filename);
       if (!file) return mediaUrl;
-      const mime = mediaMime || file.mime || 'application/octet-stream';
-      return `data:${mime};base64,${file.bytes.toString('base64')}`;
+      bytes = file.bytes;
+      mime = mediaMime || file.mime || 'application/octet-stream';
     } catch (err) {
-      console.warn('[zapi] resolveMediaForZapi failed:', (err as any)?.message);
+      console.warn('[zapi] resolveMediaForZapi read failed:', (err as any)?.message);
       return mediaUrl;
     }
+    // Onda 47: audio webm precisa virar ogg/opus pro WhatsApp tocar.
+    // Browser MediaRecorder produz webm/opus. Z-API repassa, mas WA mobile
+    // mostra audio "vazio". Converter via ffmpeg.
+    if (mediaType === 'audio' && /webm|ogg/i.test(mime)) {
+      try {
+        const { spawn } = await import('node:child_process');
+        const converted = await new Promise<Buffer | null>((resolve) => {
+          const ff = spawn('ffmpeg', [
+            '-i', 'pipe:0',
+            '-c:a', 'libopus',
+            '-b:a', '32k',
+            '-ar', '16000',
+            '-ac', '1',
+            '-f', 'ogg',
+            'pipe:1',
+          ], { stdio: ['pipe', 'pipe', 'pipe'] });
+          const chunks: Buffer[] = [];
+          ff.stdout.on('data', (d: Buffer) => chunks.push(d));
+          ff.on('error', () => resolve(null));
+          ff.on('close', (code: number) => {
+            if (code === 0 && chunks.length > 0) resolve(Buffer.concat(chunks));
+            else resolve(null);
+          });
+          ff.stdin.write(bytes);
+          ff.stdin.end();
+        });
+        if (converted) {
+          bytes = converted;
+          mime = 'audio/ogg; codecs=opus';
+        } else {
+          console.warn('[zapi] ffmpeg audio conversion failed; sending original');
+        }
+      } catch (err) {
+        console.warn('[zapi] ffmpeg spawn failed:', (err as any)?.message);
+      }
+    }
+    return `data:${mime};base64,${bytes!.toString('base64')}`;
   }
 
   if (opts.text && !opts.mediaUrl) {
@@ -83,20 +122,20 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
     body.message = opts.text;
   } else if (opts.mediaUrl && opts.mediaType === 'image') {
     path = '/send-image';
-    body.image = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
+    body.image = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime, 'image');
     if (opts.caption) body.caption = opts.caption;
   } else if (opts.mediaUrl && opts.mediaType === 'audio') {
     path = '/send-audio';
-    body.audio = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
+    body.audio = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime, 'audio');
     body.viewOnce = false;
   } else if (opts.mediaUrl && opts.mediaType === 'video') {
     path = '/send-video';
-    body.video = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
+    body.video = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime, 'video');
     if (opts.caption) body.caption = opts.caption;
   } else if (opts.mediaUrl && opts.mediaType === 'document') {
     const ext = (opts.mediaFilename?.split('.').pop() || 'pdf').toLowerCase();
     path = `/send-document/${ext}`;
-    body.document = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
+    body.document = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime, 'document');
     body.fileName = opts.mediaFilename || `documento.${ext}`;
   } else {
     return { ok: false, error: { message: 'must provide text or mediaUrl+mediaType' } };
@@ -173,17 +212,24 @@ export function parseWebhook(payload: any): WebhookValue {
 
   for (const item of items) {
     if (!item) continue;
-    // Skip status-update callbacks (delivery/sent/read events from outbound messages)
-    // Z-API sends: type='MessageStatusCallback' for these.
-    // ReceivedCallback messages also have a status field ('RECEIVED') — DO NOT skip those.
-    if (item.type === 'MessageStatusCallback') continue;
-    // Skip notification status updates (SENT/DELIVERED/READ) without text payload
-    const updStatus = String(item.status || '').toUpperCase();
-    if (['SENT', 'DELIVERED', 'READ', 'PLAYED'].includes(updStatus)) continue;
-    if (item.fromMe === true) continue; // ignore our own outbound (we already log it on send)
+    // Onda 47: Z-API tem 4+ tipos de webhook. Apenas ReceivedCallback
+    // contem mensagens reais. Tudo o resto (PresenceChatCallback,
+    // MessageStatusCallback, DeliveryCallback) sao eventos auxiliares
+    // que NAO devem virar message_in/activity.
+    if (item.type && item.type !== 'ReceivedCallback') continue;
+    // Sanity: se nem text nem image/audio/video/document/location/contact
+    // existem, e nao tem 'message' fallback, nao processar.
+    const hasContent = !!(item.text?.message || item.image || item.audio ||
+      item.video || item.document || item.location || item.contact || item.message);
+    if (!hasContent) continue;
+    if (item.fromMe === true) continue; // ja logamos outbound no send
 
     const phone = item.phone || item.from || '';
     if (!phone) continue;
+    // Onda 47: ignorar mensagens com phone=@lid (internal Meta IDs).
+    // Se item.chatLid existe e o phone real esta em outro campo, usariamos —
+    // mas inbound de contato real sempre vem com phone=numero real.
+    if (typeof phone === 'string' && phone.includes('@lid')) continue;
 
     const base: ParsedInbound = {
       fromPhone: phone,

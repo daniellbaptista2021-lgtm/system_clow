@@ -123,6 +123,18 @@ app.post('/zapi/:secret', async (c) => {
   try { payload = await c.req.json(); }
   catch { return c.text('bad_json', 400); }
 
+  // Onda 47: log enxuto so pra tipos desconhecidos (debug ativo apenas em dev)
+  try {
+    const items = Array.isArray(payload) ? payload : [payload];
+    for (const it of items) {
+      const t = it?.type || 'unknown';
+      const known = ['ReceivedCallback', 'MessageStatusCallback', 'PresenceChatCallback', 'DeliveryCallback'];
+      if (!known.includes(t)) {
+        console.log('[zapi-webhook] unknown type=' + t + ' keys=' + Object.keys(it || {}).join(','));
+      }
+    }
+  } catch {}
+
   const parsed = zapi.parseWebhook(payload);
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
