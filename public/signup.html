@@ -194,9 +194,9 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
     <p>Sem fidelidade. Cancela quando quiser. Troca de plano quando crescer.</p>
   </div>
   <div class="plans">
-    <div class="plan" data-plan="starter" data-price="197">
+    <div class="plan" data-plan="starter" data-price="347">
       <div class="plan-name">Starter</div>
-      <div class="plan-price"><span class="val">R$ 197</span><span class="per">/mês</span></div>
+      <div class="plan-price"><span class="val">R$ 347</span><span class="per">/mês</span></div>
       <div class="plan-desc">Para autônomos e pequenos negócios começando.</div>
       <ul class="plan-features">
         <li class="strong">1 usuário</li>
@@ -212,13 +212,13 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
       <button class="plan-pick">Escolher Starter</button>
     </div>
 
-    <div class="plan featured" data-plan="profissional" data-price="497">
+    <div class="plan featured" data-plan="profissional" data-price="697">
       <div class="plan-name">Profissional</div>
-      <div class="plan-price"><span class="val">R$ 497</span><span class="per">/mês</span></div>
+      <div class="plan-price"><span class="val">R$ 697</span><span class="per">/mês</span></div>
       <div class="plan-desc">Para equipes pequenas e médias que já vendem de verdade.</div>
       <ul class="plan-features">
         <li class="strong">5 usuários (vendedores)</li>
-        <li class="strong">3 números WhatsApp</li>
+        <li class="strong">Até 5 números WhatsApp</li>
         <li class="strong">3.000 mensagens IA/mês</li>
         <li>Até 5.000 contatos</li>
         <li>10 boards no Kanban</li>
@@ -231,13 +231,13 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
       <button class="plan-pick">Escolher Profissional</button>
     </div>
 
-    <div class="plan" data-plan="empresarial" data-price="1197">
+    <div class="plan" data-plan="empresarial" data-price="1297">
       <div class="plan-name">Empresarial</div>
-      <div class="plan-price"><span class="val">R$ 1.197</span><span class="per">/mês</span></div>
+      <div class="plan-price"><span class="val">R$ 1.297</span><span class="per">/mês</span></div>
       <div class="plan-desc">Para empresas que querem white-label e operação completa.</div>
       <ul class="plan-features">
         <li class="strong">20 usuários</li>
-        <li class="strong">10 números WhatsApp</li>
+        <li class="strong">Até 10 números WhatsApp</li>
         <li class="strong">8.000 mensagens IA/mês</li>
         <li>Até 50.000 contatos</li>
         <li>30 boards no Kanban</li>
@@ -263,7 +263,7 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
     <div class="selected-plan">
       <div>
         <div class="sp-label">Plano selecionado:</div>
-        <div class="sp-val" id="planLabel"><strong>Profissional</strong> — R$ 497/mês</div>
+        <div class="sp-val" id="planLabel"><strong>Profissional</strong> — R$ 697/mês</div>
       </div>
       <a href="#planos">Trocar plano</a>
     </div>
@@ -326,7 +326,7 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
 
 <script>
 // ─── Plan selection ──────────────────────────────────────────────────
-const plans = { starter:{name:'Starter',price:197}, profissional:{name:'Profissional',price:497}, empresarial:{name:'Empresarial',price:1197} };
+const plans = { starter:{name:'Starter',price:347}, profissional:{name:'Profissional',price:697}, empresarial:{name:'Empresarial',price:1297} };
 let selectedPlan = 'profissional';
 
 function selectPlan(key) {

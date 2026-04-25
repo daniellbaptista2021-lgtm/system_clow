@@ -46,6 +46,26 @@
 
 ---
 
+## 🤖 Motor de IA
+
+Single-engine, propositalmente:
+
+| Camada | Provedor | Uso |
+|---|---|---|
+| **Chat / agente / tool use** | **GLM-5.1** (Z-AI) via OpenRouter, roteado por LiteLLM proxy local | 100% das conversas IA, raciocínio, chamadas de tool |
+| Transcrição de áudio | OpenAI **Whisper-1** | Áudios recebidos no WhatsApp |
+| Visão / OCR de PDF/imagem | OpenAI **GPT-4o-mini** | Anexos enviados pelo cliente |
+| Web Push | VAPID local | Notificações no PWA |
+
+> ⚠️ **Não há fallback para Claude/Anthropic, GPT-4 chat, ou DeepSeek.** O LiteLLM (`/opt/litellm/config.yaml`) mapeia qualquer alias `claude-*` para `openrouter/z-ai/glm-5.1` — isso preserva compatibilidade do SDK Anthropic sem trocar provedor real.
+
+Arquivos relevantes:
+- `/opt/litellm/config.yaml` — mapeamento de modelos
+- `/opt/litellm/.env` — `OPENROUTER_API_KEY` (mode 600)
+- `/opt/system-clow/.env` — `OPENAI_API_KEY` (Whisper + visão), `ANTHROPIC_BASE_URL=http://127.0.0.1:4000`
+
+---
+
 ## 🚀 Funcionalidades
 
 ### Agente IA (System Clow)
@@ -86,9 +106,9 @@
 
 | | **STARTER** | **PROFISSIONAL** ⭐ | **EMPRESARIAL** |
 |---|---|---|---|
-| Preço/mês | R$ 197 | R$ 497 | R$ 1.197 |
+| Preço/mês | R$ 347 | R$ 697 | R$ 1.297 |
 | Usuários | 1 | 5 | 20 |
-| Números WhatsApp | 1 | 3 | 10 |
+| Números WhatsApp | 1 | até 5 | até 10 |
 | Mensagens IA/mês | 500 | 3.000 | 8.000 |
 | Excedente por msg | R$ 0,20 | R$ 0,15 | R$ 0,12 |
 | Fluxos N8N | 1 | 4 | 8 |
@@ -289,7 +309,7 @@ pm2 restart clow --update-env
 - Phone whitelist por tenant (proteção contra hijack)
 - Webhook do CRM forwarda pro agente (IA continua respondendo)
 - Stripe Checkout esqueleto + webhook handler
-- Tabela de planos definida (Starter R$ 197 / Profissional R$ 497 / Empresarial R$ 1.197)
+- Tabela de planos definida (Starter R$ 347 / Profissional R$ 697 / Empresarial R$ 1.297)
 - 26 commits hoje, todos no GitHub
 
 ⏭️ Próximas etapas
