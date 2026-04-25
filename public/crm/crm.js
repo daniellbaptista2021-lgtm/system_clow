@@ -836,15 +836,25 @@ function renderMessages() {
     }
     const bubble = el('div', { class: `msg ${isIn ? 'in' : 'out'}` });
     if (a.mediaUrl && a.mediaType === 'image') {
-      bubble.append(el('div', { class: 'msg-media' }, el('img', { src: a.mediaUrl, loading: 'lazy' })));
+      const imgEl = el('img', { loading: 'lazy' });
+      bubble.append(el('div', { class: 'msg-media' }, imgEl));
+      loadMediaWithAuth(a.mediaUrl, imgEl);
     } else if (a.mediaUrl && a.mediaType === 'audio') {
-      bubble.append(el('div', { class: 'msg-media' }, el('audio', { controls: '', src: a.mediaUrl })));
+      const audioEl = el('audio', { controls: '' });
+      bubble.append(el('div', { class: 'msg-media' }, audioEl));
+      loadMediaWithAuth(a.mediaUrl, audioEl);
     } else if (a.mediaUrl && a.mediaType === 'video') {
-      bubble.append(el('div', { class: 'msg-media' }, el('video', { controls: '', src: a.mediaUrl })));
+      const videoEl = el('video', { controls: '' });
+      bubble.append(el('div', { class: 'msg-media' }, videoEl));
+      loadMediaWithAuth(a.mediaUrl, videoEl);
     } else if (a.mediaUrl && a.mediaType === 'document') {
-      bubble.append(el('div', { class: 'msg-media' },
-        el('a', { class: 'doc', href: a.mediaUrl, target: '_blank' }, '📄 ', a.metadata?.savedFilename || 'Documento'),
-      ));
+      const docName = a.metadata?.savedFilename || 'Documento';
+      const docLink = el('a', { class: 'doc', href: '#' }, '📄 ', docName);
+      docLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        downloadMediaWithAuth(a.mediaUrl, docName);
+      });
+      bubble.append(el('div', { class: 'msg-media' }, docLink));
     }
     if (a.content && (!a.mediaUrl || a.content !== `[${a.mediaType}]`)) {
       const textLine = el('div', {}, a.content);
@@ -3935,18 +3945,22 @@ async function renderCommentsTab(card) {
   } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
 }
 
-// Hook: when openCardPanel runs, populate the new tabs
-const _origOpenCardPanel = window.openCardPanel;
+// Hook: when openCardPanel runs, populate the new tabs (AI/Links/Comments)
+// IMPORTANT: original openCardPanel(cardId) is async and sets state.currentCard
+// = {card, contact, activities}. Do NOT overwrite that.
 if (typeof openCardPanel === 'function' && !openCardPanel._wrapped) {
   const origFn = openCardPanel;
-  window.openCardPanel = function(card) {
-    origFn.call(this, card);
-    state.currentCard = card;
-    setTimeout(() => {
-      renderAITab(card).catch(() => {});
-      renderLinksTab(card).catch(() => {});
-      renderCommentsTab(card).catch(() => {});
-    }, 100);
+  window.openCardPanel = async function(cardOrId) {
+    // Accept either string id (legacy) or full card object (Onda 37 callers)
+    const cardId = (cardOrId && typeof cardOrId === 'object') ? cardOrId.id : cardOrId;
+    await origFn.call(this, cardId);
+    // After original sets state.currentCard properly, render extra tabs
+    const cur = state.currentCard?.card;
+    if (cur) {
+      renderAITab(cur).catch(() => {});
+      renderLinksTab(cur).catch(() => {});
+      renderCommentsTab(cur).catch(() => {});
+    }
   };
   window.openCardPanel._wrapped = true;
 }
@@ -4017,3 +4031,60 @@ function wireKanbanContextMenu() {
   });
 }
 wireKanbanContextMenu();
+
+// ═══ ONDA 38: AUTH-AWARE MEDIA LOADER ════════════════════════════════
+// O endpoint /v1/crm/media/:tenantId/:date/:filename requer Bearer token.
+// Browsers nao mandam Authorization em <audio src>/<img src>, entao
+// fazemos fetch com auth, criamos blob URL e setamos como src.
+const _mediaBlobCache = new Map();
+
+async function loadMediaWithAuth(mediaUrl, el) {
+  if (!mediaUrl || !el) return;
+  if (_mediaBlobCache.has(mediaUrl)) {
+    el.src = _mediaBlobCache.get(mediaUrl);
+    return;
+  }
+  // Strip /v1/crm prefix if present (api() prepends API_BASE)
+  const path = mediaUrl.startsWith(API_BASE) ? mediaUrl.slice(API_BASE.length) : mediaUrl.replace(/^\/v1\/crm/, '');
+  try {
+    const r = await fetch(API_BASE + path, { headers: { Authorization: 'Bearer ' + state.apiKey } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    _mediaBlobCache.set(mediaUrl, url);
+    el.src = url;
+  } catch (e) {
+    console.warn('[media-load]', mediaUrl, e.message);
+    if (el.tagName === 'IMG') el.alt = 'Erro carregando midia';
+  }
+}
+
+async function downloadMediaWithAuth(mediaUrl, filename) {
+  const path = mediaUrl.startsWith(API_BASE) ? mediaUrl.slice(API_BASE.length) : mediaUrl.replace(/^\/v1\/crm/, '');
+  try {
+    const r = await fetch(API_BASE + path, { headers: { Authorization: 'Bearer ' + state.apiKey } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'media';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  }
+}
+
+// Cleanup blob URLs quando trocar de card
+if (typeof closeCardPanel === 'function' && !closeCardPanel._cleanupWired) {
+  const _origCloseCardPanel = closeCardPanel;
+  window.closeCardPanel = function() {
+    for (const url of _mediaBlobCache.values()) URL.revokeObjectURL(url);
+    _mediaBlobCache.clear();
+    return _origCloseCardPanel.call(this);
+  };
+  window.closeCardPanel._cleanupWired = true;
+}
