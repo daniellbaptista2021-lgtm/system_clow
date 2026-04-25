@@ -5029,23 +5029,25 @@ if (typeof _originalShowView_o53 === 'function') {
 window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, renderChannelsLimitsBadge };
 // ═══════════════════════════════════════════════════════════════════════
 
-// Onda 53f: monkey-patch openNewChannelModal pra abrir picker quando
-// chamado sem args (usado por wire('#newChannelBtn')). Quando chamado
-// COM presetType, abre o modal de criacao direto (usado pelo picker
-// depois que o user escolhe Z-API ou Meta).
-(function patchNewChannel() {
-  if (window.__newChannelPatched_o53f) return;
-  window.__newChannelPatched_o53f = true;
-  const _origOpen = window.openNewChannelModal;
-  if (typeof _origOpen !== 'function') return;
-  window.openNewChannelModal = async function(presetType) {
-    if (presetType) {
-      // Vem do picker — abre modal de criacao
-      return _origOpen.call(this, presetType);
+// Onda 53g: interceptar click do #newChannelBtn no capture phase pra
+// abrir picker ANTES do handler antigo. openNewChannelModal eh funcao
+// local do modulo (nao exposta em window) entao monkey-patch nao
+// funciona; event delegation com capture eh a forma robusta.
+(function interceptNewChannelClick() {
+  if (window.__newChannelIntercepted_o53g) return;
+  window.__newChannelIntercepted_o53g = true;
+  document.addEventListener('click', function(ev) {
+    const btn = ev.target.closest('#newChannelBtn');
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (typeof openChannelTypePicker === 'function') {
+      openChannelTypePicker();
+    } else {
+      console.warn('[onda53g] openChannelTypePicker indisponivel');
     }
-    // Vem direto do botao "+ Novo Canal" — abre picker primeiro
-    return openChannelTypePicker();
-  };
-  console.log('[onda53f] openNewChannelModal interceptado pra abrir picker');
+  }, true); // capture = roda antes do handler bubble do wire(...)
+  console.log('[onda53g] click #newChannelBtn interceptado em capture');
 })();
+
 
