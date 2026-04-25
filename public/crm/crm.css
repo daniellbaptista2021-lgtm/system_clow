@@ -911,3 +911,16 @@ body {
 
 /* Espaco entre media e caption */
 .msg .msg-media + .msg-text { margin-top: 6px; }
+
+/* Onda 54: WA badge inline (no card-title-row, ao lado do botão ⋯) */
+.card-wa-badge--inline {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 3px 7px !important;
+  font-size: 10.5px !important;
+  pointer-events: auto !important;
+}
+.card-wa-badge--inline .wa-icon svg { width: 12px !important; height: 12px !important; }

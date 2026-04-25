@@ -269,10 +269,14 @@ function cardEl(card) {
   const c = el('div', { class: 'card', draggable: 'true', data: { cardId: card.id, columnId: card.columnId } },
     el('div', { class: 'card-title-row', style: 'display:flex;align-items:flex-start;gap:6px;justify-content:space-between' },
       el('div', { class: 'card-title', style: 'flex:1;min-width:0' }, card.title),
+      (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge card-wa-badge--inline', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
+        el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="14" height="14" fill="#fff"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
+        el('span', { class: 'wa-count' }, String(card.unreadCount)),
+      ) : null,
       el('button', {
         class: 'card-menu-btn',
         title: 'Opções do card',
-        style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:16px;line-height:1;font-weight:700;flex:0 0 auto;opacity:.55;transition:opacity .15s,background .15s',
+        style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:16px;line-height:1;font-weight:700;flex:0 0 auto;opacity:.7;transition:opacity .15s,background .15s;position:relative;z-index:6',
         on: {
           click: (e) => {
             e.stopPropagation();
@@ -281,7 +285,7 @@ function cardEl(card) {
             showCardContextMenu(card, r.right, r.bottom + 4);
           },
           mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(155,89,252,0.12)'; },
-          mouseleave: (e) => { e.currentTarget.style.opacity = '.55'; e.currentTarget.style.background = 'transparent'; },
+          mouseleave: (e) => { e.currentTarget.style.opacity = '.7'; e.currentTarget.style.background = 'transparent'; },
         }
       }, '⋯'),
     ),
@@ -299,11 +303,6 @@ function cardEl(card) {
     card.dueDate ? el('div', { class: over ? 'card-due overdue' : 'card-due' },
       over ? '⚠ ' : '📅 ',
       new Date(card.dueDate).toLocaleDateString('pt-BR'),
-    ) : null,
-    // Onda 48: badge WhatsApp — aparece quando tem mensagens nao respondidas
-    (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
-      el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="16" height="16" fill="#25D366"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
-      el('span', { class: 'wa-count' }, String(card.unreadCount)),
     ) : null,
   );
   c.addEventListener('dragstart', (e) => {
@@ -798,9 +797,32 @@ async function patchCardSafe(cardId, patch) {
 }
 
 function positionMenu(menu, x, y) {
-  // Estima 280x400 antes de medir; ajusta se sair da viewport
-  menu.style.left = Math.min(x, window.innerWidth - 260) + 'px';
-  menu.style.top = Math.min(y, window.innerHeight - 420) + 'px';
+  // Posiciona invisivel pra medir altura real, depois decide flip vertical
+  menu.style.visibility = 'hidden';
+  menu.style.position = 'fixed';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  const w = rect.width || 260;
+  const h = rect.height || 420;
+  const margin = 8;
+  let left = x;
+  let top = y;
+  // Horizontal: se passa da direita, alinha pela esquerda do click
+  if (left + w > window.innerWidth - margin) left = Math.max(margin, x - w);
+  // Vertical: se passa do fim, abre pra cima do click
+  if (top + h > window.innerHeight - margin) {
+    const flipped = y - h - 4;
+    top = flipped >= margin ? flipped : Math.max(margin, window.innerHeight - h - margin);
+  }
+  if (left < margin) left = margin;
+  if (top < margin) top = margin;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = '';
+  // Remove pra reanexar pelo showMenu (evita duplicacao)
+  menu.remove();
 }
 
 function truncate(s, n) {
