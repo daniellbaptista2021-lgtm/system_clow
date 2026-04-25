@@ -134,9 +134,14 @@ async function bootstrap() {
     renderChannelsList(); // pre-render so send-channel dropdown has data
     // Polling: refresh pipeline + active conversation every 10s
     state.pollInterval = setInterval(async () => {
+      // Onda 52: smart refresh preserva scroll + skip se interagindo
       if ($('#kanbanView').classList.contains('active')) {
-        await loadPipeline(state.currentBoardId);
-        renderKanban();
+        if (typeof window.__smartRefresh === 'function') {
+          await window.__smartRefresh('boot-tick-10s');
+        } else {
+          await loadPipeline(state.currentBoardId);
+          renderKanban();
+        }
       }
       if (state.currentCard && !$('#sidePanel').classList.contains('hide')) {
         await refreshCurrentCard();
@@ -4477,27 +4482,21 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
         if (window.__onda49) window.__onda49.lastSseMsg = Date.now();
         try {
           const data = JSON.parse(ev.data);
-          // Tocar beep so se o card NAO esta aberto agora (evita spam quando
-          // voce ta conversando com o cara)
           const openCardId = window.state?.currentCard?.card?.id;
           if (data.cardId !== openCardId) {
             beep();
             showNotification(data);
           }
-          // Refresh pipeline pra mostrar badge atualizado
-          if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
-            loadPipeline(window.state.currentBoardId).then(() => {
-              if (typeof renderKanban === 'function') renderKanban();
-            }).catch(()=>{});
+          // Onda 52: smart refresh — preserva scroll + skip se interagindo
+          if (typeof window.__smartRefresh === 'function') {
+            window.__smartRefresh('sse:message.in');
           }
         } catch (e) { console.warn('[onda48] message.in parse', e); }
       });
       state48.es.addEventListener('message.read', (ev) => {
         try {
-          if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
-            loadPipeline(window.state.currentBoardId).then(() => {
-              if (typeof renderKanban === 'function') renderKanban();
-            }).catch(()=>{});
+          if (typeof window.__smartRefresh === 'function') {
+            window.__smartRefresh('sse:message.read');
           }
         } catch {}
       });
@@ -4538,18 +4537,19 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
 
   async function forceRefresh(reason) {
     const now = Date.now();
-    // throttle: no minimo 2s entre refreshes
     if (now - sync49.lastRefresh < 2000) return;
     sync49.lastRefresh = now;
     try {
-      if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
+      // Onda 52: smart refresh preserva scroll e checa interacao
+      if (typeof window.__smartRefresh === 'function') {
+        await window.__smartRefresh('o49:' + reason);
+      } else if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
         await loadPipeline(window.state.currentBoardId);
         if (typeof renderKanban === 'function') renderKanban();
       }
       if (window.state?.currentCard && typeof refreshCurrentCard === 'function') {
         await refreshCurrentCard();
       }
-      console.log('[onda49] refresh:', reason);
     } catch (e) { console.warn('[onda49] refresh failed:', e); }
   }
 
@@ -4571,7 +4571,7 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
       if (document.visibilityState === 'visible' && !sync49.sseAlive) {
         forceRefresh('polling');
       }
-    }, 30000);
+    }, 90000); // Onda 52: 30s → 90s (menos agressivo)
   }
   startPolling();
 
@@ -4692,5 +4692,126 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   }
 
   window.__onda49 = { registerPush, forceRefresh };
+})();
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══ ONDA 52: SCROLL STABILITY (no mais salto pro topo) ════════════
+(function onda52ScrollStable() {
+  const stable = {
+    interactingUntil: 0,
+    pendingRefresh: null,
+    lastSnapshot: '',
+  };
+
+  // Marcar interacao por 8s a cada touch/scroll/click
+  function markInteracting(ms = 8000) {
+    stable.interactingUntil = Date.now() + ms;
+  }
+
+  ['touchstart', 'touchmove', 'wheel', 'scroll', 'mousedown'].forEach(ev => {
+    window.addEventListener(ev, () => markInteracting(), { passive: true, capture: true });
+  });
+
+  function isInteracting() {
+    return Date.now() < stable.interactingUntil;
+  }
+
+  // Snapshot dos scrolls atuais
+  function snapshotScrolls() {
+    const snap = {
+      win: window.scrollY,
+      body: document.body.scrollTop,
+      cols: [],
+      kanbanBoard: null,
+    };
+    document.querySelectorAll('.col-body').forEach(el => {
+      snap.cols.push({ id: el.getAttribute('data-column-id') || el.dataset.columnId || '', top: el.scrollTop });
+    });
+    const board = document.querySelector('.kanban-board, #kanban');
+    if (board) {
+      snap.kanbanBoard = { left: board.scrollLeft, top: board.scrollTop };
+    }
+    return snap;
+  }
+
+  function restoreScrolls(snap) {
+    try {
+      // Restaura proximo frame, depois do reflow
+      requestAnimationFrame(() => {
+        if (snap.win) window.scrollTo({ top: snap.win, behavior: 'instant' });
+        if (snap.body) document.body.scrollTop = snap.body;
+        snap.cols.forEach(c => {
+          const el = c.id ? document.querySelector(`.col-body[data-column-id="${c.id}"]`) : null;
+          if (el) el.scrollTop = c.top;
+        });
+        const board = document.querySelector('.kanban-board, #kanban');
+        if (board && snap.kanbanBoard) {
+          board.scrollLeft = snap.kanbanBoard.left;
+          board.scrollTop = snap.kanbanBoard.top;
+        }
+      });
+    } catch (e) { /* noop */ }
+  }
+
+  // Wrap render que preserva scroll. Usado pelos auto-refresh.
+  window.__renderKanbanPreserve = function() {
+    if (typeof renderKanban !== 'function') return;
+    const snap = snapshotScrolls();
+    renderKanban();
+    restoreScrolls(snap);
+  };
+
+  // Hash simples do pipeline pra detectar se mudou de fato
+  function pipelineHash() {
+    try {
+      const s = window.state;
+      if (!s?.pipeline) return '';
+      const parts = [];
+      for (const col of s.pipeline.columns) {
+        const cards = s.pipeline.cardsByColumn[col.id] || [];
+        for (const c of cards) {
+          parts.push(`${c.id}:${c.position}:${c.unreadCount || 0}:${c.lastActivityAt || 0}`);
+        }
+      }
+      return parts.join('|');
+    } catch { return ''; }
+  }
+
+  // Refresh inteligente:
+  //  - Se user interagindo, agenda pra quando ficar idle
+  //  - Se hash igual ao anterior, skip render
+  //  - Senao, snapshot scroll + render + restore
+  window.__smartRefresh = async function smartRefresh(reason) {
+    if (isInteracting()) {
+      // Agendar pra daqui 9s (apos interactingUntil)
+      if (stable.pendingRefresh) clearTimeout(stable.pendingRefresh);
+      const delay = Math.max(stable.interactingUntil - Date.now() + 1000, 1000);
+      stable.pendingRefresh = setTimeout(() => smartRefresh('deferred:' + reason), delay);
+      return;
+    }
+    stable.pendingRefresh = null;
+    try {
+      const s = window.state;
+      if (s?.currentBoardId && typeof loadPipeline === 'function') {
+        await loadPipeline(s.currentBoardId);
+        const newHash = pipelineHash();
+        if (newHash === stable.lastSnapshot) {
+          // Nada mudou — pular re-render (preserva scroll automaticamente)
+          return;
+        }
+        stable.lastSnapshot = newHash;
+        if (typeof renderKanban === 'function') {
+          const snap = snapshotScrolls();
+          renderKanban();
+          restoreScrolls(snap);
+        }
+      }
+    } catch (e) { console.warn('[onda52] smartRefresh:', e); }
+  };
+
+  // Replace as chamadas dos blocos onda48/onda49 que fazem renderKanban
+  // direto — proximo evento, vao usar __smartRefresh em vez disso.
+  window.__onda52 = { snapshotScrolls, restoreScrolls, isInteracting, markInteracting, pipelineHash };
 })();
 // ═══════════════════════════════════════════════════════════════════════
