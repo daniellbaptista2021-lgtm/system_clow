@@ -631,7 +631,14 @@ body {
     border-right: 1px solid var(--border);
     padding-top: 60px; /* espaco pro hamburger */
   }
-  .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+  /* Onda 43: especificidade + !important pra garantir override */
+  .app-shell .sidebar.open,
+  #app .sidebar.open,
+  .sidebar.open {
+    transform: translateX(0) !important;
+    box-shadow: 4px 0 24px rgba(0,0,0,.5);
+    z-index: 1500 !important;
+  }
 
   /* Backdrop atras do sidebar quando aberto */
   .sidebar-backdrop {
@@ -744,3 +751,18 @@ body {
 .panel-tabs .panel-tab { white-space: nowrap; flex-shrink: 0; }
 .sidebar-foot .nav-item { padding: 6px 8px; }
 .kanban-card { cursor: pointer; }
+
+
+/* ONDA 43 — hamburger sempre visivel acima de tudo no mobile */
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    z-index: 2000 !important;
+  }
+  .sidebar-backdrop {
+    z-index: 1400 !important;
+  }
+  /* Garantir que o sidebar fique acima do main no mobile */
+  .app-shell .sidebar {
+    z-index: 1500 !important;
+  }
+}

@@ -4180,39 +4180,44 @@ if (document.readyState !== 'loading') {
 }
 
 
-// ═══ ONDA 41: MOBILE SIDEBAR TOGGLE ════════════════════════════════════
-function wireMobileSidebar() {
-  const toggle = document.getElementById('sidebarToggle');
+// ═══ ONDA 41/43: MOBILE SIDEBAR TOGGLE (event delegation) ═════════════
+// Usa delegation no document — funciona mesmo se botao foi adicionado
+// dinamicamente apos o boot ou antes do JS rodar.
+function _toggleMobileSidebar(open) {
   const sidebar = document.querySelector('.sidebar');
   const backdrop = document.getElementById('sidebarBackdrop');
-  if (!toggle || !sidebar) return;
-
-  toggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    sidebar.classList.toggle('open');
-    if (backdrop) backdrop.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
-  });
-
-  if (backdrop) {
-    backdrop.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      backdrop.style.display = 'none';
-    });
-  }
-
-  // Auto-close ao clicar em nav-item (em mobile)
-  sidebar.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      if (window.innerWidth <= 768) {
-        sidebar.classList.remove('open');
-        if (backdrop) backdrop.style.display = 'none';
-      }
-    });
-  });
+  if (!sidebar) return;
+  const shouldOpen = open !== undefined ? open : !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', shouldOpen);
+  if (backdrop) backdrop.style.display = shouldOpen ? 'block' : 'none';
+  // Tambem inline transform pra garantir override CSS
+  sidebar.style.transform = shouldOpen ? 'translateX(0)' : '';
 }
 
-document.addEventListener('DOMContentLoaded', wireMobileSidebar);
-if (document.readyState !== 'loading') wireMobileSidebar();
+// Click delegation — qualquer click no document
+document.addEventListener('click', (e) => {
+  // Hamburger toggle
+  if (e.target.closest('#sidebarToggle, .sidebar-toggle')) {
+    e.preventDefault();
+    e.stopPropagation();
+    _toggleMobileSidebar();
+    return;
+  }
+  // Backdrop click → fecha
+  if (e.target.closest('#sidebarBackdrop, .sidebar-backdrop')) {
+    _toggleMobileSidebar(false);
+    return;
+  }
+  // Nav-item click no mobile → auto-fecha
+  if (window.innerWidth <= 768 && e.target.closest('.sidebar .nav-item')) {
+    setTimeout(() => _toggleMobileSidebar(false), 100);
+  }
+}, true); // capture phase pra pegar antes de outros handlers
+
+// Reset ao entrar/sair de modo mobile
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 768) _toggleMobileSidebar(false);
+});
 
 
 // ═══ ONDA 42: CHANNEL INBOX CONFIG (auto-create leads) ════════════════
