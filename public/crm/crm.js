@@ -267,7 +267,24 @@ function cardEl(card) {
   const contact = card.contact || {};
   const over = card.dueDate && card.dueDate < Date.now();
   const c = el('div', { class: 'card', draggable: 'true', data: { cardId: card.id, columnId: card.columnId } },
-    el('div', { class: 'card-title' }, card.title),
+    el('div', { class: 'card-title-row', style: 'display:flex;align-items:flex-start;gap:6px;justify-content:space-between' },
+      el('div', { class: 'card-title', style: 'flex:1;min-width:0' }, card.title),
+      el('button', {
+        class: 'card-menu-btn',
+        title: 'Opções do card',
+        style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:16px;line-height:1;font-weight:700;flex:0 0 auto;opacity:.55;transition:opacity .15s,background .15s',
+        on: {
+          click: (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const r = e.currentTarget.getBoundingClientRect();
+            showCardContextMenu(card, r.right, r.bottom + 4);
+          },
+          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(155,89,252,0.12)'; },
+          mouseleave: (e) => { e.currentTarget.style.opacity = '.55'; e.currentTarget.style.background = 'transparent'; },
+        }
+      }, '⋯'),
+    ),
     contact.name ? el('div', { class: 'card-contact' },
       el('div', { class: 'card-avatar' }, initials(contact.name)),
       contact.name,
