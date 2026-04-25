@@ -567,7 +567,9 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
-@media (max-width: 900px) {
+/* Onda 50: range RESTRITO 769..900px — so onde sidebar e icone-only.
+   No mobile (<=768px) sidebar e overlay 240px e LABELS DEVEM APARECER. */
+@media (min-width: 769px) and (max-width: 900px) {
   .app-shell { grid-template-columns: 64px 1fr; }
   .app-shell.panel-open { grid-template-columns: 64px 1fr; }
   .side-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 100%; max-width: 420px; }
@@ -808,4 +810,76 @@ body {
 /* Card container precisa de position:relative pro badge absoluto funcionar */
 .kanban-col .card, .kanban-board .card {
   position: relative;
+}
+
+
+/* ═══ ONDA 50: MOBILE SIDEBAR OVERLAY — LABELS SEMPRE VISIVEIS ═══════ */
+@media (max-width: 768px) {
+  /* Forcar labels e foot visiveis no overlay mobile */
+  .sidebar .nav-item span,
+  .sidebar .nav-item .nav-label {
+    display: inline-block !important;
+  }
+  .sidebar .nav-label {
+    flex: 1 !important;
+    margin-left: 8px !important;
+    font-size: 14px !important;
+    color: inherit !important;
+  }
+  .sidebar .nav-icon {
+    flex: 0 0 auto !important;
+  }
+  .sidebar .nav-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 14px !important;
+    text-align: left !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  .sidebar .brand-text { display: block !important; }
+  .sidebar .sidebar-foot {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    border-top: 1px solid var(--border) !important;
+  }
+  .sidebar .sidebar-foot .nav-item { padding: 6px 8px !important; }
+  .sidebar .sidebar-foot .tenant-info { padding: 8px 0 !important; }
+  .sidebar .sidebar-foot .name {
+    font-size: 13px !important;
+    color: var(--text) !important;
+    font-weight: 600 !important;
+  }
+  .sidebar .sidebar-foot .tier {
+    font-size: 11px !important;
+    color: var(--text-dim) !important;
+    text-transform: uppercase !important;
+    letter-spacing: .5px !important;
+  }
+  .sidebar .sidebar-foot .logout-btn {
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: #EF4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    padding: 8px 14px !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    font-size: 13px !important;
+    margin-top: 8px !important;
+  }
+  .sidebar .sidebar-foot .logout-btn:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+  }
+  /* Brand SVG menor no mobile pra dar espaco aos labels */
+  .sidebar .brand {
+    padding: 16px 12px !important;
+    text-align: center !important;
+  }
+  .sidebar .brand-infinite {
+    width: 80px !important;
+    height: 40px !important;
+  }
 }
