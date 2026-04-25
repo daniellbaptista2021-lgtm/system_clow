@@ -220,12 +220,16 @@ function renderKanban() {
   for (const col of columns) {
     const cards = cardsByColumn[col.id] || [];
     const colEl = el('div', { class: 'kanban-col', data: { columnId: col.id } },
-      el('div', { class: 'col-head' },
+      el('div', { class: 'col-head', style: 'cursor:pointer', title: 'Botão direito (ou clique longo) para opções da coluna',
+        on: { contextmenu: (e) => { e.preventDefault(); showColumnContextMenu(col, e.clientX, e.clientY); } } },
         el('div', { class: 'col-title' },
           el('span', { class: 'col-color-dot', style: `background:${col.color}` }),
           col.name,
         ),
         el('span', { class: 'col-count' }, String(cards.length)),
+        el('button', { class: 'col-menu-btn', title: 'Opções da coluna',
+          style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:4px 8px;border-radius:6px;margin-left:auto;font-size:18px;line-height:1;font-weight:700',
+          on: { click: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); showColumnContextMenu(col, r.right, r.bottom); } } }, '⋯'),
       ),
       el('div', { class: 'col-body', data: { columnId: col.id } }, ...cards.map(cardEl)),
       el('div', { class: 'col-foot' },
@@ -441,6 +445,232 @@ function showCardContextMenu(card, x, y) {
   );
 
   showMenu(menu, x, y);
+}
+
+
+// ─── Onda 54: Context menu da COLUNA (kanban) ───────────────────────────
+async function showColumnContextMenu(col, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+
+  const ICO_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const ICO_COLOR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/></svg>';
+  const ICO_LEFT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="15 18 9 12 15 6"/></svg>';
+  const ICO_RIGHT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="9 18 15 12 9 6"/></svg>';
+  const ICO_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const ICO_EMPTY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+  const ICO_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>';
+  const ICO_WIP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const ICO_WIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="20 6 9 17 4 12"/></svg>';
+  const ICO_LOSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const ICO_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  const cols = (state.pipeline?.columns || []);
+  const idx = cols.findIndex(c => c.id === col.id);
+  const cardsHere = (state.pipeline?.cardsByColumn?.[col.id] || []);
+  const cardCount = cardsHere.length;
+  const stageType = col.stageType || col.stage_type || 'open';
+
+  const menu = el('div', { class: 'ctx-menu' });
+  menu.append(
+    ctxHeader(truncate(col.name || 'Coluna', 28) + ' (' + cardCount + ' card' + (cardCount === 1 ? '' : 's') + ')'),
+
+    ctxItem(ICO_EDIT, 'Renomear coluna', async () => {
+      const v = await clowPrompt('Novo nome:', col.name || '', { title: 'Renomear coluna' });
+      if (v == null || v.trim() === col.name) return;
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { name: v.trim() } });
+        toast('Coluna renomeada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxItem(ICO_COLOR, 'Mudar cor', async () => {
+      const palette = ['#9B59FC', '#4A9EFF', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const v = await pickFromPalette(palette, col.color || '#9B59FC', 'Mudar cor da coluna');
+      if (!v) return;
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { color: v } });
+        toast('Cor atualizada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxSep(),
+
+    ctxItem(ICO_LEFT, 'Mover coluna para esquerda', async () => {
+      if (idx <= 0) return toast('Já é a primeira', 'warning');
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { position: idx - 1 } });
+        await api('/columns/' + cols[idx - 1].id, { method: 'PATCH', body: { position: idx } });
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: idx <= 0 }),
+
+    ctxItem(ICO_RIGHT, 'Mover coluna para direita', async () => {
+      if (idx >= cols.length - 1) return toast('Já é a última', 'warning');
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { position: idx + 1 } });
+        await api('/columns/' + cols[idx + 1].id, { method: 'PATCH', body: { position: idx } });
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: idx >= cols.length - 1 }),
+
+    ctxSep(),
+
+    ctxItem(ICO_PLUS, 'Adicionar card aqui', () => openNewCardModal(col.id)),
+
+    ctxItem(ICO_EMPTY, 'Mover todos os cards para...', () => showMoveAllSubmenu(col, x, y)),
+
+    ctxSep(),
+
+    ctxItem(ICO_WIN, stageType === 'won' ? '✓ Marcada como Ganho' : 'Marcar como "Ganho" (terminal)', async () => {
+      try {
+        await api('/columns/' + col.id + '/stage-type', { method: 'PATCH', body: { stageType: 'won' } });
+        toast('Coluna marcada como Ganho', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: stageType === 'won' }),
+
+    ctxItem(ICO_LOSS, stageType === 'lost' ? '✓ Marcada como Perdido' : 'Marcar como "Perdido" (terminal)', async () => {
+      try {
+        await api('/columns/' + col.id + '/stage-type', { method: 'PATCH', body: { stageType: 'lost' } });
+        toast('Coluna marcada como Perdido', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: stageType === 'lost' }),
+
+    ctxItem(ICO_WIP, 'Definir limite WIP', async () => {
+      const cur = col.wipLimit || col.wip_limit || '';
+      const v = await clowPrompt('Limite máximo de cards (deixe vazio para ilimitado):', String(cur), { title: 'Limite WIP', type: 'number' });
+      if (v == null) return;
+      const n = v.trim() === '' ? null : parseInt(v, 10);
+      if (n !== null && (!Number.isFinite(n) || n < 0)) return toast('Valor inválido', 'error');
+      try {
+        await api('/columns/' + col.id + '/wip-limit', { method: 'PATCH', body: { wipLimit: n } });
+        toast('Limite atualizado', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxSep(),
+
+    ctxItem(ICO_CHART, 'Relatório da coluna', () => showColumnReport(col, cardsHere)),
+
+    ctxSep(),
+
+    ctxItem(ICO_TRASH, 'Apagar coluna', async () => {
+      const msg = cardCount > 0
+        ? 'Apagar a coluna "' + col.name + '" e os ' + cardCount + ' card(s) dentro? Esta ação é PERMANENTE.'
+        : 'Apagar a coluna "' + col.name + '"?';
+      if (!(await clowConfirm(msg, { title: 'Apagar coluna', danger: true, confirmLabel: 'Apagar tudo' }))) return;
+      try {
+        await api('/columns/' + col.id, { method: 'DELETE' });
+        toast('Coluna apagada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { danger: true }),
+  );
+
+  showMenu(menu, x, y);
+}
+
+function showMoveAllSubmenu(col, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+  const menu = el('div', { class: 'ctx-menu' });
+  const cardsHere = (state.pipeline?.cardsByColumn?.[col.id] || []);
+  menu.append(ctxHeader('Mover ' + cardsHere.length + ' card(s) para...'));
+  const others = (state.pipeline?.columns || []).filter(c => c.id !== col.id);
+  if (!others.length) {
+    menu.append(el('div', { style: 'padding:12px;color:var(--text-dim);font-size:12px' }, 'Nenhuma outra coluna disponível.'));
+  } else {
+    for (const c of others) {
+      menu.append(ctxItem(
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#9B59FC') + '"></span>',
+        c.name,
+        async () => {
+          if (!cardsHere.length) return toast('Coluna já está vazia', 'info');
+          if (!(await clowConfirm('Mover ' + cardsHere.length + ' card(s) para "' + c.name + '"?', { title: 'Confirmar movimentação' }))) return;
+          let ok = 0, err = 0;
+          for (const card of cardsHere) {
+            try { await api('/cards/' + card.id + '/move', { method: 'POST', body: { toColumnId: c.id } }); ok++; }
+            catch { err++; }
+          }
+          toast(ok + ' movido(s)' + (err ? ' / ' + err + ' falha(s)' : ''), err ? 'error' : 'success');
+          await refreshBoard();
+        }
+      ));
+    }
+  }
+  showMenu(menu, x, y);
+}
+
+function showColumnReport(col, cards) {
+  closeCtxMenus();
+  const totalCards = cards.length;
+  const totalValueCents = cards.reduce((a, c) => a + (c.valueCents || 0), 0);
+  const weightedCents = cards.reduce((a, c) => a + (c.valueCents || 0) * (c.probability || 0) / 100, 0);
+  const overdue = cards.filter(c => c.dueDate && c.dueDate < Date.now()).length;
+  const noValue = cards.filter(c => !c.valueCents).length;
+  const contacts = new Set(cards.map(c => c.contact?.id).filter(Boolean)).size;
+  const labelCount = {};
+  for (const c of cards) for (const l of (c.labels || [])) labelCount[l] = (labelCount[l] || 0) + 1;
+  const topLabels = Object.entries(labelCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const avgProb = totalCards ? Math.round(cards.reduce((a, c) => a + (c.probability || 0), 0) / totalCards) : 0;
+
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const stat = (label, value, color) => el('div', { style: 'background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px;border-radius:10px' },
+    el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
+    el('div', { style: 'font-size:22px;font-weight:800;color:' + (color || 'var(--text)') }, value),
+  );
+  const modal = el('div', { class: 'modal', style: 'max-width:560px' },
+    el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:18px' },
+      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#9B59FC') }),
+      el('h3', { style: 'margin:0' }, 'Relatório · ' + col.name),
+    ),
+    el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
+      stat('Total de cards', String(totalCards)),
+      stat('Contatos únicos', String(contacts)),
+      stat('Valor total', fmtMoney(totalValueCents), '#22C55E'),
+      stat('Valor ponderado', fmtMoney(weightedCents), '#9B59FC'),
+      stat('Probabilidade média', avgProb + '%'),
+      stat('Vencidos', String(overdue), overdue > 0 ? '#EF4444' : 'var(--text)'),
+    ),
+    noValue > 0 ? el('p', { style: 'font-size:12px;color:var(--text-dim);margin:8px 0' }, '⚠ ' + noValue + ' card(s) sem valor definido') : null,
+    topLabels.length ? el('div', { style: 'margin-top:12px' },
+      el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px' }, 'Etiquetas mais usadas'),
+      el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' },
+        ...topLabels.map(([l, n]) => el('span', { class: 'card-label', style: 'padding:4px 10px' }, l + ' · ' + n)),
+      ),
+    ) : null,
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
+
+async function pickFromPalette(palette, current, title) {
+  return new Promise((resolve) => {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const modal = el('div', { class: 'modal', style: 'max-width:380px' },
+      el('h3', {}, title || 'Escolher cor'),
+      el('div', { style: 'display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:14px 0' },
+        ...palette.map(c => el('button', {
+          type: 'button',
+          style: 'width:42px;height:42px;border-radius:10px;border:' + (c === current ? '3px solid #fff' : '2px solid rgba(255,255,255,0.1)') + ';background:' + c + ';cursor:pointer',
+          on: { click: () => { dialog.remove(); resolve(c); } },
+        }))
+      ),
+      el('div', { class: 'modal-actions' },
+        el('button', { class: 'cancel', on: { click: () => { dialog.remove(); resolve(null); } } }, 'Cancelar'),
+      ),
+    );
+    dialog.append(modal);
+    document.body.append(dialog);
+  });
 }
 
 function showAssignSubmenu(card, x, y) {
