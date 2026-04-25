@@ -36,6 +36,7 @@ export interface SendOptions {
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'document' | 'video';
   mediaFilename?: string;
+  mediaMime?: string;
   caption?: string;
   replyToMessageId?: string;
 }
@@ -54,26 +55,48 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
   let body: any = { phone };
   if (opts.replyToMessageId) body.messageId = opts.replyToMessageId;
 
+  // Onda 45: helper pra converter /v1/crm/media/... em data:base64
+  // Z-API nao consegue baixar URLs internas (auth-protected), entao
+  // enviamos o conteudo inline como base64 quando o mediaUrl aponta pro
+  // nosso endpoint interno.
+  async function resolveMediaForZapi(mediaUrl: string, mediaMime?: string): Promise<string> {
+    // Se for URL externa (https://...), passar direto — Z-API faz fetch
+    if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
+    // URL interna: extrair tenantId/date/filename e ler do disk
+    const m = mediaUrl.match(/\/v1\/crm\/media\/([^/]+)\/([^/]+)\/([^/?]+)/);
+    if (!m) return mediaUrl; // formato desconhecido — tentar como veio
+    const [, tid, date, filename] = m;
+    try {
+      const { readMedia } = await import('../media.js');
+      const file = readMedia(tid, date, filename);
+      if (!file) return mediaUrl;
+      const mime = mediaMime || file.mime || 'application/octet-stream';
+      return `data:${mime};base64,${file.bytes.toString('base64')}`;
+    } catch (err) {
+      console.warn('[zapi] resolveMediaForZapi failed:', (err as any)?.message);
+      return mediaUrl;
+    }
+  }
+
   if (opts.text && !opts.mediaUrl) {
     path = '/send-text';
     body.message = opts.text;
   } else if (opts.mediaUrl && opts.mediaType === 'image') {
     path = '/send-image';
-    body.image = opts.mediaUrl;
+    body.image = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
     if (opts.caption) body.caption = opts.caption;
   } else if (opts.mediaUrl && opts.mediaType === 'audio') {
     path = '/send-audio';
-    body.audio = opts.mediaUrl;
+    body.audio = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
     body.viewOnce = false;
   } else if (opts.mediaUrl && opts.mediaType === 'video') {
     path = '/send-video';
-    body.video = opts.mediaUrl;
+    body.video = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
     if (opts.caption) body.caption = opts.caption;
   } else if (opts.mediaUrl && opts.mediaType === 'document') {
-    // Z-API uses /send-document/{extension}
     const ext = (opts.mediaFilename?.split('.').pop() || 'pdf').toLowerCase();
     path = `/send-document/${ext}`;
-    body.document = opts.mediaUrl;
+    body.document = await resolveMediaForZapi(opts.mediaUrl, opts.mediaMime);
     body.fileName = opts.mediaFilename || `documento.${ext}`;
   } else {
     return { ok: false, error: { message: 'must provide text or mediaUrl+mediaType' } };

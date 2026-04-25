@@ -183,8 +183,14 @@ async function findOrCreateOpenCardForContact(tenantId: string, contactId: strin
     columnId = leadCol.id;
   }
 
+  // Onda 45: novos leads inbound aparecem no TOPO da coluna (position = MIN-1)
+  const { getCrmDb } = await import('./schema.js');
+  const dbForPos = getCrmDb();
+  const minPosRow = dbForPos.prepare('SELECT COALESCE(MIN(position), 0) as m FROM crm_cards WHERE column_id = ?').get(columnId) as { m: number };
+  const topPosition = (minPosRow?.m ?? 0) - 1;
   return store.createCard(tenantId, {
     boardId, columnId, title: displayTitle, contactId,
+    position: topPosition,
   });
 }
 

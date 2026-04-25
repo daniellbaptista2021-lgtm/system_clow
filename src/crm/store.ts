@@ -345,6 +345,7 @@ export function createCard(tenantId: string, input: {
   boardId: string; columnId: string; title: string; description?: string;
   contactId?: string; ownerAgentId?: string; valueCents?: number; probability?: number;
   labels?: string[]; dueDate?: number; customFields?: Record<string, unknown>;
+  position?: number;
 }): Card | null {
   const db = getCrmDb();
   if (!getBoard(tenantId, input.boardId)) return null;
@@ -361,7 +362,7 @@ export function createCard(tenantId: string, input: {
     probability: input.probability ?? 0,
     labels: input.labels ?? [],
     dueDate: input.dueDate,
-    position: getNextCardPosition(db, input.columnId),
+    position: input.position !== undefined ? input.position : getNextCardPosition(db, input.columnId),
     customFields: input.customFields ?? {},
     createdAt: now(),
     updatedAt: now(),
@@ -385,6 +386,14 @@ function getNextCardPosition(db: Database.Database, columnId: string): number {
     .get(columnId) as { m: number };
   return r.m + 1;
 }
+
+// Onda 45: posicao MIN-1 pra novos leads aparecerem no TOPO da coluna
+function getTopCardPosition(db: Database.Database, columnId: string): number {
+  const r = db.prepare('SELECT COALESCE(MIN(position), 0) as m FROM crm_cards WHERE column_id = ?')
+    .get(columnId) as { m: number };
+  return r.m - 1;
+}
+export { getTopCardPosition };
 
 export function getCard(tenantId: string, cardId: string): Card | null {
   const db = getCrmDb();
