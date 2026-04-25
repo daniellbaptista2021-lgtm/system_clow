@@ -612,78 +612,109 @@ body {
 
 /* ═══ ONDA-24-MOBILE: mobile-first responsive enhancements ═══════════════ */
 @media (max-width: 768px) {
+  /* App-shell vira coluna unica — sidebar deixa de ocupar espaco no grid */
+  .app-shell,
+  .app-shell.panel-open {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Sidebar vira overlay deslizante */
   .sidebar {
     position: fixed !important;
-    left: -250px;
-    top: 0;
-    bottom: 0;
-    width: 220px;
+    top: 0; left: 0; bottom: 0;
+    width: 240px;
+    max-width: 80vw;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
     z-index: 1000;
-    transition: left .25s ease;
     background: var(--bg-2);
     border-right: 1px solid var(--border);
+    padding-top: 60px; /* espaco pro hamburger */
   }
-  .sidebar.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,.4); }
+  .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+
+  /* Backdrop atras do sidebar quando aberto */
+  .sidebar-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 999;
+  }
+  .sidebar.open ~ .sidebar-backdrop,
+  body.sidebar-open .sidebar-backdrop { display: block; }
+
+  /* Hamburger button — visivel so em mobile */
   .sidebar-toggle {
-    display: block !important;
+    display: flex !important;
+    align-items: center; justify-content: center;
     position: fixed;
     top: 10px; left: 10px;
-    z-index: 999;
-    width: 40px; height: 40px;
+    z-index: 1001;
+    width: 42px; height: 42px;
     border-radius: 8px;
     background: var(--purple);
     color: #fff;
     border: 0;
-    font-size: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.3);
-  }
-  .top-bar {
-    padding-left: 60px !important;
-    flex-wrap: wrap;
-  }
-  .top-bar h2 { font-size: 16px !important; }
-  .top-bar-right { gap: 6px !important; font-size: 12px; }
-  .top-bar-right button, .top-bar-right input, .top-bar-right select {
-    padding: 6px 10px !important; font-size: 12px !important;
+    font-size: 22px;
+    box-shadow: 0 4px 12px rgba(155,89,252,.4);
+    cursor: pointer;
   }
 
-  /* Kanban mobile: horizontal scroll columns */
-  .kanban-columns {
+  /* Top-bar gap pro hamburger */
+  .top-bar {
+    padding-left: 64px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .top-bar h2 { font-size: 16px !important; }
+  .top-bar-left { flex-wrap: wrap; gap: 8px !important; }
+  .top-bar-right { gap: 6px !important; font-size: 12px; flex-wrap: wrap; }
+  .top-bar-right button,
+  .top-bar-right input,
+  .top-bar-right select,
+  .top-bar-left select {
+    padding: 6px 10px !important; font-size: 12px !important;
+    min-height: 36px;
+  }
+
+  /* Kanban mobile — usar .kanban-board (nome correto) */
+  .kanban-board {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
     gap: 10px;
     padding: 10px;
   }
   .kanban-col {
-    min-width: 85vw !important;
-    max-width: 85vw !important;
+    min-width: 88vw !important;
+    max-width: 88vw !important;
     scroll-snap-align: start;
+    flex: 0 0 88vw !important;
   }
 
-  /* Side panel full-screen on mobile */
+  /* Side panel — overlay full-screen, fica acima de tudo */
   .side-panel {
+    position: fixed !important;
+    top: 0; right: 0; bottom: 0; left: 0;
     width: 100vw !important;
-    right: -100vw;
+    max-width: 100vw !important;
+    z-index: 1100;
+    transform: translateX(100%);
+    transition: transform .25s ease;
   }
-  .side-panel:not(.hide) { right: 0 !important; }
+  .side-panel:not(.hide) { transform: translateX(0); }
 
-  /* Reports: stack charts vertically */
-  #statsView > div:last-child {
-    grid-template-columns: 1fr !important;
-  }
-  #statsGrid {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
+  /* Views genericas */
+  #statsGrid { grid-template-columns: repeat(2, 1fr) !important; }
+  #statsView > div:last-child { grid-template-columns: 1fr !important; }
+  .modal { max-width: 95vw !important; margin: 10px !important; }
 
-  /* Modals full-screen */
-  .modal {
-    max-width: 95vw !important;
-    margin: 10px !important;
-  }
-
-  /* Touch-friendly minimum tap target */
   button, .nav-item, .panel-tab { min-height: 44px; }
 }
+
+/* Hamburger button — escondido no desktop */
+.sidebar-toggle { display: none; }
+.sidebar-backdrop { display: none; }
 
 @media (max-width: 480px) {
   #statsGrid { grid-template-columns: 1fr !important; }

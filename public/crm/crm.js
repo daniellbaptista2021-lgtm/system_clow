@@ -4178,3 +4178,38 @@ if (document.readyState !== 'loading') {
     wireChannelFilter();
   }, 1500);
 }
+
+
+// ═══ ONDA 41: MOBILE SIDEBAR TOGGLE ════════════════════════════════════
+function wireMobileSidebar() {
+  const toggle = document.getElementById('sidebarToggle');
+  const sidebar = document.querySelector('.sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!toggle || !sidebar) return;
+
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sidebar.classList.toggle('open');
+    if (backdrop) backdrop.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+  });
+
+  if (backdrop) {
+    backdrop.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      backdrop.style.display = 'none';
+    });
+  }
+
+  // Auto-close ao clicar em nav-item (em mobile)
+  sidebar.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('open');
+        if (backdrop) backdrop.style.display = 'none';
+      }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', wireMobileSidebar);
+if (document.readyState !== 'loading') wireMobileSidebar();
