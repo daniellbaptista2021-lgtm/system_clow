@@ -284,7 +284,7 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
   app.post('/webhooks/zapi', async (c) => {
     const config = getZApiConfig();
     if (!config) {
-      console.error('[zapi] Webhook hit but no Z-API config — ignoring');
+      // Onda 53i: silenciado — CRM usa /webhooks/crm/zapi/:secret. Este endpoint legacy fica idle.
       return c.json({ ok: true });
     }
 

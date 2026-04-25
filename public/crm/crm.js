@@ -5040,11 +5040,6 @@ async function openZapiCheckoutFlow(me) {
   }, 3000);
 }
 
-
-dialog.append(modal);
-  document.body.append(dialog);
-}
-
 async function openBillingPortal() {
   try {
     const me = window.state.me || await loadMyInfo();

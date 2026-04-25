@@ -3296,9 +3296,12 @@ app.post('/auth/exchange', async (c) => {
   // Try user session token first (multi-tenant SaaS)
   const userTok = (await import('../auth/authRoutes.js')).verifyUserToken(token);
   if (userTok) {
-    const t = (await import('../tenancy/tenantStore.js')).getTenant(userTok.tid);
+    const ts = await import('../tenancy/tenantStore.js');
+    const t = ts.getTenant(userTok.tid);
     if (!t) return c.json({ error: 'tenant_not_found' }, 404);
-    const apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(t.id, 'crm-shell-' + Date.now());
+    // Revoke old crm-shell keys before creating a fresh one
+    ts.revokeOldCrmShellKeys(t.id);
+    const apiKey = ts.createApiKeyForTenant(t.id, 'crm-shell-' + Date.now());
     return c.json({
       api_key: apiKey,
       tenant_id: t.id,
@@ -3312,20 +3315,13 @@ app.post('/auth/exchange', async (c) => {
   const adm = (await import('../server/middleware/tenantAuth.js')).verifyAdminSessionToken(token);
   if (adm.ok) {
     // Map admin to admin@clow.dev tenant (the one with assets + active subs)
-    const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
+    const ts = await import('../tenancy/tenantStore.js');
+    const tenants = ts.listTenants();
     const tenant = tenants.find(t => t.email === 'admin@clow.dev') || tenants[0];
     if (!tenant) return c.json({ error: 'no_tenant' }, 404);
-    // Find or create a CRM key for this tenant
-    const keys = (await import('../tenancy/tenantStore.js')).listApiKeysForTenant(tenant.id);
-    let apiKey: string;
-    const existing = keys.find(k => k.name && k.name.startsWith('crm-shell-'));
-    if (existing) {
-      // We dont store raw keys, so always create a fresh shell key per session
-      // (cheap; old ones stay valid until rotated)
-      apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
-    } else {
-      apiKey = (await import('../tenancy/tenantStore.js')).createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
-    }
+    // Revoke old crm-shell keys before creating a fresh one
+    ts.revokeOldCrmShellKeys(tenant.id);
+    const apiKey = ts.createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
     return c.json({
       api_key: apiKey,
       tenant_id: tenant.id,

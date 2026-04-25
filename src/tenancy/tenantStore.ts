@@ -223,6 +223,20 @@ export function revokeApiKey(keyId: string): boolean {
   return true;
 }
 
+export function revokeOldCrmShellKeys(tenantId: string): number {
+  const store = readStore();
+  let count = 0;
+  const now = new Date().toISOString();
+  for (const k of store.api_keys) {
+    if (k.tenant_id === tenantId && !k.revoked_at && k.name && k.name.startsWith('crm-shell-')) {
+      k.revoked_at = now;
+      count++;
+    }
+  }
+  if (count > 0) writeStore(store);
+  return count;
+}
+
 export function listApiKeysForTenant(tenantId: string): ApiKey[] {
   const store = readStore();
   return store.api_keys.filter((k) => k.tenant_id === tenantId && !k.revoked_at);
