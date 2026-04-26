@@ -268,14 +268,50 @@ export function getContact(tenantId: string, contactId: string): Contact | null 
   return r ? rowToContact(r) : null;
 }
 
-export function searchContacts(tenantId: string, query: string, limit = 25): Contact[] {
+export function searchContacts(tenantId: string, query: string, limit = 100): Contact[] {
   const db = getCrmDb();
-  const q = `%${query.toLowerCase()}%`;
-  const rows = db.prepare(`
-    SELECT * FROM crm_contacts
-    WHERE tenant_id = ? AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR phone LIKE ?)
-    ORDER BY updated_at DESC LIMIT ?
-  `).all(tenantId, q, q, `%${query.replace(/\D/g, '')}%`, limit) as any[];
+  const raw = String(query || '').trim();
+  if (!raw) return [];
+
+  // Normalizacao: lowercase + remove acentos
+  const norm = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const qLike = `%${norm}%`;
+
+  // Digitos puros: pra phone E cpf_cnpj (ambos podem ter formatacao)
+  const digits = raw.replace(/\D/g, '');
+  const digitsLike = digits ? `%${digits}%` : null;
+
+  // Construcao dinamica
+  const wh: string[] = ['tenant_id = ?', 'deleted_at IS NULL'];
+  const params: any[] = [tenantId];
+
+  // Match por nome/email/empresa (normalizado)
+  // SQLite nao tem unaccent nativo, mas como o LIKE eh case-sensitive,
+  // comparamos LOWER(coluna) com qLike (que ja eh lowercase). Acentos: o usuario
+  // pode digitar com ou sem acento, e a comparacao tradicional ja vai falhar.
+  // Solucao pratica: gerar tambem variacoes com acento removido na coluna
+  // via REPLACE em cascata (gera SQL grande, mas funciona). Pra simplificar:
+  // 1) match direto LOWER LIKE (pega quem digita certinho)
+  // 2) match removendo acentos comuns no input vs banco
+  wh.push('(LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(COALESCE(company,\'\')) LIKE ?)');
+  params.push(qLike, qLike, qLike);
+
+  // Adicional: phone OU cpf_cnpj (matching por digitos, ignora formatacao)
+  let extraSql = '';
+  if (digitsLike && digits.length >= 4) {
+    // Remove formatacao do banco no momento da query
+    extraSql = ` OR REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(phone,''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?` +
+               ` OR REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cpf_cnpj,''), '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?`;
+    params.push(digitsLike, digitsLike);
+  }
+
+  // Substitui o ultimo wh.push pra incluir o OR extra
+  wh[wh.length - 1] = '(' + wh[wh.length - 1] + extraSql + ')';
+
+  params.push(Math.min(limit, 500));
+
+  const sql = `SELECT * FROM crm_contacts WHERE ${wh.join(' AND ')} ORDER BY (avatar_url IS NOT NULL) DESC, updated_at DESC LIMIT ?`;
+  const rows = db.prepare(sql).all(...params) as any[];
   return rows.map(rowToContact);
 }
 

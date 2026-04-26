@@ -516,7 +516,7 @@ app.post('/contacts/refresh-photos', async (c) => {
 app.get('/contacts/search', (c) => {
   const q = c.req.query('q') || '';
   if (!q) return ok(c, { contacts: [] });
-  return ok(c, { contacts: store.searchContacts(tenantOf(c), q, 25) });
+  return ok(c, { contacts: store.searchContacts(tenantOf(c), q, 100) });
 });
 
 app.post('/contacts', async (c) => {
