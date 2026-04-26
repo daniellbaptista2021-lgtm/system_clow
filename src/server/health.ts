@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ─── Build / runtime metadata (resolved once at module load) ──────────────
 
@@ -42,9 +43,10 @@ const COMMIT_SHA: string = (() => {
 
 const BUILD_TIME: string = (() => {
   if (process.env.BUILD_TIME) return process.env.BUILD_TIME;
-  // Heuristic: mtime of the entry script — refreshed every time `tsc` rebuilds dist/.
+  // mtime of THIS module after tsc emits it. process.argv[1] is unreliable
+  // under PM2 (it points at the cluster wrapper, mtime ≠ tsc emit time).
   try {
-    return statSync(process.argv[1] ?? '').mtime.toISOString();
+    return statSync(fileURLToPath(import.meta.url)).mtime.toISOString();
   } catch {
     return new Date(SERVER_START_MS).toISOString();
   }
