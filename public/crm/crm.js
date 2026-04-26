@@ -1649,8 +1649,9 @@ async function renderTasksView() {
     for (const t of data.tasks) {
       const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#F59E0B', low: '#64748B' }[t.priority] || '#64748B';
       const typeIcon = { call: '📞', email: '✉️', meeting: '👥', followup: '🔄', other: '📌' }[t.type] || '📌';
-      const dueStr = t.dueAt ? new Date(t.dueAt).toLocaleString('pt-BR') : 'Sem prazo';
-      const overdue = t.dueAt && t.dueAt < Date.now() && t.status === 'open';
+      const dueMs = t.dueAt ? (typeof t.dueAt === 'number' ? t.dueAt : Date.parse(t.dueAt)) : null;
+      const dueStr = dueMs ? new Date(dueMs).toLocaleString('pt-BR') : 'Sem prazo';
+      const overdue = dueMs && dueMs < Date.now() && t.status === 'open';
       const row = el('div', {
         style: `background:var(--bg-2);border:1px solid var(--border);border-left:4px solid ${priorityColor};border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center;cursor:pointer` + (t.status === 'completed' ? ';opacity:.5' : ''),
         on: {
@@ -1713,7 +1714,8 @@ function openTaskEditModal(task) {
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
 
-  const dueDateLocal = task.dueAt ? new Date(task.dueAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  const dueAtMs = task.dueAt ? (typeof task.dueAt === 'number' ? task.dueAt : Date.parse(task.dueAt)) : null;
+  const dueDateLocal = (dueAtMs && Number.isFinite(dueAtMs)) ? new Date(dueAtMs - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
 
   form.append(
     inputField('title', 'Título *', { required: true, value: task.title || '' }),
@@ -4434,7 +4436,7 @@ async function openNewTaskModal(card, onDone) {
       cardId: card.id,
     };
     if (card.contactId) body.contactId = card.contactId;
-    if (v.dueAt) body.dueAt = new Date(v.dueAt).toISOString();
+    if (v.dueAt) body.dueAt = new Date(v.dueAt).getTime();
     if (v.description?.trim()) body.description = v.description.trim();
     await api('/tasks', { method: 'POST', body });
     toast('Tarefa criada', 'success');
@@ -4457,7 +4459,7 @@ async function openEditTaskModal(t, onDone) {
       title: v.title.trim(),
       priority: v.priority,
       description: v.description?.trim() || null,
-      dueAt: v.dueAt ? new Date(v.dueAt).toISOString() : null,
+      dueAt: v.dueAt ? new Date(v.dueAt).getTime() : null,
     };
     await api('/tasks/' + t.id, { method: 'PATCH', body });
     toast('Tarefa atualizada', 'success');
@@ -4482,7 +4484,7 @@ async function openUploadDocModal(card, onDone) {
     try {
       const r = await fetch('/v1/crm/media/upload', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + window.state.apiKey },
+        headers: { 'Authorization': 'Bearer ' + state.apiKey },
         body: fd,
       });
       uploaded = await r.json();
@@ -4497,7 +4499,7 @@ async function openUploadDocModal(card, onDone) {
         fd2.append('file', v.file);
         const r2 = await fetch('/v1/crm/media/process', {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + window.state.apiKey },
+          headers: { 'Authorization': 'Bearer ' + state.apiKey },
           body: fd2,
         });
         const j = await r2.json();
@@ -5582,7 +5584,7 @@ async function openZapiCheckoutFlow(me) {
   try {
     const r = await fetch('/api/billing/whatsapp-addon/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
       body: JSON.stringify({ tenantId: me.tenant.id, currentTotal: me.whatsapp.totalUsed }),
     });
     const data = await r.json();
@@ -5634,7 +5636,7 @@ async function openZapiCheckoutFlow(me) {
     }
     try {
       const r = await fetch('/api/billing/whatsapp-addon/checkout-status?session_id=' + encodeURIComponent(sessionId), {
-        headers: { 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+        headers: { 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
       });
       const data = await r.json();
       if (data.paid) {
@@ -5653,7 +5655,7 @@ async function openBillingPortal() {
     if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
     const r = await fetch('/api/billing/portal', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + window.state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
       body: JSON.stringify({ tenantId: me.tenant.id }),
     });
     const data = await r.json();
