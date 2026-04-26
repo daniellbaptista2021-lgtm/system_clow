@@ -465,7 +465,10 @@ app.get('/contacts', (c) => {
   const limit = parseInt(c.req.query('limit') || '50', 10);
   const offset = parseInt(c.req.query('offset') || '0', 10);
   const tag = c.req.query('tag') || undefined;
-  return ok(c, { contacts: store.listContacts(tenantOf(c), { limit, offset, tag }) });
+  const tid = tenantOf(c);
+  const contacts = store.listContacts(tid, { limit, offset, tag });
+  const total = store.countContacts(tid, { tag });
+  return ok(c, { contacts, total, limit, offset, hasMore: offset + contacts.length < total });
 });
 
 // ─── Onda 55: refresh manual de fotos de perfil WhatsApp (Z-API) ──────

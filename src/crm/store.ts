@@ -283,16 +283,25 @@ export function listContacts(tenantId: string, opts: { limit?: number; offset?: 
   const db = getCrmDb();
   const limit = Math.min(opts.limit ?? 50, 500);
   const offset = opts.offset ?? 0;
+  // Onda 58: ordena por foto WhatsApp primeiro (com avatar), depois updated_at
   const rows = opts.tag
     ? db.prepare(`
-        SELECT * FROM crm_contacts WHERE tenant_id = ? AND tags_json LIKE ?
-        ORDER BY updated_at DESC LIMIT ? OFFSET ?
+        SELECT * FROM crm_contacts WHERE tenant_id = ? AND tags_json LIKE ? AND deleted_at IS NULL
+        ORDER BY (avatar_url IS NOT NULL) DESC, updated_at DESC LIMIT ? OFFSET ?
       `).all(tenantId, `%"${opts.tag}"%`, limit, offset) as any[]
     : db.prepare(`
-        SELECT * FROM crm_contacts WHERE tenant_id = ?
-        ORDER BY updated_at DESC LIMIT ? OFFSET ?
+        SELECT * FROM crm_contacts WHERE tenant_id = ? AND deleted_at IS NULL
+        ORDER BY (avatar_url IS NOT NULL) DESC, updated_at DESC LIMIT ? OFFSET ?
       `).all(tenantId, limit, offset) as any[];
   return rows.map(rowToContact);
+}
+
+export function countContacts(tenantId: string, opts: { tag?: string } = {}): number {
+  const db = getCrmDb();
+  const r = opts.tag
+    ? db.prepare(`SELECT COUNT(*) AS n FROM crm_contacts WHERE tenant_id = ? AND tags_json LIKE ? AND deleted_at IS NULL`).get(tenantId, `%"${opts.tag}"%`) as any
+    : db.prepare(`SELECT COUNT(*) AS n FROM crm_contacts WHERE tenant_id = ? AND deleted_at IS NULL`).get(tenantId) as any;
+  return r?.n ?? 0;
 }
 
 export function updateContact(tenantId: string, contactId: string, patch: Partial<Omit<Contact, 'id' | 'tenantId' | 'createdAt'>>): Contact | null {

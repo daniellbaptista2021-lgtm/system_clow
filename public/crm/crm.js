@@ -195,10 +195,21 @@ async function loadChannels() {
   state.channels = r.channels || [];
 }
 
-async function loadContacts(q = '') {
-  const path = q ? `/contacts/search?q=${encodeURIComponent(q)}` : '/contacts?limit=100';
-  const r = await api(path);
-  state.contacts = r.contacts || [];
+async function loadContacts(q = '', page = 1) {
+  const PER_PAGE = 50;
+  state.contactsPage = page;
+  state.contactsQuery = q;
+  if (q) {
+    // Busca: backend retorna ate 25, sem paginacao real (pra simplificar)
+    const r = await api('/contacts/search?q=' + encodeURIComponent(q));
+    state.contacts = r.contacts || [];
+    state.contactsTotal = state.contacts.length;
+  } else {
+    const offset = (page - 1) * PER_PAGE;
+    const r = await api('/contacts?limit=' + PER_PAGE + '&offset=' + offset);
+    state.contacts = r.contacts || [];
+    state.contactsTotal = r.total ?? state.contacts.length;
+  }
 }
 
 async function loadAgents() {
@@ -2450,7 +2461,30 @@ if (document.readyState !== 'loading') wireOnda35Buttons();
 function renderContactsList() {
   const l = $('#contactsList');
   l.innerHTML = '';
-  if (!state.contacts.length) { l.append(el('div', { class: 'empty' }, 'Nenhum contato ainda.')); return; }
+  const PER_PAGE = 50;
+  const total = state.contactsTotal ?? state.contacts.length;
+  const page = state.contactsPage ?? 1;
+  const query = state.contactsQuery ?? '';
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  // Counter no topo: "Mostrando X-Y de Z contatos"
+  const fromIdx = (page - 1) * PER_PAGE + 1;
+  const toIdx = Math.min(page * PER_PAGE, total);
+  const counterText = query
+    ? state.contacts.length + ' resultado(s) para "' + query + '"'
+    : (total > 0 ? 'Mostrando ' + fromIdx + '–' + toIdx + ' de ' + total + ' contatos' : 'Nenhum contato');
+  l.append(el('div', {
+    style: 'padding:6px 4px 12px;font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center'
+  },
+    el('span', {}, counterText),
+    query ? el('button', {
+      style: 'background:transparent;border:1px solid var(--border);color:var(--text-dim);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px',
+      on: { click: async () => { document.getElementById('contactSearchInput').value = ''; await loadContacts('', 1); renderContactsList(); } }
+    }, '× limpar busca') : null,
+  ));
+
+  if (!state.contacts.length) { l.append(el('div', { class: 'empty' }, query ? 'Nenhum resultado.' : 'Nenhum contato ainda.')); return; }
+
   for (const c of state.contacts) {
     const item = el('div', { class: 'list-item', on: { click: async () => {
       const detail = await api(`/contacts/${c.id}`);
@@ -2470,6 +2504,50 @@ function renderContactsList() {
     attachListItemContextMenu(item, (x, y) => showContactContextMenu(c, x, y));
     l.append(item);
   }
+
+  // Paginador no rodape (só mostra se tiver mais de 1 pagina e nao está em busca)
+  if (!query && totalPages > 1) {
+    l.append(renderPagination(page, totalPages, async (newPage) => {
+      await loadContacts('', newPage);
+      renderContactsList();
+      // Scroll pro topo
+      l.scrollTop = 0;
+      l.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+    }));
+  }
+}
+
+function renderPagination(currentPage, totalPages, onPageChange) {
+  const wrap = el('div', {
+    style: 'display:flex;justify-content:center;align-items:center;gap:6px;padding:18px 8px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px'
+  });
+  const btn = (label, page, disabled, active) => el('button', {
+    disabled: disabled || active,
+    style: 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;cursor:' + (disabled || active ? 'default' : 'pointer') +
+      ';background:' + (active ? 'linear-gradient(135deg,#9B59FC,#4A9EFF)' : 'transparent') +
+      ';color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') +
+      ';border:1px solid ' + (active ? 'transparent' : 'var(--border)') +
+      ';opacity:' + (disabled && !active ? '.5' : '1'),
+    on: { click: () => { if (!disabled && !active) onPageChange(page); } }
+  }, label);
+
+  // Estratégia: «  1 2 ... N-1 N  »  com janela de 5 ao redor da pagina atual
+  const pages = new Set([1, totalPages, currentPage]);
+  for (let i = -2; i <= 2; i++) {
+    const p = currentPage + i;
+    if (p > 1 && p < totalPages) pages.add(p);
+  }
+  const sortedPages = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+
+  wrap.append(btn('«', currentPage - 1, currentPage <= 1, false));
+  let prev = 0;
+  for (const p of sortedPages) {
+    if (prev && p > prev + 1) wrap.append(el('span', { style: 'color:var(--text-dim);padding:0 4px' }, '...'));
+    wrap.append(btn(String(p), p, false, p === currentPage));
+    prev = p;
+  }
+  wrap.append(btn('»', currentPage + 1, currentPage >= totalPages, false));
+  return wrap;
 }
 
 function renderChannelsList() {
