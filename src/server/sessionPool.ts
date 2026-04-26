@@ -31,6 +31,7 @@ import {
 import type { ClovMessage } from '../api/anthropic.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import * as fs from 'fs';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -289,7 +290,11 @@ export class SessionPool {
     });
 
     if (tenantId) {
-      registerSession(tenantId, sessionId);
+      // Fire-and-forget: registerSession is async (cluster-shared via
+      // Redis). The session is usable before the SADD round-trip
+      // completes; correctness only matters for countActiveSessions
+      // which we await separately on the quota gate.
+      void registerSession(tenantId, sessionId);
     }
 
     return engine;
@@ -327,7 +332,7 @@ export class SessionPool {
       void entry.engine.gracefulShutdown('session_deleted');
     }
     if (entry?.tenantId) {
-      unregisterSession(entry.tenantId, sessionId);
+      void unregisterSession(entry.tenantId, sessionId);
     }
     return this.engines.delete(sessionId);
   }
@@ -423,7 +428,7 @@ export class SessionPool {
         entry.messageCount = engine.getMessageCount();
       }
 
-      console.error(`  [pool] Rehydrated session ${sessionId.slice(0, 8)} from disk (${historyMessages.length} messages)`);
+      logger.error(`  [pool] Rehydrated session ${sessionId.slice(0, 8)} from disk (${historyMessages.length} messages)`);
       return engine;
     } catch {
       return null;
@@ -446,9 +451,9 @@ export class SessionPool {
       for (const id of expired) {
         const entry = this.engines.get(id);
         if (entry?.tenantId) {
-          unregisterSession(entry.tenantId, id);
+          void unregisterSession(entry.tenantId, id);
         }
-        console.error(`  [pool] TTL expired: session ${id.slice(0, 8)} (idle ${Math.floor((now - this.engines.get(id)!.lastAccess) / 60_000)}min)`);
+        logger.error(`  [pool] TTL expired: session ${id.slice(0, 8)} (idle ${Math.floor((now - this.engines.get(id)!.lastAccess) / 60_000)}min)`);
         this.engines.delete(id);
       }
     }, CLEANUP_INTERVAL_MS);
@@ -463,7 +468,7 @@ export class SessionPool {
     }
     for (const [sessionId, entry] of this.engines.entries()) {
       if (entry.tenantId) {
-        unregisterSession(entry.tenantId, sessionId);
+        void unregisterSession(entry.tenantId, sessionId);
       }
     }
     this.engines.clear();

@@ -38,6 +38,7 @@ import {
   getTotalOutputTokens,
   runWithExecutionContext,
 } from '../bootstrap/state.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Build Routes ───────────────────────────────────────────────────────────
 
@@ -89,17 +90,16 @@ export function buildRoutes(pool: SessionPool): Hono {
     const isAdmin = (c as any).get("authMode") === "admin_session";
     const clientIp = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || '';
 
-    // Rate limiting (skip for admin)
+    // Rate limiting (skip for admin) — atomic check+increment via clusterStore.
     if (!isAdmin && tenantId) {
-      const rl = rateLimiter.checkSessionCreate(tenantId);
+      const rl = await rateLimiter.checkSessionCreate(tenantId);
       if (!rl.allowed) {
         audit('rate_limit_exceeded', tenantId || 'unknown', { endpoint: 'session_create', retryAfterMs: rl.retryAfterMs }, undefined, clientIp);
         return c.json({ error: 'rate_limit', message: 'Limite de criacao de sessoes excedido. Tente novamente em breve.' }, 429);
       }
-      rateLimiter.recordSessionCreate(tenantId);
     }
 
-    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? await checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', tenantId || 'unknown', { code: quotaError.code }, undefined, clientIp);
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
@@ -167,7 +167,7 @@ export function buildRoutes(pool: SessionPool): Hono {
         const { tryUnlockFromMessage } = await import('../auth/adminUnlock.js');
         const res = tryUnlockFromMessage(sessionId, message, true);
         if (res.matched) message = res.stripped;
-      } catch (err: any) { console.error('[adminUnlock web]', err?.message); }
+      } catch (err: any) { logger.error('[adminUnlock web]', err?.message); }
     }
 
     // Session ownership check
@@ -177,17 +177,16 @@ export function buildRoutes(pool: SessionPool): Hono {
       return c.json({ error: 'access_denied', message: ownershipError }, 403);
     }
 
-    // Rate limiting
+    // Rate limiting — atomic check+increment via clusterStore.
     if (!isAdmin && requestTenantId) {
-      const rl = rateLimiter.checkRequest(requestTenantId, tenantTier || 'one');
+      const rl = await rateLimiter.checkRequest(requestTenantId, tenantTier || 'one');
       if (!rl.allowed) {
         audit('rate_limit_exceeded', requestTenantId, { endpoint: 'messages' });
         return c.json({ error: 'rate_limit', message: 'Limite de requisicoes excedido. Tente novamente em breve.', retry_after_ms: rl.retryAfterMs }, 429);
       }
-      rateLimiter.recordRequest(requestTenantId);
     }
 
-    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? await checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', requestTenantId || 'unknown', { code: quotaError.code });
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
@@ -344,7 +343,7 @@ export function buildRoutes(pool: SessionPool): Hono {
               inputTokens,
               outputTokens,
               cacheHitTokens: 0,
-            }).catch((err) => console.error('[recordClowUsage] failed:', err));
+            }).catch((err) => logger.error('[recordClowUsage] failed:', err));
           }
 
           await flushSession();

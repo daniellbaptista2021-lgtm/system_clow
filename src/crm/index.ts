@@ -6,6 +6,7 @@
  */
 
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 let _initialized = false;
 
@@ -14,7 +15,7 @@ export function initCrm(): void {
   // Touching getCrmDb() runs migrations.
   const db = getCrmDb();
   const meta = db.prepare('SELECT COUNT(*) as n FROM crm_migrations').get() as { n: number };
-  console.log(`[CRM] Schema ready (${meta.n} migration(s) applied)`);
+  logger.info(`[CRM] Schema ready (${meta.n} migration(s) applied)`);
   _initialized = true;
 }
 

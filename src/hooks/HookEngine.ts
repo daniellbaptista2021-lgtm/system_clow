@@ -30,6 +30,7 @@ import { HookTrust } from './HookTrust.js';
 import { AsyncHookRegistry } from './HookAsync.js';
 import { HookErrorScope, recordHookError } from './HookErrorScope.js';
 import { HookConfigLoader } from './HookConfigLoader.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // HookEngine Class
@@ -85,7 +86,7 @@ export class HookEngine {
       this.trustChecked.add(workspaceRoot);
       const shouldSkip = await this.trust.shouldSkipDueToTrust(workspaceRoot, isInteractive);
       if (shouldSkip) {
-        console.warn(`[HookEngine] Skipping hooks for untrusted workspace: ${workspaceRoot}`);
+        logger.warn(`[HookEngine] Skipping hooks for untrusted workspace: ${workspaceRoot}`);
         this.hooks = [];
       }
     }
@@ -93,7 +94,7 @@ export class HookEngine {
     this.initialized = true;
 
     if (this.hooks.length > 0) {
-      console.log(`[HookEngine] Loaded ${this.hooks.length} hooks`);
+      logger.info(`[HookEngine] Loaded ${this.hooks.length} hooks`);
     }
   }
 

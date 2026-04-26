@@ -16,6 +16,7 @@ import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import { sendOutbound } from './inbox.js';
 import type { Subscription, BillingCycle } from './types.js';
+import { logger } from '../utils/logger.js';
 
 const REMINDER_DAYS = [3, 1, 0]; // T-3d, T-1d, on the day
 
@@ -57,7 +58,7 @@ async function sendUpcomingReminders(): Promise<void> {
     `).all(windowStart, windowEnd, REMINDER_DAYS.length - REMINDER_DAYS.indexOf(days)) as any[];
     for (const r of rows) {
       try { await sendBillingReminder(rowToSub(r), days); }
-      catch (e: any) { console.warn('[billing reminder] failed', e.message); }
+      catch (e: any) { logger.warn('[billing reminder] failed', e.message); }
     }
   }
 }
@@ -112,7 +113,7 @@ async function chargeDue(): Promise<void> {
         });
       }
     } catch (e: any) {
-      console.warn('[billing charge] failed', e.message);
+      logger.warn('[billing charge] failed', e.message);
     }
   }
 }

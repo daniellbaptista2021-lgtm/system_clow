@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 /**
  * mailer.ts — Transactional email sender.
  *
@@ -109,11 +110,11 @@ export async function sendEmail(input: EmailInput): Promise<{ ok: boolean; id?: 
   }
 
   // Dev fallback: log only
-  console.log('\n━━━━━━━━━ EMAIL (dev mode — not sent) ━━━━━━━━━');
-  console.log('To:', input.to);
-  console.log('Subject:', input.subject);
-  console.log('Text:', text.slice(0, 400));
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  logger.info('\n━━━━━━━━━ EMAIL (dev mode — not sent) ━━━━━━━━━');
+  logger.info('To:', input.to);
+  logger.info('Subject:', input.subject);
+  logger.info('Text:', text.slice(0, 400));
+  logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   return { ok: false, error: 'no_mailer_configured' };
 }
 

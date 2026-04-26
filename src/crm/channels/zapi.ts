@@ -8,6 +8,7 @@
 
 import { decryptJson } from '../crypto.js';
 import type { Channel2, MediaType } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 export interface ZapiCreds {
   instanceId: string;
@@ -75,7 +76,7 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
       bytes = file.bytes;
       mime = mediaMime || file.mime || 'application/octet-stream';
     } catch (err) {
-      console.warn('[zapi] resolveMediaForZapi read failed:', (err as any)?.message);
+      logger.warn('[zapi] resolveMediaForZapi read failed:', (err as any)?.message);
       return mediaUrl;
     }
     // Onda 47: audio webm precisa virar ogg/opus pro WhatsApp tocar.
@@ -108,10 +109,10 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
           bytes = converted;
           mime = 'audio/ogg; codecs=opus';
         } else {
-          console.warn('[zapi] ffmpeg audio conversion failed; sending original');
+          logger.warn('[zapi] ffmpeg audio conversion failed; sending original');
         }
       } catch (err) {
-        console.warn('[zapi] ffmpeg spawn failed:', (err as any)?.message);
+        logger.warn('[zapi] ffmpeg spawn failed:', (err as any)?.message);
       }
     }
     return `data:${mime};base64,${bytes!.toString('base64')}`;
@@ -332,7 +333,7 @@ export async function fetchProfilePicture(channel: Channel2, phone: string): Pro
     const j: any = await r.json().catch(() => ({}));
     return (typeof j?.link === 'string' && j.link.startsWith('http')) ? j.link : null;
   } catch (err: any) {
-    console.warn('[zapi.fetchProfilePicture] failed:', err?.message);
+    logger.warn('[zapi.fetchProfilePicture] failed:', err?.message);
     return null;
   }
 }

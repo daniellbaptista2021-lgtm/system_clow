@@ -22,6 +22,7 @@ import * as push from './push.js';
 import * as ai from './ai.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
+import { logger } from '../utils/logger.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const STALE_DAYS = 7;
@@ -55,13 +56,13 @@ export function isSchedulerWorker(): boolean {
 export function startScheduler(): void {
   if (_timer) return;
   if (!isSchedulerWorker()) {
-    console.log(`[CRM] Scheduler skipped on worker ${process.env.NODE_APP_INSTANCE} (cluster mode — only worker 0 schedules)`);
+    logger.info(`[CRM] Scheduler skipped on worker ${process.env.NODE_APP_INSTANCE} (cluster mode — only worker 0 schedules)`);
     return;
   }
   _timer = setInterval(() => { void tick(); }, TICK_INTERVAL_MS);
   // Run once shortly after boot (10s) to process any due items
   setTimeout(() => { void tick(); }, 10_000);
-  console.log(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s, worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`);
+  logger.info(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s, worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`);
 }
 
 export function stopScheduler(): void {
@@ -83,7 +84,7 @@ function maybeRotateMonthly() {
     _lastRotationDay = key;
     rotateMonthlyAllTenants();
   } catch (err: any) {
-    console.warn('[scheduler monthly rotate] err:', err.message);
+    logger.warn('[scheduler monthly rotate] err:', err.message);
   }
 }
 
@@ -125,12 +126,12 @@ async function tick(): Promise<void> {
             lgpd.processRetentionPolicies();
             lgpd.processScheduledDeletions();
           } catch { /* non-blocking */ }
-        } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
+        } catch (err: any) { logger.warn('[email-marketing tick]', err?.message); }
       })(),
     ]);
     maybeRotateMonthly();
   } catch (e: any) {
-    console.warn('[CRM scheduler] tick error:', e.message);
+    logger.warn('[CRM scheduler] tick error:', e.message);
   } finally {
     _runningTick = false;
   }
@@ -161,7 +162,7 @@ async function processReminders(): Promise<void> {
         }
       }
     } catch (err: any) {
-      console.warn(`[CRM reminder] ${r.id} failed: ${err.message}`);
+      logger.warn(`[CRM reminder] ${r.id} failed: ${err.message}`);
     }
   }
 }

@@ -41,6 +41,7 @@ import { subscribe, formatSseFrame } from '.././events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../../tenancy/tenantStore.js';
 import { readMedia } from '.././media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from '.././types.js';
+import { logger } from '../../utils/logger.js';
 /**
  * CRM REST API routes — mounted at /v1/crm.
  *
@@ -379,7 +380,7 @@ export function registerAgentsRoutes(app: Hono): void {
 
       // Tenant nao encontrado: retorna fallback 200 (nunca derruba o front)
       if (!t) {
-        console.warn('[/me] tenant not found tid=' + tid + ' — using fallback');
+        logger.warn('[/me] tenant not found tid=' + tid + ' — using fallback');
         return c.json({
           ok: true,
           _fallback: true,
@@ -400,7 +401,7 @@ export function registerAgentsRoutes(app: Hono): void {
           const addonItem = sub.items.data.find((it: any) => it.price.id === process.env.STRIPE_PRICE_WHATSAPP_ADDON);
           if (addonItem) extraPaid = addonItem.quantity || 0;
         } catch (err: any) {
-          console.warn('[/me] subscription check failed:', err.message);
+          logger.warn('[/me] subscription check failed:', err.message);
         }
       }
 
@@ -430,7 +431,7 @@ export function registerAgentsRoutes(app: Hono): void {
         },
       });
     } catch (err: any) {
-      console.error('[/me] handler error:', err && err.stack || err);
+      logger.error('[/me] handler error:', err && err.stack || err);
       return c.json({
         ok: true,
         _fallback: true,

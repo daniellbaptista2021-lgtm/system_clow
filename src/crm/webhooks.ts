@@ -14,6 +14,7 @@ import { decryptJson } from './crypto.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { ingestInbound } from './inbox.js';
+import { logger } from '../utils/logger.js';
 
 
 // Internal forward: also deliver the raw webhook to the System Clow agent
@@ -29,7 +30,7 @@ async function forwardToAgent(path: string, payload: unknown, sigHeader?: string
       body: JSON.stringify(payload),
     });
   } catch (err: any) {
-    console.warn('[crm-webhook forward] agent unreachable:', err?.message || err);
+    logger.warn('[crm-webhook forward] agent unreachable:', err?.message || err);
   }
 }
 
@@ -98,13 +99,13 @@ app.post('/meta/:secret', async (c) => {
     const { isAdminPhone } = await import('../admin/adminConfig.js');
     const senderPhones = parsed.messages.map((m: any) => String(m.fromPhone || m.phone || '')).filter(Boolean);
     const hasAdminSender = senderPhones.some((p) => isAdminPhone(p));
-    console.log('[crm-webhook] senders=' + senderPhones.join(',') + ' adminMatch=' + hasAdminSender);
+    logger.info('[crm-webhook] senders=' + senderPhones.join(',') + ' adminMatch=' + hasAdminSender);
     if (hasAdminSender) {
       forwardTenantId = undefined; // admin path
-      console.log('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
+      logger.info('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
     }
   } catch (err: any) {
-    console.warn('[crm-webhook] adminConfig check failed:', err?.message);
+    logger.warn('[crm-webhook] adminConfig check failed:', err?.message);
   }
 
   // ALSO forward the original payload to the System Clow AI agent so it can reply
@@ -130,7 +131,7 @@ app.post('/zapi/:secret', async (c) => {
       const t = it?.type || 'unknown';
       const known = ['ReceivedCallback', 'MessageStatusCallback', 'PresenceChatCallback', 'DeliveryCallback'];
       if (!known.includes(t)) {
-        console.log('[zapi-webhook] unknown type=' + t + ' keys=' + Object.keys(it || {}).join(','));
+        logger.info('[zapi-webhook] unknown type=' + t + ' keys=' + Object.keys(it || {}).join(','));
       }
     }
   } catch {}

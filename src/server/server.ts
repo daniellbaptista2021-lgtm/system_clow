@@ -53,7 +53,7 @@ import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
 import { buildDocsRoutes } from './openapi.js';
-import { getMetricsSummary } from '../utils/logger.js';
+import { getMetricsSummary, logger } from '../utils/logger.js';
 import { buildDashboardRoutes } from './adminDashboard.js';
 import { apiQueue } from './requestQueue.js';
 import { buildSSORoutes } from './ssoAuth.js';
@@ -113,19 +113,19 @@ function ensureSSLCertificates(): { key: string; cert: string } {
   }
 
   // Generate self-signed certificate
-  console.log('  Generating self-signed SSL certificate...');
+  logger.info('  Generating self-signed SSL certificate...');
   try {
     execSync(
       `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost"`,
       { stdio: 'pipe' }
     );
-    console.log('  ✓ SSL certificate generated');
+    logger.info('  ✓ SSL certificate generated');
     return {
       key: fs.readFileSync(keyPath, 'utf-8'),
       cert: fs.readFileSync(certPath, 'utf-8'),
     };
   } catch (err: any) {
-    console.error('  ✗ Failed to generate SSL certificate:', err.message);
+    logger.error('  ✗ Failed to generate SSL certificate:', err.message);
     throw err;
   }
 }
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   // Init API
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error('FATAL: Set ANTHROPIC_API_KEY in .env');
+    logger.error('FATAL: Set ANTHROPIC_API_KEY in .env');
     process.exit(1);
   }
 
@@ -164,10 +164,10 @@ async function main(): Promise<void> {
     await pluginSystem.initialize(process.cwd());
     const pluginStats = pluginSystem.getStats();
     if (pluginStats.pluginCount > 0) {
-      console.log(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`);
+      logger.info(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`);
     }
   } catch (err: any) {
-    console.error(`  ? Plugins: ${err.message}`);
+    logger.error(`  ? Plugins: ${err.message}`);
   }
 
   // Init MCP
@@ -185,10 +185,10 @@ async function main(): Promise<void> {
     mcpManager.registerServers(pluginMcpConfigs);
     await mcpManager.connectAll();
     if (mcpManager.serverCount > 0) {
-      console.log(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
+      logger.info(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
     }
   } catch (err: any) {
-    console.error(`  ? MCP: ${err.message}`);
+    logger.error(`  ? MCP: ${err.message}`);
   }
 
   // Populate git cache silently
@@ -231,7 +231,7 @@ async function main(): Promise<void> {
   app.use('/v2/crm', tenantAuth);
   app.route('/v2/crm', v2Routes);
   app.use('/v1/crm', tenantAuth);
-  console.log('  ✓ Auth: Multi-tenant API key enabled');
+  logger.info('  ✓ Auth: Multi-tenant API key enabled');
 
   // Public health/readiness endpoints (no auth, IP-rate-limited).
   // Mounted before apiRoutes so /health/live, /health/ready, /health/version
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
   // Mount Meta WhatsApp Official API adapter
   const metaWhatsAppRoutes = buildMetaWhatsAppRoutes(pool);
   app.route('/', metaWhatsAppRoutes);
-  console.log('  ✓ WhatsApp Meta: /webhooks/meta');
+  logger.info('  ✓ WhatsApp Meta: /webhooks/meta');
 
   // Mount MCP Remote Server (for Claude Desktop integration)
   const mcpRemoteRoutes = buildMCPRemoteRoutes(pool, mcpManager);
@@ -271,34 +271,34 @@ async function main(): Promise<void> {
   // Mount persistent memory API routes
   const memoryRoutes = buildMemoryRoutes();
   app.route('/v1/memory', memoryRoutes);
-  console.log('  ✓ Persistent Memory: API routes mounted');
+  logger.info('  ✓ Persistent Memory: API routes mounted');
 
   // Mount OpenAPI docs (Swagger UI at /docs)
   const docsRoutes = buildDocsRoutes();
   app.route('/', docsRoutes);
-  console.log('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
+  logger.info('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
 
   // Metrics endpoint
   app.get('/v1/metrics', (c) => c.json({
     ...getMetricsSummary(),
     queue: apiQueue.getStats(),
   }));
-  console.log('  ✓ Metrics: /v1/metrics');
+  logger.info('  ✓ Metrics: /v1/metrics');
 
   // Admin dashboard
   const dashboardRoutes = buildDashboardRoutes(pool);
   app.route('/', dashboardRoutes);
-  console.log('  ✓ Dashboard: /admin/dashboard + /health/deep');
+  logger.info('  ✓ Dashboard: /admin/dashboard + /health/deep');
 
   // SSO authentication
   const ssoRoutes = buildSSORoutes();
   app.route('/', ssoRoutes);
-  console.log('  ✓ SSO: /auth/sso + /auth/sso/verify');
+  logger.info('  ✓ SSO: /auth/sso + /auth/sso/verify');
 
   // Plugin marketplace
   const marketplaceRoutes = buildMarketplaceRoutes();
   app.route('/v1/marketplace', marketplaceRoutes);
-  console.log('  ✓ Marketplace: /v1/marketplace/plugins');
+  logger.info('  ✓ Marketplace: /v1/marketplace/plugins');
 
   // Mission runner
   const missionRoutes = buildMissionRoutes();
@@ -344,7 +344,7 @@ async function main(): Promise<void> {
           }
         }
       } catch (err: any) {
-        console.error('[auth tenant fallback]', err?.message);
+        logger.error('[auth tenant fallback]', err?.message);
       }
     }
 
@@ -366,7 +366,7 @@ async function main(): Promise<void> {
   app.route('/', stripeRoutes);
   app.route('/v1/n8n', n8nRoutes);
   app.route('/v1/branding', n8nRoutes);
-  console.log('  ✓ Missions: /v1/missions/:id');
+  logger.info('  ✓ Missions: /v1/missions/:id');
 
   // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
   app.get('/downloads/*', (c) => {
@@ -528,7 +528,7 @@ async function main(): Promise<void> {
 
   // Graceful shutdown
   const cleanup = async () => {
-    console.log('\n  Shutting down...');
+    logger.info('\n  Shutting down...');
     pool.shutdown();
     await mcpManager.disconnectAll();
     process.exit(0);
@@ -537,9 +537,9 @@ async function main(): Promise<void> {
   process.on('SIGTERM', cleanup);
 
   // Start
-  console.log(`\n  ╔═══════════════════════════════════════╗`);
-  console.log(`  ║   System Clow API — port ${PORT}         ║`);
-  console.log(`  ╚═══════════════════════════════════════╝\n`);
+  logger.info(`\n  ╔═══════════════════════════════════════╗`);
+  logger.info(`  ║   System Clow API — port ${PORT}         ║`);
+  logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate
   const useHttps = process.env.CLOW_USE_HTTPS !== 'false';
@@ -548,21 +548,21 @@ async function main(): Promise<void> {
     const { key, cert } = ensureSSLCertificates();
     const httpsServer = https.createServer({ key, cert }, app.fetch as any);
     httpsServer.listen(PORT, () => {
-      console.log(`  Listening on https://localhost:${PORT}`);
-      console.log(`  Health: https://localhost:${PORT}/health`);
-      console.log(`  MCP: https://localhost:${PORT}/mcp`);
-      console.log(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
+      logger.info(`  Listening on https://localhost:${PORT}`);
+      logger.info(`  Health: https://localhost:${PORT}/health`);
+      logger.info(`  MCP: https://localhost:${PORT}/mcp`);
+      logger.info(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
     });
   } else {
     serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
-      console.log(`  Listening on http://localhost:${info.port}`);
-      console.log(`  Health: http://localhost:${info.port}/health`);
-      console.log(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
+      logger.info(`  Listening on http://localhost:${info.port}`);
+      logger.info(`  Health: http://localhost:${info.port}/health`);
+      logger.info(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
     });
   }
 }
 
 main().catch((err) => {
-  console.error(`FATAL: ${err.message}`);
+  logger.error(`FATAL: ${err.message}`);
   process.exit(1);
 });

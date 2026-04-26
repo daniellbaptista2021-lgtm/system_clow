@@ -9,6 +9,7 @@
 
 import { randomBytes, createHmac } from 'crypto';
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 function nid(prefix: string): string { return prefix + '_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -118,7 +119,7 @@ export async function emit(tenantId: string, event: WebhookEvent, payload: Recor
     `).run(deliveryId, hook.id, event, JSON.stringify({ event, tenantId, timestamp: t, ...payload }), t, t);
 
     // Fire-and-forget immediate delivery attempt
-    void attemptDelivery(deliveryId).catch(err => console.warn('[ohk immediate]', deliveryId, err?.message));
+    void attemptDelivery(deliveryId).catch(err => logger.warn('[ohk immediate]', deliveryId, err?.message));
   }
 }
 

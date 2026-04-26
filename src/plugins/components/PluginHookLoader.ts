@@ -22,6 +22,7 @@ import * as path from 'path';
 import type { PluginManifest, PluginValidationError } from '../types.js';
 import type { ConfiguredHook, HookConfig, HookEventName } from '../../hooks/types.js';
 import { HooksFileSchema } from '../../hooks/HookSchemas.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -193,7 +194,7 @@ export class PluginHookLoader {
     }
 
     if (hooks.length > 0) {
-      console.log(`[PluginHookLoader] Loaded ${hooks.length} hooks from ${manifest.name}`);
+      logger.info(`[PluginHookLoader] Loaded ${hooks.length} hooks from ${manifest.name}`);
     }
 
     return hooks;

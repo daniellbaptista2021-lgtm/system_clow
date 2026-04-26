@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { PluginManifest, PluginCommand, PluginCommandArgument, PluginValidationError } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -76,12 +77,12 @@ export class PluginCommandLoader {
     const allFiles = await this.expandAllGlobs(rootDir, manifest.commands);
 
     if (allFiles.length === 0) {
-      console.warn(`[PluginCommandLoader] No command files found for ${manifest.name}`);
+      logger.warn(`[PluginCommandLoader] No command files found for ${manifest.name}`);
       return [];
     }
 
     if (allFiles.length > MAX_COMMANDS_PER_PLUGIN) {
-      console.warn(`[PluginCommandLoader] ${manifest.name} has ${allFiles.length} commands (max ${MAX_COMMANDS_PER_PLUGIN}), truncating`);
+      logger.warn(`[PluginCommandLoader] ${manifest.name} has ${allFiles.length} commands (max ${MAX_COMMANDS_PER_PLUGIN}), truncating`);
     }
 
     const commands: PluginCommand[] = [];
@@ -134,7 +135,7 @@ export class PluginCommandLoader {
     }
 
     if (this.loadErrors.length > 0) {
-      console.warn(
+      logger.warn(
         `[PluginCommandLoader] ${manifest.name}: loaded ${commands.length} commands, ${this.loadErrors.length} errors`,
       );
     }

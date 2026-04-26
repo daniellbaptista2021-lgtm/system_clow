@@ -9,6 +9,7 @@
  */
 
 import { MemoryStore } from './MemoryStore.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Constants
@@ -106,7 +107,7 @@ export function generateMemoryContext(tenantId: string = 'default'): string {
 
     return context;
   } catch (err) {
-    console.warn(`[Memory] Context generation error: ${(err as Error).message}`);
+    logger.warn(`[Memory] Context generation error: ${(err as Error).message}`);
     return '';
   }
 }

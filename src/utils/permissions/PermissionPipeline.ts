@@ -23,6 +23,7 @@ import { PermissionMatcher } from './PermissionMatcher.js';
 import { PermissionClassifier } from './PermissionClassifier.js';
 import { PermissionModes } from './PermissionModes.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
+import { logger } from '../logger.js';
 
 export class PermissionPipeline {
   private storage: PermissionStorage;
@@ -221,7 +222,7 @@ export class PermissionPipeline {
         context.addSessionRule(rule);
       }
     } catch (err) {
-      console.error(`[permissions] Failed to persist rule: ${(err as Error).message}`);
+      logger.error(`[permissions] Failed to persist rule: ${(err as Error).message}`);
     }
   }
 

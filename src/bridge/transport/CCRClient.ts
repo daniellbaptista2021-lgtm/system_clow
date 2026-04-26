@@ -16,6 +16,7 @@ import type {
 } from '../types.js';
 import { EpochConflictError } from '../types.js';
 import { SerialBatchEventUploader } from './SerialBatchEventUploader.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -185,7 +186,7 @@ export class CCRClient {
       if (!this.running) return;
       void this.sendHeartbeat().catch((err) => {
         // eslint-disable-next-line no-console
-        console.error('[CCRClient] Heartbeat failed', err);
+        logger.error('[CCRClient] Heartbeat failed', err);
       });
     }, this.heartbeatIntervalMs);
   }

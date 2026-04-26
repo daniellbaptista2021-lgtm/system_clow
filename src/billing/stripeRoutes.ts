@@ -26,6 +26,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { sendWelcomeEmail } from '../notifications/mailer.js';
 import { sendWelcomeWhatsApp } from '../notifications/whatsapper.js';
+import { logger } from '../utils/logger.js';
 
 const app = new Hono();
 
@@ -114,7 +115,7 @@ app.post('/api/billing/checkout', async (c) => {
     const session = await sk.checkout.sessions.create(sessionParams);
     return c.json({ ok: true, url: session.url, session_id: session.id });
   } catch (err: any) {
-    console.error('[stripe checkout] error:', err.message);
+    logger.error('[stripe checkout] error:', err.message);
     // Se boleto/pix derem problema na conta, tenta fallback só com card
     if (/payment_method_type|not_allowed|not.*enabled/i.test(err.message || '')) {
       try {
@@ -133,7 +134,7 @@ app.post('/api/billing/checkout', async (c) => {
           metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
           subscription_data: { metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits } },
         });
-        console.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
+        logger.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
         return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
       } catch (err2: any) {
         return c.json({ error: 'checkout_failed', message: err2.message }, 502);
@@ -173,7 +174,7 @@ app.post('/webhooks/stripe', async (c) => {
     const raw = await c.req.text();
     event = sk.webhooks.constructEvent(raw, sig, wh);
   } catch (err: any) {
-    console.error('[stripe webhook] signature error:', err.message);
+    logger.error('[stripe webhook] signature error:', err.message);
     return c.text('invalid_signature', 400);
   }
 
@@ -184,7 +185,7 @@ app.post('/webhooks/stripe', async (c) => {
         // Para boleto/pix: session.status=complete mas payment_status=unpaid até pagar
         // Só provisiona quando payment_status === 'paid'
         if (session.payment_status !== 'paid') {
-          console.log(`[stripe] session completed mas payment_status=${session.payment_status} — aguardando confirmação`);
+          logger.info(`[stripe] session completed mas payment_status=${session.payment_status} — aguardando confirmação`);
           break;
         }
         await provisionFromSession(session);
@@ -193,13 +194,13 @@ app.post('/webhooks/stripe', async (c) => {
       case 'checkout.session.async_payment_succeeded': {
         // Pix/boleto confirmado (pagamento assíncrono)
         const session = event.data.object;
-        console.log(`[stripe] async payment succeeded — provisionando ${session.customer_email}`);
+        logger.info(`[stripe] async payment succeeded — provisionando ${session.customer_email}`);
         await provisionFromSession(session);
         break;
       }
       case 'checkout.session.async_payment_failed': {
         const session = event.data.object;
-        console.warn(`[stripe] async payment FAILED para ${session.customer_email} (boleto/pix expirou)`);
+        logger.warn(`[stripe] async payment FAILED para ${session.customer_email} (boleto/pix expirou)`);
         break;
       }
       case 'customer.subscription.updated': {
@@ -228,7 +229,7 @@ app.post('/webhooks/stripe', async (c) => {
     }
     return c.json({ received: true });
   } catch (err: any) {
-    console.error('[stripe webhook] processing error:', err.message);
+    logger.error('[stripe webhook] processing error:', err.message);
     return c.json({ received: true, error: err.message });
   }
 });
@@ -247,7 +248,7 @@ async function provisionFromSession(session: any): Promise<void> {
       stripe_subscription_id: session.subscription,
       status: 'active',
     } as any);
-    console.log(`[stripe] upgraded ${email} to ${md.plan}`);
+    logger.info(`[stripe] upgraded ${email} to ${md.plan}`);
     return;
   }
 
@@ -265,7 +266,7 @@ async function provisionFromSession(session: any): Promise<void> {
     status: 'active',
     temp_password_for_email: tempPassword,
   } as any);
-  console.log(`[stripe] created tenant ${email} (${md.plan}); disparando email + whatsapp`);
+  logger.info(`[stripe] created tenant ${email} (${md.plan}); disparando email + whatsapp`);
 
   // Dispara email + WhatsApp em paralelo; nenhum é bloqueante
   const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
@@ -274,7 +275,7 @@ async function provisionFromSession(session: any): Promise<void> {
     md.phone ? sendWelcomeWhatsApp(md.phone, md.full_name || email, tempPassword, md.plan || 'starter', loginUrl) : Promise.resolve({ ok: false, error: 'no_phone' }),
   ]).then(results => {
     const [emailR, waR] = results;
-    console.log('[stripe] welcome:', {
+    logger.info('[stripe] welcome:', {
       email: emailR.status === 'fulfilled' ? (emailR.value as any)?.ok : 'rejected',
       whatsapp: waR.status === 'fulfilled' ? (waR.value as any)?.ok : 'rejected',
     });
@@ -353,7 +354,7 @@ app.get('/api/billing/whatsapp-addon/status', async (c) => {
       const addonItem = sub.items.data.find((it: any) => it.price.id === whatsappAddonPriceId());
       if (addonItem) currentExtraCount = addonItem.quantity || 0;
     } catch (err: any) {
-      console.warn('[wa-addon status] subscription fetch failed:', err.message);
+      logger.warn('[wa-addon status] subscription fetch failed:', err.message);
     }
   }
 
@@ -419,7 +420,7 @@ app.post('/api/billing/whatsapp-addon/add', async (c) => {
       message: '+1 numero WhatsApp adicionado. Cobranca recorrente R$ 100/mes (proporcional ate fim do ciclo atual).',
     });
   } catch (err: any) {
-    console.error('[wa-addon add] error:', err.message);
+    logger.error('[wa-addon add] error:', err.message);
     return c.json({ error: 'addon_add_failed', message: err.message }, 502);
   }
 });
@@ -453,7 +454,7 @@ app.post('/api/billing/whatsapp-addon/remove', async (c) => {
     }
     return c.json({ ok: true, newExtraCount: newQty });
   } catch (err: any) {
-    console.error('[wa-addon remove] error:', err.message);
+    logger.error('[wa-addon remove] error:', err.message);
     return c.json({ error: 'addon_remove_failed', message: err.message }, 502);
   }
 });
@@ -539,7 +540,7 @@ app.post('/api/billing/whatsapp-addon/checkout', async (c) => {
     const session = await sk.checkout.sessions.create(sessionParams);
     return c.json({ ok: true, url: session.url, session_id: session.id });
   } catch (err: any) {
-    console.error('[wa-addon checkout] error:', err.message);
+    logger.error('[wa-addon checkout] error:', err.message);
     return c.json({ error: 'checkout_failed', message: err.message }, 502);
   }
 });

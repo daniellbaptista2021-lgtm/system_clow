@@ -13,6 +13,7 @@
 
 import type { CCREvent } from '../types.js';
 import { CCR_BATCH_SIZE, CCR_FLUSH_INTERVAL_MS } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Statistics
@@ -176,7 +177,7 @@ export class SerialBatchEventUploader {
 
         // 4xx (not 429): not retryable; drop the batch.
         // eslint-disable-next-line no-console
-        console.error(
+        logger.error(
           `[SerialBatchEventUploader] Non-retryable error ${res.status}; dropping ${batch.length} events`,
         );
         this.stats.totalDropped += batch.length;

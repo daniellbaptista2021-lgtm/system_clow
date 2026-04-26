@@ -23,6 +23,7 @@
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import type { JSONLEntry, JSONLEntryType } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -109,13 +110,13 @@ export class JSONLReader {
       } catch {
         malformed++;
         if (malformed <= 5) {
-          console.warn(`[JSONLReader] Malformed line ${lineNum} in ${this.filePath} (skipped)`);
+          logger.warn(`[JSONLReader] Malformed line ${lineNum} in ${this.filePath} (skipped)`);
         }
       }
     }
 
     if (malformed > 5) {
-      console.warn(`[JSONLReader] ${malformed} total malformed lines in ${this.filePath}`);
+      logger.warn(`[JSONLReader] ${malformed} total malformed lines in ${this.filePath}`);
     }
 
     const stat = await fsp.stat(this.filePath).catch(() => null);

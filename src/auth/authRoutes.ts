@@ -26,6 +26,7 @@ import {
   createTenant, findTenantByEmail, getTenant, updateTenant, listTenants,
   type Tenant,
 } from '../tenancy/tenantStore.js';
+import { logger } from '../utils/logger.js';
 
 const app = new Hono();
 
@@ -298,7 +299,7 @@ app.post('/authorized-phones', async (c) => {
       return c.json({ ok: true, phones: saved });
     }
   } catch (err: any) {
-    console.error('[authorized-phones admin branch]', err?.message);
+    logger.error('[authorized-phones admin branch]', err?.message);
   }
 
   return c.json({ error: 'unauthorized' }, 401);

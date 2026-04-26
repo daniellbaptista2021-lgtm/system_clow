@@ -20,6 +20,7 @@ import * as docs from './documents.js';
 import { buildDocumentHTML } from './documentPublic.js';
 import { buildBookingHTML } from './bookingPage.js';
 import { buildEmbedJS, buildHostedFormHTML } from './embedTemplate.js';
+import { logger } from '../utils/logger.js';
 
 const app = new Hono();
 
@@ -141,7 +142,7 @@ app.get('/forms/:slug/config.json', (c) => {
 
 app.get('/forms/:slug/embed.js', (c) => {
   const f = forms.getFormBySlug(c.req.param('slug'));
-  if (!f) return c.text('console.error("Clow form not found");', 404, { 'content-type': 'application/javascript' });
+  if (!f) return c.text('logger.error("Clow form not found");', 404, { 'content-type': 'application/javascript' });
   const proto = c.req.header('x-forwarded-proto') || 'https';
   const host = c.req.header('host') || 'localhost';
   const base = `${proto}://${host}`;

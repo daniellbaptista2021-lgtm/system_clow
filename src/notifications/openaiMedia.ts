@@ -19,6 +19,7 @@ import * as os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 const execFileP = promisify(execFile);
 
@@ -68,13 +69,13 @@ export async function transcribeAudio(
 
     if (!res.ok) {
       const err = await res.text().catch(() => '');
-      console.error('[openai-whisper] http', res.status, err.slice(0, 300));
+      logger.error('[openai-whisper] http', res.status, err.slice(0, 300));
       return `[Erro transcrevendo áudio: HTTP ${res.status}]`;
     }
     const text = (await res.text()).trim();
     return text || '[Áudio sem fala detectada]';
   } catch (err: any) {
-    console.error('[openai-whisper] error', err?.message);
+    logger.error('[openai-whisper] error', err?.message);
     return `[Erro transcrevendo áudio: ${err?.message || 'desconhecido'}]`;
   }
 }
@@ -125,14 +126,14 @@ export async function describeImage(
 
     if (!res.ok) {
       const err = await res.text().catch(() => '');
-      console.error('[openai-vision] http', res.status, err.slice(0, 300));
+      logger.error('[openai-vision] http', res.status, err.slice(0, 300));
       return `[Erro descrevendo imagem: HTTP ${res.status}]`;
     }
     const data: any = await res.json();
     const txt = data?.choices?.[0]?.message?.content?.trim();
     return txt || '[Imagem sem descrição extraída]';
   } catch (err: any) {
-    console.error('[openai-vision] error', err?.message);
+    logger.error('[openai-vision] error', err?.message);
     return `[Erro descrevendo imagem: ${err?.message || 'desconhecido'}]`;
   }
 }
@@ -163,7 +164,7 @@ export async function extractPdfText(pdf: Buffer): Promise<string> {
     }
     return text;
   } catch (err: any) {
-    console.error('[pdf-extract] error', err?.message);
+    logger.error('[pdf-extract] error', err?.message);
     return `[Erro extraindo texto do PDF: ${err?.message || 'desconhecido'}]`;
   } finally {
     try { fs.unlinkSync(pdfPath); } catch {}

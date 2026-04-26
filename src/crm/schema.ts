@@ -19,6 +19,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { applyMigrations } from './migrator.js';
+import { logger } from '../utils/logger.js';
 
 let _db: Database.Database | null = null;
 
@@ -43,7 +44,7 @@ export function getCrmDb(): Database.Database {
   // fully-migrated DB (just an INSERT-existence check per migration).
   applyMigrations(_db, {
     logger: (msg) => {
-      if (process.env.CLOW_MIGRATION_LOG !== '0') console.log(msg);
+      if (process.env.CLOW_MIGRATION_LOG !== '0') logger.info(msg);
     },
   });
 

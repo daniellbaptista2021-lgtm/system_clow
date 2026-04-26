@@ -577,14 +577,39 @@ Esse comando **não deve imprimir nada** durante o reload. Se aparecer `502`, `5
 **Mitigado via `NODE_APP_INSTANCE === '0'`:**
 - `scheduler.ts` — só roda no worker 0 (evita reminders disparados N vezes, billing tick duplicado, quota rotation 2×, email-marketing 2×). Force em outros workers via `CLOW_FORCE_SCHEDULER=1` (testes).
 
-**⚠️ Estados in-memory que ainda não estão cluster-safe** (TODO antes de subir além de 2 workers):
-- `src/server/rateLimiter.ts` — janela por worker → limites efetivamente ×N
-- `src/server/health.ts` — IP rate limit por worker (DDoS protection)
-- `src/billing/quotaGuard.ts` — race condition no `current_month_messages` (read-modify-write em tenants.json)
-- `src/tenancy/tenantStore.ts` — `activeSessions` Map por worker
-- `src/server/sessionPool.ts` — sessões ficam no worker que criou; precisa sticky session no nginx OR migration pra Redis
+**Estados in-memory que foram migrados pra cluster-safe:**
+- `src/server/rateLimiter.ts` — atomic `INCR + EXPIRE` via `clusterStore` (Redis se `REDIS_URL`, fallback Map)
+- `src/server/health.ts` — IP rate limit por `clusterStore`
+- `src/billing/quotaGuard.ts` — read+check+increment dentro de file lock em `tenants.json` (`proper-lockfile.lockSync`)
+- `src/tenancy/tenantStore.ts` `activeSessions` — Redis SET (`SADD/SREM/SCARD`) via `clusterStore`
+- `src/crm/automations.ts` `_runningEvents` — `SET key NX EX 5` via `clusterStore`
 
-Esses ítens devem ir pro Redis em comandos seguintes — atual cluster com 2 workers já dobra os limites por padrão (aceitável para pequena escala, **inaceitável** quando virar 4+).
+**⚠️ Único item ainda worker-local (precisa sticky session OU Redis):**
+- `src/server/sessionPool.ts` — a engine de cada sessão fica em memória do worker que a criou. Se o nginx/load balancer mandar a continuação pro outro worker, ele 404 a sessão. **Solução**: sticky cookies no nginx (config abaixo). Migration completa pra Redis seria refator pesado — só vale fazer se a contagem de workers passar de 4.
+
+```nginx
+# /etc/nginx/sites-available/system-clow
+upstream clow_cluster {
+    # ip_hash garante que o mesmo IP cliente sempre cai no mesmo worker.
+    # Para sticky por session_id no path/header, usar nginx-plus ou um
+    # módulo extra (e.g. ngx_http_upstream_jvm_route_module) — esse é o
+    # caminho correto se PM2 reload mover IPs entre workers.
+    ip_hash;
+    server 127.0.0.1:3001;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name system-clow.pvcorretor01.com.br;
+    location / {
+        proxy_pass http://clow_cluster;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Sem isso, sessões que duram mais de 1 turno (que é o caso típico — usuário faz pergunta, espera resposta, faz follow-up) podem cair em workers diferentes e perder contexto. **Configure isso ANTES de aumentar `CLOW_INSTANCES`.**
 
 #### Fallback: deploy modo antigo (com downtime)
 

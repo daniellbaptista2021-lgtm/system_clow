@@ -25,6 +25,7 @@ import * as path from 'path';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from './types.js';
 import type { PluginManifest, PluginPermission, PluginCategory } from './types.js';
 import { validatePluginManifest } from './PluginManifestSchema.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export async function readManifest(pluginDir: string): Promise<PluginManifest | 
     // Size check
     const stat = await fsp.stat(fp);
     if (stat.size > MAX_MANIFEST_SIZE) {
-      console.warn(`[PluginManifest] Manifest too large: ${stat.size} bytes (max ${MAX_MANIFEST_SIZE})`);
+      logger.warn(`[PluginManifest] Manifest too large: ${stat.size} bytes (max ${MAX_MANIFEST_SIZE})`);
       return null;
     }
 
@@ -80,10 +81,10 @@ export async function readManifest(pluginDir: string): Promise<PluginManifest | 
 
     if (result.valid) return result.data;
 
-    console.warn(`[PluginManifest] Validation failed for ${fp}:`, result.errors.map(e => e.message).join(', '));
+    logger.warn(`[PluginManifest] Validation failed for ${fp}:`, result.errors.map(e => e.message).join(', '));
     return null;
   } catch (err) {
-    console.warn(`[PluginManifest] Failed to read ${fp}: ${(err as Error).message}`);
+    logger.warn(`[PluginManifest] Failed to read ${fp}: ${(err as Error).message}`);
     return null;
   }
 }

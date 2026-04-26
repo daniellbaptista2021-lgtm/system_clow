@@ -23,8 +23,8 @@ function fetchPath(app: Hono, path: string, headers: Record<string, string> = {}
   return app.fetch(new Request(`http://localhost${path}`, { headers }));
 }
 
-beforeEach(() => {
-  _resetHealthRateLimitForTests();
+beforeEach(async () => {
+  await _resetHealthRateLimitForTests();
 });
 
 describe('GET /health/live', () => {

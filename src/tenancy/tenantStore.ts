@@ -85,6 +85,21 @@ function storePath(): string {
 }
 
 // ─── Read / Write Operations ────────────────────────────────────────────────
+// In PM2 cluster mode multiple workers can mutate tenants.json
+// concurrently. Two workers reading current_month_messages=499 and both
+// writing 500 = quota under-counted by 1 → effective rate = 2× plan.
+// `mutateStore(fn)` solves this by holding an exclusive file lock for
+// the read-modify-write window. Pure read paths (`readStore()` callers
+// like getTenant, listTenants) don't need the lock — better-sqlite3-
+// style concurrent readers are fine on a JSON file.
+//
+// proper-lockfile is already a dependency. We use the sync API so the
+// rest of the module stays sync (most call sites are deep inside CRUD
+// helpers that aren't async). The lock files (.lock subdir created by
+// proper-lockfile) live next to tenants.json.
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const lockfile: typeof import('proper-lockfile') = require('proper-lockfile');
 
 function readStore(): StoreData {
   try {
@@ -95,10 +110,64 @@ function readStore(): StoreData {
   }
 }
 
-function writeStore(data: StoreData): void {
+function writeStoreUnsafe(data: StoreData): void {
   const p = storePath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(data, null, 2), { mode: 0o600 });
+}
+
+/**
+ * Atomically read-modify-write the tenant store under an exclusive
+ * file lock. The mutator receives a fresh snapshot and may modify it
+ * in place; we re-serialize and write under lock when it returns.
+ *
+ * Returns whatever the mutator returns, so call sites can produce a
+ * derived value (the new tenant, the updated api key, etc.) in one go.
+ *
+ * `stale: 8000` means an abandoned lock (process killed mid-write) is
+ * cleaned up after 8 seconds. `retries.retries: 8 / minTimeout: 30`
+ * gives ~1s of total wait for normal contention, which is plenty for
+ * a 2-worker cluster's quota-increment latency.
+ */
+function mutateStore<T>(mutator: (store: StoreData) => T): T {
+  // proper-lockfile requires the target file to exist for lockSync.
+  // Ensure storePath() exists (touch an empty store if needed).
+  const p = storePath();
+  if (!fs.existsSync(p)) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    writeStoreUnsafe({ tenants: [], api_keys: [], whatsapp_numbers: [] });
+  }
+  // proper-lockfile's sync API does NOT accept the `retries` option (it's
+  // async-only), so we implement a tiny retry loop ourselves. Under cluster
+  // contention the typical wait is <100ms; the busy-spin between attempts
+  // is bounded and acceptable for a hot path that gates on a file lock.
+  const release = acquireLockWithRetry(p);
+  try {
+    const store = readStore();
+    const result = mutator(store);
+    writeStoreUnsafe(store);
+    return result;
+  } finally {
+    release();
+  }
+}
+
+function acquireLockWithRetry(filepath: string, attempts = 10): () => void {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return lockfile.lockSync(filepath, { stale: 8000 });
+    } catch (err) {
+      lastErr = err;
+      // Spin-wait briefly; backoff grows linearly. Most contention
+      // resolves on attempt 1 or 2 (single-cluster, short writes).
+      const waitMs = 20 + i * 25;
+      const deadline = Date.now() + waitMs;
+      // eslint-disable-next-line no-empty
+      while (Date.now() < deadline) {}
+    }
+  }
+  throw lastErr;
 }
 
 // ─── API Key Helpers ────────────────────────────────────────────────────────
@@ -120,50 +189,48 @@ export function createTenant(opts: {
   tier: TierName;
   trial_days?: number;
 }): { tenant: Tenant; apiKey: string } {
-  const store = readStore();
+  return mutateStore((store) => {
+    // Check duplicate email — must run inside the lock so two workers
+    // can't both pass the check before either has written.
+    if (store.tenants.some((t) => t.email === opts.email)) {
+      throw new Error(`Tenant with email ${opts.email} already exists`);
+    }
 
-  // Check duplicate email
-  if (store.tenants.some((t) => t.email === opts.email)) {
-    throw new Error(`Tenant with email ${opts.email} already exists`);
-  }
+    const tierConfig = TIERS[opts.tier];
+    const now = new Date().toISOString();
 
-  const tierConfig = TIERS[opts.tier];
-  const now = new Date().toISOString();
+    const tenant: Tenant = {
+      id: crypto.randomUUID(),
+      email: opts.email,
+      name: opts.name,
+      tier: opts.tier,
+      status: opts.trial_days ? 'trial' : 'active',
+      created_at: now,
+      trial_ends_at: opts.trial_days
+        ? new Date(Date.now() + opts.trial_days * 86400_000).toISOString()
+        : undefined,
+      max_messages_per_month: tierConfig.max_messages_per_month,
+      max_cost_usd_per_month: tierConfig.max_cost_usd_per_month,
+      max_concurrent_sessions: tierConfig.max_concurrent_sessions,
+      max_workspace_size_mb: tierConfig.max_workspace_size_mb,
+      current_month_messages: 0,
+      current_month_cost_usd: 0,
+      current_month_started_at: now,
+    };
 
-  const tenant: Tenant = {
-    id: crypto.randomUUID(),
-    email: opts.email,
-    name: opts.name,
-    tier: opts.tier,
-    status: opts.trial_days ? 'trial' : 'active',
-    created_at: now,
-    trial_ends_at: opts.trial_days
-      ? new Date(Date.now() + opts.trial_days * 86400_000).toISOString()
-      : undefined,
-    max_messages_per_month: tierConfig.max_messages_per_month,
-    max_cost_usd_per_month: tierConfig.max_cost_usd_per_month,
-    max_concurrent_sessions: tierConfig.max_concurrent_sessions,
-    max_workspace_size_mb: tierConfig.max_workspace_size_mb,
-    current_month_messages: 0,
-    current_month_cost_usd: 0,
-    current_month_started_at: now,
-  };
+    const rawKey = generateApiKey('live');
+    const apiKey: ApiKey = {
+      id: crypto.randomUUID(),
+      tenant_id: tenant.id,
+      key_hash: hashApiKey(rawKey),
+      name: 'default',
+      created_at: now,
+    };
 
-  // Generate API key
-  const rawKey = generateApiKey('live');
-  const apiKey: ApiKey = {
-    id: crypto.randomUUID(),
-    tenant_id: tenant.id,
-    key_hash: hashApiKey(rawKey),
-    name: 'default',
-    created_at: now,
-  };
-
-  store.tenants.push(tenant);
-  store.api_keys.push(apiKey);
-  writeStore(store);
-
-  return { tenant, apiKey: rawKey };
+    store.tenants.push(tenant);
+    store.api_keys.push(apiKey);
+    return { tenant, apiKey: rawKey };
+  });
 }
 
 export function getTenant(id: string): Tenant | null {
@@ -186,61 +253,81 @@ export function findTenantByApiKeyHash(keyHash: string): Tenant | null {
 }
 
 export function updateTenant(id: string, updates: Partial<Tenant>): Tenant | null {
-  const store = readStore();
-  const idx = store.tenants.findIndex((t) => t.id === id);
-  if (idx === -1) return null;
-  store.tenants[idx] = { ...store.tenants[idx], ...updates };
-  writeStore(store);
-  return store.tenants[idx];
+  return mutateStore((store) => {
+    const idx = store.tenants.findIndex((t) => t.id === id);
+    if (idx === -1) return null;
+    store.tenants[idx] = { ...store.tenants[idx], ...updates } as Tenant;
+    return store.tenants[idx];
+  });
 }
 
 export function listTenants(): Tenant[] {
   return readStore().tenants;
 }
 
+/**
+ * Atomically read-modify-write a single tenant under the same exclusive
+ * lock as updateTenant. The mutator callback receives the LIVE tenant
+ * object (not a copy) and can return a value passed back to the caller.
+ *
+ * Use this for check-then-write hot paths where read and write must see
+ * the same version of the row — e.g. quota counter increment with a
+ * limit-check guard. A naive `getTenant() → check → updateTenant()`
+ * sequence is racey under cluster mode because two workers can both
+ * pass the check before either writes.
+ */
+export function mutateTenant<T>(
+  tenantId: string,
+  mutator: (tenant: Tenant) => T,
+): T | null {
+  return mutateStore((store) => {
+    const tenant = store.tenants.find((t) => t.id === tenantId);
+    if (!tenant) return null;
+    return mutator(tenant);
+  });
+}
+
 // ─── API Key Management ─────────────────────────────────────────────────────
 
 export function createApiKeyForTenant(tenantId: string, name: string): string {
-  const store = readStore();
-  if (!store.tenants.some((t) => t.id === tenantId)) {
-    throw new Error('Tenant not found');
-  }
-
-  const rawKey = generateApiKey('live');
-  const apiKey: ApiKey = {
-    id: crypto.randomUUID(),
-    tenant_id: tenantId,
-    key_hash: hashApiKey(rawKey),
-    name,
-    created_at: new Date().toISOString(),
-  };
-
-  store.api_keys.push(apiKey);
-  writeStore(store);
-  return rawKey;
+  return mutateStore((store) => {
+    if (!store.tenants.some((t) => t.id === tenantId)) {
+      throw new Error('Tenant not found');
+    }
+    const rawKey = generateApiKey('live');
+    const apiKey: ApiKey = {
+      id: crypto.randomUUID(),
+      tenant_id: tenantId,
+      key_hash: hashApiKey(rawKey),
+      name,
+      created_at: new Date().toISOString(),
+    };
+    store.api_keys.push(apiKey);
+    return rawKey;
+  });
 }
 
 export function revokeApiKey(keyId: string): boolean {
-  const store = readStore();
-  const key = store.api_keys.find((k) => k.id === keyId);
-  if (!key) return false;
-  key.revoked_at = new Date().toISOString();
-  writeStore(store);
-  return true;
+  return mutateStore((store) => {
+    const key = store.api_keys.find((k) => k.id === keyId);
+    if (!key) return false;
+    key.revoked_at = new Date().toISOString();
+    return true;
+  });
 }
 
 export function revokeOldCrmShellKeys(tenantId: string): number {
-  const store = readStore();
-  let count = 0;
-  const now = new Date().toISOString();
-  for (const k of store.api_keys) {
-    if (k.tenant_id === tenantId && !k.revoked_at && k.name && k.name.startsWith('crm-shell-')) {
-      k.revoked_at = now;
-      count++;
+  return mutateStore((store) => {
+    let count = 0;
+    const now = new Date().toISOString();
+    for (const k of store.api_keys) {
+      if (k.tenant_id === tenantId && !k.revoked_at && k.name && k.name.startsWith('crm-shell-')) {
+        k.revoked_at = now;
+        count++;
+      }
     }
-  }
-  if (count > 0) writeStore(store);
-  return count;
+    return count;
+  });
 }
 
 export function listApiKeysForTenant(tenantId: string): ApiKey[] {
@@ -249,12 +336,10 @@ export function listApiKeysForTenant(tenantId: string): ApiKey[] {
 }
 
 export function touchApiKey(keyHash: string): void {
-  const store = readStore();
-  const key = store.api_keys.find((k) => k.key_hash === keyHash);
-  if (key) {
-    key.last_used_at = new Date().toISOString();
-    writeStore(store);
-  }
+  mutateStore((store) => {
+    const key = store.api_keys.find((k) => k.key_hash === keyHash);
+    if (key) key.last_used_at = new Date().toISOString();
+  });
 }
 
 // ─── Usage Tracking ─────────────────────────────────────────────────────────
@@ -263,14 +348,15 @@ export function incrementUsage(tenantId: string, usage: {
   messages?: number;
   cost_usd?: number;
 }): void {
-  const store = readStore();
-  const tenant = store.tenants.find((t) => t.id === tenantId);
-  if (!tenant) return;
-
-  if (usage.messages) tenant.current_month_messages += usage.messages;
-  if (usage.cost_usd) tenant.current_month_cost_usd += usage.cost_usd;
-
-  writeStore(store);
+  // The hot path: this is what gets hit on every AI message. Must be
+  // atomic across cluster workers — without the lock, two concurrent
+  // increments collapse into one and the quota under-counts.
+  mutateStore((store) => {
+    const tenant = store.tenants.find((t) => t.id === tenantId);
+    if (!tenant) return;
+    if (usage.messages) tenant.current_month_messages += usage.messages;
+    if (usage.cost_usd) tenant.current_month_cost_usd += usage.cost_usd;
+  });
 }
 
 export function resetMonthlyUsage(tenantId: string): void {
@@ -296,14 +382,14 @@ export function addWhatsAppNumber(
   instanceId: string,
   token: string,
 ): void {
-  const store = readStore();
-  store.whatsapp_numbers.push({
-    tenant_id: tenantId,
-    phone_number: phoneNumber,
-    zapi_instance_id: instanceId,
-    zapi_token: token,
+  mutateStore((store) => {
+    store.whatsapp_numbers.push({
+      tenant_id: tenantId,
+      phone_number: phoneNumber,
+      zapi_instance_id: instanceId,
+      zapi_token: token,
+    });
   });
-  writeStore(store);
 }
 
 // ─── Billing Helpers ────────────────────────────────────────────────────────
@@ -322,19 +408,30 @@ export function findOverdueTenants(graceDays: number = 7): Tenant[] {
 }
 
 // ─── Concurrent Session Counting ────────────────────────────────────────────
+// Cluster-shared via clusterStore — without it, each PM2 worker tracks
+// its own session set, the count is wrong, and a tenant can spawn N×
+// max_concurrent_sessions across the cluster. With Redis configured the
+// SADD/SREM/SCARD round-trips give the cluster-wide truth; without
+// Redis it falls back to a single-process Map (current single-worker
+// behavior preserved).
 
-// This is called by sessionPool — tracks active sessions per tenant externally
-const activeSessions = new Map<string, Set<string>>();
+import { getCluster } from '../utils/clusterStore.js';
 
-export function registerSession(tenantId: string, sessionId: string): void {
-  if (!activeSessions.has(tenantId)) activeSessions.set(tenantId, new Set());
-  activeSessions.get(tenantId)!.add(sessionId);
+function sessionsKey(tenantId: string): string {
+  return `tenant:active-sessions:${tenantId}`;
 }
 
-export function unregisterSession(tenantId: string, sessionId: string): void {
-  activeSessions.get(tenantId)?.delete(sessionId);
+export async function registerSession(tenantId: string, sessionId: string): Promise<void> {
+  const store = await getCluster();
+  await store.sAdd(sessionsKey(tenantId), sessionId);
 }
 
-export function countActiveSessions(tenantId: string): number {
-  return activeSessions.get(tenantId)?.size || 0;
+export async function unregisterSession(tenantId: string, sessionId: string): Promise<void> {
+  const store = await getCluster();
+  await store.sRem(sessionsKey(tenantId), sessionId);
+}
+
+export async function countActiveSessions(tenantId: string): Promise<number> {
+  const store = await getCluster();
+  return store.sCard(sessionsKey(tenantId));
 }

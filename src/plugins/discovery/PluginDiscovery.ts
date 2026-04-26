@@ -31,6 +31,7 @@ import { UserDiscovery } from './UserDiscovery.js';
 import { ProjectDiscovery } from './ProjectDiscovery.js';
 import { MarketplaceDiscovery } from './MarketplaceDiscovery.js';
 import type { LoadedPlugin, PluginSource } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ export class PluginDiscovery {
     if (errors.length > 0 && process.env.CLOW_QUIET_BOOTSTRAP !== '1') {
       // Log detalhado: source + erro (ajuda diagnostico)
       const summary = errors.map(e => `${e.source}:${e.error}`).join(" | ");
-      console.warn(`[PluginDiscovery] ${errors.length} error(s): ${summary}`);
+      logger.warn(`[PluginDiscovery] ${errors.length} error(s): ${summary}`);
     }
 
     return active;

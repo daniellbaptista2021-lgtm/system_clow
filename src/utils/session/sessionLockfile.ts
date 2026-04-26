@@ -18,6 +18,7 @@
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as os from 'os';
+import { logger } from '../logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export class SessionLockfile {
             process.kill(pid, 0);
             // Process is alive — check for stale timeout
             if (lockData.acquiredAt && Date.now() - lockData.acquiredAt > LOCK_STALE_MS) {
-              console.warn(`[SessionLockfile] Stale lock detected (PID ${pid}, age ${Date.now() - lockData.acquiredAt}ms)`);
+              logger.warn(`[SessionLockfile] Stale lock detected (PID ${pid}, age ${Date.now() - lockData.acquiredAt}ms)`);
               await fsp.unlink(lockPath);
               continue;
             }
@@ -92,7 +93,7 @@ export class SessionLockfile {
           } catch (killErr: any) {
             if (killErr.code === 'ESRCH') {
               // Process is dead — clear stale lock
-              console.warn(`[SessionLockfile] Clearing stale lock for dead PID ${pid}`);
+              logger.warn(`[SessionLockfile] Clearing stale lock for dead PID ${pid}`);
               await fsp.unlink(lockPath);
               continue;
             }

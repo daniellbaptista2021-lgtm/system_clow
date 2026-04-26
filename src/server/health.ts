@@ -52,23 +52,15 @@ const BUILD_TIME: string = (() => {
   }
 })();
 
-// ─── Per-IP rate limiter (sliding minute, in-memory) ──────────────────────
+// ─── Per-IP rate limiter (1-minute fixed window, cluster-shared) ──────────
+// Backed by clusterStore so the count is consistent across PM2 workers.
+// Without this, /health/* would let through HEALTH_RATE_LIMIT_PER_MIN ×
+// (worker count) per IP, watering down the DDoS protection.
 
-interface IpBucket {
-  count: number;
-  resetAt: number;
-}
+import { getCluster, _resetClusterStoreForTests } from '../utils/clusterStore.js';
 
 const HEALTH_RATE_LIMIT_PER_MIN = 60;
-const ipBuckets = new Map<string, IpBucket>();
-
-// Periodic GC so this doesn't grow unbounded under DDoS attempts.
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, bucket] of ipBuckets) {
-    if (now >= bucket.resetAt) ipBuckets.delete(ip);
-  }
-}, 60_000).unref?.();
+const HEALTH_RATE_WINDOW_SEC = 60;
 
 function clientIp(c: Context): string {
   const xff = c.req.header('x-forwarded-for');
@@ -81,35 +73,30 @@ function clientIp(c: Context): string {
 
 const ipRateLimit: MiddlewareHandler = async (c, next) => {
   const ip = clientIp(c);
-  const now = Date.now();
-  const bucket = ipBuckets.get(ip);
+  const store = await getCluster();
+  const count = await store.incr(`rl:health-ip:${ip}`, HEALTH_RATE_WINDOW_SEC);
 
-  if (!bucket || now >= bucket.resetAt) {
-    ipBuckets.set(ip, { count: 1, resetAt: now + 60_000 });
-    return next();
-  }
-
-  if (bucket.count >= HEALTH_RATE_LIMIT_PER_MIN) {
-    const retryAfterSec = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-    c.header('Retry-After', String(retryAfterSec));
+  if (count > HEALTH_RATE_LIMIT_PER_MIN) {
+    // Conservative retry-after: full window. We don't currently expose
+    // a TTL read primitive on clusterStore so we report the worst case.
+    c.header('Retry-After', String(HEALTH_RATE_WINDOW_SEC));
     return c.json(
       {
         error: 'rate_limit_exceeded',
         limit: HEALTH_RATE_LIMIT_PER_MIN,
-        window_seconds: 60,
-        retry_after_seconds: retryAfterSec,
+        window_seconds: HEALTH_RATE_WINDOW_SEC,
+        retry_after_seconds: HEALTH_RATE_WINDOW_SEC,
       },
       429,
     );
   }
-
-  bucket.count += 1;
   return next();
 };
 
-// Test-only: reset the IP rate limiter state between tests.
-export function _resetHealthRateLimitForTests(): void {
-  ipBuckets.clear();
+// Test-only: reset the cluster store between specs so each test sees a
+// fresh counter regardless of which test ran last.
+export async function _resetHealthRateLimitForTests(): Promise<void> {
+  await _resetClusterStoreForTests();
 }
 
 // ─── Dependency probes ────────────────────────────────────────────────────

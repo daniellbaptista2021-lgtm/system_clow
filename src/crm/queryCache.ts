@@ -11,6 +11,7 @@
  */
 
 import { createHash } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 interface Entry {
   value: any;
@@ -36,9 +37,9 @@ class QueryCache {
       const { default: Redis } = await import('ioredis' as string) as any;
       this.redisClient = new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: true });
       await this.redisClient.connect();
-      console.log('[query-cache] Redis backend connected:', url.replace(/:[^@]+@/, ':***@'));
+      logger.info('[query-cache] Redis backend connected:', url.replace(/:[^@]+@/, ':***@'));
     } catch (err: any) {
-      console.warn('[query-cache] Redis unavailable, using in-memory only:', err?.message);
+      logger.warn('[query-cache] Redis unavailable, using in-memory only:', err?.message);
       this.redisClient = null;
     }
   }

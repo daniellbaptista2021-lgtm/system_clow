@@ -23,6 +23,7 @@ import * as os from 'os';
 import { PluginLoader } from '../PluginLoader.js';
 import type { LoadedPlugin } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -134,12 +135,12 @@ export class UserDiscovery {
         if (plugins.length >= MAX_USER_PLUGINS) break;
       }
     } catch (err) {
-      console.warn(`[UserDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
+      logger.warn(`[UserDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
     }
 
     const elapsed = Date.now() - startTime;
     if (plugins.length > 0) {
-      console.log(`[UserDiscovery] Found ${plugins.length} user plugins in ${elapsed}ms`);
+      logger.info(`[UserDiscovery] Found ${plugins.length} user plugins in ${elapsed}ms`);
     }
 
     // Update scan timestamp
