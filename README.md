@@ -263,6 +263,95 @@ Repita o processo pra `master` se você usa essa branch também.
 
 ---
 
+## 💾 Backup & Restore
+
+Sistema de snapshot **online (WAL-safe)** dos bancos SQLite — usa o comando `.backup` do `sqlite3`, **não** `cp`. Tudo local na VPS, sem serviço externo.
+
+### O que é coberto
+
+| DB | Caminho | Backup |
+|---|---|---|
+| CRM | `~/.clow/crm.sqlite3` | ✅ |
+| Memória por tenant | `~/.clow/memory/*.sqlite3` | ✅ |
+
+### Onde os snapshots ficam
+
+```
+~/.clow/backups/YYYY-MM-DD-HH/
+  ├── crm.sqlite3
+  └── memory/{tenant}.sqlite3
+~/.clow/backups/cron.log     ← stdout/stderr do cron
+```
+
+### Retenção (rotação automática a cada hora)
+
+| Tier | Janela | Política |
+|---|---|---|
+| **Hourly** | últimas 24h | mantém todos os snapshots |
+| **Daily** | 24h–7d | mantém o mais recente de cada dia |
+| **Weekly** | 7d–28d | mantém o mais recente de cada semana ISO |
+| Older | >28d | apagado |
+
+### Comandos
+
+```bash
+# Tirar um backup agora (manual)
+./scripts/backup-sqlite.sh
+
+# Validar o snapshot mais recente (PRAGMA integrity_check)
+./scripts/verify-backup.sh
+
+# Validar um snapshot específico
+./scripts/verify-backup.sh 2026-04-26-14
+
+# Restaurar do snapshot mais recente
+./scripts/restore-sqlite.sh latest
+
+# Restaurar de um snapshot específico
+./scripts/restore-sqlite.sh 2026-04-26-14
+
+# Preview do restore sem mexer em nada
+./scripts/restore-sqlite.sh latest --dry-run
+
+# Instalar cron (a cada hora :00 backup, :30 verify)
+./scripts/setup-cron.sh
+```
+
+### Garantias do restore
+
+1. Se o DB ao vivo já existe, ele é **renomeado** para `<nome>.pre-restore.<unix-ts>` antes de ser substituído (restore reversível).
+2. Sidecars `-wal` e `-shm` antigos são removidos (snapshot é um arquivo único consistente).
+3. `--dry-run` mostra o que seria feito sem tocar em nada.
+
+### Setup na VPS
+
+```bash
+ssh root@<VPS_IP>
+cd /opt/system-clow
+./scripts/setup-cron.sh           # instala backup hourly + verify hourly
+crontab -l                         # confere as duas linhas
+
+# primeiro backup imediato
+./scripts/backup-sqlite.sh
+./scripts/verify-backup.sh
+ls ~/.clow/backups/
+```
+
+### Cobertura de testes
+
+`tests/integration/backupRestore.test.ts` exercita:
+
+- Snapshot **enquanto há writer concorrente** (proova WAL-safety)
+- Snapshot **sobrevive a corrupção** do DB ao vivo + `PRAGMA integrity_check`
+- Script `backup-sqlite.sh` cria a pasta `YYYY-MM-DD-HH` com CRM + memory
+- Script `verify-backup.sh` retorna 0 em snapshot saudável, ≠0 quando corrompido
+- Script `restore-sqlite.sh latest` recupera dados após corrupção do DB ao vivo
+- `restore-sqlite.sh latest --dry-run` não modifica nada
+
+Os 4 últimos casos rodam só onde `bash` + `sqlite3` estão no PATH (Linux/macOS); no Windows são `skipped` pelo vitest automaticamente.
+
+---
+
 ## 🛠️ Operação
 
 ### Stack rodando
