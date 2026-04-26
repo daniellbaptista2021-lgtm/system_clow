@@ -1,5 +1,7 @@
 # System Clow
 
+[![CI](https://github.com/daniellbaptista2021-lgtm/system_clow/actions/workflows/ci.yml/badge.svg)](https://github.com/daniellbaptista2021-lgtm/system_clow/actions/workflows/ci.yml)
+
 > Plataforma SaaS premium que une **Agente IA via WhatsApp** + **CRM completo** + **automações n8n** num único produto. Cada cliente assinante recebe seu workspace isolado com pipeline de vendas, atendimento por WhatsApp e IA que opera o CRM por comando natural.
 
 **Live:** https://system-clow.pvcorretor01.com.br
@@ -220,6 +222,44 @@ POST      /webhooks/stripe              Stripe events
 - Webhook signature verification opcional (Meta `X-Hub-Signature-256`, Stripe assinatura)
 - Phone whitelist no agente (impede uso por terceiros)
 - Path traversal guard no media handler
+
+---
+
+## 🤖 CI / Continuous Integration
+
+GitHub Actions roda em todo `push` e `pull_request` para a branch `main`/`master`. 4 jobs em paralelo:
+
+| Job | O que faz |
+|---|---|
+| **TypeScript typecheck** | `tsc --noEmit` |
+| **Unit tests (vitest)** | `npm test` |
+| **Secrets scan (gitleaks)** | varre todo o histórico do git contra `.gitleaks.toml` |
+| **Build** | `tsc` + verifica artefatos em `dist/` |
+
+Workflow em [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### 🔒 Branch protection — ATIVAR MANUALMENTE
+
+Pra bloquear merge na `main` quando o CI falhar (não dá pra automatizar via repo — precisa ser feito 1x na UI do GitHub):
+
+1. Abra: https://github.com/daniellbaptista2021-lgtm/system_clow/settings/branches
+2. Clique em **"Add branch protection rule"** (ou edite a regra existente da `main`)
+3. **Branch name pattern**: `main`
+4. Marque:
+   - ✅ **Require a pull request before merging** (opcional mas recomendado)
+   - ✅ **Require status checks to pass before merging**
+     - ✅ **Require branches to be up to date before merging**
+     - No campo de busca **"Search for status checks"**, selecione (depois do primeiro CI rodar):
+       - `TypeScript typecheck`
+       - `Unit tests (vitest)`
+       - `Secrets scan (gitleaks)`
+       - `Build (tsc → dist/)`
+   - ✅ **Do not allow bypassing the above settings** (recomendado)
+5. Clique **"Create"** ou **"Save changes"**
+
+> ⚠️ Os checks só aparecem na lista depois que o CI rodar **pelo menos uma vez** na branch. Faça um push qualquer pra `main` (ou abra um PR) e depois volte a essa tela.
+
+Repita o processo pra `master` se você usa essa branch também.
 
 ---
 
