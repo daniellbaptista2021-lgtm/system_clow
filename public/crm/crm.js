@@ -5811,93 +5811,136 @@ window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, render
 // ─── Onda 56: Importar/Exportar contatos ────────────────────────────────
 function openImportContactsModal() {
   const dialog = el('div', { class: 'modal-backdrop' });
-  const fileInput = el('input', {
-    type: 'file', accept: '.csv,.xlsx,.xls',
-    style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
-  });
-  const resultBox = el('div', { style: 'margin-top:14px' });
-  const submitBtn = el('button', {
-    style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
-    on: { click: async () => {
-      const file = fileInput.files?.[0];
-      if (!file) { toast('Selecione um arquivo', 'error'); return; }
-      submitBtn.disabled = true; submitBtn.textContent = 'Importando...';
-      const fd = new FormData();
-      fd.append('file', file);
-      try {
-        const r = await fetch('/v1/crm/contacts/import', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + state.apiKey },
-          body: fd,
-        });
-        const ct = (r.headers.get('content-type') || '').toLowerCase();
-        let data;
-        if (ct.includes('application/json')) {
-          data = await r.json();
-        } else {
-          // Erro HTML do nginx (413 payload too large, 502, 504, etc)
-          const text = await r.text();
-          if (r.status === 413) throw new Error('Arquivo muito grande (limite: 50MB). Divida em partes menores.');
-          if (r.status === 502 || r.status === 504) throw new Error('Servidor demorou. Tenta de novo ou divide o arquivo.');
-          throw new Error('HTTP ' + r.status + ': ' + text.replace(/<[^>]+>/g, '').slice(0, 200));
-        }
-        if (!r.ok) throw new Error(data.message || data.error || 'falha');
-        resultBox.innerHTML = '';
-        const noneCreated = (data.created === 0 && data.updated === 0);
-        resultBox.append(el('div', { style: 'background:rgba(' + (noneCreated ? '239,68,68' : '34,197,94') + ',0.1);border:1px solid rgba(' + (noneCreated ? '239,68,68' : '34,197,94') + ',0.3);padding:14px;border-radius:8px;color:' + (noneCreated ? '#fca5a5' : '#86efac') },
-          el('div', { style: 'font-weight:700;margin-bottom:8px' }, noneCreated ? '⚠ Importação processada mas nada foi salvo' : '✓ Importação concluída'),
-          el('div', {}, '📥 Total processado: ' + data.total),
-          el('div', {}, '🆕 Criados: ' + data.created),
-          el('div', {}, '🔄 Atualizados (já existiam pelo telefone/email): ' + data.updated),
-          (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'margin-top:10px;cursor:pointer', open: noneCreated },
-            el('summary', { style: 'color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas — clique pra ver'),
-            el('div', { style: 'background:rgba(155,89,252,0.06);padding:10px;border-radius:6px;margin-top:6px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
-              ...data.headerDetected.map(h => el('div', {}, h)),
-            ),
-          ) : null,
-          (data.errors && data.errors.length) ? el('details', { style: 'margin-top:8px;cursor:pointer' },
-            el('summary', { style: 'color:#fca5a5' }, '⚠ ' + data.errors.length + ' erro(s) — clique pra ver'),
-            el('div', { style: 'background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;margin-top:6px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace' },
-              ...data.errors.slice(0, 50).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error))
-            ),
-          ) : null,
-        ));
-        if (typeof loadContacts === 'function') { await loadContacts(); renderContactsList(); }
-      } catch (e) {
-        resultBox.innerHTML = '';
-        resultBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:#fca5a5' }, 'Erro: ' + e.message));
-      } finally { submitBtn.disabled = false; submitBtn.textContent = 'Importar'; }
-    } }
-  }, 'Importar');
-
-  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' },
-    el('h3', { style: 'margin:0 0 8px' }, '⬆ Importar contatos'),
-    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 14px' }, 'Aceita CSV (UTF-8) ou Excel (XLSX). A primeira linha deve ser o cabeçalho.'),
-    el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
-      el('summary', { style: 'font-size:12px;color:var(--text-dim);font-weight:600' }, '📋 Colunas reconhecidas (clique pra ver)'),
-      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6' },
-        el('div', {}, '• ', el('b', {}, 'name'), ' / nome / full_name — obrigatório'),
-        el('div', {}, '• ', el('b', {}, 'phone'), ' / telefone / whatsapp — recomendado (chave de upsert)'),
-        el('div', {}, '• ', el('b', {}, 'email'), ' — fallback de upsert se não tiver phone'),
-        el('div', {}, '• company / empresa, title / cargo, website / site'),
-        el('div', {}, '• address / endereco, cpf / cnpj / cpf_cnpj'),
-        el('div', {}, '• tags (separadas por ; ou |), notes / observacoes'),
-        el('div', {}, '• source (default: "import")'),
-        el('div', { style: 'margin-top:6px;color:#fbbf24' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
-      ),
-    ),
-    el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600' }, 'Arquivo (.csv, .xlsx)'),
-    fileInput,
-    resultBox,
-    el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:18px' },
-      el('button', {
-        style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;cursor:pointer',
-        on: { click: () => dialog.remove() }
-      }, 'Fechar'),
-      submitBtn,
-    ),
-  );
+  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' });
   dialog.append(modal);
+  document.body.append(dialog);
+
+  // Tela 1: formulário de upload
+  function renderForm() {
+    modal.innerHTML = '';
+    const fileInput = el('input', {
+      type: 'file', accept: '.csv,.xlsx,.xls',
+      style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
+    });
+    const errorBox = el('div', { style: 'margin-top:14px' });
+    const submitBtn = el('button', {
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
+      on: { click: async () => {
+        const file = fileInput.files?.[0];
+        if (!file) { toast('Selecione um arquivo', 'error'); return; }
+        submitBtn.disabled = true; submitBtn.textContent = 'Importando...';
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+          const r = await fetch('/v1/crm/contacts/import', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + state.apiKey },
+            body: fd,
+          });
+          const ct = (r.headers.get('content-type') || '').toLowerCase();
+          let data;
+          if (ct.includes('application/json')) data = await r.json();
+          else {
+            const text = await r.text();
+            if (r.status === 413) throw new Error('Arquivo muito grande (limite: 50MB). Divida em partes menores.');
+            if (r.status === 502 || r.status === 504) throw new Error('Servidor demorou. Tenta de novo ou divide o arquivo.');
+            throw new Error('HTTP ' + r.status + ': ' + text.replace(/<[^>]+>/g, '').slice(0, 200));
+          }
+          if (!r.ok) throw new Error(data.message || data.error || 'falha');
+          // Sucesso → renderiza tela de confirmação
+          if (typeof loadContacts === 'function') { try { await loadContacts(); renderContactsList(); } catch {} }
+          renderSuccess(data, file.name);
+        } catch (e) {
+          errorBox.innerHTML = '';
+          errorBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:#fca5a5' }, '⚠ Erro: ' + e.message));
+          submitBtn.disabled = false; submitBtn.textContent = 'Importar';
+        }
+      } }
+    }, 'Importar');
+
+    modal.append(
+      el('h3', { style: 'margin:0 0 8px' }, '⬆ Importar contatos'),
+      el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 14px' }, 'Aceita CSV (UTF-8) ou Excel (XLSX). A primeira linha deve ser o cabeçalho.'),
+      el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
+        el('summary', { style: 'font-size:12px;color:var(--text-dim);font-weight:600' }, '📋 Colunas reconhecidas (clique pra ver)'),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6' },
+          el('div', {}, '• ', el('b', {}, 'name'), ' / nome / nome completo / cliente / contato / razão social — obrigatório'),
+          el('div', {}, '• ', el('b', {}, 'phone'), ' / telefone / whatsapp / celular / telefone celular — recomendado'),
+          el('div', {}, '• ', el('b', {}, 'email'), ' / e-mail — fallback de upsert se não tiver phone'),
+          el('div', {}, '• company / empresa, title / cargo, website / site'),
+          el('div', {}, '• address / endereço, cpf / cnpj / cnpj/cpf'),
+          el('div', {}, '• tags (separadas por ; ou |), notes / observações'),
+          el('div', {}, '• source / origem (default: "import")'),
+          el('div', { style: 'margin-top:6px;color:#fbbf24' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
+        ),
+      ),
+      el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600' }, 'Arquivo (.csv, .xlsx)'),
+      fileInput,
+      errorBox,
+      el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:18px' },
+        el('button', {
+          style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;cursor:pointer',
+          on: { click: () => dialog.remove() }
+        }, 'Fechar'),
+        submitBtn,
+      ),
+    );
+  }
+
+  // Tela 2: confirmação pós-import (substitui modal inteiro)
+  function renderSuccess(data, filename) {
+    modal.innerHTML = '';
+    const noneCreated = (data.created === 0 && data.updated === 0);
+    const totalSaved = (data.created || 0) + (data.updated || 0);
+    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px 8px;border-radius:10px' },
+      el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
+      el('div', { style: 'font-size:28px;font-weight:800;color:' + (color || 'var(--text)') }, String(value)),
+    );
+
+    modal.append(
+      // Cabeçalho com check grande
+      el('div', { style: 'text-align:center;padding:10px 0 18px' },
+        el('div', { style: 'width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:' + (noneCreated ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:36px' }, noneCreated ? '⚠' : '✓'),
+        el('h3', { style: 'margin:0;font-size:20px;color:' + (noneCreated ? '#fca5a5' : '#86efac') }, noneCreated ? 'Nada foi importado' : 'Importação concluída!'),
+        el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 0' }, noneCreated ? 'Nenhum contato foi criado nem atualizado. Veja o mapeamento abaixo.' : totalSaved + ' contato(s) salvos no CRM com sucesso.'),
+        el('p', { style: 'color:var(--text-dim);font-size:11px;margin:6px 0 0;font-family:monospace' }, '📄 ' + filename),
+      ),
+      // Stats em cards grandes
+      el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
+        stat('Total processado', data.total || 0),
+        stat('Criados', data.created || 0, '#22C55E'),
+        stat('Atualizados', data.updated || 0, '#9B59FC'),
+      ),
+      // Header mapping (collapsed por padrão se sucesso)
+      (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
+        el('summary', { style: 'font-size:12px;color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
+        el('div', { style: 'background:rgba(155,89,252,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
+          ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),
+        ),
+      ) : null,
+      // Errors (se houver)
+      (data.errors && data.errors.length) ? el('details', { style: 'background:rgba(239,68,68,0.05);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer' },
+        el('summary', { style: 'font-size:12px;color:#fca5a5;font-weight:600' }, '⚠ ' + data.errors.length + ' linha(s) com erro'),
+        el('div', { style: 'background:rgba(239,68,68,0.05);padding:10px;border-radius:6px;margin-top:8px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace' },
+          ...data.errors.slice(0, 100).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error)),
+          data.errors.length > 100 ? el('div', { style: 'margin-top:6px;font-style:italic' }, '...e mais ' + (data.errors.length - 100) + ' erros') : null,
+        ),
+      ) : null,
+      // Botões (NÃO tem mais "Importar" — só "Pronto" e "Importar outra")
+      el('div', { style: 'display:flex;gap:10px;justify-content:flex-end;margin-top:18px' },
+        el('button', {
+          style: 'background:transparent;border:1px solid var(--border);color:var(--text-dim);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px',
+          on: { click: () => renderForm() }
+        }, '⬆ Importar outra'),
+        el('button', {
+          style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
+          on: { click: () => dialog.remove() }
+        }, '✓ Pronto, fechar'),
+      ),
+    );
+  }
+
+  renderForm();
   document.body.append(dialog);
 }
 
