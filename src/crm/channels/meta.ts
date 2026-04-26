@@ -126,7 +126,7 @@ async function uploadMediaToMeta(
     form.append('type', mime);
     // Nome do arquivo no blob — Meta detecta formato pelo mime primarily
     const blobName = filename || `upload.${mime.split('/')[1]?.split(';')[0] || 'bin'}`;
-    form.append('file', new Blob([bytes], { type: mime }), blobName);
+    form.append('file', new Blob([new Uint8Array(bytes)], { type: mime }), blobName);
 
     const res = await fetch(url, {
       method: 'POST',

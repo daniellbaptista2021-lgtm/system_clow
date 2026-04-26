@@ -53,7 +53,7 @@ export async function transcribeAudio(
   if (!key) return '[Áudio recebido — OPENAI_API_KEY não configurada]';
 
   try {
-    const blob = new Blob([audio]);
+    const blob = new Blob([new Uint8Array(audio)]);
     const form = new FormData();
     form.append('file', blob, filename);
     form.append('model', whisperModel());
