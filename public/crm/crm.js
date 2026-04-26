@@ -3557,8 +3557,22 @@ async function renderInsightsView() {
   const container = $('#insightsContent');
   container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
   try {
-    const forecast = await api('/ai/forecast').catch(() => ({}));
+    // Auto: se primeira vez (forecast vazio), dispara batch-score em background (custa centavos OpenAI)
+    let forecast = await api('/ai/forecast').catch(() => ({}));
     const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
+    const noScore = !forecast.weightedCents && (cards.cards || []).length > 0;
+    if (noScore && !window._insightsAutoScored) {
+      window._insightsAutoScored = true;
+      // background, sem bloquear UI
+      api('/ai/batch-score', { method: 'POST', body: { limit: 20 } }).then(async () => {
+        try {
+          forecast = await api('/ai/forecast').catch(() => ({}));
+          if (typeof renderInsightsView === 'function' && document.getElementById('insightsContent')) {
+            renderInsightsView();
+          }
+        } catch { /* silent */ }
+      }).catch(() => { /* silent */ });
+    }
 
     container.innerHTML = '';
     // Forecast hero
@@ -3685,7 +3699,14 @@ async function renderPerformanceView() {
   try {
     const dashboard = await api(`/gamification/dashboard?period=${period}`).catch(() => ({ rows: [], leaderboards: {} }));
     const goals = await api('/goals').catch(() => ({ goals: [] }));
-    const badges = await api('/badges').catch(() => ({ badges: [] }));
+    let badges = await api('/badges').catch(() => ({ badges: [] }));
+    // Auto-seed: se nenhum badge existe, cria defaults silenciosamente
+    if (!badges.badges?.length) {
+      try {
+        await api('/badges/seed-defaults', { method: 'POST', body: {} });
+        badges = await api('/badges').catch(() => ({ badges: [] }));
+      } catch { /* silent */ }
+    }
 
     container.innerHTML = '';
 
@@ -3808,7 +3829,14 @@ async function renderSecurityView() {
   const container = $('#securityContent');
   container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
   try {
-    const roles = await api('/security/roles').catch(() => ({ roles: [] }));
+    let roles = await api('/security/roles').catch(() => ({ roles: [] }));
+    // Auto-seed: se nenhuma role existe, cria defaults (owner/admin/agent/viewer)
+    if (!roles.roles?.length) {
+      try {
+        await api('/security/roles/seed-defaults', { method: 'POST', body: {} });
+        roles = await api('/security/roles').catch(() => ({ roles: [] }));
+      } catch { /* silent */ }
+    }
     const ipList = await api('/security/ip-whitelist').catch(() => ({ entries: [] }));
 
     container.innerHTML = '';
