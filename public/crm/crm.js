@@ -408,10 +408,16 @@ window.addEventListener('scroll', closeCtxMenus, true);
 
 function ctxItem(icon, label, onClick, opts = {}) {
   const span = el('span', { class: 'ctx-ico', html: icon });
-  const item = el('div', { class: 'ctx-item' + (opts.danger ? ' ctx-danger' : '') }, span, label);
+  const cls = 'ctx-item' + (opts.danger ? ' ctx-danger' : '') + (opts.disabled ? ' ctx-disabled' : '');
+  const item = el('div', { class: cls }, span, label);
   if (opts.submenu) item.append(el('span', { class: 'ctx-arrow' }, '›'));
+  if (opts.disabled) {
+    item.style.opacity = '.45';
+    item.style.cursor = 'not-allowed';
+  }
   item.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (opts.disabled) return;
     closeCtxMenus();
     onClick?.();
   });
@@ -2521,15 +2527,24 @@ function renderPagination(currentPage, totalPages, onPageChange) {
   const wrap = el('div', {
     style: 'display:flex;justify-content:center;align-items:center;gap:6px;padding:18px 8px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px'
   });
-  const btn = (label, page, disabled, active) => el('button', {
-    disabled: disabled || active,
-    style: 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;cursor:' + (disabled || active ? 'default' : 'pointer') +
-      ';background:' + (active ? 'linear-gradient(135deg,#9B59FC,#4A9EFF)' : 'transparent') +
-      ';color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') +
-      ';border:1px solid ' + (active ? 'transparent' : 'var(--border)') +
-      ';opacity:' + (disabled && !active ? '.5' : '1'),
-    on: { click: () => { if (!disabled && !active) onPageChange(page); } }
-  }, label);
+  const btn = (label, page, disabled, active) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (disabled || active) b.disabled = true;
+    b.style.cssText = 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;' +
+      'cursor:' + (disabled || active ? 'default' : 'pointer') + ';' +
+      'background:' + (active ? 'linear-gradient(135deg,#9B59FC,#4A9EFF)' : 'transparent') + ';' +
+      'color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') + ';' +
+      'border:1px solid ' + (active ? 'transparent' : 'var(--border)') + ';' +
+      'opacity:' + (disabled && !active ? '.5' : '1');
+    b.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!disabled && !active) onPageChange(page);
+    });
+    return b;
+  };
 
   // Estratégia: «  1 2 ... N-1 N  »  com janela de 5 ao redor da pagina atual
   const pages = new Set([1, totalPages, currentPage]);
