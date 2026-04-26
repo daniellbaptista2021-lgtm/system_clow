@@ -3555,23 +3555,19 @@ async function openCardById(id) {
 // ═════════ INSIGHTS AI ═══════════════════════════════════════════════════
 async function renderInsightsView() {
   const container = $('#insightsContent');
-  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
   try {
-    // Auto: se primeira vez (forecast vazio), dispara batch-score em background (custa centavos OpenAI)
     let forecast = await api('/ai/forecast').catch(() => ({}));
     const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
     const noScore = !forecast.weightedCents && (cards.cards || []).length > 0;
+    // Auto-score sincrono na primeira visita: garante dados antes de renderizar
     if (noScore && !window._insightsAutoScored) {
       window._insightsAutoScored = true;
-      // background, sem bloquear UI
-      api('/ai/batch-score', { method: 'POST', body: { limit: 20 } }).then(async () => {
-        try {
-          forecast = await api('/ai/forecast').catch(() => ({}));
-          if (typeof renderInsightsView === 'function' && document.getElementById('insightsContent')) {
-            renderInsightsView();
-          }
-        } catch { /* silent */ }
-      }).catch(() => { /* silent */ });
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
+      try {
+        await api('/ai/batch-score', { method: 'POST', body: { limit: 20 } });
+        forecast = await api('/ai/forecast').catch(() => ({}));
+      } catch { /* silent — usa o forecast vazio mesmo */ }
     }
 
     container.innerHTML = '';
