@@ -233,6 +233,12 @@ async function main(): Promise<void> {
   app.use('/v1/crm', tenantAuth);
   console.log('  ✓ Auth: Multi-tenant API key enabled');
 
+  // Public health/readiness endpoints (no auth, IP-rate-limited).
+  // Mounted before apiRoutes so /health/live, /health/ready, /health/version
+  // resolve here; bare /health falls through to the legacy handler in apiRoutes.
+  const { buildHealthRoutes } = await import('./health.js');
+  app.route('/health', buildHealthRoutes());
+
   // Mount routes
   const apiRoutes = buildRoutes(pool);
   app.route('/', apiRoutes);

@@ -352,6 +352,107 @@ Os 4 últimos casos rodam só onde `bash` + `sqlite3` estão no PATH (Linux/macO
 
 ---
 
+## 📡 Monitoring
+
+Endpoints públicos pra monitoramento externo (UptimeRobot, Better Stack, Pingdom, k8s liveness/readiness probes). **Sem autenticação** — protegidos por rate limit de **60 req/min por IP** pra não virar vetor de DDoS.
+
+| Endpoint | Status | Quando 200 | Quando ≠200 |
+|---|---|---|---|
+| `GET /health/live` | sempre 200 | processo Node respondendo | (só ≠200 se o processo morreu) |
+| `GET /health/ready` | 200 / 503 | SQLite + Redis + LiteLLM ok **e** disco `~/.clow/` < 85% | 503 com JSON detalhado por dependência |
+| `GET /health/version` | 200 | sempre | — |
+
+### Exemplos de resposta
+
+`/health/live`:
+```json
+{ "status": "ok" }
+```
+
+`/health/ready` (saudável):
+```json
+{
+  "status": "ok",
+  "checks": {
+    "sqlite":  { "ok": true,  "latency_ms": 1 },
+    "redis":   { "ok": true,  "latency_ms": 3 },
+    "litellm": { "ok": true,  "latency_ms": 12, "details": "HTTP 200" },
+    "disk":    { "ok": true,  "latency_ms": 4,  "details": "37% used (threshold 85%)" }
+  }
+}
+```
+
+`/health/ready` (degraded — HTTP 503):
+```json
+{
+  "status": "degraded",
+  "checks": {
+    "sqlite":  { "ok": true },
+    "redis":   { "ok": false, "details": "ECONNREFUSED 127.0.0.1:6379" },
+    "litellm": { "ok": true },
+    "disk":    { "ok": false, "details": "92% used (threshold 85%)" }
+  }
+}
+```
+
+`/health/version`:
+```json
+{
+  "commit_sha": "70980eea63...",
+  "build_time": "2026-04-26T18:22:11.000Z",
+  "node_version": "v22.22.2",
+  "uptime_seconds": 4827
+}
+```
+
+### Configurando UptimeRobot
+
+1. **New Monitor** → **HTTP(s)**
+2. **URL**: `https://system-clow.pvcorretor01.com.br/health/ready`
+3. **Monitoring Interval**: 5 minutes
+4. **Advanced Settings → Custom HTTP Statuses**: aceitar `200` apenas (UptimeRobot dispara alerta em 503)
+5. **Alert Contacts**: e-mail do oncall + canal Slack/Telegram via webhook
+
+Adicione um monitor extra **HTTP(s)** apontando pra `/health/live` com intervalo de **1 min** — esse é o canário da liveness (se o processo morreu, alerta em 1 min).
+
+### Configurando Better Stack
+
+1. **Monitors → Create monitor → HTTP**
+2. **URL**: `https://system-clow.pvcorretor01.com.br/health/ready`
+3. **Check frequency**: `30s`
+4. **Request timeout**: `5s` (o `/health/ready` faz 4 probes em paralelo — fica em ~50–500ms tipicamente)
+5. **Expected status code**: `200`
+6. **Recovery time**: `2 confirmations` (evita alerta com flap único do LiteLLM)
+7. **Escalation policy**: oncall on-duty + Slack `#alerts-system-clow`
+
+### Rate-limit headers
+
+Resposta `429` (excedeu 60 req/min/IP):
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 47
+Content-Type: application/json
+
+{ "error": "rate_limit_exceeded", "limit": 60, "window_seconds": 60, "retry_after_seconds": 47 }
+```
+
+UptimeRobot e Better Stack respeitam `Retry-After` automaticamente. Se você roda múltiplos serviços de monitoring atrás do mesmo IP NAT, suba o limite editando `HEALTH_RATE_LIMIT_PER_MIN` em [src/server/health.ts](src/server/health.ts).
+
+### Trazendo o commit_sha em produção
+
+Em build local, `/health/version` lê o SHA via `git rev-parse HEAD`. Em deploy via CI/Docker (sem `.git/`), exporte uma das envs:
+
+```bash
+GIT_COMMIT_SHA=$(git rev-parse HEAD)   # ou
+GITHUB_SHA=$GITHUB_SHA                 # se vem do GitHub Actions
+BUILD_SHA=...                          # qualquer pipeline custom
+CLOW_COMMIT_SHA=...                    # PM2 ecosystem.config
+```
+
+A primeira env definida vence (ordem: `GIT_COMMIT_SHA` → `GITHUB_SHA` → `BUILD_SHA` → `CLOW_COMMIT_SHA` → `git rev-parse` → `"unknown"`).
+
+---
+
 ## 🛠️ Operação
 
 ### Stack rodando
