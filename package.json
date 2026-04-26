@@ -24,7 +24,7 @@
     "postinstall": "node scripts/install-gitleaks.cjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@hono/node-server": "^1.19.13",
     "@types/pdfkit": "^0.17.6",
     "bcryptjs": "^3.0.3",
