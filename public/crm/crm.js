@@ -150,6 +150,7 @@ async function bootstrap() {
     await api('/init', { method: 'POST' });
     await loadBoards();
     await loadChannels();
+    try { await loadAgents(); } catch { state.agents = []; }
     if (state.boards.length) {
       state.currentBoardId = state.boards[0].id;
       await loadPipeline(state.currentBoardId);
@@ -1163,7 +1164,7 @@ function closeCardPanel() {
   state.currentCard = null;
 }
 
-function renderPanel() {
+async function renderPanel() {
   const { card, contact, activities } = state.currentCard;
   // Onda 55: foto WA no painel
   const pa = $('#pAvatar');
@@ -1198,6 +1199,10 @@ function renderPanel() {
   // Onda 59: select de agente atribuido ao card
   const agSel = $('#ownerAgentSelect');
   if (agSel) {
+    // Lazy-load agentes se ainda nao foram carregados
+    if (!state.agents || !state.agents.length) {
+      try { await loadAgents(); } catch { state.agents = state.agents || []; }
+    }
     agSel.innerHTML = '';
     agSel.append(el('option', { value: '' }, '— Nenhum —'));
     for (const a of (state.agents || [])) {
