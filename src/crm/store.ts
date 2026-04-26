@@ -207,6 +207,8 @@ function rowToColumn(r: any): BoardColumn {
 export function createContact(tenantId: string, input: {
   name: string; phone?: string; email?: string; avatarUrl?: string;
   tags?: string[]; customFields?: Record<string, unknown>; notes?: string; source?: string;
+  company?: string; title?: string; website?: string; address?: string;
+  birthdateTs?: number; cpfCnpj?: string; leadScore?: number;
 }): Contact {
   const db = getCrmDb();
   const c: Contact = {
@@ -220,14 +222,25 @@ export function createContact(tenantId: string, input: {
     customFields: input.customFields ?? {},
     notes: input.notes,
     source: input.source,
+    company: input.company,
+    title: input.title,
+    website: input.website,
+    address: input.address,
+    birthdateTs: input.birthdateTs,
+    cpfCnpj: input.cpfCnpj,
+    leadScore: input.leadScore,
     createdAt: now(),
     updatedAt: now(),
   };
   db.prepare(`
-    INSERT INTO crm_contacts (id, tenant_id, name, phone, email, avatar_url, tags_json, custom_fields_json, notes, source, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO crm_contacts (id, tenant_id, name, phone, email, avatar_url, tags_json, custom_fields_json, notes, source,
+      company, title, website, address, birthdate_ts, cpf_cnpj, lead_score, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(c.id, c.tenantId, c.name, c.phone ?? null, c.email ?? null, c.avatarUrl ?? null,
-    J.stringify(c.tags), J.stringify(c.customFields), c.notes ?? null, c.source ?? null, c.createdAt, c.updatedAt);
+    J.stringify(c.tags), J.stringify(c.customFields), c.notes ?? null, c.source ?? null,
+    c.company ?? null, c.title ?? null, c.website ?? null, c.address ?? null,
+    c.birthdateTs ?? null, c.cpfCnpj ?? null, c.leadScore ?? 0,
+    c.createdAt, c.updatedAt);
   return c;
 }
 
@@ -290,10 +303,13 @@ export function updateContact(tenantId: string, contactId: string, patch: Partia
   db.prepare(`
     UPDATE crm_contacts SET name = ?, phone = ?, email = ?, avatar_url = ?,
       tags_json = ?, custom_fields_json = ?, notes = ?, source = ?,
+      company = ?, title = ?, website = ?, address = ?, birthdate_ts = ?, cpf_cnpj = ?, lead_score = ?,
       updated_at = ?, last_interaction_at = ?
     WHERE id = ? AND tenant_id = ?
   `).run(upd.name, upd.phone ?? null, upd.email ?? null, upd.avatarUrl ?? null,
     J.stringify(upd.tags), J.stringify(upd.customFields), upd.notes ?? null, upd.source ?? null,
+    upd.company ?? null, upd.title ?? null, upd.website ?? null, upd.address ?? null,
+    upd.birthdateTs ?? null, upd.cpfCnpj ?? null, upd.leadScore ?? 0,
     upd.updatedAt, upd.lastInteractionAt ?? null, contactId, tenantId);
   return upd;
 }
@@ -335,6 +351,13 @@ function rowToContact(r: any): Contact {
     tags: J.parse(r.tags_json, []),
     customFields: J.parse(r.custom_fields_json, {}),
     notes: r.notes ?? undefined, source: r.source ?? undefined,
+    company: r.company ?? undefined,
+    title: r.title ?? undefined,
+    website: r.website ?? undefined,
+    address: r.address ?? undefined,
+    birthdateTs: r.birthdate_ts ?? undefined,
+    cpfCnpj: r.cpf_cnpj ?? undefined,
+    leadScore: r.lead_score ?? undefined,
     createdAt: r.created_at, updatedAt: r.updated_at,
     lastInteractionAt: r.last_interaction_at ?? undefined,
   };
