@@ -347,7 +347,43 @@ function cardEl(card) {
     e.dataTransfer.setData('text/from-col', card.columnId);
     c.classList.add('dragging');
   });
-  c.addEventListener('dragend', () => c.classList.remove('dragging'));
+  c.addEventListener('dragend', () => {
+    c.classList.remove('dragging');
+    document.querySelectorAll('.card.drop-before, .card.drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+  });
+  // Onda 59: drop target entre cards (reorder na mesma coluna ou inserir em posicao especifica)
+  c.addEventListener('dragover', (e) => {
+    const draggedId = (e.dataTransfer && e.dataTransfer.types.includes('text/card-id')) ? null : null;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = c.getBoundingClientRect();
+    const beforeHalf = (e.clientY - rect.top) < rect.height / 2;
+    c.classList.toggle('drop-before', beforeHalf);
+    c.classList.toggle('drop-after', !beforeHalf);
+  });
+  c.addEventListener('dragleave', () => c.classList.remove('drop-before', 'drop-after'));
+  c.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cardId = e.dataTransfer.getData('text/card-id');
+    if (!cardId || cardId === card.id) { c.classList.remove('drop-before', 'drop-after'); return; }
+    const rect = c.getBoundingClientRect();
+    const beforeHalf = (e.clientY - rect.top) < rect.height / 2;
+    c.classList.remove('drop-before', 'drop-after');
+    try {
+      const body = { toColumnId: card.columnId, beforeCardId: beforeHalf ? card.id : null };
+      // Se after, precisa do proximo card
+      if (!beforeHalf) {
+        const cardsHere = (state.pipeline?.cardsByColumn?.[card.columnId] || []);
+        const idx = cardsHere.findIndex(c2 => c2.id === card.id);
+        const next = cardsHere[idx + 1];
+        body.beforeCardId = next ? next.id : null; // null = vai pro fim
+      }
+      await api('/cards/' + cardId + '/reorder', { method: 'POST', body });
+      await loadPipeline(state.currentBoardId);
+      renderKanban();
+    } catch (err) { toast('Erro ao reordenar: ' + err.message, 'error'); }
+  });
   c.addEventListener('click', () => openCardPanel(card.id));
   // Right-click: menu de contexto com acoes
   c.addEventListener('contextmenu', (e) => {
@@ -1158,6 +1194,33 @@ function renderPanel() {
   if (state.channels.length === 0) {
     sel.append(el('option', { value: '' }, 'Nenhum canal configurado'));
   }
+
+  // Onda 59: select de agente atribuido ao card
+  const agSel = $('#ownerAgentSelect');
+  if (agSel) {
+    agSel.innerHTML = '';
+    agSel.append(el('option', { value: '' }, '— Nenhum —'));
+    for (const a of (state.agents || [])) {
+      agSel.append(el('option', { value: a.id }, a.name + (a.role ? ' (' + a.role + ')' : '')));
+    }
+    agSel.value = card.ownerAgentId || '';
+    if (!agSel._wired) {
+      agSel._wired = true;
+      agSel.addEventListener('change', async () => {
+        const newOwner = agSel.value || null;
+        if (!state.currentCard?.card) return;
+        const cId = state.currentCard.card.id;
+        try {
+          await api('/cards/' + cId, { method: 'PATCH', body: { ownerAgentId: newOwner } });
+          await refreshCurrentCard();
+          renderInfoTab();
+          renderMessages();
+          toast('Atendente atualizado', 'success');
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+      });
+    }
+  }
+
   renderMessages();
   renderInfoTab();
   renderEditTab();

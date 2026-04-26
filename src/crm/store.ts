@@ -526,6 +526,76 @@ export function moveCard(tenantId: string, cardId: string, toColumnId: string, p
   return moved;
 }
 
+// Onda 59: reorderCard — reorganiza posicoes inteiras sequencialmente
+export function reorderCard(
+  tenantId: string,
+  cardId: string,
+  toColumnId: string,
+  opts: { beforeCardId?: string; atIndex?: number } = {},
+): Card | null {
+  const db = getCrmDb();
+  const card = getCard(tenantId, cardId);
+  if (!card) return null;
+  const fromColumnId = card.columnId;
+
+  // Pega cards da coluna alvo (excluindo o que vamos mover)
+  const colCards = (db.prepare(`SELECT id, position FROM crm_cards WHERE tenant_id = ? AND column_id = ? AND id != ? ORDER BY position ASC, created_at ASC`).all(tenantId, toColumnId, cardId) as any[]);
+
+  // Determina indice de insercao
+  let insertAt: number;
+  if (opts.beforeCardId) {
+    const idx = colCards.findIndex(c => c.id === opts.beforeCardId);
+    insertAt = idx >= 0 ? idx : colCards.length;
+  } else if (typeof opts.atIndex === 'number') {
+    insertAt = Math.max(0, Math.min(opts.atIndex, colCards.length));
+  } else {
+    insertAt = colCards.length; // adicionar no final
+  }
+
+  // Constroi nova ordem e re-numera 0..N
+  const newOrder = [...colCards];
+  newOrder.splice(insertAt, 0, { id: cardId, position: 0 });
+
+  const tx = db.transaction(() => {
+    // Atualiza coluna do card movido
+    if (fromColumnId !== toColumnId) {
+      db.prepare(`UPDATE crm_cards SET column_id = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(toColumnId, Date.now(), cardId, tenantId);
+    }
+    // Renumera todos os cards da coluna
+    const stmt = db.prepare(`UPDATE crm_cards SET position = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`);
+    const now = Date.now();
+    for (let i = 0; i < newOrder.length; i++) {
+      stmt.run(i, now, newOrder[i].id, tenantId);
+    }
+  });
+  tx();
+
+  // Se mudou de coluna, loga atividade igual moveCard
+  if (fromColumnId !== toColumnId) {
+    logActivity(tenantId, {
+      cardId, contactId: card.contactId, type: 'stage_change', channel: 'manual',
+      content: 'Movido de ' + fromColumnId + ' para ' + toColumnId,
+    });
+    void (async () => {
+      try {
+        (await getEmit())({ trigger: 'card_moved', tenantId, cardId, contactId: card.contactId, fromColumnId, toColumnId });
+        const cols2 = listColumns(tenantId, card.boardId);
+        const tgt = cols2.find((c: any) => c.id === toColumnId);
+        if (tgt?.isTerminal && /ganho|won/i.test(tgt.name)) { (await getCommitStock())(tenantId, cardId); }
+        (await getPublish())(tenantId, 'card', { action: 'moved', cardId, toColumnId });
+      } catch { /* silent */ }
+    })();
+  } else {
+    // Reorder dentro da mesma coluna: notificar SSE pra atualizar UI dos outros usuarios
+    void (async () => {
+      try { (await getPublish())(tenantId, 'card', { action: 'reordered', cardId, columnId: toColumnId }); } catch {}
+    })();
+  }
+
+  return getCard(tenantId, cardId);
+}
+
 export function deleteCard(tenantId: string, cardId: string): boolean {
   const db = getCrmDb();
   const r = db.prepare('DELETE FROM crm_cards WHERE id = ? AND tenant_id = ?').run(cardId, tenantId);

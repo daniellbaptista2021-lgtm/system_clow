@@ -403,9 +403,34 @@ app.get('/cards/:id', (c) => {
 });
 
 app.patch('/cards/:id', async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const upd = store.updateCard(tenantOf(c), c.req.param('id'), body);
-  return upd ? ok(c, { card: upd }) : notFound(c, 'card');
+  const tid = tenantOf(c);
+  const cardId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({})) as any;
+
+  // Onda 59: detecta mudanca de owner pra logar atividade
+  let oldOwner: string | undefined;
+  if ('ownerAgentId' in body) {
+    const before = store.getCard(tid, cardId);
+    oldOwner = before?.ownerAgentId;
+  }
+
+  const upd = store.updateCard(tid, cardId, body);
+  if (!upd) return notFound(c, 'card');
+
+  // Log de mudanca de owner
+  if ('ownerAgentId' in body && oldOwner !== upd.ownerAgentId) {
+    try {
+      const agents = store.listAgents(tid);
+      const oldName = agents.find(a => a.id === oldOwner)?.name || (oldOwner ? oldOwner.slice(0, 8) : 'ninguem');
+      const newName = agents.find(a => a.id === upd.ownerAgentId)?.name || (upd.ownerAgentId ? upd.ownerAgentId.slice(0, 8) : 'ninguem');
+      store.logActivity(tid, {
+        cardId, contactId: upd.contactId, type: 'assignment', channel: 'manual',
+        content: 'Atendente alterado: ' + oldName + ' -> ' + newName,
+        metadata: { oldOwnerAgentId: oldOwner || null, newOwnerAgentId: upd.ownerAgentId || null },
+      });
+    } catch { /* silent */ }
+  }
+  return ok(c, { card: upd });
 });
 
 // Onda 48: marcar card como lido (zera badge WhatsApp)
@@ -418,11 +443,36 @@ app.post('/cards/:id/mark-read', async (c) => {
 app.post('/cards/:id/move', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!body.toColumnId) return badRequest(c, 'toColumnId required');
-  // Onda 2: respeita WIP limit se configurado (settings.wipEnforce=true + col.wip_limit)
   const wip = store.checkWipLimit(tenantOf(c), body.toColumnId);
   if (!wip.allowed) return c.json({ error: 'wip_limit_reached', message: 'Coluna cheia (' + wip.current + '/' + wip.limit + '). Aumente o WIP ou mova outro card antes.', current: wip.current, limit: wip.limit }, 409);
   const moved = store.moveCard(tenantOf(c), c.req.param('id'), body.toColumnId, body.position);
   return moved ? ok(c, { card: moved }) : notFound(c, 'card');
+});
+
+// Onda 59: reordenar card dentro/entre colunas — recalcula posicoes sequenciais
+// body: { toColumnId, beforeCardId?: string (move pra antes desse card),
+//         atIndex?: number (alternativa: posicao 0..N) }
+app.post('/cards/:id/reorder', async (c) => {
+  const tid = tenantOf(c);
+  const cardId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({})) as any;
+  const toColumnId = String(body.toColumnId || '').trim();
+  if (!toColumnId) return badRequest(c, 'toColumnId required');
+
+  const wip = store.checkWipLimit(tid, toColumnId);
+  // Permite reorder dentro da mesma coluna mesmo no limite
+  const card = store.getCard(tid, cardId);
+  if (!card) return notFound(c, 'card');
+  const sameCol = card.columnId === toColumnId;
+  if (!sameCol && !wip.allowed) {
+    return c.json({ error: 'wip_limit_reached', message: 'Coluna cheia (' + wip.current + '/' + wip.limit + ').', current: wip.current, limit: wip.limit }, 409);
+  }
+
+  const result = store.reorderCard(tid, cardId, toColumnId, {
+    beforeCardId: body.beforeCardId ? String(body.beforeCardId) : undefined,
+    atIndex: typeof body.atIndex === 'number' ? body.atIndex : undefined,
+  });
+  return result ? ok(c, { card: result }) : notFound(c, 'card');
 });
 
 app.post('/cards/:id/lose', async (c) => {

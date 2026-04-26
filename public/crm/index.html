@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/logo-new.png">
-<link rel="stylesheet" href="/crm/crm.css?v=68">
+<link rel="stylesheet" href="/crm/crm.css?v=76">
 </head>
 <body>
 
@@ -364,9 +364,9 @@
       <section class="tab-section conversation active" data-tab="conversation">
         <div class="messages" id="messagesList"></div>
         <div class="composer">
-          <div class="channel-selector">
-            <label>Enviar por:</label>
-            <select id="sendChannelSelect"></select>
+          <div class="channel-selector" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Enviar por:</label><select id="sendChannelSelect"></select></div>
+            <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Agente:</label><select id="ownerAgentSelect" title="Agente responsavel pelo atendimento"></select></div>
           </div>
           <div class="composer-row">
             <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo">📎</button>
@@ -394,7 +394,7 @@
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/crm/clow-dialog.js?v=58"></script>
-<script type="module" src="/crm/crm.js?v=75"></script>
+<script type="module" src="/crm/crm.js?v=76"></script>
 <script src="/crm/crm-extras.js?v=58"></script>
 <script src="/crm/crm-settings-ext.js?v=68"></script>
 <script>

@@ -931,3 +931,17 @@ img.card-avatar, img.contact-avatar {
   object-fit: cover;
   display: inline-block;
 }
+
+/* Onda 59: drop indicator entre cards (reorder via drag-drop) */
+.kanban-col .card.drop-before {
+  box-shadow: inset 0 3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  transition: box-shadow .12s;
+}
+.kanban-col .card.drop-after {
+  box-shadow: inset 0 -3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  transition: box-shadow .12s;
+}
+.kanban-col .card.dragging {
+  opacity: .35;
+  transform: rotate(.6deg) scale(.98);
+}
