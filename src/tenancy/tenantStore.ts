@@ -98,8 +98,13 @@ function storePath(): string {
 // helpers that aren't async). The lock files (.lock subdir created by
 // proper-lockfile) live next to tenants.json.
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const lockfile: typeof import('proper-lockfile') = require('proper-lockfile');
+// proper-lockfile só publica CommonJS — usamos createRequire pra carregar
+// num módulo ESM ("type": "module" no package.json). require() puro não
+// funciona aqui (ReferenceError em Node, embora tsx polyfille); o
+// createRequire oferece um require sintetizado a partir do import.meta.
+import { createRequire } from 'node:module';
+const _require = createRequire(import.meta.url);
+const lockfile: typeof import('proper-lockfile') = _require('proper-lockfile');
 
 function readStore(): StoreData {
   try {
