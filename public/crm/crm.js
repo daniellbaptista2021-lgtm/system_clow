@@ -4198,41 +4198,360 @@ async function renderLinksTab(card) {
   const sec = $('#linksSection');
   if (!sec) return;
   sec.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">Carregando...</div>';
+
+  // Refs no escopo do tab pra refresh seletivo
+  const refresh = () => renderLinksTab(card);
+
+  let tasks = { tasks: [] }, docs = { documents: [] }, props = { proposals: [] };
   try {
-    const tasks = await api(`/cards/${card.id}/tasks`).catch(() => ({ tasks: [] }));
-    const docs = await api(`/cards/${card.id}/documents`).catch(() => ({ documents: [] }));
-    const props = await api(`/cards/${card.id}/proposals`).catch(() => ({ proposals: [] }));
-    sec.innerHTML = '';
-    const wrap = el('div', { style: 'padding:14px' });
-    wrap.append(el('h4', { style: 'margin:0 0 8px;font-size:13px' }, '✅ Tarefas (' + (tasks.tasks?.length || 0) + ')'));
-    if (tasks.tasks?.length) {
-      for (const t of tasks.tasks) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, t.title),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, `${t.priority} • ${t.status}`),
-        ));
-      }
+    const [t1, d1, p1] = await Promise.all([
+      api('/cards/' + card.id + '/tasks').catch(() => ({ tasks: [] })),
+      api('/cards/' + card.id + '/documents').catch(() => ({ documents: [] })),
+      api('/cards/' + card.id + '/proposals').catch(() => ({ proposals: [] })),
+    ]);
+    tasks = t1; docs = d1; props = p1;
+  } catch (e) {
+    sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>';
+    return;
+  }
+
+  sec.innerHTML = '';
+  const wrap = el('div', { style: 'padding:14px;display:flex;flex-direction:column;gap:18px' });
+
+  // Helpers de UI
+  const sectionHead = (icon, title, count, onAdd) => el('div', {
+    style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px'
+  },
+    el('h4', { style: 'margin:0;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px' },
+      el('span', { style: 'font-size:14px' }, icon),
+      title,
+      el('span', { style: 'color:var(--text-dim);font-weight:500' }, '(' + count + ')'),
+    ),
+    el('button', {
+      type: 'button',
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer',
+      on: { click: onAdd }
+    }, '+ Adicionar')
+  );
+
+  const emptyHint = (msg) => el('div', { style: 'color:var(--text-dim);font-size:12px;font-style:italic;padding:8px;background:rgba(155,89,252,0.04);border-radius:6px;text-align:center' }, msg);
+
+  const itemCard = (children, opts) => el('div', {
+    style: 'background:var(--bg-3,rgba(255,255,255,0.03));border:1px solid rgba(155,89,252,0.12);padding:10px;border-radius:8px;margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
+  }, ...children);
+
+  const inlineBtn = (label, onClick, danger) => el('button', {
+    type: 'button',
+    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(239,68,68,0.4)' : 'rgba(155,89,252,0.3)') + ';color:' + (danger ? '#fca5a5' : 'var(--text)') + ';padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer',
+    on: { click: onClick }
+  }, label);
+
+  const PRIO_COLOR = { urgent: '#EF4444', high: '#F59E0B', med: '#9B59FC', low: '#64748B' };
+  const PRIO_LABEL = { urgent: 'Urgente', high: 'Alta', med: 'Média', low: 'Baixa' };
+
+  // ─── TAREFAS ─────────────────────────────────────────────────────────
+  const tasksSec = el('section', {});
+  tasksSec.append(sectionHead('✅', 'Tarefas', tasks.tasks?.length || 0, () => openNewTaskModal(card, refresh)));
+  if (!tasks.tasks?.length) tasksSec.append(emptyHint('Nenhuma tarefa. Use "+ Adicionar" pra criar (cobrar mensalidade, marcar reunião, etc)'));
+  else {
+    for (const t of tasks.tasks) {
+      const due = t.due_at || t.dueAt;
+      const dueDate = due ? new Date(due) : null;
+      const overdue = dueDate && dueDate.getTime() < Date.now() && t.status === 'open';
+      const done = t.status === 'done' || t.status === 'completed';
+      tasksSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap' },
+            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + (PRIO_COLOR[t.priority] || '#9B59FC') }),
+            el('span', { style: 'text-decoration:' + (done ? 'line-through' : 'none') }, t.title || '(sem título)'),
+            t.type ? el('span', { style: 'font-size:10px;padding:2px 6px;background:rgba(155,89,252,0.15);border-radius:5px;color:var(--text-dim);text-transform:uppercase' }, t.type) : null,
+          ),
+          el('div', { style: 'color:' + (overdue ? '#fca5a5' : 'var(--text-dim)') + ';font-size:11px;margin-top:4px' },
+            (PRIO_LABEL[t.priority] || t.priority || '') + ' · ' + (t.status || '') +
+            (dueDate ? ' · ' + (overdue ? '⚠ vencida ' : '📅 ') + dueDate.toLocaleDateString('pt-BR') + (due.toString().includes('T') ? ' ' + dueDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '') : '')
+          ),
+          t.description ? el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px;white-space:pre-wrap' }, t.description) : null,
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          !done ? inlineBtn('✓', async () => {
+            try { await api('/tasks/' + t.id + '/complete', { method: 'POST', body: {} }); toast('Concluída', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }) : null,
+          inlineBtn('✎', () => openEditTaskModal(t, refresh)),
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar tarefa "' + (t.title || '') + '"?', { title: 'Apagar tarefa', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/tasks/' + t.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ], { dimmed: done }));
     }
-    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '📄 Documentos (' + (docs.documents?.length || 0) + ')'));
-    if (docs.documents?.length) {
-      for (const d of docs.documents) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, d.title + ' v' + d.version),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, d.status),
-        ));
-      }
+  }
+  wrap.append(tasksSec);
+
+  // ─── DOCUMENTOS ──────────────────────────────────────────────────────
+  const docsSec = el('section', {});
+  docsSec.append(sectionHead('📄', 'Documentos', docs.documents?.length || 0, () => openUploadDocModal(card, refresh)));
+  if (!docs.documents?.length) docsSec.append(emptyHint('Nenhum documento. Use "+ Adicionar" pra anexar contratos, comprovantes, fotos, PDFs'));
+  else {
+    for (const d of docs.documents) {
+      const fileLink = extractFileLink(d.bodyHtml || d.body_html || '');
+      docsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600' }, d.title + ' · v' + (d.version || 1)),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            (d.status || 'draft') + (d.created_at || d.createdAt ? ' · ' + new Date(d.created_at || d.createdAt).toLocaleDateString('pt-BR') : '')
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          fileLink ? inlineBtn('⬇', () => window.open(fileLink, '_blank')) : null,
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar documento "' + d.title + '"?', { title: 'Apagar documento', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/documents/' + d.id, { method: 'DELETE' }); toast('Apagado', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ]));
     }
-    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '💼 Propostas (' + (props.proposals?.length || 0) + ')'));
-    if (props.proposals?.length) {
-      for (const p of props.proposals) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, 'v' + p.version + ' — ' + fmtMoney(p.totalCents || 0)),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, p.status),
-        ));
-      }
+  }
+  wrap.append(docsSec);
+
+  // ─── PROPOSTAS ───────────────────────────────────────────────────────
+  const propsSec = el('section', {});
+  propsSec.append(sectionHead('💼', 'Propostas', props.proposals?.length || 0, () => openNewProposalModal(card, refresh)));
+  if (!props.proposals?.length) propsSec.append(emptyHint('Nenhuma proposta. Use "+ Adicionar" pra criar uma proposta comercial pro cliente'));
+  else {
+    for (const pr of props.proposals) {
+      propsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600' }, (pr.title || 'Proposta') + ' · v' + (pr.version || 1)),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            (pr.status || 'draft') + ' · ' + fmtMoney(pr.totalCents || pr.total_cents || 0)
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar proposta?', { title: 'Apagar', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/proposals/' + pr.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ]));
     }
-    sec.append(wrap);
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+  }
+  wrap.append(propsSec);
+
+  sec.append(wrap);
+}
+
+// ─── Helpers da aba Vínculos ────────────────────────────────────────────
+function extractFileLink(html) {
+  if (!html) return null;
+  const m = String(html).match(/href=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+function buildModal(title, fields, onSubmit) {
+  return new Promise((resolve) => {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const inputs = {};
+    const formChildren = [el('h3', { style: 'margin:0 0 14px' }, title)];
+    for (const f of fields) {
+      const wrap = el('div', { style: 'margin-bottom:12px' });
+      wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600' }, f.label + (f.required ? ' *' : '')));
+      let input;
+      if (f.type === 'textarea') {
+        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
+        if (f.value != null) input.value = f.value;
+      } else if (f.type === 'select') {
+        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        for (const opt of f.options) input.append(el('option', { value: opt.value }, opt.label));
+        if (f.value != null) input.value = f.value;
+      } else if (f.type === 'file') {
+        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
+      } else {
+        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        if (f.value != null) input.value = f.value;
+      }
+      inputs[f.name] = input;
+      wrap.append(input);
+      if (f.hint) wrap.append(el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' }, f.hint));
+      formChildren.push(wrap);
+    }
+    const submitBtn = el('button', {
+      type: 'button',
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
+      on: { click: async () => {
+        const values = {};
+        for (const f of fields) {
+          const inp = inputs[f.name];
+          if (f.type === 'file') values[f.name] = inp.files?.[0] || null;
+          else values[f.name] = inp.value;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Salvando...';
+        try {
+          const ok = await onSubmit(values);
+          if (ok !== false) { dialog.remove(); resolve(true); }
+          else { submitBtn.disabled = false; submitBtn.textContent = 'Salvar'; }
+        } catch (e) {
+          toast('Erro: ' + e.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Salvar';
+        }
+      } }
+    }, 'Salvar');
+    formChildren.push(el('div', { class: 'modal-actions', style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px' },
+      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
+      submitBtn,
+    ));
+    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:20px' }, ...formChildren);
+    dialog.append(modal);
+    document.body.append(dialog);
+  });
+}
+
+async function openNewTaskModal(card, onDone) {
+  await buildModal('Nova tarefa', [
+    { name: 'title', label: 'Título', required: true, placeholder: 'Ex: Cobrar mensalidade, Ligar pro cliente, Mandar contrato' },
+    { name: 'type', label: 'Tipo', type: 'select', value: 'followup', options: [
+      { value: 'followup', label: 'Follow-up' }, { value: 'call', label: 'Ligação' },
+      { value: 'meeting', label: 'Reunião' }, { value: 'email', label: 'E-mail' },
+      { value: 'other', label: 'Outro' },
+    ] },
+    { name: 'priority', label: 'Prioridade', type: 'select', value: 'med', options: [
+      { value: 'low', label: 'Baixa' }, { value: 'med', label: 'Média' },
+      { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
+    ] },
+    { name: 'dueAt', label: 'Vencimento (data e hora)', type: 'datetime-local', hint: 'Opcional. Vai aparecer na Agenda e em Tarefas vencidas.' },
+    { name: 'description', label: 'Descrição', type: 'textarea', placeholder: 'Detalhes da tarefa...', rows: 3 },
+  ], async (v) => {
+    if (!v.title?.trim()) { toast('Título obrigatório', 'error'); return false; }
+    const body = {
+      title: v.title.trim(),
+      type: v.type || 'followup',
+      priority: v.priority || 'med',
+      cardId: card.id,
+    };
+    if (card.contactId) body.contactId = card.contactId;
+    if (v.dueAt) body.dueAt = new Date(v.dueAt).toISOString();
+    if (v.description?.trim()) body.description = v.description.trim();
+    await api('/tasks', { method: 'POST', body });
+    toast('Tarefa criada', 'success');
+    onDone?.();
+  });
+}
+
+async function openEditTaskModal(t, onDone) {
+  const dueLocal = (t.due_at || t.dueAt) ? new Date(t.due_at || t.dueAt).toISOString().slice(0, 16) : '';
+  await buildModal('Editar tarefa', [
+    { name: 'title', label: 'Título', required: true, value: t.title },
+    { name: 'priority', label: 'Prioridade', type: 'select', value: t.priority || 'med', options: [
+      { value: 'low', label: 'Baixa' }, { value: 'med', label: 'Média' },
+      { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
+    ] },
+    { name: 'dueAt', label: 'Vencimento', type: 'datetime-local', value: dueLocal },
+    { name: 'description', label: 'Descrição', type: 'textarea', value: t.description || '', rows: 3 },
+  ], async (v) => {
+    const body = {
+      title: v.title.trim(),
+      priority: v.priority,
+      description: v.description?.trim() || null,
+      dueAt: v.dueAt ? new Date(v.dueAt).toISOString() : null,
+    };
+    await api('/tasks/' + t.id, { method: 'PATCH', body });
+    toast('Tarefa atualizada', 'success');
+    onDone?.();
+  });
+}
+
+async function openUploadDocModal(card, onDone) {
+  await buildModal('Anexar documento', [
+    { name: 'file', label: 'Arquivo (PDF, imagem, doc, etc)', type: 'file', required: true, accept: '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt' },
+    { name: 'title', label: 'Título', placeholder: 'Ex: Contrato assinado, RG do cliente, Comprovante de renda', hint: 'Se vazio, usa o nome do arquivo' },
+    { name: 'extract', label: 'Extrair texto do arquivo (OCR/Whisper)', type: 'select', value: 'no', options: [
+      { value: 'no', label: 'Não — só anexar' },
+      { value: 'yes', label: 'Sim — gera texto pesquisável (custa centavos OpenAI)' },
+    ], hint: 'Útil pra contratos PDF: o texto vira pesquisável e fica salvo junto.' },
+  ], async (v) => {
+    if (!v.file) { toast('Selecione um arquivo', 'error'); return false; }
+    // 1) Upload do arquivo
+    const fd = new FormData();
+    fd.append('file', v.file);
+    let uploaded;
+    try {
+      const r = await fetch('/v1/crm/media/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + window.state.apiKey },
+        body: fd,
+      });
+      uploaded = await r.json();
+      if (!r.ok || !uploaded.url) throw new Error(uploaded.message || uploaded.error || 'upload falhou');
+    } catch (e) { toast('Erro upload: ' + e.message, 'error'); return false; }
+
+    // 2) Opcional: extrair texto
+    let extractedText = '';
+    if (v.extract === 'yes') {
+      try {
+        const fd2 = new FormData();
+        fd2.append('file', v.file);
+        const r2 = await fetch('/v1/crm/media/process', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + window.state.apiKey },
+          body: fd2,
+        });
+        const j = await r2.json();
+        if (r2.ok && j.content) extractedText = j.content;
+      } catch (e) { /* silent */ }
+    }
+
+    // 3) Cria documento ligado ao card com link e texto
+    const title = v.title?.trim() || v.file.name;
+    const sizeKb = Math.round((v.file.size || 0) / 1024);
+    const bodyHtml =
+      '<p><strong>📎 ' + escapeHtml(v.file.name) + '</strong> (' + sizeKb + ' KB · ' + escapeHtml(v.file.type || 'file') + ')</p>' +
+      '<p><a href="' + uploaded.url + '" target="_blank">⬇ Baixar arquivo</a></p>' +
+      (extractedText ? '<hr/><h4>Conteúdo extraído</h4><pre style="white-space:pre-wrap">' + escapeHtml(extractedText) + '</pre>' : '');
+
+    await api('/documents', {
+      method: 'POST',
+      body: {
+        title,
+        bodyHtml,
+        cardId: card.id,
+        contactId: card.contactId || undefined,
+        status: 'draft',
+      },
+    });
+    toast('Documento anexado', 'success');
+    onDone?.();
+  });
+}
+
+async function openNewProposalModal(card, onDone) {
+  await buildModal('Nova proposta', [
+    { name: 'title', label: 'Título', required: true, value: card.title ? 'Proposta · ' + card.title : '', placeholder: 'Ex: Plano Profissional + Z-API' },
+    { name: 'totalBrl', label: 'Valor total (R$)', type: 'text', placeholder: '697.00', hint: 'Use ponto ou vírgula como separador decimal' },
+    { name: 'description', label: 'Descrição / itens da proposta', type: 'textarea', rows: 4, placeholder: 'Ex: 1x Plano Profissional R$ 697/mês\n1x Setup inicial R$ 0\n...' },
+  ], async (v) => {
+    if (!v.title?.trim()) { toast('Título obrigatório', 'error'); return false; }
+    const cents = v.totalBrl ? Math.round(parseFloat(String(v.totalBrl).replace(',', '.')) * 100) : 0;
+    if (v.totalBrl && (!Number.isFinite(cents) || cents < 0)) { toast('Valor inválido', 'error'); return false; }
+    await api('/cards/' + card.id + '/proposals', {
+      method: 'POST',
+      body: {
+        title: v.title.trim(),
+        totalCents: cents,
+        bodyHtml: v.description ? '<pre style="white-space:pre-wrap">' + escapeHtml(v.description) + '</pre>' : '',
+      },
+    });
+    toast('Proposta criada', 'success');
+    onDone?.();
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
 async function renderCommentsTab(card) {
