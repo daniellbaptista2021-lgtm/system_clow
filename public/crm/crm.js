@@ -3379,6 +3379,23 @@ function wireEvents() {
   wire('#newCardBtn', 'click', () => openNewCardModal());
   wire('#newChannelBtn', 'click', openNewChannelModal);
   wire('#newContactBtn', 'click', openNewContactModal);
+  wire('#refreshPhotosBtn', 'click', async () => {
+    const btn = document.getElementById('refreshPhotosBtn');
+    if (!btn || btn.disabled) return;
+    const force = await clowConfirm(
+      'Buscar foto de perfil dos contatos via Z-API. Pode levar alguns segundos. Forçar refresh de TODOS (mesmo dos que já têm foto)?',
+      { title: 'Atualizar fotos WhatsApp', confirmLabel: 'Sim, todos' }
+    );
+    btn.disabled = true;
+    const orig = btn.textContent; btn.textContent = '📷 Buscando...';
+    try {
+      const r = await api('/contacts/refresh-photos', { method: 'POST', body: { force: !!force } });
+      toast(`✓ ${r.updated} foto(s) baixada(s) · ${r.noPhoto} sem foto pública · ${r.errors} erros (de ${r.total})`, 'success');
+      await loadContacts(); renderContactsList();
+      if (state.currentBoardId) { await loadPipeline(state.currentBoardId); renderKanban(); }
+    } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+  });
   wire('#newAgentBtn', 'click', openNewAgentModal);
   wire('#newInventoryBtn', 'click', openNewInventoryModal);
 

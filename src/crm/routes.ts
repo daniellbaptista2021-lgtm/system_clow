@@ -468,6 +468,48 @@ app.get('/contacts', (c) => {
   return ok(c, { contacts: store.listContacts(tenantOf(c), { limit, offset, tag }) });
 });
 
+// ─── Onda 55: refresh manual de fotos de perfil WhatsApp (Z-API) ──────
+// POST /contacts/refresh-photos { force?: boolean }
+//   force=false (default): só busca fotos de contatos sem avatar_url
+//   force=true: busca de TODOS, sobrescreve URLs antigas (links Z-API expiram)
+// Resposta: { ok, updated, skipped, noPhoto, errors, total }
+app.post('/contacts/refresh-photos', async (c) => {
+  const tid = tenantOf(c);
+  const body = await c.req.json().catch(() => ({})) as any;
+  const force = body.force === true;
+
+  const zapiMod = await import('./channels/zapi.js');
+  const dbMod = await import('./schema.js');
+  const db = dbMod.getCrmDb();
+
+  const channels = db.prepare("SELECT * FROM crm_channels WHERE tenant_id = ? AND type = 'zapi' AND status != 'disabled'").all(tid) as any[];
+  if (!channels.length) {
+    return c.json({ ok: false, error: 'no_zapi_channel', message: 'Conecte um canal Z-API primeiro' }, 400);
+  }
+  const channel = {
+    id: channels[0].id, tenantId: channels[0].tenant_id, type: channels[0].type,
+    name: channels[0].name, credentialsEncrypted: channels[0].credentials_encrypted,
+    status: channels[0].status,
+  };
+
+  const where = force
+    ? "tenant_id = ? AND phone IS NOT NULL AND phone != '' AND deleted_at IS NULL"
+    : "tenant_id = ? AND phone IS NOT NULL AND phone != '' AND avatar_url IS NULL AND deleted_at IS NULL";
+  const contacts = db.prepare(`SELECT id, phone, name FROM crm_contacts WHERE ${where} LIMIT 500`).all(tid) as any[];
+
+  let updated = 0, noPhoto = 0, errors = 0;
+  const upd = db.prepare('UPDATE crm_contacts SET avatar_url = ?, updated_at = ? WHERE id = ?');
+  for (const ct of contacts) {
+    try {
+      const url = await zapiMod.fetchProfilePicture(channel as any, ct.phone);
+      if (url) { upd.run(url, Date.now(), ct.id); updated++; }
+      else { noPhoto++; }
+    } catch { errors++; }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return c.json({ ok: true, updated, noPhoto, errors, total: contacts.length, force });
+});
+
 app.get('/contacts/search', (c) => {
   const q = c.req.query('q') || '';
   if (!q) return ok(c, { contacts: [] });
