@@ -1072,7 +1072,7 @@ export function mergeContacts(tenantId: string, keepId: string, mergeId: string)
 }
 
 // CSV utils — parser manual pra nao depender de lib externa
-function parseCsvLine(line: string): string[] {
+function parseCsvLine(line: string, sep: string = ','): string[] {
   const result: string[] = [];
   let cur = '';
   let inQuotes = false;
@@ -1084,7 +1084,7 @@ function parseCsvLine(line: string): string[] {
       else cur += c;
     } else {
       if (c === '"') inQuotes = true;
-      else if (c === ',') { result.push(cur); cur = ''; }
+      else if (c === sep) { result.push(cur); cur = ''; }
       else cur += c;
     }
   }
@@ -1092,10 +1092,22 @@ function parseCsvLine(line: string): string[] {
   return result;
 }
 
-function csvEscape(v: unknown): string {
+// Detecta separador (',' ou ';') olhando a primeira linha de header
+function detectCsvSeparator(headerLine: string): ',' | ';' {
+  // Conta ocorrencias FORA de aspas
+  let inQ = false, commas = 0, semis = 0;
+  for (const c of headerLine) {
+    if (c === '"') inQ = !inQ;
+    else if (!inQ && c === ',') commas++;
+    else if (!inQ && c === ';') semis++;
+  }
+  return semis > commas ? ';' : ',';
+}
+
+function csvEscape(v: unknown, sep: string = ','): string {
   if (v == null) return '';
   const s = String(v);
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+  if (s.includes(sep) || s.includes('"') || s.includes('\n') || s.includes('\r')) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
 
@@ -1107,15 +1119,27 @@ export interface ImportResult {
 }
 
 export function importContactsCsv(tenantId: string, csvText: string): ImportResult {
-  const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+  // Remove BOM se presente
+  if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
+  let lines = csvText.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return { total: 0, created: 0, updated: 0, errors: [{ line: 0, error: 'csv vazio ou sem header' }] };
 
-  const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  // Diretiva sep= do Excel (ex: 'sep=;' na primeira linha) — pula
+  let sepOverride: ',' | ';' | null = null;
+  if (/^sep=([,;])\s*$/i.test(lines[0])) {
+    const m = lines[0].match(/^sep=([,;])/i)!;
+    sepOverride = m[1] as ',' | ';';
+    lines = lines.slice(1);
+  }
+  if (lines.length < 2) return { total: 0, created: 0, updated: 0, errors: [{ line: 0, error: 'csv vazio ou sem header' }] };
+
+  const sep = sepOverride || detectCsvSeparator(lines[0]);
+  const header = parseCsvLine(lines[0], sep).map(h => h.trim().toLowerCase());
   const result: ImportResult = { total: 0, created: 0, updated: 0, errors: [] };
 
   for (let i = 1; i < lines.length; i++) {
     try {
-      const row = parseCsvLine(lines[i]);
+      const row = parseCsvLine(lines[i], sep);
       const obj: Record<string, string> = {};
       for (let j = 0; j < header.length && j < row.length; j++) obj[header[j]] = row[j];
       result.total++;
@@ -1162,28 +1186,31 @@ export function importContactsCsv(tenantId: string, csvText: string): ImportResu
 
 export function exportContactsCsv(tenantId: string): string {
   const db = getCrmDb();
-  const rows = db.prepare('SELECT * FROM crm_contacts WHERE tenant_id = ? ORDER BY created_at DESC').all(tenantId) as any[];
+  const rows = db.prepare('SELECT * FROM crm_contacts WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY created_at DESC').all(tenantId) as any[];
+  const SEP = ';'; // pt-BR Excel default
   const header = ['name', 'phone', 'email', 'company', 'title', 'website', 'address', 'cpf_cnpj', 'lead_score', 'tags', 'source', 'notes', 'created_at'];
-  const lines: string[] = [header.join(',')];
+  // 'sep=;' no topo: Excel reconhece e força o delimitador correto
+  const lines: string[] = [`sep=${SEP}`, header.join(SEP)];
   for (const r of rows) {
-    const tags = JSON.parse(r.tags_json || '[]').join(';');
+    // tags separadas por | dentro do campo (porque ; eh nosso delimitador agora)
+    const tags = (() => { try { return JSON.parse(r.tags_json || '[]').join('|'); } catch { return ''; } })();
     lines.push([
-      csvEscape(r.name),
-      csvEscape(r.phone),
-      csvEscape(r.email),
-      csvEscape(r.company),
-      csvEscape(r.title),
-      csvEscape(r.website),
-      csvEscape(r.address),
-      csvEscape(r.cpf_cnpj),
-      csvEscape(r.lead_score),
-      csvEscape(tags),
-      csvEscape(r.source),
-      csvEscape(r.notes),
-      csvEscape(new Date(r.created_at).toISOString()),
-    ].join(','));
+      csvEscape(r.name, SEP),
+      csvEscape(r.phone, SEP),
+      csvEscape(r.email, SEP),
+      csvEscape(r.company, SEP),
+      csvEscape(r.title, SEP),
+      csvEscape(r.website, SEP),
+      csvEscape(r.address, SEP),
+      csvEscape(r.cpf_cnpj, SEP),
+      csvEscape(r.lead_score, SEP),
+      csvEscape(tags, SEP),
+      csvEscape(r.source, SEP),
+      csvEscape(r.notes, SEP),
+      csvEscape(new Date(r.created_at).toISOString(), SEP),
+    ].join(SEP));
   }
-  return lines.join('\n');
+  return lines.join('\r\n');
 }
 
 export function bulkContactOp(tenantId: string, op: BulkContactOp): { affected: number; errors: string[] } {

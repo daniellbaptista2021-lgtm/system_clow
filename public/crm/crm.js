@@ -5830,7 +5830,17 @@ function openImportContactsModal() {
           headers: { 'Authorization': 'Bearer ' + state.apiKey },
           body: fd,
         });
-        const data = await r.json();
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        let data;
+        if (ct.includes('application/json')) {
+          data = await r.json();
+        } else {
+          // Erro HTML do nginx (413 payload too large, 502, 504, etc)
+          const text = await r.text();
+          if (r.status === 413) throw new Error('Arquivo muito grande (limite: 50MB). Divida em partes menores.');
+          if (r.status === 502 || r.status === 504) throw new Error('Servidor demorou. Tenta de novo ou divide o arquivo.');
+          throw new Error('HTTP ' + r.status + ': ' + text.replace(/<[^>]+>/g, '').slice(0, 200));
+        }
         if (!r.ok) throw new Error(data.message || data.error || 'falha');
         resultBox.innerHTML = '';
         resultBox.append(el('div', { style: 'background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);padding:14px;border-radius:8px;color:#86efac' },
