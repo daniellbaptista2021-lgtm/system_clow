@@ -33,3 +33,6 @@ prompt_*.md
 
 # Gitleaks scan reports (gerados localmente, não commitar)
 .gitleaks-report*.json
+
+# Coverage artifacts
+coverage/

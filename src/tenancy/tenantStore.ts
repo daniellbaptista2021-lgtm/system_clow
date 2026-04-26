@@ -76,14 +76,19 @@ interface StoreData {
 }
 
 // ─── File Path ──────────────────────────────────────────────────────────────
+// Resolved on every read/write so tests can flip CLOW_HOME between cases
+// without re-importing the module.
 
-const STORE_PATH = path.join(os.homedir(), '.clow', 'tenants.json');
+function storePath(): string {
+  const home = process.env.CLOW_HOME || path.join(os.homedir(), '.clow');
+  return path.join(home, 'tenants.json');
+}
 
 // ─── Read / Write Operations ────────────────────────────────────────────────
 
 function readStore(): StoreData {
   try {
-    const raw = fs.readFileSync(STORE_PATH, 'utf-8');
+    const raw = fs.readFileSync(storePath(), 'utf-8');
     return JSON.parse(raw);
   } catch {
     return { tenants: [], api_keys: [], whatsapp_numbers: [] };
@@ -91,8 +96,9 @@ function readStore(): StoreData {
 }
 
 function writeStore(data: StoreData): void {
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
+  const p = storePath();
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
 // ─── API Key Helpers ────────────────────────────────────────────────────────
