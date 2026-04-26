@@ -275,6 +275,7 @@ export class HookEngine {
       totalHooks: this.hooks.length,
       hooksByEvent,
       hooksByType,
+      totalFires: this.totalFires,
       totalExecutions: this.totalExecutions,
       totalBlocks: this.totalBlocks,
       avgExecutionMs: this.executor.getAvgDurationMs(),
