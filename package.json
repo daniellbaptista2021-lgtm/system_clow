@@ -8,7 +8,7 @@
     "clow": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-migrations.cjs",
     "start": "node dist/cli.js",
     "server": "node dist/server/server.js",
     "dev": "tsx src/cli.ts",
@@ -17,6 +17,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:rollback": "tsx scripts/db-migrate.ts --rollback",
+    "db:status": "tsx scripts/db-migrate.ts --status",
     "scan:secrets": "node scripts/run-gitleaks.cjs protect --staged --redact -v",
     "scan:secrets:full": "node scripts/run-gitleaks.cjs detect --source . --redact -v --report-path .gitleaks-report.json --report-format json",
     "scan:secrets:history": "node scripts/run-gitleaks.cjs detect --redact -v",
