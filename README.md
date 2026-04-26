@@ -102,22 +102,6 @@ Arquivos relevantes:
 - **Stripe Checkout** (esqueleto): `POST /api/billing/checkout` cria session, webhook auto-cria tenant
 - **Status do tenant** controlado por Stripe events (active/past_due/cancelled)
 
-### Planos comerciais
-
-| | **STARTER** | **PROFISSIONAL** ⭐ | **EMPRESARIAL** |
-|---|---|---|---|
-| Preço/mês | R$ 347 | R$ 697 | R$ 1.297 |
-| Usuários | 1 | 5 | 20 |
-| Números WhatsApp | 1 | até 5 | até 10 |
-| Mensagens IA/mês | 500 | 3.000 | 8.000 |
-| Excedente por msg | R$ 0,20 | R$ 0,15 | R$ 0,12 |
-| Fluxos N8N | 1 | 4 | 8 |
-| Margem operacional | ~82% | ~61% | ~57% |
-
-Cálculo de custo: GLM-5.1 a $1.05/M input + $3.50/M output ≈ R$ 0,06/mensagem.
-
----
-
 ## 📁 Estrutura
 
 ```
@@ -336,7 +320,6 @@ pm2 restart clow --update-env
 - Phone whitelist por tenant (proteção contra hijack)
 - Webhook do CRM forwarda pro agente (IA continua respondendo)
 - Stripe Checkout esqueleto + webhook handler
-- Tabela de planos definida (Starter R$ 347 / Profissional R$ 697 / Empresarial R$ 1.297)
 - 26 commits hoje, todos no GitHub
 
 ⏭️ Próximas etapas

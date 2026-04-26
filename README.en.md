@@ -65,21 +65,6 @@ Single-engine, by design:
   webhook auto-creates the tenant
 - Tenant status driven by Stripe events (active / past_due / cancelled)
 
-### Commercial Plans
-
-| | **STARTER** | **PROFISSIONAL** ⭐ | **EMPRESARIAL** |
-|---|---|---|---|
-| Monthly price | R$ 347 | R$ 697 | R$ 1,297 |
-| Users | 1 | 5 | 20 |
-| WhatsApp numbers | 1 | up to 5 | up to 10 |
-| AI messages/month | 500 | 3,000 | 8,000 |
-| Overage per msg | R$ 0.20 | R$ 0.15 | R$ 0.12 |
-| n8n flows | 1 | 4 | 8 |
-
-Cost basis: GLM-5.1 at $1.05/M input + $3.50/M output ≈ R$ 0.06/message.
-
----
-
 ## 🛠️ Installation
 
 ```bash
