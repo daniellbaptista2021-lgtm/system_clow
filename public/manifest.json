@@ -1,15 +1,77 @@
 {
   "name": "System Clow Workspace",
   "short_name": "System Clow",
-  "description": "Workspace premium do System Clow para chat, automações e execução assistida.",
-  "start_url": "/",
+  "description": "CRM completo + Agente IA via WhatsApp + Automações n8n. Gerencie carteira de clientes, pipeline de vendas e atendimento por WhatsApp em uma única plataforma.",
+  "start_url": "/?source=pwa",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#1f1d1a",
+  "background_color": "#0F0E14",
   "theme_color": "#1f1d1a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "communication"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "/assets/logo-new.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/logo-new.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/icon-192-gold.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512-gold.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/assets/logo-new.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/screenshots/screenshot-pipeline.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Pipeline de Vendas — Kanban com drag-and-drop"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-conversa.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Conversa WhatsApp integrada com IA"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-contatos.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Contatos com importação de planilha"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Versão mobile do CRM"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pipeline",
+      "short_name": "Pipeline",
+      "description": "Abrir pipeline de vendas",
+      "url": "/crm/?view=pipeline",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Contatos",
+      "short_name": "Contatos",
+      "description": "Lista de contatos",
+      "url": "/crm/?view=contacts",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tarefas",
+      "short_name": "Tarefas",
+      "description": "Tarefas de hoje",
+      "url": "/crm/?view=tasks",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    }
   ]
 }
