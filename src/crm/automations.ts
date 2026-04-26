@@ -95,6 +95,15 @@ export async function emit(event: AutomationEvent): Promise<void> {
           try { await runAction(event, action); }
           catch (err: any) {
             logger.warn(`[crm-automation] action ${action.type} failed: ${err.message}`);
+            // Sentry: surface action-level failures so we can fix flaky
+            // integrations (Z-API down, customer URL invalid, etc).
+            const { captureException } = await import('../utils/sentry.js');
+            captureException(err, {
+              source: 'automation_action',
+              action_type: action.type,
+              trigger: event.trigger,
+              tenant_id: event.tenantId,
+            });
           }
         }
 

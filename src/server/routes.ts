@@ -23,6 +23,7 @@ import { checkQuota } from '../tenancy/quotaGuard.js';
 import { incrementUsage } from '../tenancy/tenantStore.js';
 import { apiQueue } from './requestQueue.js';
 import { rateLimiter } from './rateLimiter.js';
+import { incAiMessage } from './metrics.js';
 import { audit } from '../tenancy/auditLog.js';
 import { recordClowUsage } from './middleware/clowSonnetGuard.js';
 import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
@@ -328,6 +329,9 @@ export function buildRoutes(pool: SessionPool): Hono {
               messages: 1,
               cost_usd: Math.max(0, engine!.getInstanceCostUsd() - costBefore),
             });
+            // Prometheus counter — labels are tenant-id + plan tier so we
+            // can grain throughput per customer in Grafana.
+            incAiMessage(tenantId, tenantTier ?? 'unknown');
           }
 
           // If this is a Clow-Sonnet bridge session, debit Clow user credit

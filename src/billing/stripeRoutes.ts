@@ -164,6 +164,9 @@ app.get('/api/billing/session/:id', async (c) => {
 
 // ─── POST /webhooks/stripe ─────────────────────────────────────────────
 app.post('/webhooks/stripe', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('stripe');
+
   const sig = c.req.header('stripe-signature');
   const wh = process.env.STRIPE_WEBHOOK_SECRET;
   if (!sig || !wh) return c.text('webhook_not_configured', 503);

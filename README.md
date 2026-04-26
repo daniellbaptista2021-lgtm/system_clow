@@ -453,6 +453,179 @@ A primeira env definida vence (ordem: `GIT_COMMIT_SHA` → `GITHUB_SHA` → `BUI
 
 ---
 
+## 📈 Metrics & Monitoring (Prometheus)
+
+Endpoint **`/metrics`** em formato Prometheus — token-protected. Configure `METRICS_TOKEN` no `.env`:
+
+```bash
+METRICS_TOKEN=$(openssl rand -hex 32)
+```
+
+Sem `METRICS_TOKEN` setado → endpoint retorna **503** (proteção contra exposição acidental).
+
+### Métricas expostas
+
+| Nome | Tipo | Labels | Descrição |
+|---|---|---|---|
+| `clow_http_requests_total` | counter | `route`, `method`, `status` | total de requests HTTP por rota/método/status |
+| `clow_http_request_duration_seconds` | histogram | `route`, `method` | latência por rota (buckets: 5ms-10s) |
+| `clow_errors_total` | counter | `route`, `status` | só responses 5xx |
+| `clow_ai_messages_total` | counter | `tenant_id`, `plan` | mensagens IA processadas (incrementa em `/v1/sessions/:id/messages`) |
+| `clow_webhooks_received_total` | counter | `channel` | webhooks `meta` / `zapi` / `stripe` |
+| `clow_tenants_active` | gauge | — | tenants em status `active` ou `trial` (coletado on-scrape) |
+| `clow_db_size_bytes` | gauge | — | tamanho de `~/.clow/crm.sqlite3` (coletado on-scrape) |
+| `clow_node_*` | mixed | — | métricas Node.js padrão (CPU, mem, event loop lag, GC) |
+
+### Scrape
+
+```bash
+curl -H "Authorization: Bearer $METRICS_TOKEN" \
+  https://system-clow.pvcorretor01.com.br/metrics
+```
+
+### Apontando Grafana Cloud free tier
+
+1. Cria conta gratuita em [grafana.com](https://grafana.com) → tier free dá 10k métricas + 50GB logs.
+2. **My Account → Connections → Add new connection → Prometheus**.
+3. Cola a URL do remote-write do seu stack Grafana Cloud (vai estar em `https://prometheus-prod-XX-prod-us-east-Y.grafana.net/api/prom/push`).
+4. Configura `prometheus.yml` em uma VM auxiliar:
+
+```yaml
+global:
+  scrape_interval: 30s
+  external_labels:
+    cluster: system-clow-prod
+
+scrape_configs:
+  - job_name: 'system-clow'
+    metrics_path: /metrics
+    bearer_token: <METRICS_TOKEN_VALUE>
+    static_configs:
+      - targets: ['system-clow.pvcorretor01.com.br:443']
+        labels:
+          env: production
+    scheme: https
+
+remote_write:
+  - url: https://prometheus-prod-XX-prod-us-east-Y.grafana.net/api/prom/push
+    basic_auth:
+      username: <GRAFANA_CLOUD_USER>
+      password: <GRAFANA_CLOUD_API_KEY>
+```
+
+### Self-hosted Prometheus
+
+Mesma config sem o `remote_write`. Roda em qualquer VM (até a própria VPS):
+
+```bash
+docker run -d --name prometheus \
+  -p 9090:9090 \
+  -v /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+
+E aponta o Grafana local pra `http://localhost:9090`.
+
+### Dashboards sugeridos
+
+- **Throughput**: `rate(clow_http_requests_total[5m])` agrupado por route
+- **Latência p95**: `histogram_quantile(0.95, rate(clow_http_request_duration_seconds_bucket[5m]))`
+- **Error rate**: `rate(clow_errors_total[5m]) / rate(clow_http_requests_total[5m])`
+- **MAU por plano**: `clow_tenants_active` (atual) + `increase(clow_ai_messages_total[30d])` (mensagens/mês por plano)
+- **DB growth**: `clow_db_size_bytes` (alarmar quando passar de 1GB)
+- **Webhook health**: `rate(clow_webhooks_received_total[1m])` — queda abrupta = canal Z-API/Meta caído
+
+### Alertas críticos
+
+```yaml
+- alert: HighErrorRate
+  expr: rate(clow_errors_total[5m]) / rate(clow_http_requests_total[5m]) > 0.01
+  for: 5m
+  labels: { severity: page }
+  annotations: { summary: "5xx rate > 1% por 5min" }
+
+- alert: DBGrowingTooFast
+  expr: deriv(clow_db_size_bytes[1h]) > 10*1024*1024
+  for: 30m
+  annotations: { summary: "CRM SQLite cresceu >10MB/h por 30min" }
+
+- alert: WebhooksDown
+  expr: rate(clow_webhooks_received_total{channel="zapi"}[10m]) == 0
+  for: 15m
+  annotations: { summary: "Z-API webhooks parados há 15min" }
+```
+
+---
+
+## 🐛 Sentry — Error tracking
+
+Captura automática de erros não tratados, com **filtragem de dados sensíveis** já wired in. **Sem `SENTRY_DSN` no `.env`, vira no-op** — código não envia nada e não trava.
+
+### Setup (5 min, free tier)
+
+1. Cria conta em [sentry.io](https://sentry.io) — free tier dá **5k events/mês**, suficiente pra começar.
+2. **Create Project → Node.js → "system-clow"**.
+3. Copia o DSN (formato `https://<key>@<org>.ingest.sentry.io/<projectId>`).
+4. Adiciona no `.env` (modo 600, dono root):
+   ```bash
+   SENTRY_DSN=https://abc123@o4501234567.ingest.sentry.io/4509876543
+   ```
+5. `pm2 reload clow --update-env` — Sentry inicializa no boot e começa a enviar.
+
+### O que Sentry captura automaticamente
+
+- **Uncaught exceptions** (`process.on('uncaughtException')`)
+- **Unhandled promise rejections**
+- **Hono error middleware** — qualquer rota que jogue 500
+- **Action errors em automations** — quando uma action de automação falha (Z-API down, URL inválida, etc)
+- **Webhook errors** — falhas de signature, parsing, processamento
+
+### Auto-tagging (zero boilerplate no call site)
+
+Cada evento Sentry leva tags do request context (que vem do AsyncLocalStorage do logger):
+
+| Tag | Origem |
+|---|---|
+| `tenant_id` | `c.get('tenantId')` (set pelo `tenantAuth`) |
+| `user_id` | `c.get('userId')` |
+| `request_id` | header `x-request-id` (preservado ou gerado) |
+| `plan` | quando passado em `captureException(err, { plan: ... })` |
+| `environment` | `NODE_ENV` |
+| `release` | `GIT_COMMIT_SHA` ou `GITHUB_SHA` se setado |
+| `app` | sempre `system-clow` |
+
+### Filtragem de dados sensíveis (`beforeSend` hook)
+
+**Body do request é stripado em rotas sensíveis:**
+- `/auth/*` (signup/login → senhas)
+- `/webhooks/stripe*` (signing secrets, customer IDs)
+- `/v1/crm/channels/:id/credentials*` (Z-API tokens, Meta tokens)
+
+**Headers stripados em TODA rota:**
+- `Authorization`, `Cookie`, `x-api-key`
+- `stripe-signature`, `x-hub-signature`, `x-hub-signature-256`
+
+**Chaves stripadas em qualquer payload (regex em key name):**
+- `password`, `password_hash`
+- `api_key`, `access_token`, `refresh_token`, `client_secret`
+- `stripe_customer_id`, `stripe_subscription_id`, `stripe_secret_key`, `stripe_webhook_secret`
+- `credentials_encrypted`, `webhook_secret`
+
+A regra: **se em dúvida, filtra**. Adicione mais nomes em `SENSITIVE_KEY_RX` em [src/utils/sentry.ts](src/utils/sentry.ts) se aparecer algo novo.
+
+### Verificando que tá funcionando
+
+Forçar um erro de teste em prod:
+
+```bash
+curl -i https://system-clow.pvcorretor01.com.br/v1/crm/contacts/__sentry_test_force_500__ \
+     -H "Authorization: Bearer <api_key_inválida>"
+```
+
+Espera 401 (auth falha). Mas se você quiser ver um evento real no Sentry, edita um endpoint pra `throw new Error('sentry-test')` numa branch, deploya, faz a request, depois reverte. Em ~30s o evento aparece no dashboard com `tenant_id`, `request_id`, route — sem nenhum dado sensível.
+
+---
+
 ## 🛠️ Operação
 
 ### Stack rodando

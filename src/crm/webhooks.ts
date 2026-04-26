@@ -62,6 +62,9 @@ app.get('/meta/:secret', async (c) => {
 
 // ─── META: POST (incoming messages) ─────────────────────────────────────
 app.post('/meta/:secret', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('meta');
+
   const secret = c.req.param('secret');
   const channel = findChannelByWebhookSecret(secret);
   if (!channel || channel.type !== 'meta') return c.text('not_found', 404);
@@ -116,6 +119,9 @@ app.post('/meta/:secret', async (c) => {
 
 // ─── Z-API: POST (incoming messages) ────────────────────────────────────
 app.post('/zapi/:secret', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('zapi');
+
   const secret = c.req.param('secret');
   const channel = findChannelByWebhookSecret(secret);
   if (!channel || channel.type !== 'zapi') return c.text('not_found', 404);

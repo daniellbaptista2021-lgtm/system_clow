@@ -137,6 +137,11 @@ async function main(): Promise<void> {
   loadEnv({ path: path.resolve(process.cwd(), '.env') });
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
+  // Initialize Sentry as early as possible so anything thrown during
+  // bootstrap is captured. No-op when SENTRY_DSN is unset.
+  const { initSentry } = await import('../utils/sentry.js');
+  initSentry();
+
   const PORT = parseInt(process.env.PORT || '3001', 10);
   const allowedCorsOrigins = getAllowedCorsOrigins();
   const downloadRoots = resolveDownloadRootCandidates();
@@ -204,6 +209,12 @@ async function main(): Promise<void> {
   // Build Hono app
   const app = new Hono();
 
+  // Wire Sentry's onError handler — captures every Hono-level error
+  // with the request context (tenant, user, route) and stripped headers.
+  // No-op when SENTRY_DSN is unset.
+  const { honoSentryErrorHandler } = await import('../utils/sentry.js');
+  app.onError(honoSentryErrorHandler);
+
   // CORS is opt-in via allowlist. Same-origin requests work without these headers.
   if (allowedCorsOrigins.length > 0) {
     app.use('*', compress());
@@ -238,6 +249,14 @@ async function main(): Promise<void> {
   // resolve here; bare /health falls through to the legacy handler in apiRoutes.
   const { buildHealthRoutes } = await import('./health.js');
   app.route('/health', buildHealthRoutes());
+
+  // Prometheus middleware (counts + times every request) + /metrics endpoint
+  // (token-protected via METRICS_TOKEN). The middleware MUST be registered
+  // before route handlers so the timer wraps them; the /metrics endpoint
+  // mounts on its own path so it's part of the request graph too.
+  const { prometheusMiddleware, buildMetricsRoutes } = await import('./metrics.js');
+  app.use('*', prometheusMiddleware());
+  app.route('/metrics', buildMetricsRoutes());
 
   // Mount routes
   const apiRoutes = buildRoutes(pool);
