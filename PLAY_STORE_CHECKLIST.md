@@ -11,7 +11,7 @@
 - [x] Termos de Uso: https://system-clow.pvcorretor01.com.br/terms.html
 - [x] `manifest.json` aprimorado (categories, screenshots, shortcuts, lang pt-BR)
 - [x] Ícones maskable 192x192 e 512x512 (com safe area de 60%)
-- [x] Screenshots placeholder (4 imagens, 1280x720 + 720x1280)
+- [x] Screenshots **reais da UI** (10 imagens 720x1280 — login, agente IA, pipeline, menu, conversas, performance, relatórios, agenda)
 - [x] `/.well-known/assetlinks.json` (template, com placeholder pro SHA-256)
 - [x] Nginx servindo `/.well-known/`, `/privacy.html`, `/terms.html` e screenshots
 - [x] Texto da ficha pronto em `PLAY_STORE_LISTING.md`
@@ -152,12 +152,17 @@ Menu lateral → **"Crescer usuários"** → **"Ficha principal da loja"**:
 - **Imagem do recurso** (1024x500): você precisa criar. Sugestões:
   - Canva → "Google Play Feature Graphic" → use as cores `#9B59FC` e `#4A9EFF`
   - Texto: "CRM + WhatsApp + IA" e "system-clow.pvcorretor01.com.br"
-- **Capturas de tela do telefone** (mínimo 2, máximo 8):
-  - Faça upload de `assets/screenshots/screenshot-pipeline.png`
-  - `assets/screenshots/screenshot-conversa.png`
-  - `assets/screenshots/screenshot-contatos.png`
-  - `assets/screenshots/screenshot-mobile.png`
-  - **RECOMENDADO**: tirar prints REAIS do app (você tem a UI rodando) e substituir os placeholders. Mais convincente.
+- **Capturas de tela do telefone** (mínimo 2, máximo 8) — usa as fotos REAIS já hospedadas, **nesta ordem**:
+  1. `screenshot-03-pipeline.png` — capa (Pipeline com cards reais)
+  2. `screenshot-02-agente-ia.png` — Agente IA
+  3. `screenshot-06-performance.png` — Dashboard R$ 5.6M
+  4. `screenshot-07-relatorios.png` — Forecast R$ 32M
+  5. `screenshot-04-menu-crm.png` — Menu CRM
+  6. `screenshot-08-conversa-ia.png` — Conversa com IA
+  7. `screenshot-09-agenda.png` — Agenda
+  8. `screenshot-01-login.png` — Login
+
+  Todas em `https://system-clow.pvcorretor01.com.br/assets/screenshots/`. Você pode baixar, fazer upload manual no Play Console, ou usar a URL direto.
 - **Capturas de tablet 7"** (opcional)
 - **Capturas de tablet 10"** (opcional)
 

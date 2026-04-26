@@ -23,32 +23,60 @@
   ],
   "screenshots": [
     {
-      "src": "/assets/screenshots/screenshot-pipeline.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Pipeline de Vendas — Kanban com drag-and-drop"
-    },
-    {
-      "src": "/assets/screenshots/screenshot-conversa.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Conversa WhatsApp integrada com IA"
-    },
-    {
-      "src": "/assets/screenshots/screenshot-contatos.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Contatos com importação de planilha"
-    },
-    {
-      "src": "/assets/screenshots/screenshot-mobile.png",
+      "src": "/assets/screenshots/screenshot-01-login.png",
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Versão mobile do CRM"
+      "label": "Tela de login do System Clow"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-02-agente-ia.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Agente IA — Como posso ajudar?"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-03-pipeline.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pipeline de Vendas — Kanban com leads e probabilidade"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-04-menu-crm.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Menu do CRM — Pipeline, Contatos, WhatsApp, Equipe e mais"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-06-performance.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Performance — Dashboard de vendas por agente"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-07-relatorios.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Relatórios — Forecast ponderado e origem dos leads"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-08-conversa-ia.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Conversa com Agente IA"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-09-agenda.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Agenda — Compromissos e reuniões"
     }
   ],
   "shortcuts": [

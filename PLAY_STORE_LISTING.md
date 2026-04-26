@@ -215,14 +215,34 @@ Todos hospedados no domínio:
 |---|---|---|
 | Ícone (any) | `/assets/icon-512-gold.png` | 512x512 |
 | Ícone (maskable) | `/assets/icon-512-maskable.png` | 512x512 |
-| Screenshot — Pipeline | `/assets/screenshots/screenshot-pipeline.png` | 1280x720 |
-| Screenshot — Conversa | `/assets/screenshots/screenshot-conversa.png` | 1280x720 |
-| Screenshot — Contatos | `/assets/screenshots/screenshot-contatos.png` | 1280x720 |
-| Screenshot — Mobile | `/assets/screenshots/screenshot-mobile.png` | 720x1280 |
+| Screenshot — Login | `/assets/screenshots/screenshot-01-login.png` | 720x1280 |
+| Screenshot — Agente IA | `/assets/screenshots/screenshot-02-agente-ia.png` | 720x1280 |
+| Screenshot — Pipeline | `/assets/screenshots/screenshot-03-pipeline.png` | 720x1280 |
+| Screenshot — Menu do CRM | `/assets/screenshots/screenshot-04-menu-crm.png` | 720x1280 |
+| Screenshot — Conversas | `/assets/screenshots/screenshot-05-conversas.png` | 720x1280 |
+| Screenshot — Performance | `/assets/screenshots/screenshot-06-performance.png` | 720x1280 |
+| Screenshot — Relatórios | `/assets/screenshots/screenshot-07-relatorios.png` | 720x1280 |
+| Screenshot — Conversa IA | `/assets/screenshots/screenshot-08-conversa-ia.png` | 720x1280 |
+| Screenshot — Agenda | `/assets/screenshots/screenshot-09-agenda.png` | 720x1280 |
+| Screenshot — Detalhe Conversa | `/assets/screenshots/screenshot-10-conversa-clow.png` | 720x1280 |
 | Manifest | `/manifest.json` | — |
 | Asset Links | `/.well-known/assetlinks.json` | — |
 
-> ⚠️ Os screenshots atuais são placeholders. Recomendo trocar pelos prints reais da UI antes de publicar (mais convincente pro usuário).
+> ✅ Screenshots **reais da UI em produção** (10 imagens 720x1280, formato 9:16 ideal pra Play Store).
+> O manifest.json declara as 8 melhores na ordem ideal de apresentação na loja.
+
+### Ordem recomendada de upload no Play Store
+
+A primeira screenshot é a que aparece como "capa" do app. Subir nesta ordem pra contar a melhor história:
+
+1. **screenshot-03-pipeline.png** — Pipeline com cards reais (impressiona mais que login)
+2. **screenshot-02-agente-ia.png** — Agente IA "Como posso ajudar?"
+3. **screenshot-06-performance.png** — Dashboard com R$ 5.6M de vendas reais
+4. **screenshot-07-relatorios.png** — Forecast R$ 32M, gráfico donut por origem
+5. **screenshot-04-menu-crm.png** — Menu lateral mostrando todas as features
+6. **screenshot-08-conversa-ia.png** — Conversa real com IA
+7. **screenshot-09-agenda.png** — Agenda com reunião
+8. **screenshot-01-login.png** — Login (deixar por último)
 
 ---
 
