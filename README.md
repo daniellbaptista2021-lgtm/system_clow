@@ -255,37 +255,64 @@ SQLite WAL: ~/.clow/crm.sqlite3
 
 ### Env vars principais
 
+> Veja `.env.example` para a lista completa. **Nunca commite o `.env`.**
+
 ```bash
-# Modelo
-ANTHROPIC_API_KEY=sk-clow-proxy-local       # dummy pra LiteLLM
-ANTHROPIC_BASE_URL=http://127.0.0.1:4000    # LiteLLM
+# ─── Gateway IA (LiteLLM proxy local → OpenRouter → GLM-5.1) ────────────
+ANTHROPIC_API_KEY=sk-clow-proxy-local        # placeholder para o SDK Anthropic; tráfego vai pro LiteLLM
+ANTHROPIC_BASE_URL=http://127.0.0.1:4000     # LiteLLM proxy local
 CLOW_MODEL=glm-5.1
-OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_API_KEY=                          # ← obrigatória (https://openrouter.ai/keys)
 
-# Auth
-CLOW_ADMIN_USER=...                          # legacy admin
-CLOW_ADMIN_PASS=...
-CLOW_ADMIN_SESSION_SECRET=...                # HMAC pra admin tokens
-CLOW_USER_SESSION_SECRET=...                 # HMAC pra user tokens (multi-tenant)
-CLOW_CRM_SECRET=...                          # AES-256 pra credenciais
+# ─── OpenAI (apenas Whisper + visão, NÃO chat) ──────────────────────────
+OPENAI_API_KEY=                              # transcrição de áudio + OCR de PDF/imagem
+OPENAI_WHISPER_MODEL=whisper-1
+OPENAI_VISION_MODEL=gpt-4o-mini
 
-# WhatsApp Meta (canal padrão / admin)
-META_WA_ACCESS_TOKEN=...                     # System User token (vitalício)
-META_WA_PHONE_NUMBER_ID=REDACTED_PHONE_ID
-META_WA_BUSINESS_ACCOUNT_ID=REDACTED_BUSINESS_ID
-META_WA_APP_ID=REDACTED_APP_ID
-META_WA_VERIFY_TOKEN=REDACTED_VERIFY_TOKEN
-META_WA_ADMIN_PHONES=REDACTED_ADMIN_PHONE
+# ─── Auth ───────────────────────────────────────────────────────────────
+CLOW_ADMIN_USER=                             # usuário admin
+CLOW_ADMIN_PASS=                             # senha admin (forte)
+CLOW_ADMIN_KEY=                              # API key admin
+CLOW_ADMIN_SESSION_SECRET=                   # HMAC pra admin tokens (32+ chars random)
+CLOW_USER_SESSION_SECRET=                    # HMAC pra user tokens (multi-tenant)
+CLOW_CRM_SECRET=                             # AES-256 pra credenciais de canais
+CLOW_ADMIN_BASH_PASSWORD=                    # senha pra destravar Bash em sessões admin
 
-# Stripe (preencher pra ativar billing)
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_STARTER=price_...
-STRIPE_PRICE_PROFISSIONAL=price_...
-STRIPE_PRICE_EMPRESARIAL=price_...
-STRIPE_SUCCESS_URL=https://system-clow.pvcorretor01.com.br/signup/success
-STRIPE_CANCEL_URL=https://system-clow.pvcorretor01.com.br/signup
+# ─── WhatsApp Meta Cloud API ────────────────────────────────────────────
+META_WA_ACCESS_TOKEN=                        # System User token
+META_WA_PHONE_NUMBER_ID=                     # ID do número conectado
+META_WA_BUSINESS_ACCOUNT_ID=
+META_WA_APP_ID=
+META_WA_PAGE_ID=
+META_WA_VERIFY_TOKEN=                        # token aleatório pra validar webhook
+META_WA_ADMIN_PHONES=                        # E.164, separado por vírgula
+META_WA_API_VERSION=v22.0
+
+# ─── Stripe (billing) ───────────────────────────────────────────────────
+STRIPE_PUBLISHABLE_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_STARTER=                        # price ID do plano R$ 347
+STRIPE_PRICE_PROFISSIONAL=                   # price ID do plano R$ 697
+STRIPE_PRICE_EMPRESARIAL=                    # price ID do plano R$ 1.297
+STRIPE_PRICE_WHATSAPP_ADDON=                 # price ID do add-on Z-API R$ 100/nº
+STRIPE_SUCCESS_URL=https://seu-dominio.com.br/signup/success
+STRIPE_CANCEL_URL=https://seu-dominio.com.br/signup
+
+# ─── Web Push (PWA) ─────────────────────────────────────────────────────
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:admin@seu-dominio.com.br
+
+# ─── Server ─────────────────────────────────────────────────────────────
+PORT=3001
+CLOW_PUBLIC_BASE_URL=https://seu-dominio.com.br
+CLOW_ALLOWED_ORIGINS=https://seu-dominio.com.br
 ```
+
+> Os IDs do Meta WhatsApp, telefones admin, price IDs do Stripe e qualquer
+> token real ficam **somente** no `.env` (modo `600`, dono `root`) e em
+> `/opt/litellm/.env`. **Não copie valores reais para este README.**
 
 ### Deploy
 

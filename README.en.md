@@ -1,71 +1,86 @@
 # System Clow
 
-[README em Portugu?s](README.md) | English
+[README em Português](README.md) | English
 
-System Clow is a TypeScript/Node.js coding agent with CLI, HTTP server, MCP support, plugin runtime, coordinator mode, bridge transport, and swarm tooling.
+> Premium SaaS platform combining a **WhatsApp AI agent** + **complete CRM** +
+> **n8n automations** in a single product. Each subscriber gets an isolated
+> workspace with sales pipeline, WhatsApp customer service, and an AI that
+> operates the CRM through natural language commands.
 
-The project is designed to run as a practical coding assistant with a smaller, more modular codebase than larger agent runtimes, while still supporting real execution flows such as tool use, subagents, remote control, and multi-tenant server operation.
+**Live:** https://system-clow.pvcorretor01.com.br
+**Stack:** Node 22 + TypeScript + Hono + better-sqlite3 + GLM-5.1 (via LiteLLM/OpenRouter)
 
-## Current Status
+---
 
-System Clow is operational.
+## 🤖 AI Engine
 
-Validated in runtime:
-- CLI and `--print` execution
-- HTTP server and session persistence
-- Resume and session rehydration
-- Tool execution: `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`, `WebFetch`, `TodoWrite`
-- `Agent` subagent tool
-- `Coordinator` mode in CLI and server
-- Plugin runtime: commands, hooks, skills, MCP servers, tools, output styles
-- Bridge API and `clow bridge`
-- Remote control via REPL bridge
-- Swarm runtime tools and permission prompts
-- Multi-tenant quota enforcement and workspace isolation
+Single-engine, by design:
 
-## Main Capabilities
+| Layer | Provider | Use |
+|---|---|---|
+| **Chat / agent / tool use** | **GLM-5.1** (Z-AI) via OpenRouter, routed through a local LiteLLM proxy | 100% of AI conversations, reasoning, tool calls |
+| Audio transcription | OpenAI **Whisper-1** | Audio messages received on WhatsApp |
+| Vision / PDF & image OCR | OpenAI **GPT-4o-mini** | Attachments sent by the customer |
+| Web Push | local VAPID | PWA notifications |
 
-- Interactive CLI coding agent
-- HTTP server for session-based execution
-- MCP integration with runtime tool adaptation
-- Plugin system with runtime-loaded commands, hooks, skills, tools, styles, and MCP servers
-- Coordinator mode for structured delegation flows
-- Swarm tools for team-style multi-agent workflows
-- Bridge transport for remote execution and event streaming
-- JSONL-based session persistence and transcript recovery
-- Permission pipeline with interactive approvals
-- Multi-tenant auth, quotas, and workspace path guards
-- Sandboxed multi-tenant `Bash` using `bubblewrap` when available
+> ⚠️ **There is no fallback to Claude/Anthropic, GPT-4 chat, or DeepSeek.**
+> The LiteLLM config (`/opt/litellm/config.yaml`) maps every `claude-*` alias
+> to `openrouter/z-ai/glm-5.1` — this preserves Anthropic-SDK compatibility
+> without changing the actual provider.
 
-## Project Structure
+---
 
-```text
-src/
-  adapters/      External adapters
-  api/           Model clients and streaming
-  bootstrap/     Runtime global/bootstrap state
-  bridge/        Bridge runtime, session runner, remote control
-  coordinator/   Coordinator mode and worker orchestration
-  hooks/         Hook engine and dispatcher
-  mcp/           MCP manager, client, adapters
-  plugins/       Plugin discovery, loading, runtime components
-  query/         Core QueryEngine and message state
-  server/        HTTP API, session pool, middleware
-  skills/        Skill engine and built-in skill support
-  swarm/         Team, mailbox, runtime tools, spawning
-  tenancy/       Path guards, tiers, quotas, tenant store
-  tools/         Built-in tools and tool registry
-  utils/         Context, compact, retry, permissions, sessions
-```
+## 🚀 Features
 
-## Requirements
+### AI Agent
+- WhatsApp conversations driven by GLM-5.1
+- 10 native CRM tools the AI invokes via natural language:
+  `crm_find_or_create_contact`, `crm_create_card`, `crm_move_card`,
+  `crm_add_note`, `crm_send_whatsapp`, `crm_search`, `crm_pipeline`,
+  `crm_get_contact`, `crm_create_reminder`, `crm_dashboard`
+- Per-phone persistent session (cross-conversation memory)
+- Per-number isolated workspace at `~/.clow/sessions/`
 
-- Node.js 20+
-- npm 10+
-- Linux recommended for production
-- `bubblewrap` recommended for sandboxed multi-tenant shell execution
+### Clow CRM
 
-## Installation
+| Module | Capabilities |
+|---|---|
+| Kanban Pipeline | Custom boards, drag-and-drop, terminal columns (Won/Lost) |
+| Contacts | Full record, real-time search, tags, unified history |
+| WhatsApp Channels | Meta Cloud API + Z-API, AES-256-GCM encrypted credentials |
+| Side Panel | Inline conversation with bubble UI, text/audio/image/PDF |
+| Team | Agents with roles (owner/admin/agent/viewer), auto assignment |
+| Inventory | SKU, price, stock, line items, auto-reduce on Win |
+| Subscriptions | Recurring billing, T-3/T-1/T-0 WhatsApp reminders, mark paid |
+| Automations | 6 triggers × 9 conditions × 8 actions, 5 one-click templates |
+| Stats | Weighted forecast, per-agent metrics |
+| Real-time | SSE pub/sub, no polling |
+
+### Multi-tenant SaaS
+
+- Signup (`POST /auth/signup`) with CPF, E.164 phone, unique e-mail, bcrypt
+- Login (`POST /auth/login`) returns `usr.{payload}.{sig}` token (30-day TTL)
+- Phone whitelist per tenant (anti-hijack)
+- Stripe Checkout: `POST /api/billing/checkout` creates a session,
+  webhook auto-creates the tenant
+- Tenant status driven by Stripe events (active / past_due / cancelled)
+
+### Commercial Plans
+
+| | **STARTER** | **PROFISSIONAL** ⭐ | **EMPRESARIAL** |
+|---|---|---|---|
+| Monthly price | R$ 347 | R$ 697 | R$ 1,297 |
+| Users | 1 | 5 | 20 |
+| WhatsApp numbers | 1 | up to 5 | up to 10 |
+| AI messages/month | 500 | 3,000 | 8,000 |
+| Overage per msg | R$ 0.20 | R$ 0.15 | R$ 0.12 |
+| n8n flows | 1 | 4 | 8 |
+
+Cost basis: GLM-5.1 at $1.05/M input + $3.50/M output ≈ R$ 0.06/message.
+
+---
+
+## 🛠️ Installation
 
 ```bash
 npm install
@@ -73,36 +88,10 @@ npm run typecheck
 npm run build
 ```
 
-## Running
-
-### CLI
-
-```bash
-npm run start
-```
-
-Development CLI:
-
-```bash
-npm run dev
-```
-
-Print mode:
-
-```bash
-node dist/cli.js --print "Say exactly OK"
-```
-
-### HTTP Server
+### Run the HTTP server
 
 ```bash
 npm run server
-```
-
-Development server:
-
-```bash
-npm run dev:server
 ```
 
 Health check:
@@ -111,116 +100,124 @@ Health check:
 curl http://127.0.0.1:3001/health
 ```
 
-### Bridge
+### LiteLLM gateway (separate process)
+
+See `deploy/GATEWAY.md` and `deploy/litellm-config.example.yaml`.
+Run with `pm2 start ecosystem.config.cjs`.
+
+---
+
+## ⚙️ Required environment variables
+
+See `.env.example` for the full list. **Never commit `.env`.**
 
 ```bash
-node dist/cli.js bridge --endpoint http://127.0.0.1:3001 --api-key YOUR_KEY
+# AI gateway (LiteLLM → OpenRouter → GLM-5.1)
+ANTHROPIC_API_KEY=sk-clow-proxy-local        # placeholder for the SDK
+ANTHROPIC_BASE_URL=http://127.0.0.1:4000
+CLOW_MODEL=glm-5.1
+OPENROUTER_API_KEY=                          # required
+
+# OpenAI (Whisper + vision only, NOT chat)
+OPENAI_API_KEY=
+
+# Auth
+CLOW_ADMIN_USER=
+CLOW_ADMIN_PASS=
+CLOW_ADMIN_SESSION_SECRET=
+CLOW_USER_SESSION_SECRET=
+CLOW_CRM_SECRET=
+
+# Meta WhatsApp Cloud API (per-tenant configurable too)
+META_WA_ACCESS_TOKEN=
+META_WA_PHONE_NUMBER_ID=
+META_WA_BUSINESS_ACCOUNT_ID=
+META_WA_VERIFY_TOKEN=
+META_WA_ADMIN_PHONES=
+
+# Stripe billing
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_STARTER=
+STRIPE_PRICE_PROFISSIONAL=
+STRIPE_PRICE_EMPRESARIAL=
+STRIPE_PRICE_WHATSAPP_ADDON=
+
+# Web Push
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=
 ```
 
-## Environment
+> Real Meta WhatsApp IDs, admin phone numbers, Stripe price IDs and any
+> real token must live **only** in `.env` (mode `600`, owner `root`) and
+> in `/opt/litellm/.env`. **Do not copy real values into this README.**
 
-Common environment variables used by the project:
+---
 
-```bash
-ANTHROPIC_API_KEY=
-CLOW_MODEL=claude-sonnet-4-6
-ANTHROPIC_API_KEY=
-CLOW_MODEL=claude-sonnet-4-6
-PORT=3001
-CLOW_ADMIN_KEY=
-JWT_SECRET=
+## 🔒 Security
+
+- Bcrypt (cost 10) for passwords
+- HMAC SHA-256 for session tokens (admin + user)
+- AES-256-GCM for channel credentials at rest
+- Per-tenant phone whitelist
+- Webhook signature validation (Meta + Z-API)
+- Rate limiting (in-memory, per-tenant)
+- Audit log for sensitive operations
+- LGPD: consent, retention policies, data portability, right to erasure
+
+See `SECURITY.md` and `SECURITY_HARDENING_COMMAND.md` for hardening
+checklist.
+
+---
+
+## 📂 Project structure
+
+```text
+src/
+  adapters/      External adapters (WhatsApp Meta, Z-API)
+  api/           Anthropic SDK wrapper (routed to LiteLLM)
+  auth/          ★ Multi-user signup/login + HMAC tokens
+  billing/       Stripe routes, n8n routes, quota guard
+  crm/           ★ ~50 modules (CRM core)
+    routes.ts        REST API
+    store.ts         SQLite store
+    channels/        meta.ts + zapi.ts
+    webhooks.ts      /webhooks/crm/{meta|zapi}/:secret
+    ...
+  memory/        Persistent agent memory + RAG
+  notifications/ mailer, openaiMedia (Whisper/vision), whatsapper
+  server/        HTTP API, session pool, middleware
+  tenancy/       Path guards, tiers, quotas, tenant store
+  tools/         Native tools + registry
+  ...
+public/
+  index.html         App shell (auto-loader)
+  crm/               CRM SPA
+  pricing.html       Public pricing page
+  signup.html        Signup form
 ```
 
-Depending on the features you enable, you may also need tenant, billing, or external adapter configuration.
+Persistent data lives in `~/.clow/`:
+- `crm.sqlite3` (CRM data)
+- `memory/*.sqlite3` (agent memory)
+- `crm-media/{tenant}/{date}/` (WhatsApp attachments)
+- `tenants.json` (tenants + api_keys)
 
-## Built-in Tools
+---
 
-Core tools available in the main runtime include:
+## 🚦 Operational health
 
-- `Read`
-- `Write`
-- `Edit`
-- `Glob`
-- `Grep`
-- `Bash`
-- `WebFetch`
-- `WebSearch`
-- `TodoWrite`
-- `Agent`
-- `EnterPlanMode`
-- `ExitPlanMode`
-- Swarm runtime tools: `TeamCreate`, `TeamDelete`, `ListPeers`, `SendMessage`, `TeammateIdle`
-
-Tool availability may be filtered by permission mode, tier, tenant, runtime mode, or server configuration.
-
-## Permissions and Safety
-
-System Clow includes:
-
-- interactive permission prompts
-- allow/deny session rules
-- plan mode restrictions
-- tier-based tool filtering
-- workspace path guards
-- multi-tenant quota enforcement
-- sandboxed shell execution for multi-tenant server flows
-
-## Plugins and MCP
-
-The plugin runtime supports:
-
-- commands
-- hooks
-- skills
-- tools
-- output styles
-- MCP server registration
-
-MCP tools are adapted into the runtime tool pool and can be filtered by tier or deny rules.
-
-## Coordinator, Bridge, and Swarm
-
-### Coordinator
-
-Coordinator mode narrows the toolset and routes structured delegation through the `Agent` tool and task notifications.
-
-### Bridge
-
-The bridge stack supports:
-- environment registration
-- work polling
-- event streaming
-- env-less session creation
-- remote prompt delivery
-
-### Swarm
-
-Swarm provides runtime tools for team creation, peer lookup, direct messaging, and teammate state handling.
-
-## Known Rough Edges
-
-The project is operational, but still has some non-blocking rough edges:
-
-- noisy bootstrap logs in some flows
-- deprecation warning around `punycode`
-- plugin discovery warnings may appear depending on local plugin state
-- some advanced paths still need more test coverage than the core runtime
-
-## Development Workflow
-
-```bash
-npm run typecheck
-npm run build
+```
+GET /health → 200 OK in <10ms
+PM2: clow + litellm + pm2-logrotate
+Node: --max-old-space-size=1024, max_memory_restart 1G
 ```
 
-Recommended smoke checks:
+See `ecosystem.config.cjs` for PM2 settings.
 
-```bash
-node dist/cli.js --print "Say exactly OK"
-curl http://127.0.0.1:3001/health
-```
+---
 
 ## License
 
 No license file is currently present in this repository.
-
