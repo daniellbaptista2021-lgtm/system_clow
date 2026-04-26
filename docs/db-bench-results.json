@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-04-26T21:33:05.265Z",
+  "reads_per_phase": 10000,
+  "writes_per_phase": 1000,
+  "baseline": {
+    "label": "BASELINE",
+    "reads": {
+      "totalMs": 720.6245,
+      "opsPerSec": 13876.852646558644
+    },
+    "writes": {
+      "totalMs": 3528.7635,
+      "opsPerSec": 283.385384143766
+    }
+  },
+  "tuned": {
+    "label": "TUNED",
+    "reads": {
+      "totalMs": 121.2722,
+      "opsPerSec": 82459.12913264541
+    },
+    "writes": {
+      "totalMs": 626.0912,
+      "opsPerSec": 1597.2113966783115
+    }
+  },
+  "speedup": {
+    "reads": 5.942206870164804,
+    "writes": 5.6361812783824465
+  }
+}
