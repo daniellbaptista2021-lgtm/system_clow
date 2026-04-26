@@ -370,13 +370,25 @@ async function main(): Promise<void> {
     return c.json({ ok: false, error: 'invalid_credentials' }, 401);
   });
 
-  app.get('/auth/verify', (c) => {
-    if (!ADMIN_USER || !ADMIN_PASS) return c.json({ ok: false }, 503);
+  app.get('/auth/verify', async (c) => {
     const token = c.req.header('X-Auth-Token')
       || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
     if (!token) return c.json({ ok: false }, 401);
+
+    // 1) Tenant user_session token (formato usr.payload.sig) — caso comum SaaS.
+    //    Sem isso, todo reload de pagina chamava logout() e matava o token,
+    //    deixando o usuario preso na tela de login (incidente 2026-04-26).
+    if (token.startsWith('usr.')) {
+      const { verifyUserToken } = await import('../auth/authRoutes.js');
+      const payload = verifyUserToken(token);
+      if (payload) return c.json({ ok: true, kind: 'user', tid: payload.tid });
+      return c.json({ ok: false }, 401);
+    }
+
+    // 2) Admin session (legacy, env-based)
+    if (!ADMIN_USER || !ADMIN_PASS) return c.json({ ok: false }, 503);
     const verified = verifyAdminSessionToken(token);
-    if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true });
+    if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true, kind: 'admin' });
     return c.json({ ok: false }, 401);
   });
 

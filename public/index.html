@@ -848,15 +848,89 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 
   function showCrmError(loading, msg, showRelogin) {
     if (!loading) return;
-    const reloginBtn = showRelogin
-      ? '<button id="crmReloginBtn" style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;margin-right:8px">Relogar</button>'
-      : '';
-    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br>' + reloginBtn + '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
+    if (showRelogin) { showCrmInlineLogin(loading, msg); return; }
+    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br><button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
     setTimeout(()=>{
-      const rb = document.getElementById('crmReloginBtn');
-      if (rb) rb.onclick = function(){ clearCrmCaches(); localStorage.removeItem('clow_token'); location.reload(); };
       const cb = document.getElementById('crmCloseBtn');
       if (cb) cb.onclick = function(){ closeCRM(); };
+    }, 0);
+  }
+
+  // Inline login — substitui o antigo "Relogar" que mandava reload
+  // e deixava o usuario preso na tela de login do shell. Agora autentica
+  // direto e ja abre o CRM, sem refresh, sem friccao.
+  function showCrmInlineLogin(loading, msg) {
+    if (!loading) return;
+    var savedEmail = '';
+    try { savedEmail = localStorage.getItem('clow_last_email') || ''; } catch (e) {}
+    loading.innerHTML =
+      '<div class="crm-modal-error" style="text-align:center;max-width:360px;margin:0 auto;color:#E8E8F0">' +
+        '<div style="margin-bottom:14px;color:var(--danger);font-size:13px">' + msg + '</div>' +
+        '<form id="crmReloginForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;text-align:left">' +
+          '<input id="crmReloginEmail" type="email" placeholder="Seu email" autocomplete="username" required value="' + savedEmail.replace(/"/g, '&quot;') + '" ' +
+            'style="background:#14142A;border:1px solid rgba(155,89,252,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
+          '<input id="crmReloginPass" type="password" placeholder="Sua senha" autocomplete="current-password" required ' +
+            'style="background:#14142A;border:1px solid rgba(155,89,252,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
+          '<button id="crmReloginSubmit" type="submit" ' +
+            'style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:12px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;margin-top:4px">' +
+            'Entrar e abrir CRM</button>' +
+        '</form>' +
+        '<div id="crmReloginErr" style="color:#F87171;font-size:12px;min-height:14px;margin:6px 0 12px;text-align:center"></div>' +
+        '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px">Fechar</button>' +
+      '</div>';
+    setTimeout(function(){
+      var form = document.getElementById('crmReloginForm');
+      var emailEl = document.getElementById('crmReloginEmail');
+      var passEl = document.getElementById('crmReloginPass');
+      var submitBtn = document.getElementById('crmReloginSubmit');
+      var errEl = document.getElementById('crmReloginErr');
+      var closeBtn = document.getElementById('crmCloseBtn');
+
+      if (emailEl && !emailEl.value) emailEl.focus(); else if (passEl) passEl.focus();
+
+      if (form) form.onsubmit = async function(e){
+        e.preventDefault();
+        if (errEl) errEl.textContent = '';
+        var email = (emailEl.value || '').trim().toLowerCase();
+        var password = passEl.value || '';
+        if (!email || !password) { if (errEl) errEl.textContent = 'Preencha email e senha.'; return; }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Entrando...';
+        try {
+          var r = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password }),
+          });
+          var d = await r.json().catch(function(){ return {}; });
+          if (!r.ok || !d.ok || !d.token) {
+            var em = d.error === 'invalid_credentials' ? 'Email ou senha incorretos.'
+                   : d.error === 'account_blocked' ? 'Conta suspensa. Contate o suporte.'
+                   : d.error === 'missing_credentials' ? 'Preencha email e senha.'
+                   : 'Erro ao entrar' + (d.error ? ' (' + d.error + ')' : '') + '.';
+            if (errEl) errEl.textContent = em;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Entrar e abrir CRM';
+            return;
+          }
+          // Sucesso: salva token + email pra prefill futuro, limpa caches CRM
+          // antigos (apiKey antiga revogada do lado do servidor) e reabre o CRM.
+          try { localStorage.setItem('clow_token', d.token); } catch (e) {}
+          try { localStorage.setItem('clow_last_email', email); } catch (e) {}
+          if (typeof window.authToken !== 'undefined') { try { window.authToken = d.token; } catch (e) {} }
+          clearCrmCaches();
+          loading.innerHTML = '<div class="crm-spin"></div><div>Abrindo seu CRM...</div>';
+          loading.classList.remove('hide');
+          // Re-tenta o fluxo completo de abertura do CRM com o token novo
+          await window.openCRM();
+        } catch (err) {
+          if (errEl) errEl.textContent = 'Erro de conexao: ' + ((err && err.message) || 'tente novamente');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Entrar e abrir CRM';
+        }
+      };
+
+      if (closeBtn) closeBtn.onclick = function(){ closeCRM(); };
     }, 0);
   }
 
