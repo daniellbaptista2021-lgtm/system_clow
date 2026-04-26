@@ -30,3 +30,6 @@ prompt_*.md
 
 # LiteLLM config com secret (ja tem .env.example)
 .env.bak_before_openrouter
+
+# Gitleaks scan reports (gerados localmente, não commitar)
+.gitleaks-report*.json

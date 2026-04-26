@@ -1,0 +1,203 @@
+# ──────────────────────────────────────────────────────────────────────────
+# .gitleaks.toml — System Clow
+# Regras pra detectar credenciais antes de commit/push.
+# Roda via: `npm run scan:secrets` (staged) ou `npm run scan:secrets:full` (histórico).
+# ──────────────────────────────────────────────────────────────────────────
+
+title = "System Clow secret scanner"
+
+# Regras built-in do gitleaks que queremos ativas (a base já cobre AWS, GCP, etc).
+# As nossas custom rules vão por cima.
+
+# ──── Regras customizadas ──────────────────────────────────────────────
+
+[[rules]]
+id = "stripe-secret-live"
+description = "Stripe Secret Key (production)"
+regex = '''sk_live_[0-9a-zA-Z]{16,}'''
+tags = ["key", "stripe", "production"]
+
+[[rules]]
+id = "stripe-restricted-live"
+description = "Stripe Restricted Key (production)"
+regex = '''rk_live_[0-9a-zA-Z]{16,}'''
+tags = ["key", "stripe", "production"]
+
+[[rules]]
+id = "stripe-publishable-live"
+description = "Stripe Publishable Key (production) — não é segredo mas é PII de tenant"
+regex = '''pk_live_[0-9a-zA-Z]{16,}'''
+tags = ["key", "stripe", "production"]
+
+[[rules]]
+id = "stripe-webhook-secret"
+description = "Stripe Webhook Signing Secret"
+regex = '''whsec_[0-9a-zA-Z]{20,}'''
+tags = ["secret", "stripe", "webhook"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API Key (sk-or-v1-...)"
+regex = '''sk-or-v1-[0-9a-f]{32,}'''
+tags = ["key", "openrouter", "ai"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic Claude API Key"
+regex = '''sk-ant-(?:api|admin)\d{2}-[0-9A-Za-z_\-]{20,}'''
+tags = ["key", "anthropic", "ai"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key (sk-...)"
+regex = '''sk-(?:proj-)?[0-9A-Za-z_\-]{40,}'''
+tags = ["key", "openai", "ai"]
+# evita match com sk-or-v1- e sk-ant-, que tem regras dedicadas
+[rules.allowlist]
+regexes = ['''sk-or-v1-''', '''sk-ant-''', '''sk-clow-proxy-local''']
+
+[[rules]]
+id = "meta-whatsapp-system-token"
+description = "Meta/Facebook System User Token (WhatsApp Cloud API)"
+regex = '''EAA[0-9A-Za-z]{50,}'''
+tags = ["token", "meta", "whatsapp", "facebook"]
+
+[[rules]]
+id = "zapi-instance-token"
+description = "Z-API instance token (3 a 5 grupos hex separados por '-' tipicos da Z-API)"
+regex = '''(?i)(zapi[._-]?(?:instance|token|security)[_-]?(?:id|token|key)?)\s*[:=]\s*['\"]?[0-9a-f\-]{20,}['\"]?'''
+tags = ["token", "zapi", "whatsapp"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key (AIza...)"
+regex = '''AIza[0-9A-Za-z_\-]{35}'''
+tags = ["key", "google"]
+
+[[rules]]
+id = "vapid-private-key"
+description = "VAPID Private Key (Web Push) — base64url longo"
+regex = '''(?i)vapid[_-]?private[_-]?key\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{40,}['\"]?'''
+tags = ["key", "vapid", "webpush"]
+
+[[rules]]
+id = "system-clow-admin-pass-known"
+description = "Senha admin conhecida do System Clow (Dan24851388.@)"
+regex = '''Dan24851388(?:\.@)?'''
+tags = ["password", "system-clow", "known"]
+
+[[rules]]
+id = "system-clow-vps-ip"
+description = "IP da VPS do System Clow hardcoded"
+regex = '''69\.62\.98\.11'''
+tags = ["pii", "infrastructure", "system-clow"]
+# permitir em arquivos de exemplo de log onde o IP é genérico de docs
+[rules.allowlist]
+paths = ['''(?i).*\.gitleaks\.toml$''']
+
+[[rules]]
+id = "private-rsa-key"
+description = "Private key block (RSA, OpenSSH, EC)"
+regex = '''-----BEGIN (?:RSA |OPENSSH |EC |PGP |DSA |ENCRYPTED )?PRIVATE KEY( BLOCK)?-----[\s\S]{20,}-----END'''
+tags = ["key", "private"]
+[rules.allowlist]
+# Permite quando é só a string literal usada pra MONTAR chave em runtime
+# (típico em código que gera keystores VAPID dinamicamente)
+regexes = [
+    '''['"]-----BEGIN[^'"]*PRIVATE KEY-----['"]''',
+    '''`-----BEGIN[^`]*PRIVATE KEY-----`''',
+]
+paths = [
+    '''src/crm/push\.ts$''',
+    '''.*\.test\.ts$''',
+    '''.*test.*\.ts$''',
+]
+
+[[rules]]
+id = "jwt-token"
+description = "JSON Web Token"
+regex = '''eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}'''
+tags = ["token", "jwt"]
+[rules.allowlist]
+# pula JWTs de exemplo em testes
+paths = ['''(?i).*test.*''', '''(?i).*\.md$''', '''(?i).*\.example$''']
+
+[[rules]]
+id = "generic-password-assignment"
+description = "Atribuição de password/secret/token com valor hardcoded de alta entropia"
+regex = '''(?i)(?:password|passwd|secret|api[_-]?key|access[_-]?key)\s*[:=]\s*['\"][A-Za-z0-9+/=_\-]{20,}['\"]'''
+tags = ["generic", "credential"]
+[rules.allowlist]
+# permite placeholders documentados, mocks de teste, valores curtos
+regexes = [
+    '''(?i)(?:password|secret|token|key)\s*[:=]\s*['\"]?(?:change[_-]?me|your[_-]?(?:key|secret|token)|placeholder|<[^>]+>|\.\.\.|xxxxx|\*+|null|undefined|TODO|FIXME|EXAMPLE|SAMPLE)''',
+    '''sk-clow-proxy-local''',
+    '''clow_meta_verify_2026''',  # legacy
+    '''(?i)test[_-](?:secret|key|token|password)''',  # mocks de teste tipo 'test-secret-...'
+    '''rotate[_-]?token''',                            # enum constants
+    '''(?i)['"]rotate_token['"]''',
+]
+paths = [
+    '''node_modules/''',
+    '''dist/''',
+    '''\.gitleaks\.toml$''',
+    '''\.lock$''',
+    '''package-lock\.json$''',
+    '''(?i)tests?/''',                                # ignora pastas de teste
+    '''\.test\.[tj]sx?$''',                           # ignora arquivos *.test.ts
+    '''\.spec\.[tj]sx?$''',                           # *.spec.ts
+    '''(?i)__tests__/''',
+    '''public/index\.html$''',                        # gerar verifyToken/webhook UI runtime
+    '''public/onboarding\.html$''',
+    '''public/crm/crm\.js$''',                        # JS gera tokens runtime (HMAC) e linkify
+    '''src/bridge/types\.ts$''',                      # enum SystemCommandType
+    '''dist/bridge/types\.js$''',
+]
+
+# ──── Allowlist global ────────────────────────────────────────────────
+# Coisas que NÃO são vazamento de credencial e devem ser ignoradas.
+
+[allowlist]
+description = "Global allowlist — paths e padrões que sempre são ignorados"
+paths = [
+    '''node_modules/''',
+    '''dist/''',
+    '''\.git/''',
+    '''package-lock\.json$''',
+    '''\.png$''',
+    '''\.jpg$''',
+    '''\.jpeg$''',
+    '''\.webp$''',
+    '''\.svg$''',
+    '''\.ico$''',
+    '''\.pdf$''',
+    '''\.bak''',
+    '''workspace/''',
+    '''output/''',
+    '''public/assets/screenshots/''',
+    '''public/assets/.*\.png$''',
+    '''dist-ssr/''',
+    '''\.tsbuildinfo$''',
+    '''public/sw\.js$''',  # service worker tem hashes longos válidos
+    '''\.well-known/''',  # assetlinks.json tem SHA-256 (não é segredo)
+]
+regexes = [
+    # Placeholder genéricos comuns
+    '''<[A-Z_\-]+>''',                    # <YOUR_KEY>, <SECRET>, etc
+    '''xxx+''',
+    '''\.\.\.''',
+    '''sk-clow-proxy-local''',           # placeholder do nosso .env.example
+    '''placeholder''',
+    '''CHANGE_ME''',
+    '''your-(?:key|secret|token|api-key)-here''',
+]
+
+# Stop words — palavras que NÃO devem disparar regra
+stopwords = [
+    "example",
+    "sample",
+    "placeholder",
+    "your-key-here",
+    "redacted",
+    "REDACTED",
+]
