@@ -286,7 +286,49 @@ async function provisionFromSession(session: any): Promise<void> {
 }
 
 // ─── GET /signup/success — landing após pagamento ───────────────────────
-app.get('/signup/success', (c) => {
+// Mostra email + senha temp INLINE na tela. Email/WhatsApp viram backup,
+// nao caminho critico — se mailer cair ou cair no spam, cliente AINDA tem
+// as credenciais aqui na hora. Lookup: session_id → Stripe → tenant.email
+// → tenant.temp_password_for_email (limpo em /auth/login com troca forçada).
+app.get('/signup/success', async (c) => {
+  const sessionId = c.req.query('session_id') || '';
+  let creds: { email: string; tempPassword: string; tier: string } | null = null;
+
+  if (sessionId) {
+    try {
+      const sk = await stripe();
+      const session = await sk.checkout.sessions.retrieve(sessionId);
+      const md = session.metadata || {};
+      const email = String(md.email || session.customer_email || '').toLowerCase();
+      if (email) {
+        const tenant = findTenantByEmail(email);
+        if (tenant && (tenant as any).temp_password_for_email) {
+          creds = {
+            email,
+            tempPassword: String((tenant as any).temp_password_for_email),
+            tier: tenant.tier || md.plan || 'starter',
+          };
+        }
+      }
+    } catch (err: any) {
+      logger.warn('[stripe success] could not load creds:', err?.message);
+    }
+  }
+
+  const credsBlock = creds ? [
+    '<div class="creds">',
+    '<div class="creds-header">🔑 Suas credenciais de acesso</div>',
+    '<div class="creds-row"><span class="creds-label">Email</span><code id="credsEmail">' + escapeHtml(creds.email) + '</code><button class="copy-btn" onclick="copyText(\'credsEmail\',this)" type="button">Copiar</button></div>',
+    '<div class="creds-row"><span class="creds-label">Senha temp</span><code id="credsPass">' + escapeHtml(creds.tempPassword) + '</code><button class="copy-btn" onclick="copyText(\'credsPass\',this)" type="button">Copiar</button></div>',
+    '<div class="creds-warn">⚠️ Anote ou copie agora. Troque a senha no 1º login em <strong>Configurações → Segurança</strong>.</div>',
+    '</div>',
+  ].join('') : [
+    '<div class="info">',
+    '<strong>Sua conta foi criada!</strong><br>',
+    'Enviamos sua senha temporária por <strong>email</strong> e <strong>WhatsApp</strong>. Verifica também o spam.',
+    '</div>',
+  ].join('');
+
   const html = [
     '<!DOCTYPE html><html lang="pt-BR"><head>',
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -295,17 +337,26 @@ app.get('/signup/success', (c) => {
     '<style>',
     'body{margin:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px}',
     'body::before{content:"";position:fixed;inset:0;background:radial-gradient(50% 50% at 50% 30%,rgba(155,89,252,.12),transparent 65%);pointer-events:none}',
-    '.card{position:relative;max-width:540px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:22px;padding:46px 38px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.55)}',
+    '.card{position:relative;max-width:560px;background:#0F0F24;border:1px solid rgba(155,89,252,.3);border-radius:22px;padding:46px 38px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.55)}',
     '.logo img{height:38px;margin-bottom:22px;filter:drop-shadow(0 4px 12px rgba(155,89,252,.35))}',
     '.check{width:72px;height:72px;margin:0 auto 22px;border-radius:50%;background:linear-gradient(135deg,#22C55E,#16A34A);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(34,197,94,.35)}',
     '.check svg{width:38px;height:38px;color:#fff;stroke-width:3}',
     'h1{background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;font-size:28px;margin:0 0 12px;letter-spacing:-.02em;font-weight:800}',
     'p{color:#B8B8D0;line-height:1.6;font-size:14.5px;margin:10px 0}',
-    '.channels{display:flex;gap:12px;margin:22px 0}',
-    '.ch{flex:1;background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.22);border-radius:12px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:#E8E8F0}',
-    '.ch svg{width:26px;height:26px;color:#9B59FC}',
-    '.info{background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.2);border-radius:12px;padding:18px;margin:24px 0;text-align:left;font-size:13px;color:#B8B8D0;line-height:1.75}',
+    '.creds{background:linear-gradient(135deg,rgba(155,89,252,.12),rgba(74,158,255,.08));border:1px solid rgba(155,89,252,.32);border-radius:14px;padding:22px 22px 18px;margin:24px 0;text-align:left}',
+    '.creds-header{font-size:13px;color:#9B59FC;font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px}',
+    '.creds-row{display:flex;align-items:center;gap:10px;background:#14142A;border:1px solid rgba(155,89,252,.18);border-radius:10px;padding:12px 14px;margin-bottom:10px}',
+    '.creds-label{font-size:11px;color:#9898B8;text-transform:uppercase;letter-spacing:1px;flex-shrink:0;width:78px}',
+    '.creds-row code{flex:1;background:transparent;color:#E8E8F0;font-family:"SF Mono",Consolas,Monaco,monospace;font-size:14.5px;font-weight:600;letter-spacing:.5px;word-break:break-all}',
+    '.copy-btn{background:rgba(155,89,252,.2);border:1px solid rgba(155,89,252,.4);color:#E8E8F0;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;transition:all .15s ease;font-family:inherit}',
+    '.copy-btn:hover{background:rgba(155,89,252,.32);transform:translateY(-1px)}',
+    '.copy-btn.ok{background:rgba(34,197,94,.25);border-color:rgba(34,197,94,.5);color:#86EFAC}',
+    '.creds-warn{color:#F59E0B;font-size:12px;line-height:1.5;margin-top:12px}',
+    '.creds-warn strong{color:#FCD34D}',
+    '.info{background:rgba(155,89,252,.08);border:1px solid rgba(155,89,252,.2);border-radius:12px;padding:18px;margin:24px 0;text-align:left;font-size:13.5px;color:#B8B8D0;line-height:1.75}',
     '.info strong{color:#E8E8F0}',
+    '.steps{text-align:left;color:#B8B8D0;font-size:13.5px;line-height:1.85;margin:20px 0 8px;padding:18px 18px 14px;background:rgba(255,255,255,.025);border-radius:12px;border:1px solid rgba(255,255,255,.06)}',
+    '.steps strong{color:#E8E8F0;display:block;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px}',
     '.btn{display:inline-block;margin-top:14px;padding:14px 30px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:12px;font-weight:700;font-size:14.5px;box-shadow:0 8px 24px rgba(155,89,252,.35);transition:transform .15s ease}',
     '.btn:hover{transform:translateY(-2px)}',
     '.note{font-size:11.5px;color:#6E6E8C;margin-top:16px}',
@@ -314,24 +365,35 @@ app.get('/signup/success', (c) => {
     '<div class="logo"><img src="/assets/logo-official-full-white.png" alt="System Clow"></div>',
     '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
     '<h1>Pagamento confirmado!</h1>',
-    '<p>Sua conta foi criada. Enviamos sua <strong>senha temporária</strong> por:</p>',
-    '<div class="channels">',
-    '<div class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg><span>Email</span></div>',
-    '<div class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span>WhatsApp</span></div>',
+    '<p>Sua conta foi criada. ' + (creds ? 'Aqui estão suas credenciais:' : 'Confira seu email e WhatsApp.') + '</p>',
+    credsBlock,
+    '<div class="steps">',
+    '<strong>🚀 Próximos passos</strong>',
+    '1. Faz login com as credenciais acima<br>',
+    '2. Troca a senha em Configurações → Segurança<br>',
+    '3. Conecta seu WhatsApp (Meta API ou Z-API) em CRM → Canais<br>',
+    '4. Sua IA começa a atender 24/7 ✨',
     '</div>',
-    '<div class="info">',
-    '<strong>Próximos passos</strong><br>',
-    '1. Pegue a senha temporária no email (ou WhatsApp)<br>',
-    '2. Faça login — troca de senha acontece automática no 1º acesso<br>',
-    '3. Complete o onboarding (3 min): conecta WhatsApp + instala automações<br>',
-    '4. Sua IA começa a atender 24/7',
+    '<a href="/" class="btn">Entrar agora →</a>',
+    '<div class="note">Suporte: <a href="mailto:contato@pvcorretor01.com.br" style="color:#9B59FC">contato@pvcorretor01.com.br</a></div>',
     '</div>',
-    '<a href="/" class="btn">Ir pro login →</a>',
-    '<div class="note">Não recebeu? Verifica o spam ou <a href="mailto:contato@pvcorretor01.com.br" style="color:#9B59FC">contato@pvcorretor01.com.br</a></div>',
-    '</div></body></html>',
+    '<script>',
+    'function copyText(id,btn){var el=document.getElementById(id);if(!el)return;var t=el.textContent;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){btn.textContent="Copiado!";btn.classList.add("ok");setTimeout(function(){btn.textContent="Copiar";btn.classList.remove("ok")},1500)}).catch(function(){fallback(t,btn)})}else{fallback(t,btn)}}',
+    'function fallback(t,btn){var ta=document.createElement("textarea");ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");btn.textContent="Copiado!";btn.classList.add("ok");setTimeout(function(){btn.textContent="Copiar";btn.classList.remove("ok")},1500)}catch(e){}document.body.removeChild(ta)}',
+    '</script>',
+    '</body></html>',
   ].join('');
   return c.html(html);
 });
+
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 
 
