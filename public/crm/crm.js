@@ -3379,6 +3379,8 @@ function wireEvents() {
   wire('#newCardBtn', 'click', () => openNewCardModal());
   wire('#newChannelBtn', 'click', openNewChannelModal);
   wire('#newContactBtn', 'click', openNewContactModal);
+  wire('#importContactsBtn', 'click', () => openImportContactsModal());
+  wire('#exportContactsBtn', 'click', () => openExportContactsMenu());
   wire('#refreshPhotosBtn', 'click', async () => {
     const btn = document.getElementById('refreshPhotosBtn');
     if (!btn || btn.disabled) return;
@@ -5802,4 +5804,134 @@ window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, render
   console.log('[onda53g] click #newChannelBtn interceptado em capture');
 })();
 
+
+
+
+
+// ─── Onda 56: Importar/Exportar contatos ────────────────────────────────
+function openImportContactsModal() {
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const fileInput = el('input', {
+    type: 'file', accept: '.csv,.xlsx,.xls',
+    style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
+  });
+  const resultBox = el('div', { style: 'margin-top:14px' });
+  const submitBtn = el('button', {
+    style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
+    on: { click: async () => {
+      const file = fileInput.files?.[0];
+      if (!file) { toast('Selecione um arquivo', 'error'); return; }
+      submitBtn.disabled = true; submitBtn.textContent = 'Importando...';
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const r = await fetch('/v1/crm/contacts/import', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + state.apiKey },
+          body: fd,
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.message || data.error || 'falha');
+        resultBox.innerHTML = '';
+        resultBox.append(el('div', { style: 'background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);padding:14px;border-radius:8px;color:#86efac' },
+          el('div', { style: 'font-weight:700;margin-bottom:8px' }, '✓ Importação concluída'),
+          el('div', {}, '📥 Total processado: ' + data.total),
+          el('div', {}, '🆕 Criados: ' + data.created),
+          el('div', {}, '🔄 Atualizados (já existiam pelo telefone/email): ' + data.updated),
+          (data.errors && data.errors.length) ? el('details', { style: 'margin-top:8px;cursor:pointer' },
+            el('summary', { style: 'color:#fca5a5' }, '⚠ ' + data.errors.length + ' erro(s) — clique pra ver'),
+            el('div', { style: 'background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;margin-top:6px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace' },
+              ...data.errors.slice(0, 50).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error))
+            ),
+          ) : null,
+        ));
+        if (typeof loadContacts === 'function') { await loadContacts(); renderContactsList(); }
+      } catch (e) {
+        resultBox.innerHTML = '';
+        resultBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:#fca5a5' }, 'Erro: ' + e.message));
+      } finally { submitBtn.disabled = false; submitBtn.textContent = 'Importar'; }
+    } }
+  }, 'Importar');
+
+  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' },
+    el('h3', { style: 'margin:0 0 8px' }, '⬆ Importar contatos'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 14px' }, 'Aceita CSV (UTF-8) ou Excel (XLSX). A primeira linha deve ser o cabeçalho.'),
+    el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
+      el('summary', { style: 'font-size:12px;color:var(--text-dim);font-weight:600' }, '📋 Colunas reconhecidas (clique pra ver)'),
+      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6' },
+        el('div', {}, '• ', el('b', {}, 'name'), ' / nome / full_name — obrigatório'),
+        el('div', {}, '• ', el('b', {}, 'phone'), ' / telefone / whatsapp — recomendado (chave de upsert)'),
+        el('div', {}, '• ', el('b', {}, 'email'), ' — fallback de upsert se não tiver phone'),
+        el('div', {}, '• company / empresa, title / cargo, website / site'),
+        el('div', {}, '• address / endereco, cpf / cnpj / cpf_cnpj'),
+        el('div', {}, '• tags (separadas por ; ou |), notes / observacoes'),
+        el('div', {}, '• source (default: "import")'),
+        el('div', { style: 'margin-top:6px;color:#fbbf24' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
+      ),
+    ),
+    el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600' }, 'Arquivo (.csv, .xlsx)'),
+    fileInput,
+    resultBox,
+    el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:18px' },
+      el('button', {
+        style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;cursor:pointer',
+        on: { click: () => dialog.remove() }
+      }, 'Fechar'),
+      submitBtn,
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
+
+function openExportContactsMenu() {
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const dl = (format) => {
+    const a = document.createElement('a');
+    const url = '/v1/crm/contacts/export?format=' + format;
+    // fetch com auth header e download via blob
+    fetch(url, { headers: { 'Authorization': 'Bearer ' + state.apiKey } })
+      .then(r => r.blob())
+      .then(b => {
+        const u = URL.createObjectURL(b);
+        a.href = u;
+        a.download = format === 'xlsx' ? 'contatos.xlsx' : 'contatos.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(u);
+        toast('Download iniciado', 'success');
+        dialog.remove();
+      })
+      .catch(e => { toast('Erro: ' + e.message, 'error'); });
+  };
+  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' },
+    el('h3', { style: 'margin:0 0 14px' }, '⬇ Exportar contatos'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 18px' }, 'Escolha o formato:'),
+    el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('button', {
+        style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        on: { click: () => dl('xlsx') }
+      },
+        el('div', {}, '📊 Excel (.xlsx)'),
+        el('div', { style: 'font-size:11px;opacity:.85;margin-top:2px' }, 'Recomendado — abre direto no Excel/Google Sheets'),
+      ),
+      el('button', {
+        style: 'background:rgba(155,89,252,0.1);border:1px solid rgba(155,89,252,0.3);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        on: { click: () => dl('csv') }
+      },
+        el('div', {}, '📄 CSV (.csv)'),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'UTF-8 com BOM, compatível com Excel'),
+      ),
+    ),
+    el('div', { style: 'display:flex;justify-content:flex-end;margin-top:14px' },
+      el('button', {
+        style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer',
+        on: { click: () => dialog.remove() }
+      }, 'Cancelar'),
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
 

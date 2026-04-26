@@ -545,7 +545,44 @@ app.post('/contacts/import', async (c) => {
     const fd = await c.req.formData();
     const file = fd.get('file');
     if (!file || typeof file === 'string') return badRequest(c, 'file required');
-    csv = Buffer.from(await (file as any).arrayBuffer()).toString('utf-8');
+    const filename = String((file as any).name || '').toLowerCase();
+    const isXlsx = filename.endsWith('.xlsx') || filename.endsWith('.xls') ||
+      ((file as any).type || '').includes('spreadsheet');
+    const bytes = Buffer.from(await (file as any).arrayBuffer());
+    if (isXlsx) {
+      // Converte XLSX → CSV em memoria, reusa importContactsCsv
+      try {
+        const ExcelJS = (await import('exceljs')).default;
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(bytes as any);
+        const ws = wb.worksheets[0];
+        if (!ws) return badRequest(c, 'planilha vazia');
+        const csvLines: string[] = [];
+        ws.eachRow((row) => {
+          const cells: string[] = [];
+          row.eachCell({ includeEmpty: true }, (cell) => {
+            const v = cell.value;
+            let s = '';
+            if (v == null) s = '';
+            else if (typeof v === 'object' && (v as any).text) s = String((v as any).text);
+            else if (typeof v === 'object' && (v as any).richText) s = (v as any).richText.map((rt: any) => rt.text).join('');
+            else if (v instanceof Date) s = v.toISOString();
+            else s = String(v);
+            // CSV escape: aspas duplas se contem virgula/aspas/quebra
+            if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+            cells.push(s);
+          });
+          csvLines.push(cells.join(','));
+        });
+        csv = csvLines.join('\n');
+      } catch (err: any) {
+        return badRequest(c, 'erro lendo XLSX: ' + err.message);
+      }
+    } else {
+      csv = bytes.toString('utf-8');
+      // Remove BOM (Excel costuma exportar com)
+      if (csv.charCodeAt(0) === 0xFEFF) csv = csv.slice(1);
+    }
   } else {
     csv = await c.req.text();
   }
@@ -553,12 +590,55 @@ app.post('/contacts/import', async (c) => {
   return ok(c, result);
 });
 
-app.get('/contacts/export', (c) => {
-  const csv = store.exportContactsCsv(tenantOf(c));
+app.get('/contacts/export', async (c) => {
+  const tid = tenantOf(c);
+  const format = (c.req.query('format') || 'csv').toLowerCase();
+  if (format === 'xlsx') {
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Contatos');
+      const headers = ['name', 'phone', 'email', 'company', 'title', 'website', 'address', 'cpf_cnpj', 'lead_score', 'tags', 'source', 'notes', 'created_at'];
+      ws.addRow(headers);
+      ws.getRow(1).font = { bold: true };
+      const dbMod = await import('./schema.js');
+      const db = dbMod.getCrmDb();
+      const rows = db.prepare('SELECT * FROM crm_contacts WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY created_at DESC').all(tid) as any[];
+      for (const r of rows) {
+        const tags = (() => { try { return JSON.parse(r.tags_json || '[]').join(';'); } catch { return ''; } })();
+        ws.addRow([
+          r.name || '', r.phone || '', r.email || '', r.company || '', r.title || '',
+          r.website || '', r.address || '', r.cpf_cnpj || '', r.lead_score || 0,
+          tags, r.source || '', r.notes || '',
+          new Date(r.created_at).toISOString(),
+        ]);
+      }
+      // Auto-width
+      ws.columns.forEach((col, i) => {
+        let max = headers[i].length;
+        col.eachCell?.({ includeEmpty: false }, (cell) => {
+          const len = String(cell.value || '').length;
+          if (len > max) max = Math.min(len, 50);
+        });
+        col.width = max + 2;
+      });
+      const buf = await wb.xlsx.writeBuffer();
+      return new Response(buf as any, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': 'attachment; filename="contatos.xlsx"',
+        },
+      });
+    } catch (err: any) {
+      return c.json({ error: 'export_failed', message: err.message }, 500);
+    }
+  }
+  // default: CSV (com BOM pra Excel abrir UTF-8 corretamente)
+  const csv = '\uFEFF' + store.exportContactsCsv(tenantOf(c));
   return new Response(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="contacts.csv"',
+      'Content-Disposition': 'attachment; filename="contatos.csv"',
     },
   });
 });
