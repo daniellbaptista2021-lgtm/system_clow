@@ -528,14 +528,69 @@ CLOW_ALLOWED_ORIGINS=https://seu-dominio.com.br
 > token real ficam **somente** no `.env` (modo `600`, dono `root`) e em
 > `/opt/litellm/.env`. **Não copie valores reais para este README.**
 
-### Deploy
+### Deploy (zero-downtime — PM2 cluster mode)
+
+A partir do Comando 12 o `clow` roda em **PM2 cluster com 2 workers**. `pm2 reload` substitui workers **um de cada vez**, mantendo `/health/live` respondendo durante todo o swap.
 
 ```bash
-ssh root@<vps-ip>
+ssh root@<VPS_IP>
 cd /opt/system-clow
-git pull origin main
-npm run build
-pm2 restart clow --update-env
+./scripts/deploy.sh
+```
+
+O `deploy.sh` faz:
+1. `git fetch && git reset --hard origin/<branch>`
+2. `npm ci --no-audit --no-fund`
+3. `npm run build` (tsc + copy migrations/*.sql)
+4. `npm run db:migrate` (idempotente — só aplica novas)
+5. `npm test` (paranoia local antes de tocar prod)
+6. `pm2 reload clow --update-env`
+7. Confirma o `commit_sha` em `/health/version` bate com o do git
+
+Variáveis de ambiente do script:
+- `SKIP_TESTS=1` — pula testes (modo hotfix; só use com algo já validado local)
+- `SKIP_MIGRATE=1` — pula migrations
+- `CLOW_INSTANCES=max` — usa todos os cores (default: 2)
+
+#### Verificando que o reload foi zero-downtime
+
+Em outro shell, antes de rodar `deploy.sh`:
+
+```bash
+while true; do
+  curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" \
+    https://system-clow.pvcorretor01.com.br/health/live
+  sleep 0.2
+done | grep -v "^200 "
+```
+
+Esse comando **não deve imprimir nada** durante o reload. Se aparecer `502`, `503` ou `connection refused`, o reload **não foi zero-downtime** e algum worker derrubou tráfego sozinho.
+
+#### Sobre cluster mode (limitações conhecidas)
+
+**Funciona corretamente com 2+ workers:**
+- `getCrmDb()` — better-sqlite3 abre conexão por worker, WAL permite multi-reader
+- `migrator` — idempotente (skipa migrações já aplicadas em outros workers)
+- `queryCache` — já usa Redis (`REDIS_URL`), invalidação cluster-wide
+- `health.ts` `/health/version` — `commit_sha` igual em todos os workers
+
+**Mitigado via `NODE_APP_INSTANCE === '0'`:**
+- `scheduler.ts` — só roda no worker 0 (evita reminders disparados N vezes, billing tick duplicado, quota rotation 2×, email-marketing 2×). Force em outros workers via `CLOW_FORCE_SCHEDULER=1` (testes).
+
+**⚠️ Estados in-memory que ainda não estão cluster-safe** (TODO antes de subir além de 2 workers):
+- `src/server/rateLimiter.ts` — janela por worker → limites efetivamente ×N
+- `src/server/health.ts` — IP rate limit por worker (DDoS protection)
+- `src/billing/quotaGuard.ts` — race condition no `current_month_messages` (read-modify-write em tenants.json)
+- `src/tenancy/tenantStore.ts` — `activeSessions` Map por worker
+- `src/server/sessionPool.ts` — sessões ficam no worker que criou; precisa sticky session no nginx OR migration pra Redis
+
+Esses ítens devem ir pro Redis em comandos seguintes — atual cluster com 2 workers já dobra os limites por padrão (aceitável para pequena escala, **inaceitável** quando virar 4+).
+
+#### Fallback: deploy modo antigo (com downtime)
+
+Se o reload em cluster falhar e for emergência:
+```bash
+pm2 restart clow --update-env   # 15-30s downtime
 ```
 
 ---

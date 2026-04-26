@@ -30,12 +30,38 @@ const DUE_APPROACHING_HOURS = 24;
 let _timer: NodeJS.Timeout | null = null;
 let _runningTick = false;
 
+/**
+ * Returns true on the worker that should run cluster-wide cron jobs
+ * (reminders, stale detection, billing tick, monthly quota rotation,
+ * etc.). Without this gate, every PM2 cluster worker would tick the
+ * scheduler in parallel — reminders would fire N×, quotas would rotate
+ * N×, etc.
+ *
+ * Conventions:
+ *   - PM2 cluster mode sets NODE_APP_INSTANCE = '0' on the first worker
+ *     and '1', '2', … on subsequent ones. Worker 0 owns scheduling.
+ *   - In fork mode (or in tests / dev where NODE_APP_INSTANCE is
+ *     unset), the variable is undefined and we treat that as "primary"
+ *     so cron still runs.
+ *   - Set CLOW_FORCE_SCHEDULER=1 to override (useful for testing
+ *     scheduler logic on non-zero workers).
+ */
+export function isSchedulerWorker(): boolean {
+  if (process.env.CLOW_FORCE_SCHEDULER === '1') return true;
+  const instance = process.env.NODE_APP_INSTANCE;
+  return instance === undefined || instance === '0';
+}
+
 export function startScheduler(): void {
   if (_timer) return;
+  if (!isSchedulerWorker()) {
+    console.log(`[CRM] Scheduler skipped on worker ${process.env.NODE_APP_INSTANCE} (cluster mode — only worker 0 schedules)`);
+    return;
+  }
   _timer = setInterval(() => { void tick(); }, TICK_INTERVAL_MS);
   // Run once shortly after boot (10s) to process any due items
   setTimeout(() => { void tick(); }, 10_000);
-  console.log(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s)`);
+  console.log(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s, worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`);
 }
 
 export function stopScheduler(): void {
