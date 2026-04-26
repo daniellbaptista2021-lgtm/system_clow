@@ -58,6 +58,17 @@ export async function ingestInbound(channel: Channel2, msg: {
     source: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
   });
 
+  // 2.1. Onda 55: se nao tem avatar e o canal eh Z-API, busca foto de perfil em background
+  // (Meta nao expõe foto de contatos arbitrarios via API publica)
+  if (!contact.avatarUrl && channel.type === 'zapi') {
+    void zapi.fetchProfilePicture(channel, msg.fromPhone).then((url) => {
+      if (url) {
+        try { store.updateContact(tenantId, contact.id, { avatarUrl: url }); }
+        catch { /* silent */ }
+      }
+    });
+  }
+
   // 3. Find or create card on the default sales board
   const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
 

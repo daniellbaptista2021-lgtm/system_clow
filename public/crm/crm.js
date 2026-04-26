@@ -59,6 +59,32 @@ const el = (tag, attrs = {}, ...children) => {
 function initials(name) {
   return (name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0] || '').join('').toUpperCase();
 }
+
+// Onda 55: avatar helper — usa foto se existe, fallback iniciais
+function avatarEl(person, opts) {
+  opts = opts || {};
+  const cls = opts.class || 'card-avatar';
+  const url = person?.avatarUrl || person?.avatar_url || null;
+  const name = person?.name || '?';
+  if (url) {
+    return el('img', {
+      class: cls,
+      src: url,
+      alt: name,
+      loading: 'lazy',
+      style: 'object-fit:cover;background:transparent',
+      on: {
+        error: (e) => {
+          // Se a foto falhar (link expirou, 404, CORS), troca pelas iniciais
+          const fallback = el('div', { class: cls }, initials(name));
+          e.currentTarget.replaceWith(fallback);
+        }
+      }
+    });
+  }
+  return el('div', { class: cls }, initials(name));
+}
+
 function fmtMoney(cents) {
   return `R$ ${((cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -290,7 +316,7 @@ function cardEl(card) {
       }, '⋯'),
     ),
     contact.name ? el('div', { class: 'card-contact' },
-      el('div', { class: 'card-avatar' }, initials(contact.name)),
+      avatarEl(contact, { class: 'card-avatar' }),
       contact.name,
     ) : null,
     el('div', { class: 'card-meta' },
@@ -1086,7 +1112,24 @@ function closeCardPanel() {
 
 function renderPanel() {
   const { card, contact, activities } = state.currentCard;
-  $('#pAvatar').textContent = initials(contact?.name || card.title);
+  // Onda 55: foto WA no painel
+  const pa = $('#pAvatar');
+  if (pa) {
+    pa.innerHTML = '';
+    pa.textContent = '';
+    const url = contact?.avatarUrl || contact?.avatar_url || null;
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = contact?.name || card.title || '';
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+      img.loading = 'lazy';
+      img.onerror = () => { pa.removeChild(img); pa.textContent = initials(contact?.name || card.title); };
+      pa.appendChild(img);
+    } else {
+      pa.textContent = initials(contact?.name || card.title);
+    }
+  }
   $('#pName').textContent = contact?.name || card.title;
   $('#pPhone').textContent = contact?.phone || '—';
   // Populate channel select
@@ -2416,7 +2459,7 @@ function renderContactsList() {
       else toast('Esse contato ainda não tem card', '');
     } } },
       el('div', { class: 'list-item-left' },
-        el('div', { class: 'contact-avatar' }, initials(c.name)),
+        avatarEl(c, { class: 'contact-avatar' }),
         el('div', {},
           el('div', { class: 'list-item-title' }, c.name),
           el('div', { class: 'list-item-sub' }, [c.phone, c.email].filter(Boolean).join(' · ') || '—'),

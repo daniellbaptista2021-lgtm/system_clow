@@ -924,3 +924,10 @@ body {
   pointer-events: auto !important;
 }
 .card-wa-badge--inline .wa-icon svg { width: 12px !important; height: 12px !important; }
+
+/* Onda 55: avatar img (foto WhatsApp) */
+img.card-avatar, img.contact-avatar {
+  border-radius: 50% !important;
+  object-fit: cover;
+  display: inline-block;
+}

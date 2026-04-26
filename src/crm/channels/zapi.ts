@@ -315,3 +315,24 @@ export async function fetchMedia(channel: Channel2, mediaUrl: string): Promise<{
     return { ok: false, error: err.message || 'fetch_failed' };
   }
 }
+
+
+// ─── PROFILE PICTURE (Z-API) ────────────────────────────────────────────
+// GET /instances/{instance}/token/{token}/profile-picture/{phone}
+// Retorna { link: string } ou {} se a pessoa nao tem foto/foto privada.
+export async function fetchProfilePicture(channel: Channel2, phone: string): Promise<string | null> {
+  try {
+    const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+    if (!creds.instanceId || !creds.token) return null;
+    const cleanPhone = String(phone).replace(/\D/g, '');
+    if (!cleanPhone) return null;
+    const u = url(creds, `/profile-picture?phone=${encodeURIComponent(cleanPhone)}`);
+    const r = await fetch(u, { method: 'GET', headers: headers(creds), signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const j: any = await r.json().catch(() => ({}));
+    return (typeof j?.link === 'string' && j.link.startsWith('http')) ? j.link : null;
+  } catch (err: any) {
+    console.warn('[zapi.fetchProfilePicture] failed:', err?.message);
+    return null;
+  }
+}
