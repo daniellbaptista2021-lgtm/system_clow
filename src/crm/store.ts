@@ -1116,6 +1116,51 @@ export interface ImportResult {
   created: number;
   updated: number;
   errors: Array<{ line: number; error: string }>;
+  headerDetected?: string[];
+}
+
+// Onda 57: normalizacao agressiva de header — lowercase + sem acento + sem caracteres especiais
+function normalizeHeader(h: string): string {
+  return String(h || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9 _]/g, ' ') // mantem so alfanum, espaco, _
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Mapa de aliases MUITO amplo — capta variacoes reais de planilhas humanas
+const HEADER_ALIASES: Record<string, string[]> = {
+  name: ['name','nome','nome completo','nome cliente','nome do cliente','nome contato','full name','fullname','full_name','cliente','contato','lead','razao social','nome da empresa','nome lead','primeiro nome','nome e sobrenome'],
+  phone: ['phone','telefone','whatsapp','wpp','wpp1','wa','celular','tel','fone','numero whatsapp','numero celular','telefone celular','celular telefone','tel celular','telefone1','telefone 1','contato whatsapp','contato','telefone whatsapp','celular wpp'],
+  email: ['email','e mail','mail','endereco email','endereco de email','correio eletronico'],
+  company: ['company','empresa','organizacao','organization','org','companhia','negocio','nome empresa'],
+  title: ['title','cargo','funcao','posicao','profissao','ocupacao','job title'],
+  website: ['website','site','url','pagina','homepage','web','www'],
+  address: ['address','endereco','endereço','rua','logradouro','endereco completo','endereco residencial'],
+  cpfCnpj: ['cpf','cnpj','cpf cnpj','cnpj cpf','cpfcnpj','cnpjcpf','documento','doc','cpf_cnpj','cnpj_cpf','rg cpf','cpf rg'],
+  notes: ['notes','observacoes','observacao','obs','notas','comentarios','comentario','descricao','description'],
+  tags: ['tags','tag','etiquetas','etiqueta','categorias','categoria','grupo'],
+  source: ['source','origem','canal','fonte','captado em','captacao','origem medium','origem source','origem campaign','origem campanha','utm source','utm medium','utm campaign'],
+  birthdateTs: ['birthdate','nascimento','data de nascimento','data nascimento','dt nascimento','aniversario'],
+};
+
+// Constroi mapa header_normalizado → campo_canonico
+function buildHeaderMap(headerCols: string[]): Record<number, string> {
+  const map: Record<number, string> = {};
+  for (let i = 0; i < headerCols.length; i++) {
+    const norm = normalizeHeader(headerCols[i]);
+    if (!norm) continue;
+    for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+      if (aliases.includes(norm)) { map[i] = field; break; }
+    }
+  }
+  return map;
+}
+
+// Limpa telefone: mantem so digitos
+function cleanPhone(s: string): string {
+  return String(s || '').replace(/[^\d]/g, '');
 }
 
 export function importContactsCsv(tenantId: string, csvText: string): ImportResult {
@@ -1124,7 +1169,7 @@ export function importContactsCsv(tenantId: string, csvText: string): ImportResu
   let lines = csvText.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return { total: 0, created: 0, updated: 0, errors: [{ line: 0, error: 'csv vazio ou sem header' }] };
 
-  // Diretiva sep= do Excel (ex: 'sep=;' na primeira linha) — pula
+  // Diretiva sep= do Excel
   let sepOverride: ',' | ';' | null = null;
   if (/^sep=([,;])\s*$/i.test(lines[0])) {
     const m = lines[0].match(/^sep=([,;])/i)!;
@@ -1134,21 +1179,41 @@ export function importContactsCsv(tenantId: string, csvText: string): ImportResu
   if (lines.length < 2) return { total: 0, created: 0, updated: 0, errors: [{ line: 0, error: 'csv vazio ou sem header' }] };
 
   const sep = sepOverride || detectCsvSeparator(lines[0]);
-  const header = parseCsvLine(lines[0], sep).map(h => h.trim().toLowerCase());
-  const result: ImportResult = { total: 0, created: 0, updated: 0, errors: [] };
+  const headerCols = parseCsvLine(lines[0], sep);
+  const headerMap = buildHeaderMap(headerCols);
+  const headerDetected = headerCols.map((h, i) => `${h.trim()} → ${headerMap[i] || '(ignorado)'}`);
+
+  const result: ImportResult = { total: 0, created: 0, updated: 0, errors: [], headerDetected } as any;
+
+  // Se nao achou NENHUM campo conhecido, retorna erro claro
+  if (Object.keys(headerMap).length === 0) {
+    return { ...result, errors: [{ line: 1, error: `Nenhuma coluna reconhecida. Headers vistos: ${headerCols.map(h => '"'+h.trim()+'"').join(', ')}. Renomeie pra: nome/telefone/email/empresa/cargo/tags/observacoes` }] };
+  }
 
   for (let i = 1; i < lines.length; i++) {
     try {
       const row = parseCsvLine(lines[i], sep);
+
+      // Skip linha totalmente vazia
+      if (row.every(c => !c || !String(c).trim())) continue;
+
+      // Mapeia campos via headerMap
       const obj: Record<string, string> = {};
-      for (let j = 0; j < header.length && j < row.length; j++) obj[header[j]] = row[j];
+      for (let j = 0; j < headerCols.length && j < row.length; j++) {
+        const field = headerMap[j];
+        if (field && row[j]) obj[field] = String(row[j]).trim();
+      }
       result.total++;
 
-      const name = obj['name'] || obj['nome'] || obj['full_name'];
-      if (!name) { result.errors.push({ line: i + 1, error: 'name obrigatorio' }); continue; }
-
-      const phone = obj['phone'] || obj['telefone'] || obj['whatsapp'] || undefined;
-      const email = obj['email'] || undefined;
+      // Nome: campo name OU fallback phone/email
+      let name = obj.name;
+      const phone = obj.phone ? cleanPhone(obj.phone) : undefined;
+      const email = obj.email;
+      if (!name) name = phone || email || '';
+      if (!name) {
+        result.errors.push({ line: i + 1, error: 'linha sem nome, telefone nem email' });
+        continue;
+      }
 
       // Upsert por phone ou email
       const existing = phone
@@ -1157,16 +1222,16 @@ export function importContactsCsv(tenantId: string, csvText: string): ImportResu
           ? (getCrmDb().prepare('SELECT * FROM crm_contacts WHERE tenant_id=? AND LOWER(email)=LOWER(?)').get(tenantId, email) as any)
           : null;
 
-      const tags = obj['tags'] ? obj['tags'].split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+      const tags = obj.tags ? obj.tags.split(/[;|,]/).map(t => t.trim()).filter(Boolean) : [];
       const fields = {
         name, phone, email,
-        company: obj['company'] || obj['empresa'] || undefined,
-        title: obj['title'] || obj['cargo'] || undefined,
-        website: obj['website'] || obj['site'] || undefined,
-        address: obj['address'] || obj['endereco'] || undefined,
-        cpfCnpj: obj['cpf'] || obj['cnpj'] || obj['cpf_cnpj'] || undefined,
-        notes: obj['notes'] || obj['observacoes'] || undefined,
-        source: obj['source'] || 'import',
+        company: obj.company || undefined,
+        title: obj.title || undefined,
+        website: obj.website || undefined,
+        address: obj.address || undefined,
+        cpfCnpj: obj.cpfCnpj || undefined,
+        notes: obj.notes || undefined,
+        source: obj.source || 'import',
         tags,
       };
 

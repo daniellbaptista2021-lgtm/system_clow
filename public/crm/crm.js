@@ -5843,14 +5843,21 @@ function openImportContactsModal() {
         }
         if (!r.ok) throw new Error(data.message || data.error || 'falha');
         resultBox.innerHTML = '';
-        resultBox.append(el('div', { style: 'background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);padding:14px;border-radius:8px;color:#86efac' },
-          el('div', { style: 'font-weight:700;margin-bottom:8px' }, '✓ Importação concluída'),
+        const noneCreated = (data.created === 0 && data.updated === 0);
+        resultBox.append(el('div', { style: 'background:rgba(' + (noneCreated ? '239,68,68' : '34,197,94') + ',0.1);border:1px solid rgba(' + (noneCreated ? '239,68,68' : '34,197,94') + ',0.3);padding:14px;border-radius:8px;color:' + (noneCreated ? '#fca5a5' : '#86efac') },
+          el('div', { style: 'font-weight:700;margin-bottom:8px' }, noneCreated ? '⚠ Importação processada mas nada foi salvo' : '✓ Importação concluída'),
           el('div', {}, '📥 Total processado: ' + data.total),
           el('div', {}, '🆕 Criados: ' + data.created),
           el('div', {}, '🔄 Atualizados (já existiam pelo telefone/email): ' + data.updated),
+          (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'margin-top:10px;cursor:pointer', open: noneCreated },
+            el('summary', { style: 'color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas — clique pra ver'),
+            el('div', { style: 'background:rgba(155,89,252,0.06);padding:10px;border-radius:6px;margin-top:6px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
+              ...data.headerDetected.map(h => el('div', {}, h)),
+            ),
+          ) : null,
           (data.errors && data.errors.length) ? el('details', { style: 'margin-top:8px;cursor:pointer' },
             el('summary', { style: 'color:#fca5a5' }, '⚠ ' + data.errors.length + ' erro(s) — clique pra ver'),
-            el('div', { style: 'background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;margin-top:6px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace' },
+            el('div', { style: 'background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;margin-top:6px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace' },
               ...data.errors.slice(0, 50).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error))
             ),
           ) : null,
