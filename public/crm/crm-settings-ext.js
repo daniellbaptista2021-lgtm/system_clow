@@ -261,9 +261,39 @@
     const body = $('#settingsBody');
     body.innerHTML = '';
 
+    // Onda 56: tenta /auth/me (user session) e se falhar, fallback /v1/crm/me (api_key CRM)
     let me;
-    try { me = await userApi('/auth/me'); }
-    catch { body.append(el('div', { class: 'empty' }, 'Sessão expirou. Relogue.')); return; }
+    try {
+      me = await userApi('/auth/me');
+    } catch {
+      try {
+        const crmMe = await crmApi('/me');
+        // Adapta formato do /v1/crm/me pra ficar compativel com o /auth/me
+        me = {
+          ok: true,
+          user: {
+            id: crmMe?.tenant?.id || null,
+            email: crmMe?.tenant?.email || '—',
+            name: crmMe?.tenant?.name || '—',
+            tier: crmMe?.tenant?.tier || 'unknown',
+            status: crmMe?.tenant?.status || 'unknown',
+            phone: null,
+            authorized_phones: [],
+            role: 'owner',
+          },
+          _fromCrm: true,
+        };
+      } catch (e2) {
+        body.append(el('div', { class: 'empty', style: 'text-align:center;padding:40px' },
+          el('div', { style: 'font-size:14px;color:var(--text-dim);margin-bottom:14px' }, 'Não foi possível carregar suas configurações.'),
+          el('button', {
+            style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600',
+            on: { click: () => location.reload() }
+          }, 'Recarregar página'),
+        ));
+        return;
+      }
+    }
 
     let usage;
     try { usage = await userApi('/auth/usage'); } catch { usage = null; }
