@@ -793,25 +793,76 @@ pm2 restart clow --update-env   # 15-30s downtime
 
 ---
 
-## 📌 Estado atual (2026-04-23)
+## 📌 Estado atual (2026-04-26)
 
-✅ Concluído
-- 11 ondas do CRM (do schema até UI completa + automações + SSE + UI extras)
-- Integração CRM como modal in-app no System Clow
-- Auto-login via session token (zero fricção)
-- Multi-tenant signup/login (bcrypt + HMAC tokens)
-- Phone whitelist por tenant (proteção contra hijack)
-- Webhook do CRM forwarda pro agente (IA continua respondendo)
-- Stripe Checkout esqueleto + webhook handler
-- 26 commits hoje, todos no GitHub
+**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `87448a9`
 
-⏭️ Próximas etapas
-- UI de signup (landing com seletor de plano + formulário)
-- Conectar Stripe ao vivo (precisa price IDs + secret key)
-- Email transacional (envio da senha temp)
-- Rate limit enforcement por plano (quotas: msgs IA/mês, fluxos n8n)
-- N8N integration (1/4/8 fluxos por plano)
-- White-label tenant config (logo + cores customizáveis)
+### ✅ Production-ready
+
+| Camada | O que tem |
+|---|---|
+| **CRM** | 12 tabelas, 50+ endpoints REST, automations, subscriptions, kanban, agentes, webhook Meta+Z-API, side panel, SSE real-time |
+| **Agente IA** | GLM-5.1 via LiteLLM, 10 ferramentas CRM, sessão persistente, phone whitelist por tenant |
+| **Auth multi-tenant** | Signup/login email+senha (bcrypt), tokens HMAC user_session (30d) e admin (12h), `/auth/verify` aceita ambos |
+| **Billing Stripe** | Checkout ao vivo, webhooks, polling de pagamento PIX/boleto com nudge em 5min, `/signup/success` mostra credenciais inline (não depende de email) |
+| **Cluster mode** | PM2 reload zero-downtime, 5 estados in-memory migrados pra Redis (`clusterStore`), scheduler isolado no worker 0 |
+| **Observabilidade** | `/metrics` Prometheus token-protected (12 métricas), Sentry com auto-tagging tenant/route, `/health/live` `/health/ready` `/health/version` |
+| **Backup** | SQLite snapshot WAL-safe horário (CRM + memory), retenção tier hourly/daily/weekly, restore com pre-backup automático |
+| **CI** | 4 jobs paralelos (typecheck, vitest, gitleaks, build) + 2 guards extras (bare `require()` em ESM, smoke import do server.js) |
+| **Mailer** | 3 backends (SMTP/Resend/SendGrid), fallback automático em disco (`data/pending-emails/*.json`) se nenhum configurado |
+| **Ops docs** | Soft-launch checklist, incident runbook, on-call handbook, rollback procedures (em [docs/operations/](docs/operations/)) |
+
+### 📈 Recent improvements (últimos 7 dias)
+
+- **`87448a9`** — `/signup/success` mostra email+senha inline (botão Copiar), independe de SMTP. Mailer faz fallback em disco se sem backend.
+- **`ec794a2`** — `/auth/verify` agora aceita `usr.*` (user_session); CRM "Relogar" virou mini-form inline (zero refresh)
+- **`996ac11`** — CI guard contra bare `require()` em ESM compilado + smoke-import de `dist/server/server.js`
+- **`4ae9044`** — Hotfix prod: `proper-lockfile` via `createRequire(import.meta.url)` (incidente 2026-04-26 que tirou prod do ar)
+- **`8dc0667`** — Polling de pagamento PIX/boleto: banner "demorando mais que esperado" em 5min
+- **`1bc714a`** — Docs ops: soft-launch checklist + incident runbook + on-call handbook + rollback
+- **`dc9e291`** — Perf CRM: SQLite WAL tuning + prepared statement cache + query audit + benchmark
+- **`99e5654`** — Observability: Prometheus `/metrics` + Sentry error tracking com auto-tagging
+- Wave anterior: backup hourly snapshot + cluster mode 2 workers + cluster-safe state em Redis
+
+### ⏭️ Próximas etapas (em aberto)
+
+- **SMTP em produção** — escolher backend (Gmail App Password / Resend / Hostinger) e setar env vars MAILER_* via `pm2 set` (instruções abaixo do README)
+- **Branch protection na `main`** — ativar via UI do GitHub (instruções na seção CI)
+- **Sticky session no nginx** — só necessário se aumentar `CLOW_INSTANCES` além de 2 (`sessionPool` ainda é worker-local)
+- **Limpar pending-emails** — se houver acúmulo em `data/pending-emails/`, tem dois caminhos: configurar SMTP (re-envia automático) ou processar manualmente
+- **N8N integration** — 1/4/8 fluxos por plano (esqueleto pronto em `src/n8n/`)
+- **White-label** — logo + cores customizáveis por tenant
+
+### 🛠️ Como configurar SMTP em produção
+
+```bash
+# Escolha UMA opção:
+
+# A) Gmail App Password (3 min, mais rápido)
+ssh root@<VPS_IP>
+pm2 set clow:MAILER_SMTP_HOST smtp.gmail.com
+pm2 set clow:MAILER_SMTP_PORT 465
+pm2 set clow:MAILER_SMTP_SECURE true
+pm2 set clow:MAILER_SMTP_USER seuemail@gmail.com
+pm2 set clow:MAILER_SMTP_PASS "<app-password-do-google>"
+pm2 set clow:MAILER_FROM_EMAIL seuemail@gmail.com
+pm2 reload clow --update-env
+
+# B) Resend.com (5 min, free tier 3k emails/mês)
+pm2 set clow:MAILER_RESEND_API_KEY "re_xxx..."
+pm2 reload clow --update-env
+
+# C) Hostinger SMTP (precisa criar mailbox no hPanel antes)
+pm2 set clow:MAILER_SMTP_HOST smtp.hostinger.com
+pm2 set clow:MAILER_SMTP_PORT 465
+pm2 set clow:MAILER_SMTP_SECURE true
+pm2 set clow:MAILER_SMTP_USER "<caixa@pvcorretor01.com.br>"
+pm2 set clow:MAILER_SMTP_PASS "<senha-da-caixa>"
+pm2 set clow:MAILER_FROM_EMAIL "<mesma-caixa@pvcorretor01.com.br>"
+pm2 reload clow --update-env
+```
+
+Sem SMTP configurado o sistema **continua funcionando** — emails caem em `data/pending-emails/` como JSON pra processar manualmente, e a tela `/signup/success` mostra as credenciais inline.
 
 ---
 
