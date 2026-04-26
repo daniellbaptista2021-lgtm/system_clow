@@ -164,6 +164,8 @@ paths = [
     '''dist/''',
     '''\.git/''',
     '''package-lock\.json$''',
+    '''\.gitleaks\.toml$''',  # próprio arquivo de regras (regex's contêm strings sensíveis)
+    '''\.gitleaks-report.*\.json$''',
     '''\.png$''',
     '''\.jpg$''',
     '''\.jpeg$''',
