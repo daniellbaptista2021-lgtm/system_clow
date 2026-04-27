@@ -135,6 +135,7 @@ function rowToSub(r: any): Subscription {
     nextChargeAt: r.next_charge_at, status: r.status,
     remindersSent: r.reminders_sent, createdAt: r.created_at,
     cancelledAt: r.cancelled_at ?? undefined,
+    lastPaidAt: r.last_paid_at ?? undefined,
   };
 }
 
@@ -154,11 +155,13 @@ export function markPaid(tenantId: string, subId: string): Subscription | null {
     type: 'billing', channel: 'manual',
     content: `✅ Pagamento confirmado: ${sub.planName} ${fmtMoney(sub.amountCents)} (prox: ${new Date(advanceDate(sub.nextChargeAt, sub.cycle)).toLocaleDateString('pt-BR')})`,
   });
+  const paidAt = Date.now();
   if (sub.cycle === 'one_time') {
     return store.updateSubscription(tenantId, subId, {
       remindersSent: 0,
       status: 'cancelled',
-      cancelledAt: Date.now(),
+      cancelledAt: paidAt,
+      lastPaidAt: paidAt,
     });
   }
   // Avanca a partir de NOW (nao da data antiga) pra evitar acumulo de
@@ -170,5 +173,6 @@ export function markPaid(tenantId: string, subId: string): Subscription | null {
     remindersSent: 0,
     status: 'active',
     nextChargeAt: advanceDate(baseMs, sub.cycle),
+    lastPaidAt: paidAt,
   });
 }

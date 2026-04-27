@@ -67,10 +67,10 @@ export function updateSubscription(tenantId: string, subId: string, patch: Parti
   const upd = { ...existing, ...patch };
   db.prepare(`
     UPDATE crm_subscriptions SET plan_name = ?, amount_cents = ?, cycle = ?, next_charge_at = ?,
-      status = ?, reminders_sent = ?, cancelled_at = ?
+      status = ?, reminders_sent = ?, cancelled_at = ?, last_paid_at = ?
     WHERE id = ? AND tenant_id = ?
   `).run(upd.planName, upd.amountCents, upd.cycle, upd.nextChargeAt, upd.status,
-    upd.remindersSent, upd.cancelledAt ?? null, subId, tenantId);
+    upd.remindersSent, upd.cancelledAt ?? null, upd.lastPaidAt ?? null, subId, tenantId);
   return upd;
 }
 
@@ -80,6 +80,7 @@ function rowToSubscription(r: any): Subscription {
     planName: r.plan_name, amountCents: r.amount_cents, cycle: r.cycle as BillingCycle,
     nextChargeAt: r.next_charge_at, status: r.status as SubscriptionStatus,
     remindersSent: r.reminders_sent, createdAt: r.created_at, cancelledAt: r.cancelled_at ?? undefined,
+    lastPaidAt: r.last_paid_at ?? undefined,
   };
 }
 

@@ -211,6 +211,9 @@ export interface Subscription {
   remindersSent: number;
   createdAt: number;
   cancelledAt?: number;
+  /** Timestamp do último markPaid. Permite a UI distinguir
+   *  "sub paga nesse ciclo" de "aguardando pagamento". */
+  lastPaidAt?: number;
 }
 
 export interface Automation {

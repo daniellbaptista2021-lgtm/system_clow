@@ -268,29 +268,34 @@
         const dueDays = Math.ceil(dueMs / 86400000);
         const overdue = dueMs < 0 && s.status === 'active';
         const overdueDays = overdue ? Math.abs(dueDays) : 0;
-        // "Em dia" = active + proxima cobranca > 24h. Nesse estado o
-        // botao "Marcar como pago" some (nada a pagar agora) e mostra
-        // pill verde "Paga". Caso contrario (vence hoje/amanha/atrasada)
-        // botao reaparece.
-        const inGracePeriod = s.status === 'active' && dueMs > 86400000;
-        const needsAction = (s.status === 'active' && !inGracePeriod) || s.status === 'past_due';
-        // Formata "vence" humano: hoje, em 3 dias, atrasada 5 dias
+        // Lógica baseada em lastPaidAt (vindo do backend, set por
+        // markPaid). Calcula início do ciclo atual = nextChargeAt - 1
+        // ciclo. Se lastPaidAt > inicio_ciclo, foi pago nesse ciclo.
+        const cycleMs = ({ weekly: 7*86400000, monthly: 30*86400000, quarterly: 90*86400000, yearly: 365*86400000, one_time: Infinity })[s.cycle] || 30*86400000;
+        const currentCycleStart = s.nextChargeAt - cycleMs;
+        const paidThisCycle = s.lastPaidAt && s.lastPaidAt >= currentCycleStart;
+        // Botao "Marcar como pago" so aparece se: ativo/vencida E ainda
+        // nao foi pago nesse ciclo. Cancelada nao mostra.
+        const needsAction = (s.status === 'active' || s.status === 'past_due') && !paidThisCycle;
+        // Formata "vence" humano
         const dueText = overdue
           ? `atrasada ${overdueDays}d`
           : dueDays === 0 ? 'vence hoje'
           : dueDays === 1 ? 'vence amanhã'
           : dueDays <= 7 ? `vence em ${dueDays}d`
           : `próxima cobrança ${fmtDate(s.nextChargeAt)}`;
-        // Cores do status (sutil, sem dominar o card)
-        const statusColors = inGracePeriod
-          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Paga' }
-          : s.status === 'active' && !overdue
-          ? { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'A vencer' }
-          : s.status === 'past_due' || overdue
-          ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
-          : s.status === 'cancelled'
+        // Cores do status:
+        //  - Cancelada → cinza
+        //  - paidThisCycle → verde "Paga"
+        //  - overdue/past_due → vermelha "Atrasada"
+        //  - resto (active aguardando 1º pagamento ou ciclo novo) → âmbar "Aguardando pagamento"
+        const statusColors = s.status === 'cancelled'
           ? { bg: 'rgba(148,163,184,.12)', border: 'rgba(148,163,184,.30)', fg: '#94A3B8', label: 'Cancelada' }
-          : { bg: 'rgba(148,163,184,.10)', border: 'rgba(148,163,184,.25)', fg: '#94A3B8', label: s.status };
+          : paidThisCycle
+          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Paga' }
+          : (s.status === 'past_due' || overdue)
+          ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
+          : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'Aguardando pagamento' };
         const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
 
         const subItem = el('div', {
