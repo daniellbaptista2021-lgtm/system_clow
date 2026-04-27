@@ -23,7 +23,7 @@
 import { Hono } from 'hono';
 import { findTenantByEmail, createTenant, updateTenant } from '../tenancy/tenantStore.js';
 import bcrypt from 'bcryptjs';
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes } from 'crypto';
 import { sendWelcomeEmail } from '../notifications/mailer.js';
 import { sendWelcomeWhatsApp } from '../notifications/whatsapper.js';
 import { logger } from '../utils/logger.js';
@@ -44,23 +44,10 @@ function whatsappAddonPriceId(): string | undefined {
   return process.env.STRIPE_PRICE_WHATSAPP_ADDON;
 }
 
-// Plano Piloto Empresarial — R$120/mes recorrente, tier empresarial completo.
-// Acesso restrito por senha (CLOW_PILOT_ACCESS_CODE) compartilhada manualmente
-// no grupo de corretores. Sem essa senha, endpoint retorna 401.
-function pilotPriceId(): string | undefined {
-  return process.env.STRIPE_PRICE_PILOT;
-}
-function pilotAccessCode(): string | undefined {
-  return process.env.CLOW_PILOT_ACCESS_CODE;
-}
-function isValidPilotCode(input: string | undefined): boolean {
-  const expected = pilotAccessCode();
-  if (!expected || !input) return false;
-  const a = Buffer.from(String(input), 'utf-8');
-  const b = Buffer.from(expected, 'utf-8');
-  if (a.length !== b.length) return false;
-  try { return timingSafeEqual(a, b); } catch { return false; }
-}
+// Piloto Empresarial — antes era endpoint dedicado, agora e cupom no Stripe:
+// promotion_code "CORRETOR2026" zera R$1297 -> R$120/mes (forever, so empresarial).
+// Cliente do grupo de corretores entra em /pricing, escolhe Empresarial, e
+// digita o codigo no campo "Adicionar cupom" do Stripe Checkout.
 
 function publicBase(): string {
   return process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
@@ -134,6 +121,10 @@ app.post('/api/billing/checkout', async (c) => {
       payment_method_options: {
         boleto: { expires_after_days: 3 },
       },
+      // Habilita campo "Adicionar codigo promocional" no Checkout. Cupons sao
+      // geridos via Dashboard/API (ex.: CORRETOR2026 zera R$1297 -> R$120/mes
+      // forever pra grupo piloto de corretores).
+      allow_promotion_codes: true,
       metadata: {
         plan, email, full_name, cpf: cpfDigits,
         phone: phoneDigits,
@@ -181,110 +172,6 @@ app.post('/api/billing/checkout', async (c) => {
         }
         const session = await sk.checkout.sessions.create(fallbackParams);
         logger.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
-        return c.json(isEmbedded
-          ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded', fallback: 'card_only' }
-          : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted', fallback: 'card_only' });
-      } catch (err2: any) {
-        return c.json({ error: 'checkout_failed', message: err2.message }, 502);
-      }
-    }
-    return c.json({ error: 'checkout_failed', message: err.message }, 502);
-  }
-});
-
-// ─── POST /api/billing/pilot-checkout — Plano Piloto Empresarial ─────
-// Fluxo restrito: cliente recebe access_code manualmente do owner (ex.:
-// grupo de corretores), digita no modal "Cadastre-se agora" do shell, e
-// vai pro Stripe pagando R$120/mes recorrente em vez de R$1297/mes.
-// Tier de SaaS = empresarial (todas as features), preco = piloto.
-app.post('/api/billing/pilot-checkout', async (c) => {
-  const body = await c.req.json().catch(() => ({})) as any;
-  const { access_code, email, full_name, cpf, phone, ui_mode } = body;
-
-  if (!access_code) {
-    return c.json({ error: 'missing_access_code', message: 'Senha de acesso obrigatoria.' }, 400);
-  }
-  if (!isValidPilotCode(access_code)) {
-    // Mesma resposta pra senha errada OU CLOW_PILOT_ACCESS_CODE nao setado;
-    // evita revelar config status pro mundo.
-    return c.json({ error: 'invalid_access_code', message: 'Senha de acesso invalida.' }, 401);
-  }
-  if (!email || !full_name || !cpf || !phone) {
-    return c.json({ error: 'missing_fields', message: 'Preencha email, nome, CPF e telefone.' }, 400);
-  }
-  if (findTenantByEmail(String(email).toLowerCase())) {
-    return c.json({ error: 'email_in_use', message: 'Esse email ja tem conta.' }, 409);
-  }
-  const priceId = pilotPriceId();
-  if (!priceId) {
-    return c.json({ error: 'pilot_price_not_configured', message: 'Plano piloto temporariamente indisponivel.' }, 503);
-  }
-
-  const isEmbedded = ui_mode === 'embedded';
-
-  try {
-    const sk = await stripe();
-    const cpfDigits = String(cpf).replace(/\D/g, '');
-    const phoneDigits = String(phone).replace(/\D/g, '');
-
-    const sessionParams: any = {
-      mode: 'subscription',
-      payment_method_types: paymentMethodsFor('empresarial'),
-      line_items: [{ price: priceId, quantity: 1 }],
-      customer_email: email,
-      locale: 'pt-BR',
-      billing_address_collection: 'required',
-      tax_id_collection: { enabled: true },
-      payment_method_options: { boleto: { expires_after_days: 3 } },
-      // tier empresarial mesmo pagando R$120 (provisionFromSession le 'plan' do metadata)
-      metadata: {
-        plan: 'empresarial',
-        is_pilot: 'true',
-        email, full_name,
-        cpf: cpfDigits, phone: phoneDigits,
-      },
-      subscription_data: {
-        metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
-      },
-    };
-    if (isEmbedded) {
-      sessionParams.ui_mode = 'embedded';
-      sessionParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
-    } else {
-      sessionParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
-      sessionParams.cancel_url = `${publicBase()}/`;
-    }
-
-    const session = await sk.checkout.sessions.create(sessionParams);
-    logger.info(`[stripe pilot] checkout criado para ${email} (R$120/mes empresarial, ui=${isEmbedded ? 'embedded' : 'hosted'})`);
-    return c.json(isEmbedded
-      ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded' }
-      : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted' });
-  } catch (err: any) {
-    logger.error('[stripe pilot-checkout] error:', err.message);
-    if (/payment_method_type|not_allowed|not.*enabled/i.test(err.message || '')) {
-      try {
-        const sk = await stripe();
-        const cpfDigits = String(cpf).replace(/\D/g, '');
-        const phoneDigits = String(phone).replace(/\D/g, '');
-        const fallbackParams: any = {
-          mode: 'subscription',
-          payment_method_types: ['card'],
-          line_items: [{ price: priceId, quantity: 1 }],
-          customer_email: email,
-          locale: 'pt-BR',
-          billing_address_collection: 'required',
-          metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
-          subscription_data: { metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits } },
-        };
-        if (isEmbedded) {
-          fallbackParams.ui_mode = 'embedded';
-          fallbackParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
-        } else {
-          fallbackParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
-          fallbackParams.cancel_url = `${publicBase()}/`;
-        }
-        const session = await sk.checkout.sessions.create(fallbackParams);
         return c.json(isEmbedded
           ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded', fallback: 'card_only' }
           : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted', fallback: 'card_only' });
