@@ -63,14 +63,21 @@ async function emit(size, maskable) {
   console.log(`✓ ${outPath} (${size}x${size}, ${maskable ? 'maskable' : 'any'})`);
 }
 
+async function emitNamed(filename, size, opts = {}) {
+  const svg = buildSVG(size, opts);
+  const outPath = path.join(OUT, filename);
+  await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toFile(outPath);
+  console.log(`✓ ${filename} (${size}x${size}${opts.maskable ? ', maskable' : ''})`);
+}
+
 (async () => {
+  // PWA icons (manifest icons array)
   await emit(192, false);
   await emit(512, false);
   await emit(192, true);
   await emit(512, true);
-  // O 'icon-512-gold.png' e 'icon-192-gold.png' eram do tema antigo bege —
-  // sobrescreve com a nova versao preta+branca pra nao ter inconsistencia.
-  // O manifest aponta pra eles; trocar referência seria mais code change.
+  // Aliases -gold (manifest aponta pra eles tambem; sobrescreve com a
+  // nova versao preta pra nao ter inconsistencia)
   for (const size of [192, 512]) {
     const svg = buildSVG(size, { maskable: false });
     await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toFile(
@@ -78,5 +85,13 @@ async function emit(size, maskable) {
     );
     console.log(`✓ icon-${size}-gold.png (overwritten)`);
   }
-  console.log('\nDone — 6 PNGs gerados.');
+  // Favicons (32x32 — browser tab) e suas variantes -gold
+  await emitNamed('favicon.png', 64);
+  await emitNamed('favicon-gold.png', 64);
+  // Apple touch icon (180x180 — iOS home screen) e variantes
+  await emitNamed('apple-touch-icon.png', 180);
+  await emitNamed('apple-touch-icon-gold.png', 180);
+  // logo-new.png (180x180, referenciado no manifest icons[])
+  await emitNamed('logo-new.png', 180);
+  console.log('\nDone — 11 PNGs gerados (PWA + favicon + apple touch + logo-new).');
 })();
