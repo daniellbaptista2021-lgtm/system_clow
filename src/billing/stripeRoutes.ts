@@ -23,7 +23,7 @@
 import { Hono } from 'hono';
 import { findTenantByEmail, createTenant, updateTenant } from '../tenancy/tenantStore.js';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { sendWelcomeEmail } from '../notifications/mailer.js';
 import { sendWelcomeWhatsApp } from '../notifications/whatsapper.js';
 import { logger } from '../utils/logger.js';
@@ -42,6 +42,24 @@ function priceIds(): Record<string, string | undefined> {
 // Onda 53: Add-on WhatsApp (Z-API extra), R$ 100/mes recorrente por numero
 function whatsappAddonPriceId(): string | undefined {
   return process.env.STRIPE_PRICE_WHATSAPP_ADDON;
+}
+
+// Plano Piloto Empresarial — R$120/mes recorrente, tier empresarial completo.
+// Acesso restrito por senha (CLOW_PILOT_ACCESS_CODE) compartilhada manualmente
+// no grupo de corretores. Sem essa senha, endpoint retorna 401.
+function pilotPriceId(): string | undefined {
+  return process.env.STRIPE_PRICE_PILOT;
+}
+function pilotAccessCode(): string | undefined {
+  return process.env.CLOW_PILOT_ACCESS_CODE;
+}
+function isValidPilotCode(input: string | undefined): boolean {
+  const expected = pilotAccessCode();
+  if (!expected || !input) return false;
+  const a = Buffer.from(String(input), 'utf-8');
+  const b = Buffer.from(expected, 'utf-8');
+  if (a.length !== b.length) return false;
+  try { return timingSafeEqual(a, b); } catch { return false; }
 }
 
 function publicBase(): string {
@@ -135,6 +153,94 @@ app.post('/api/billing/checkout', async (c) => {
           subscription_data: { metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits } },
         });
         logger.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
+        return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
+      } catch (err2: any) {
+        return c.json({ error: 'checkout_failed', message: err2.message }, 502);
+      }
+    }
+    return c.json({ error: 'checkout_failed', message: err.message }, 502);
+  }
+});
+
+// ─── POST /api/billing/pilot-checkout — Plano Piloto Empresarial ─────
+// Fluxo restrito: cliente recebe access_code manualmente do owner (ex.:
+// grupo de corretores), digita no modal "Cadastre-se agora" do shell, e
+// vai pro Stripe pagando R$120/mes recorrente em vez de R$1297/mes.
+// Tier de SaaS = empresarial (todas as features), preco = piloto.
+app.post('/api/billing/pilot-checkout', async (c) => {
+  const body = await c.req.json().catch(() => ({})) as any;
+  const { access_code, email, full_name, cpf, phone } = body;
+
+  if (!access_code) {
+    return c.json({ error: 'missing_access_code', message: 'Senha de acesso obrigatoria.' }, 400);
+  }
+  if (!isValidPilotCode(access_code)) {
+    // Mesma resposta pra senha errada OU CLOW_PILOT_ACCESS_CODE nao setado;
+    // evita revelar config status pro mundo.
+    return c.json({ error: 'invalid_access_code', message: 'Senha de acesso invalida.' }, 401);
+  }
+  if (!email || !full_name || !cpf || !phone) {
+    return c.json({ error: 'missing_fields', message: 'Preencha email, nome, CPF e telefone.' }, 400);
+  }
+  if (findTenantByEmail(String(email).toLowerCase())) {
+    return c.json({ error: 'email_in_use', message: 'Esse email ja tem conta.' }, 409);
+  }
+  const priceId = pilotPriceId();
+  if (!priceId) {
+    return c.json({ error: 'pilot_price_not_configured', message: 'Plano piloto temporariamente indisponivel.' }, 503);
+  }
+
+  try {
+    const sk = await stripe();
+    const cpfDigits = String(cpf).replace(/\D/g, '');
+    const phoneDigits = String(phone).replace(/\D/g, '');
+
+    const sessionParams: any = {
+      mode: 'subscription',
+      payment_method_types: paymentMethodsFor('empresarial'),
+      line_items: [{ price: priceId, quantity: 1 }],
+      customer_email: email,
+      locale: 'pt-BR',
+      billing_address_collection: 'required',
+      tax_id_collection: { enabled: true },
+      payment_method_options: { boleto: { expires_after_days: 3 } },
+      success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${publicBase()}/`,
+      // tier empresarial mesmo pagando R$120 (provisionFromSession le 'plan' do metadata)
+      metadata: {
+        plan: 'empresarial',
+        is_pilot: 'true',
+        email, full_name,
+        cpf: cpfDigits, phone: phoneDigits,
+      },
+      subscription_data: {
+        metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
+      },
+    };
+
+    const session = await sk.checkout.sessions.create(sessionParams);
+    logger.info(`[stripe pilot] checkout criado para ${email} (R$120/mes empresarial)`);
+    return c.json({ ok: true, url: session.url, session_id: session.id });
+  } catch (err: any) {
+    logger.error('[stripe pilot-checkout] error:', err.message);
+    // Fallback card-only se boleto/pix nao habilitado
+    if (/payment_method_type|not_allowed|not.*enabled/i.test(err.message || '')) {
+      try {
+        const sk = await stripe();
+        const cpfDigits = String(cpf).replace(/\D/g, '');
+        const phoneDigits = String(phone).replace(/\D/g, '');
+        const session = await sk.checkout.sessions.create({
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [{ price: priceId, quantity: 1 }],
+          customer_email: email,
+          locale: 'pt-BR',
+          billing_address_collection: 'required',
+          success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${publicBase()}/`,
+          metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
+          subscription_data: { metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits } },
+        });
         return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
       } catch (err2: any) {
         return c.json({ error: 'checkout_failed', message: err2.message }, 502);
@@ -258,6 +364,7 @@ async function provisionFromSession(session: any): Promise<void> {
   const tempPassword = randomBytes(9).toString('base64url'); // 12 chars, legível
   const password_hash = await bcrypt.hash(tempPassword, 10);
   const { tenant } = createTenant({ email, name: md.full_name || email, tier: (md.plan as any) || 'starter' });
+  const isPilot = md.is_pilot === 'true' || md.is_pilot === true;
   updateTenant(tenant.id, {
     password_hash,
     full_name: md.full_name,
@@ -268,8 +375,9 @@ async function provisionFromSession(session: any): Promise<void> {
     stripe_subscription_id: session.subscription,
     status: 'active',
     temp_password_for_email: tempPassword,
+    ...(isPilot ? { is_pilot: true, pilot_started_at: new Date().toISOString() } : {}),
   } as any);
-  logger.info(`[stripe] created tenant ${email} (${md.plan}); disparando email + whatsapp`);
+  logger.info(`[stripe] created tenant ${email} (${md.plan}${isPilot ? ' PILOT' : ''}); disparando email + whatsapp`);
 
   // Dispara email + WhatsApp em paralelo; nenhum é bloqueante
   const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
