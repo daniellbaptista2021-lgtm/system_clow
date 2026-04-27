@@ -502,17 +502,18 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
 .plan-list li svg{flex-shrink:0;width:18px;height:18px;margin-top:2px;color:var(--violet-1)}
 .plan .btn{width:100%;padding:16px 22px}
 
-/* Plano destaque (Profissional) */
+/* Plano destaque (Profissional) — destaque sem scale pra manter alinhamento
+   horizontal dos precos com os outros 2 cards. Destaque preservado via
+   gradient bg + ring duplo + glow ao redor (mais elegante que scale). */
 .plan.featured{
   background:
-    linear-gradient(180deg,rgba(139,124,246,.08),rgba(91,70,228,.06) 50%,rgba(255,255,255,.02));
+    linear-gradient(180deg,rgba(139,124,246,.10),rgba(91,70,228,.07) 50%,rgba(255,255,255,.02));
   box-shadow:
-    0 0 0 1px rgba(139,124,246,.35) inset,
-    0 30px 80px -20px rgba(124,92,255,.22),
-    0 60px 120px -40px rgba(91,70,228,.2);
-  transform:scale(1.03);
+    0 0 0 1.5px rgba(139,124,246,.50) inset,
+    0 0 0 4px rgba(139,124,246,.10),
+    0 30px 80px -20px rgba(124,92,255,.30),
+    0 60px 120px -40px rgba(91,70,228,.25);
 }
-@media (max-width:980px){.plan.featured{transform:none}}
 .plan.featured::before{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:
@@ -1113,7 +1114,7 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
         <div class="plan-divider"></div>
         <ul class="plan-list">
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>1 usuário · 1 número WhatsApp incluso</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><b>1 telefone</b> autorizado a comandar a IA via WhatsApp</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>1 telefone</b> autorizado a comandar a IA via WhatsApp</span></li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Conexão via Z-API ou Meta Cloud API oficial</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>500 mensagens IA/mês</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>IA dev full-stack (equivalente a um sênior)</li>
@@ -1141,7 +1142,7 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
         <div class="plan-divider"></div>
         <ul class="plan-list">
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>5 usuários · 1 número WhatsApp incluso</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><b>3 telefones</b> autorizados a comandar a IA via WhatsApp</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>3 telefones</b> autorizados a comandar a IA via WhatsApp</span></li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Até 5 números no total (extras a R$ 100/mês via Z-API)</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>3.000 mensagens IA/mês</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>IA dev full-stack (equivalente a um sênior)</li>
@@ -1167,7 +1168,7 @@ section{position:relative;padding:140px 0;scroll-margin-top:100px}
         <div class="plan-divider"></div>
         <ul class="plan-list">
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>20 usuários · 1 número WhatsApp incluso</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><b>5 telefones</b> autorizados a comandar a IA via WhatsApp</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>5 telefones</b> autorizados a comandar a IA via WhatsApp</span></li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Até 10 números no total (extras a R$ 100/mês via Z-API)</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>8.000 mensagens IA/mês</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 12 5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>IA dev full-stack + integrações customizadas</li>
