@@ -1771,7 +1771,7 @@ async function renderTasksView() {
     const l = $('#tasksList');
     l.innerHTML = '';
     if (!data.tasks || data.tasks.length === 0) {
-      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhuma tarefa'));
+      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim);line-height:1.6' }, 'Nenhuma tarefa ainda. Abra um card do cliente no Pipeline → aba Vínculos → "+ Adicionar" em Tarefas pra criar.'));
       return;
     }
     for (const t of data.tasks) {

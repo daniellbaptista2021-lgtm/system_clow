@@ -97,7 +97,6 @@
               el('option', { value: 'cancelled' }, 'Canceladas'),
             ),
           ),
-          el('div', {}, el('button', { id: 'newSubBtn' }, '+ Nova Assinatura')),
         ),
         el('div', { class: 'list', id: 'subsList' }),
       ),
@@ -112,7 +111,6 @@
     });
     $('#browseTemplatesBtn')?.addEventListener('click', openTemplatesModal);
     $('#newAutomationBtn')?.addEventListener('click', openAutomationModal);
-    $('#newSubBtn')?.addEventListener('click', openSubscriptionModal);
     $('#subStatusFilter')?.addEventListener('change', renderSubsList);
   }
 
@@ -265,7 +263,7 @@
       ]);
       const contactsMap = new Map((contactsRes.contacts || []).map(c => [c.id, c]));
       if (!r.subscriptions.length) {
-        l.append(el('div', { class: 'empty' }, 'Nenhuma assinatura. Clique "+ Nova Assinatura" pra criar.'));
+        l.append(el('div', { class: 'empty' }, 'Nenhuma mensalidade ainda. Adicione abrindo o card do cliente no Pipeline → aba Vínculos → "+ Adicionar" em Mensalidades.'));
         return;
       }
       // Ordena: pendentes/atrasadas no topo, pagas no meio, canceladas
