@@ -138,7 +138,12 @@ function rowToSub(r: any): Subscription {
   };
 }
 
-/** Manual: mark a subscription as paid (called via API/button) */
+/** Manual: mark a subscription as paid (called via API/button).
+ *  - Avanca next_charge_at pro proximo ciclo (monthly/weekly/etc).
+ *  - Reseta reminders, mantem status active.
+ *  - one_time: marca como cancelled (pago e fim).
+ *  Sem isso, nextChargeAt ficava na mesma data passada e o botao
+ *  "Marcar como pago" aparecia eternamente no card. */
 export function markPaid(tenantId: string, subId: string): Subscription | null {
   const db = getCrmDb();
   const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ?').get(subId, tenantId) as any;
@@ -147,11 +152,23 @@ export function markPaid(tenantId: string, subId: string): Subscription | null {
   store.logActivity(tenantId, {
     cardId: sub.cardId, contactId: sub.contactId,
     type: 'billing', channel: 'manual',
-    content: `✅ Pagamento confirmado: ${sub.planName} ${fmtMoney(sub.amountCents)}`,
+    content: `✅ Pagamento confirmado: ${sub.planName} ${fmtMoney(sub.amountCents)} (prox: ${new Date(advanceDate(sub.nextChargeAt, sub.cycle)).toLocaleDateString('pt-BR')})`,
   });
-  // Reset reminders + (re)activate
+  if (sub.cycle === 'one_time') {
+    return store.updateSubscription(tenantId, subId, {
+      remindersSent: 0,
+      status: 'cancelled',
+      cancelledAt: Date.now(),
+    });
+  }
+  // Avanca a partir de NOW (nao da data antiga) pra evitar acumulo de
+  // ciclos vencidos quando a sub estava muito atrasada. Caso o user
+  // marque pago antes do vencimento, avanca a partir do nextChargeAt
+  // original pra preservar o calendario.
+  const baseMs = sub.nextChargeAt < Date.now() ? Date.now() : sub.nextChargeAt;
   return store.updateSubscription(tenantId, subId, {
     remindersSent: 0,
     status: 'active',
+    nextChargeAt: advanceDate(baseMs, sub.cycle),
   });
 }

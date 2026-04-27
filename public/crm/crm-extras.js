@@ -268,16 +268,24 @@
         const dueDays = Math.ceil(dueMs / 86400000);
         const overdue = dueMs < 0 && s.status === 'active';
         const overdueDays = overdue ? Math.abs(dueDays) : 0;
+        // "Em dia" = active + proxima cobranca > 24h. Nesse estado o
+        // botao "Marcar como pago" some (nada a pagar agora) e mostra
+        // pill verde "Paga". Caso contrario (vence hoje/amanha/atrasada)
+        // botao reaparece.
+        const inGracePeriod = s.status === 'active' && dueMs > 86400000;
+        const needsAction = (s.status === 'active' && !inGracePeriod) || s.status === 'past_due';
         // Formata "vence" humano: hoje, em 3 dias, atrasada 5 dias
         const dueText = overdue
           ? `atrasada ${overdueDays}d`
           : dueDays === 0 ? 'vence hoje'
           : dueDays === 1 ? 'vence amanhã'
           : dueDays <= 7 ? `vence em ${dueDays}d`
-          : `vence ${fmtDate(s.nextChargeAt)}`;
+          : `próxima cobrança ${fmtDate(s.nextChargeAt)}`;
         // Cores do status (sutil, sem dominar o card)
-        const statusColors = s.status === 'active' && !overdue
-          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Ativa' }
+        const statusColors = inGracePeriod
+          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Paga' }
+          : s.status === 'active' && !overdue
+          ? { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'A vencer' }
           : s.status === 'past_due' || overdue
           ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
           : s.status === 'cancelled'
@@ -317,17 +325,20 @@
             ),
           ),
           // Actions row (botoes ghost discretos, alinhados a direita)
-          (s.status === 'active' || s.status === 'past_due' || s.status !== 'cancelled')
+          (needsAction || s.status !== 'cancelled')
             ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px' },
-              s.status === 'active' || s.status === 'past_due'
+              needsAction
                 ? el('button', {
                     style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
                       mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
                       mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },
                       click: async () => {
-                        await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
-                        toast('Marcada como paga', 'success');
+                        const updated = await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
+                        const nx = updated?.subscription?.nextChargeAt
+                          ? fmtDate(updated.subscription.nextChargeAt)
+                          : null;
+                        toast(nx ? `✓ Paga · próxima ${nx}` : '✓ Marcada como paga', 'success');
                         await renderSubsList();
                       },
                     },
