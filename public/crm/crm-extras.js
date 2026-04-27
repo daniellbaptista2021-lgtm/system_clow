@@ -264,40 +264,106 @@
       }
       for (const s of r.subscriptions) {
         const due = new Date(s.nextChargeAt);
-        const overdue = due.getTime() < Date.now() && s.status === 'active';
-        const statusClass = s.status === 'active' ? 'green' : s.status === 'past_due' ? 'red' : 'gray';
-        const subItem = el('div', { class: 'list-item', style: 'flex-direction:column;align-items:stretch;cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } } },
-          el('div', { style: 'display:flex;align-items:center;justify-content:space-between' },
-            el('div', { class: 'list-item-left' },
-              el('div', {},
-                el('div', { class: 'list-item-title' }, s.planName),
-                el('div', { class: 'list-item-sub' },
-                  `${fmtMoney(s.amountCents)} / ${s.cycle} · próxima cobrança ${fmtDate(s.nextChargeAt)}${overdue ? ' ⚠️' : ''} · ${s.remindersSent} lembrete(s) enviado(s)`,
-                ),
+        const dueMs = due.getTime() - Date.now();
+        const dueDays = Math.ceil(dueMs / 86400000);
+        const overdue = dueMs < 0 && s.status === 'active';
+        const overdueDays = overdue ? Math.abs(dueDays) : 0;
+        // Formata "vence" humano: hoje, em 3 dias, atrasada 5 dias
+        const dueText = overdue
+          ? `atrasada ${overdueDays}d`
+          : dueDays === 0 ? 'vence hoje'
+          : dueDays === 1 ? 'vence amanhã'
+          : dueDays <= 7 ? `vence em ${dueDays}d`
+          : `vence ${fmtDate(s.nextChargeAt)}`;
+        // Cores do status (sutil, sem dominar o card)
+        const statusColors = s.status === 'active' && !overdue
+          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Ativa' }
+          : s.status === 'past_due' || overdue
+          ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
+          : s.status === 'cancelled'
+          ? { bg: 'rgba(148,163,184,.12)', border: 'rgba(148,163,184,.30)', fg: '#94A3B8', label: 'Cancelada' }
+          : { bg: 'rgba(148,163,184,.10)', border: 'rgba(148,163,184,.25)', fg: '#94A3B8', label: s.status };
+        const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
+
+        const subItem = el('div', {
+          class: 'list-item',
+          style: 'flex-direction:column;align-items:stretch;cursor:pointer;padding:18px 20px;gap:12px;transition:border-color .15s ease',
+          on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } },
+        },
+          // Header: title + status pill
+          el('div', { style: 'display:flex;align-items:flex-start;justify-content:space-between;gap:12px' },
+            el('div', { style: 'min-width:0;flex:1' },
+              el('div', { style: 'font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, s.planName),
+              // Info row: valor + vence + lembretes
+              el('div', { style: 'display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-dim)' },
+                el('span', { style: 'color:var(--text);font-weight:600;font-size:14px' }, fmtMoney(s.amountCents)),
+                el('span', { style: 'color:var(--text-dim);font-size:12px;margin-left:-10px' }, cycleLabel),
+                el('span', { style: 'opacity:.4' }, '·'),
+                el('span', { style: `color:${overdue ? '#F87171' : 'var(--text-dim)'};${overdue ? 'font-weight:600' : ''}` }, dueText),
+                s.remindersSent > 0
+                  ? el('span', { style: 'opacity:.4' }, '·')
+                  : null,
+                s.remindersSent > 0
+                  ? el('span', { style: 'color:var(--text-dim)' }, `${s.remindersSent} lembrete${s.remindersSent === 1 ? '' : 's'}`)
+                  : null,
               ),
             ),
-            el('span', { class: `pill ${statusClass}` }, s.status),
+            // Status pill compacto
+            el('span', {
+              style: `display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;background:${statusColors.bg};border:1px solid ${statusColors.border};color:${statusColors.fg};white-space:nowrap;flex-shrink:0`,
+            },
+              el('span', { style: `width:6px;height:6px;border-radius:50%;background:${statusColors.fg};display:inline-block` }),
+              statusColors.label,
+            ),
           ),
-          el('div', { style: 'margin-top:8px;display:flex;gap:6px' },
-            s.status === 'active' || s.status === 'past_due' ?
-              el('button', { class: 'save-btn', style: 'flex:1;background:var(--green);font-size:12px;padding:6px',
-                on: { click: async () => {
-                  await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
-                  toast('Marcada como paga', 'success');
-                  await renderSubsList();
-                } } }, '✓ Marcar como pago') : null,
-            s.status !== 'cancelled' ?
-              el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px 12px',
-                on: { click: async () => {
-                  if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
-                  await api(`/subscriptions/${s.id}`, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } });
-                  toast('Cancelada', 'success');
-                  await renderSubsList();
-                } } }, 'Cancelar') : null,
-          ),
+          // Actions row (botoes ghost discretos, alinhados a direita)
+          (s.status === 'active' || s.status === 'past_due' || s.status !== 'cancelled')
+            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px' },
+              s.status === 'active' || s.status === 'past_due'
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
+                      mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },
+                      click: async () => {
+                        await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
+                        toast('Marcada como paga', 'success');
+                        await renderSubsList();
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                      el('polyline', { points: '20 6 9 17 4 12' }),
+                    ),
+                    'Marcar como pago',
+                  )
+                : null,
+              s.status !== 'cancelled'
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(239,68,68,.10)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,.40)'; e.currentTarget.style.color = '#F87171'; },
+                      mouseleave: (e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'; },
+                      click: async () => {
+                        if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
+                        await api(`/subscriptions/${s.id}`, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } });
+                        toast('Cancelada', 'success');
+                        await renderSubsList();
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                      el('path', { d: 'M18 6L6 18' }),
+                      el('path', { d: 'M6 6l12 12' }),
+                    ),
+                    'Cancelar',
+                  )
+                : null,
+            )
+            : null,
         );
-      window.attachListItemContextMenu(subItem, (x, y) => showSubscriptionContextMenu(s, x, y, renderSubsList));
-      l.append(subItem);
+        window.attachListItemContextMenu(subItem, (x, y) => showSubscriptionContextMenu(s, x, y, renderSubsList));
+        l.append(subItem);
       }
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
   }
