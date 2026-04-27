@@ -257,23 +257,43 @@
     const status = $('#subStatusFilter')?.value || '';
     try {
       const path = status ? `/subscriptions?status=${status}` : '/subscriptions';
-      const r = await api(path);
+      // Pega subs + contatos em paralelo pra exibir nome/telefone/tags
+      // no card e habilitar botao "Cobrar via WhatsApp" com template.
+      const [r, contactsRes] = await Promise.all([
+        api(path),
+        api('/contacts?limit=500').catch(() => ({ contacts: [] })),
+      ]);
+      const contactsMap = new Map((contactsRes.contacts || []).map(c => [c.id, c]));
       if (!r.subscriptions.length) {
         l.append(el('div', { class: 'empty' }, 'Nenhuma assinatura. Clique "+ Nova Assinatura" pra criar.'));
         return;
       }
-      for (const s of r.subscriptions) {
+      // Ordena: pendentes/atrasadas no topo, pagas no meio, canceladas
+      // no fim. Dentro de cada grupo, ordem cronologica (mais antigos
+      // primeiro pra acao).
+      const subsSorted = [...r.subscriptions].sort((a, b) => {
+        const rank = (s) => {
+          if (s.status === 'cancelled') return 3;
+          const paid = !!s.lastPaidAt && s.nextChargeAt > Date.now();
+          if (paid) return 2;
+          if (s.nextChargeAt < Date.now()) return 0; // atrasada primeiro
+          return 1; // aguardando
+        };
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return a.nextChargeAt - b.nextChargeAt;
+      });
+      for (const s of subsSorted) {
         const due = new Date(s.nextChargeAt);
         const dueMs = due.getTime() - Date.now();
         const dueDays = Math.ceil(dueMs / 86400000);
         const overdue = dueMs < 0 && s.status === 'active';
         const overdueDays = overdue ? Math.abs(dueDays) : 0;
-        // Lógica baseada em lastPaidAt (vindo do backend, set por
-        // markPaid). Calcula início do ciclo atual = nextChargeAt - 1
-        // ciclo. Se lastPaidAt > inicio_ciclo, foi pago nesse ciclo.
-        const cycleMs = ({ weekly: 7*86400000, monthly: 30*86400000, quarterly: 90*86400000, yearly: 365*86400000, one_time: Infinity })[s.cycle] || 30*86400000;
-        const currentCycleStart = s.nextChargeAt - cycleMs;
-        const paidThisCycle = s.lastPaidAt && s.lastPaidAt >= currentCycleStart;
+        // Logica simples e correta: se lastPaidAt existe E proxima
+        // cobranca ainda nao venceu, esta pago. Se venceu de novo (1
+        // mes/semana/etc depois sem novo pagamento), volta a pendente.
+        // Sub recem-criada: lastPaidAt=null → aguardando (correto).
+        const paidThisCycle = !!s.lastPaidAt && s.nextChargeAt > Date.now();
         // Botao "Marcar como pago" so aparece se: ativo/vencida E ainda
         // nao foi pago nesse ciclo. Cancelada nao mostra.
         const needsAction = (s.status === 'active' || s.status === 'past_due') && !paidThisCycle;
@@ -298,9 +318,20 @@
           : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'Aguardando pagamento' };
         const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
 
+        // Lookup do contato pra exibir info no card e habilitar
+        // botao "Cobrar via WhatsApp" com template prontinho.
+        const contact = contactsMap.get(s.contactId);
+        const phoneDigits = contact?.phone ? String(contact.phone).replace(/\D/g, '') : '';
+        const phoneFormatted = phoneDigits.length >= 12
+          ? `+${phoneDigits.slice(0,2)} (${phoneDigits.slice(2,4)}) ${phoneDigits.slice(4,9)}-${phoneDigits.slice(9,13)}`
+          : phoneDigits ? `+${phoneDigits}` : '';
+        const tags = Array.isArray(contact?.tags) ? contact.tags : [];
+        const initials = (contact?.name || s.planName)
+          .split(/\s+/).slice(0,2).map(w => w[0] || '').join('').toUpperCase().slice(0,2);
+
         const subItem = el('div', {
           class: 'list-item',
-          style: 'flex-direction:column;align-items:stretch;cursor:pointer;padding:18px 20px;gap:12px;transition:border-color .15s ease',
+          style: 'flex-direction:column;align-items:stretch;cursor:pointer;padding:18px 20px;gap:14px;transition:border-color .15s ease',
           on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } },
         },
           // Header: title + status pill
@@ -329,9 +360,61 @@
               statusColors.label,
             ),
           ),
+          // Bloco do cliente: avatar + nome + telefone + tags
+          contact ? el('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(155,89,252,.04);border:1px solid rgba(155,89,252,.10);border-radius:10px' },
+            el('div', { style: 'width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12.5px;flex-shrink:0' }, initials),
+            el('div', { style: 'min-width:0;flex:1' },
+              el('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' },
+                el('span', { style: 'font-weight:600;color:var(--text);font-size:13.5px;overflow:hidden;text-overflow:ellipsis' }, contact.name || 'Sem nome'),
+                phoneFormatted ? el('span', { style: 'color:var(--text-dim);font-size:12px;font-family:"SF Mono",Consolas,monospace' }, phoneFormatted) : null,
+              ),
+              tags.length > 0 ? el('div', { style: 'display:flex;gap:5px;margin-top:5px;flex-wrap:wrap' },
+                ...tags.slice(0, 4).map(t => el('span', {
+                  style: 'background:rgba(155,89,252,.16);border:1px solid rgba(155,89,252,.28);color:#C5A4FF;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
+                }, t)),
+                tags.length > 4 ? el('span', { style: 'color:var(--text-dim);font-size:10.5px;align-self:center' }, `+${tags.length - 4}`) : null,
+              ) : null,
+            ),
+          ) : null,
           // Actions row (botoes ghost discretos, alinhados a direita)
           (needsAction || s.status !== 'cancelled')
-            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px' },
+            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px;flex-wrap:wrap' },
+              // Botao "Cobrar via WhatsApp" — so se tem telefone E precisa de acao
+              (needsAction && phoneDigits)
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.16)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.50)'; },
+                      mouseleave: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.08)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.30)'; },
+                      click: () => {
+                        const valorBR = (s.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const dueBR = new Date(s.nextChargeAt).toLocaleDateString('pt-BR');
+                        const isOverdue = s.nextChargeAt < Date.now();
+                        const firstName = (contact.name || '').split(/\s+/)[0] || 'tudo bem';
+                        const intro = isOverdue
+                          ? `notei aqui que a sua mensalidade do *${s.planName}* venceu em *${dueBR}* e ainda consta em aberto.`
+                          : `passando pra lembrar da sua mensalidade do *${s.planName}* que vence em *${dueBR}*.`;
+                        const text = `Olá ${firstName}! 👋
+
+${intro}
+
+💰 *Valor:* R$ ${valorBR}
+📅 *${isOverdue ? 'Venceu em' : 'Vencimento'}:* ${dueBR}
+
+Caso já tenha realizado o pagamento, por favor desconsidere essa mensagem 🙏
+
+Aguardo confirmação por aqui!`;
+                        const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'currentColor' },
+                      el('path', { d: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413' }),
+                    ),
+                    'Cobrar no WhatsApp',
+                  )
+                : null,
               needsAction
                 ? el('button', {
                     style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
