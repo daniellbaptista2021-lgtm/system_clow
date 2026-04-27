@@ -1228,7 +1228,8 @@ async function renderPanel() {
 
   renderMessages();
   renderInfoTab();
-  renderEditTab();
+  // renderEditTab() removida — aba "Editar" foi tirada do painel.
+  // Edição do card via menu contextual (...) no kanban ou via Vínculos.
 }
 
 
@@ -1355,8 +1356,11 @@ function renderInfoTab() {
 }
 
 function renderEditTab() {
-  const { card } = state.currentCard;
+  // Aba "Editar" foi removida do painel. Função preservada como no-op
+  // pra não quebrar referências externas (chamadas legacy do tab switcher).
   const sec = $('#editSection');
+  if (!sec) return;
+  const { card } = state.currentCard;
   sec.innerHTML = '';
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
