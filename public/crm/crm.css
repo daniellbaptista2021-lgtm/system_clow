@@ -485,13 +485,32 @@ body {
 }
 /* Top bar dentro de view nao encolhe */
 .view > .top-bar { flex-shrink: 0; }
-/* Conteudo abaixo do top-bar pode rolar verticalmente */
-.view > *:not(.top-bar):not(#kanban) {
+/* Conteudo abaixo do top-bar pode rolar verticalmente.
+   Exclui .kpi-row (linha de cards numericos) — sem isso o flex
+   esticava os cards verticalmente, gerando sobra enorme abaixo
+   do numero. */
+.view > *:not(.top-bar):not(#kanban):not(.kpi-row) {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
   padding: 20px;
 }
+/* Linha de KPIs no topo das views (Relatorios, Tarefas, etc.):
+   altura intrinseca, nao estica. */
+.view > .kpi-row {
+  flex: 0 0 auto;
+}
+/* Forca tema dark no UI nativo dos browsers (popup do <select>,
+   datepicker do input[type=date], scrollbars). Sem isso, dropdown
+   "Prioridade" e similares abriam fundo branco vs tema escuro. */
+html, body { color-scheme: dark; }
+select, input[type="date"], input[type="time"], input[type="datetime-local"],
+input[type="month"], input[type="week"], input[type="color"], textarea, input {
+  color-scheme: dark;
+}
+/* Options do <select> em alguns browsers ainda quebram — forca
+   explicito background+color escuro nas options renderizadas. */
+select option { background: #14142A; color: #E8E8F0; }
 /* Kanban tem regras proprias (overflow-x na kanban-board) */
 #kanban {
   flex: 1;
