@@ -87,10 +87,23 @@ function paymentMethodsFor(_plan: string): string[] {
   return configured;
 }
 
+// ─── GET /api/billing/config — publishable key pro frontend ──────────
+// Necessario pro Stripe.js no client. Publishable key e PUBLICO por
+// design (pk_live_*), seguro expor no browser.
+app.get('/api/billing/config', (c) => {
+  return c.json({
+    publishable_key: process.env.STRIPE_PUBLISHABLE_KEY || '',
+    embedded_supported: true,
+  });
+});
+
 // ─── POST /api/billing/checkout — cria Stripe Checkout session ────────
+// Suporta ui_mode='embedded' (default 'hosted'). Embedded retorna
+// client_secret pra Stripe.js renderizar inline; hosted retorna URL.
+// User pediu: card embutido na propria tela, tipo ChatGPT/Claude.
 app.post('/api/billing/checkout', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const { plan, email, full_name, cpf, phone } = body;
+  const { plan, email, full_name, cpf, phone, ui_mode } = body;
   if (!plan || !priceIds()[plan]) {
     return c.json({ error: 'invalid_plan', message: 'Plano deve ser starter, profissional ou empresarial.' }, 400);
   }
@@ -100,6 +113,8 @@ app.post('/api/billing/checkout', async (c) => {
   if (findTenantByEmail(String(email).toLowerCase())) {
     return c.json({ error: 'email_in_use' }, 409);
   }
+
+  const isEmbedded = ui_mode === 'embedded';
 
   try {
     const sk = await stripe();
@@ -119,8 +134,6 @@ app.post('/api/billing/checkout', async (c) => {
       payment_method_options: {
         boleto: { expires_after_days: 3 },
       },
-      success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${publicBase()}/pricing`,
       metadata: {
         plan, email, full_name, cpf: cpfDigits,
         phone: phoneDigits,
@@ -129,9 +142,18 @@ app.post('/api/billing/checkout', async (c) => {
         metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
       },
     };
+    if (isEmbedded) {
+      sessionParams.ui_mode = 'embedded';
+      sessionParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+    } else {
+      sessionParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+      sessionParams.cancel_url = `${publicBase()}/pricing`;
+    }
 
     const session = await sk.checkout.sessions.create(sessionParams);
-    return c.json({ ok: true, url: session.url, session_id: session.id });
+    return c.json(isEmbedded
+      ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded' }
+      : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted' });
   } catch (err: any) {
     logger.error('[stripe checkout] error:', err.message);
     // Se boleto/pix derem problema na conta, tenta fallback só com card
@@ -140,20 +162,28 @@ app.post('/api/billing/checkout', async (c) => {
         const sk = await stripe();
         const cpfDigits = String(cpf).replace(/\D/g, '');
         const phoneDigits = String(phone).replace(/\D/g, '');
-        const session = await sk.checkout.sessions.create({
+        const fallbackParams: any = {
           mode: 'subscription',
           payment_method_types: ['card'],
           line_items: [{ price: priceIds()[plan], quantity: 1 }],
           customer_email: email,
           locale: 'pt-BR',
           billing_address_collection: 'required',
-          success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${publicBase()}/pricing`,
           metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
           subscription_data: { metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits } },
-        });
+        };
+        if (isEmbedded) {
+          fallbackParams.ui_mode = 'embedded';
+          fallbackParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+        } else {
+          fallbackParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+          fallbackParams.cancel_url = `${publicBase()}/pricing`;
+        }
+        const session = await sk.checkout.sessions.create(fallbackParams);
         logger.warn('[stripe checkout] fallback card-only (boleto/pix não habilitado na conta)');
-        return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
+        return c.json(isEmbedded
+          ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded', fallback: 'card_only' }
+          : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted', fallback: 'card_only' });
       } catch (err2: any) {
         return c.json({ error: 'checkout_failed', message: err2.message }, 502);
       }
@@ -169,7 +199,7 @@ app.post('/api/billing/checkout', async (c) => {
 // Tier de SaaS = empresarial (todas as features), preco = piloto.
 app.post('/api/billing/pilot-checkout', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const { access_code, email, full_name, cpf, phone } = body;
+  const { access_code, email, full_name, cpf, phone, ui_mode } = body;
 
   if (!access_code) {
     return c.json({ error: 'missing_access_code', message: 'Senha de acesso obrigatoria.' }, 400);
@@ -190,6 +220,8 @@ app.post('/api/billing/pilot-checkout', async (c) => {
     return c.json({ error: 'pilot_price_not_configured', message: 'Plano piloto temporariamente indisponivel.' }, 503);
   }
 
+  const isEmbedded = ui_mode === 'embedded';
+
   try {
     const sk = await stripe();
     const cpfDigits = String(cpf).replace(/\D/g, '');
@@ -204,8 +236,6 @@ app.post('/api/billing/pilot-checkout', async (c) => {
       billing_address_collection: 'required',
       tax_id_collection: { enabled: true },
       payment_method_options: { boleto: { expires_after_days: 3 } },
-      success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${publicBase()}/`,
       // tier empresarial mesmo pagando R$120 (provisionFromSession le 'plan' do metadata)
       metadata: {
         plan: 'empresarial',
@@ -217,31 +247,47 @@ app.post('/api/billing/pilot-checkout', async (c) => {
         metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
       },
     };
+    if (isEmbedded) {
+      sessionParams.ui_mode = 'embedded';
+      sessionParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+    } else {
+      sessionParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+      sessionParams.cancel_url = `${publicBase()}/`;
+    }
 
     const session = await sk.checkout.sessions.create(sessionParams);
-    logger.info(`[stripe pilot] checkout criado para ${email} (R$120/mes empresarial)`);
-    return c.json({ ok: true, url: session.url, session_id: session.id });
+    logger.info(`[stripe pilot] checkout criado para ${email} (R$120/mes empresarial, ui=${isEmbedded ? 'embedded' : 'hosted'})`);
+    return c.json(isEmbedded
+      ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded' }
+      : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted' });
   } catch (err: any) {
     logger.error('[stripe pilot-checkout] error:', err.message);
-    // Fallback card-only se boleto/pix nao habilitado
     if (/payment_method_type|not_allowed|not.*enabled/i.test(err.message || '')) {
       try {
         const sk = await stripe();
         const cpfDigits = String(cpf).replace(/\D/g, '');
         const phoneDigits = String(phone).replace(/\D/g, '');
-        const session = await sk.checkout.sessions.create({
+        const fallbackParams: any = {
           mode: 'subscription',
           payment_method_types: ['card'],
           line_items: [{ price: priceId, quantity: 1 }],
           customer_email: email,
           locale: 'pt-BR',
           billing_address_collection: 'required',
-          success_url: `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${publicBase()}/`,
           metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits },
           subscription_data: { metadata: { plan: 'empresarial', is_pilot: 'true', email, full_name, cpf: cpfDigits, phone: phoneDigits } },
-        });
-        return c.json({ ok: true, url: session.url, session_id: session.id, fallback: 'card_only' });
+        };
+        if (isEmbedded) {
+          fallbackParams.ui_mode = 'embedded';
+          fallbackParams.return_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+        } else {
+          fallbackParams.success_url = `${publicBase()}/signup/success?session_id={CHECKOUT_SESSION_ID}`;
+          fallbackParams.cancel_url = `${publicBase()}/`;
+        }
+        const session = await sk.checkout.sessions.create(fallbackParams);
+        return c.json(isEmbedded
+          ? { ok: true, client_secret: session.client_secret, session_id: session.id, ui_mode: 'embedded', fallback: 'card_only' }
+          : { ok: true, url: session.url, session_id: session.id, ui_mode: 'hosted', fallback: 'card_only' });
       } catch (err2: any) {
         return c.json({ error: 'checkout_failed', message: err2.message }, 502);
       }
