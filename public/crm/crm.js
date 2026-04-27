@@ -1822,9 +1822,16 @@ async function renderTasksView() {
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
-function openTaskEditModal(task) {
+async function openTaskEditModal(task) {
   const isNew = !task;
   task = task || {};
+  // Carrega contatos pra dropdown "Cliente". Sem isso, tarefa criada
+  // pelo menu Tarefas fica orfã e nao aparece nos Vinculos do card de
+  // ninguem. User: "tarefa atribida ao cliente automaticamente".
+  let contacts = [];
+  try { contacts = (await api('/contacts?limit=500')).contacts || []; }
+  catch (e) { /* segue sem dropdown se falhar */ }
+
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
@@ -1834,6 +1841,27 @@ function openTaskEditModal(task) {
       dueAt: due, description: fd.get('description'),
       alertMinutesBefore: fd.get('alert') ? Number(fd.get('alert')) : null,
     };
+    const contactId = fd.get('contactId');
+    if (contactId) {
+      body.contactId = contactId;
+      // Auto-resolve cardId do contato: se contato tem ao menos 1 card,
+      // vincula a tarefa ao primeiro card ativo encontrado. Sem isso, a
+      // tarefa fica vinculada ao contato mas nao aparece nos Vinculos
+      // do card no panel.
+      try {
+        // Helper: busca cards via boards/pipeline e filtra por contactId
+        const boards = (await api('/boards').catch(() => ({ boards: [] }))).boards || [];
+        for (const b of boards) {
+          const pl = await api('/boards/' + b.id + '/pipeline').catch(() => null);
+          if (!pl?.columns) continue;
+          for (const col of pl.columns) {
+            const match = (col.cards || []).find(c => c.contactId === contactId || c.contact_id === contactId);
+            if (match) { body.cardId = match.id; break; }
+          }
+          if (body.cardId) break;
+        }
+      } catch {}
+    }
     try {
       if (isNew) await api('/tasks', { method: 'POST', body });
       else await api(`/tasks/${task.id}`, { method: 'PATCH', body });
@@ -1845,7 +1873,23 @@ function openTaskEditModal(task) {
   const dueAtMs = task.dueAt ? (typeof task.dueAt === 'number' ? task.dueAt : Date.parse(task.dueAt)) : null;
   const dueDateLocal = (dueAtMs && Number.isFinite(dueAtMs)) ? new Date(dueAtMs - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
 
+  // Monta dropdown de contato — primeiro lugar do form pra deixar claro
+  // que toda tarefa precisa de cliente (auto-vincula ao card depois).
+  const contactSel = el('select', { name: 'contactId', style: 'width:100%;padding:10px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px' });
+  contactSel.append(el('option', { value: '' }, '— Selecione o cliente —'));
+  for (const c of contacts) {
+    const opt = el('option', { value: c.id }, `${c.name || '(sem nome)'}${c.phone ? ' (' + c.phone + ')' : ''}`);
+    if (task.contactId === c.id) opt.selected = true;
+    contactSel.append(opt);
+  }
+  const contactWrap = el('div', { style: 'margin-bottom:12px' },
+    el('label', { style: 'display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px' }, 'Cliente'),
+    contactSel,
+    el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px' }, 'Vincula a tarefa ao cliente e ao card dele automaticamente'),
+  );
+
   form.append(
+    contactWrap,
     inputField('title', 'Título *', { required: true, value: task.title || '' }),
     selectField('type', 'Tipo', [
       { value: 'call', label: '📞 Ligação' },
@@ -4451,14 +4495,15 @@ async function renderLinksTab(card) {
   // Refs no escopo do tab pra refresh seletivo
   const refresh = () => renderLinksTab(card);
 
-  let tasks = { tasks: [] }, docs = { documents: [] }, props = { proposals: [] };
+  let tasks = { tasks: [] }, docs = { documents: [] }, props = { proposals: [] }, subs = { subscriptions: [] };
   try {
-    const [t1, d1, p1] = await Promise.all([
+    const [t1, d1, p1, s1] = await Promise.all([
       api('/cards/' + card.id + '/tasks').catch(() => ({ tasks: [] })),
       api('/cards/' + card.id + '/documents').catch(() => ({ documents: [] })),
       api('/cards/' + card.id + '/proposals').catch(() => ({ proposals: [] })),
+      api('/cards/' + card.id + '/subscriptions').catch(() => ({ subscriptions: [] })),
     ]);
-    tasks = t1; docs = d1; props = p1;
+    tasks = t1; docs = d1; props = p1; subs = s1;
   } catch (e) {
     sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>';
     return;
@@ -4590,7 +4635,88 @@ async function renderLinksTab(card) {
   }
   wrap.append(propsSec);
 
+  // ─── MENSALIDADES ────────────────────────────────────────────────────
+  const subsSec = el('section', {});
+  subsSec.append(sectionHead('💳', 'Mensalidades', subs.subscriptions?.length || 0, () => openNewSubscriptionForCard(card, refresh)));
+  if (!subs.subscriptions?.length) subsSec.append(emptyHint('Nenhuma mensalidade. Use "+ Adicionar" pra criar cobrança recorrente (vai aparecer no menu Mensalidades também)'));
+  else {
+    for (const sb of subs.subscriptions) {
+      const dueMs = sb.nextChargeAt - Date.now();
+      const overdue = dueMs < 0 && sb.status === 'active';
+      const paidThisCycle = !!sb.lastPaidAt && sb.nextChargeAt > Date.now();
+      const statusLabel = sb.status === 'cancelled' ? 'Cancelada'
+        : paidThisCycle ? 'Paga'
+        : overdue ? 'Atrasada'
+        : 'Aguardando';
+      const statusColor = sb.status === 'cancelled' ? '#94A3B8'
+        : paidThisCycle ? '#22C55E'
+        : overdue ? '#F87171'
+        : '#F59E0B';
+      const cycleLabel = ({ monthly:'/mês', weekly:'/semana', quarterly:'/trim', yearly:'/ano', one_time:' (única)' })[sb.cycle] || ` /${sb.cycle}`;
+      subsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
+            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + statusColor }),
+            el('span', {}, sb.planName),
+            el('span', { style: 'font-size:10px;padding:2px 7px;background:rgba(' + (paidThisCycle ? '34,197,94' : overdue ? '239,68,68' : sb.status === 'cancelled' ? '148,163,184' : '245,158,11') + ',.15);color:' + statusColor + ';border-radius:5px;text-transform:uppercase;font-weight:700;letter-spacing:.3px' }, statusLabel),
+          ),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            fmtMoney(sb.amountCents) + cycleLabel + ' · próxima ' + new Date(sb.nextChargeAt).toLocaleDateString('pt-BR'),
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          (sb.status === 'active' || sb.status === 'past_due') && !paidThisCycle
+            ? inlineBtn('✓', async () => {
+                try { await api('/subscriptions/' + sb.id + '/mark-paid', { method: 'POST' }); toast('Marcada como paga', 'success'); refresh(); }
+                catch (e) { toast('Erro: ' + e.message, 'error'); }
+              })
+            : null,
+          sb.status !== 'cancelled'
+            ? inlineBtn('×', async () => {
+                if (!(await clowConfirm('Cancelar mensalidade "' + sb.planName + '"?', { title: 'Cancelar', danger: true, confirmLabel: 'Cancelar' }))) return;
+                try { await api('/subscriptions/' + sb.id, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } }); toast('Cancelada', 'success'); refresh(); }
+                catch (e) { toast('Erro: ' + e.message, 'error'); }
+              }, true)
+            : null,
+        ),
+      ], { dimmed: sb.status === 'cancelled' }));
+    }
+  }
+  wrap.append(subsSec);
+
   sec.append(wrap);
+}
+
+// Modal "Nova mensalidade" pre-preenchido com contato + cardId do card atual.
+// Aparece tanto no menu Mensalidades (lista global) quanto no painel Vinculos
+// do card — contato e card sao auto-vinculados, sem opcao de mudar.
+async function openNewSubscriptionForCard(card, onDone) {
+  const contactId = card?.contactId;
+  if (!contactId) { toast('Card sem contato vinculado — adicione um contato primeiro', 'error'); return; }
+  await buildModal('Nova mensalidade', [
+    { name: 'planName', label: 'Plano', required: true, placeholder: 'Ex: Sulamerica Vida, MAG, etc' },
+    { name: 'amount', label: 'Valor (R$)', type: 'number', required: true, attrs: { step: '0.01' } },
+    { name: 'cycle', label: 'Ciclo', type: 'select', value: 'monthly', options: [
+      { value: 'monthly', label: 'Mensal' }, { value: 'weekly', label: 'Semanal' },
+      { value: 'quarterly', label: 'Trimestral' }, { value: 'yearly', label: 'Anual' },
+      { value: 'one_time', label: 'Única vez' },
+    ]},
+    { name: 'nextCharge', label: 'Primeira/próxima cobrança', type: 'datetime-local', required: true },
+  ], async (v) => {
+    if (!v.planName?.trim()) { toast('Plano obrigatório', 'error'); return false; }
+    if (!v.amount || parseFloat(v.amount) <= 0) { toast('Valor inválido', 'error'); return false; }
+    if (!v.nextCharge) { toast('Data obrigatória', 'error'); return false; }
+    await api('/subscriptions', { method: 'POST', body: {
+      contactId,
+      cardId: card.id,
+      planName: v.planName.trim(),
+      amountCents: Math.round(parseFloat(v.amount) * 100),
+      cycle: v.cycle || 'monthly',
+      nextChargeAt: new Date(v.nextCharge).getTime(),
+    }});
+    toast('Mensalidade criada e vinculada ao card', 'success');
+    onDone?.();
+  });
 }
 
 // ─── Helpers da aba Vínculos ────────────────────────────────────────────

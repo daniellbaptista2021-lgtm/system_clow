@@ -415,6 +415,28 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     if (!body.link) return badRequest(c, 'link required');
     return store.setPaymentLink(tenantOf(c), c.req.param('id'), body.link) ? ok(c, { ok: true }) : notFound(c, 'subscription');
   });
+  // Lista subs vinculadas a um card (pelo cardId direto OU pelo
+  // contactId do card). Usado pelo painel Vinculos do card pra
+  // mostrar mensalidades junto com tarefas/documentos/propostas.
+  app.get('/cards/:id/subscriptions', (c) => {
+    const tid = tenantOf(c);
+    const card = store.getCard(tid, c.req.param('id'));
+    if (!card) return notFound(c, 'card');
+    const all = store.listSubscriptions(tid);
+    const subs = all.filter((s) =>
+      s.cardId === card.id || (card.contactId && s.contactId === card.contactId),
+    );
+    return ok(c, { subscriptions: subs });
+  });
+
+  // Lista subs de um contato (todos os cards/sem card desse contato)
+  app.get('/contacts/:id/subscriptions', (c) => {
+    const tid = tenantOf(c);
+    const contactId = c.req.param('id');
+    const subs = store.listSubscriptions(tid).filter((s) => s.contactId === contactId);
+    return ok(c, { subscriptions: subs });
+  });
+
   app.post('/subscriptions/:id/mark-paid', (c) => {
     const r = markPaid(tenantOf(c), c.req.param('id'));
     return r ? ok(c, { subscription: r }) : notFound(c, 'subscription');
