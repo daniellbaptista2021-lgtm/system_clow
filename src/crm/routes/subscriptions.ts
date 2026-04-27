@@ -419,4 +419,43 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     const r = markPaid(tenantOf(c), c.req.param('id'));
     return r ? ok(c, { subscription: r }) : notFound(c, 'subscription');
   });
+
+  // Garante que a sub tem um card vinculado (pra abrir o painel de chat
+  // do CRM com a conversa). Se ja tem, retorna direto. Se nao, cria um
+  // card "Cobranca - {planName}" no primeiro board+coluna disponivel,
+  // vincula a sub a ele, e retorna o cardId. Idempotente.
+  app.post('/subscriptions/:id/ensure-card', async (c) => {
+    const tid = tenantOf(c);
+    const subId = c.req.param('id');
+    const sub = store.listSubscriptions(tid).find((s) => s.id === subId);
+    if (!sub) return notFound(c, 'subscription');
+    if (sub.cardId) {
+      // Verifica se card ainda existe (pode ter sido deletado)
+      const exists = store.getCard(tid, sub.cardId);
+      if (exists) return ok(c, { cardId: sub.cardId, created: false });
+    }
+    // Acha (ou cria) board padrao
+    let boards = store.listBoards(tid);
+    if (!boards.length) {
+      store.seedDefaultBoards(tid);
+      boards = store.listBoards(tid);
+    }
+    const board = boards[0]!;
+    const cols = store.listColumns(tid, board.id);
+    if (!cols.length) return badRequest(c, 'board sem colunas — crie uma coluna no board primeiro');
+    const col = cols[0]!;
+    const contact = store.getContact(tid, sub.contactId);
+    const card = store.createCard(tid, {
+      boardId: board.id,
+      columnId: col.id,
+      title: `Cobranca - ${sub.planName}`,
+      contactId: sub.contactId,
+      valueCents: sub.amountCents,
+      contactName: contact?.name,
+      contactPhone: contact?.phone,
+    } as any);
+    if (!card) return badRequest(c, 'falha ao criar card');
+    store.updateSubscription(tid, sub.id, { cardId: card.id });
+    return ok(c, { cardId: card.id, created: true });
+  });
 }
