@@ -84,25 +84,30 @@ Arquivos relevantes:
 
 | Módulo | Capacidades |
 |---|---|
-| **Pipeline Kanban** | Boards customizáveis, drag-and-drop, cores, colunas terminais (Ganho/Perdido) |
+| **Pipeline Kanban** | Boards customizáveis, drag-and-drop, cores, colunas terminais (Ganho/Perdido). Cada tenant tem seus próprios boards/colunas (isolamento total por `tenant_id`) |
 | **Contatos** | Cadastro completo, busca em tempo real, tags, histórico unificado |
 | **Canais WhatsApp** | Suporte Meta Cloud API + Z-API, credenciais criptografadas (AES-256-GCM), webhook URL pronto pra colar |
-| **Side Panel** | Conversação inline com bubble UI, envio de texto/áudio (gravação MediaRecorder)/imagem/PDF |
+| **Side Panel do card** | 4 abas: **Conversa** (bubble UI, áudio/imagem/PDF) · **Info** · **📎 Vínculos** · **💬 Comentários**. Aba "Editar" e "AI" foram removidas — propriedades editáveis via menu contextual |
+| **📎 Vínculos do card** | 4 seções com `+ Adicionar` que pré-preenche `cardId+contactId`: **Tarefas** · **Documentos** · **Propostas** · **Mensalidades**. Itens criados aqui aparecem automaticamente nos menus laterais correspondentes (vínculo na origem) |
 | **Equipe** | Agentes com papéis (owner/admin/agent/viewer), atribuição automática (round-robin/load-balanced/manual) |
 | **Produtos (estoque)** | SKU, preço, estoque, vinculação a cards (line items), baixa automática ao ganhar |
-| **Mensalidades** | Cobrança recorrente (weekly/monthly/quarterly/yearly), lembretes T-3/T-1/T-0 via WhatsApp, marcar como pago |
+| **Mensalidades** | Cobrança recorrente (weekly/monthly/quarterly/yearly), lembretes T-3/T-1/T-0 via WhatsApp. **`markPaid` avança `nextChargeAt` + salva `lastPaidAt`** (campo persistente). UI: pill "Paga"/"Aguardando"/"Atrasada"/"Cancelada" baseado em `lastPaidAt` real, não inferência por data. Botão **"Cobrar no chat"** abre painel do CRM com template prontinho (interno, sem wa.me externo) |
 | **Automações** | 6 triggers × 9 conditions × 8 actions, 5 templates one-click, scheduler 60s |
 | **Stats** | Forecast ponderado, métricas por agente (cards/valor/tempo de resposta) |
 | **Real-time** | SSE pub/sub, UI atualiza sem polling |
+| **Sidebar enxuta** | 14 abas focadas no dia-a-dia (Pipeline, Contatos, Canais WA, Equipe, Produtos, Relatórios, Tarefas, Agenda, Documentos, Performance, Automações, Mensalidades, Configurações, Lixeira). Removidas: Formulários, Campanhas, Busca, Insights AI, Segurança, Privacidade (panels e backend preservados, só os botões da sidebar) |
 
 ### Multi-tenant SaaS
 
 - **Signup** (`POST /auth/signup`): valida CPF, telefone E.164, email único, hash bcrypt
-- **Login** (`POST /auth/login`): retorna `usr.{payload}.{sig}` token (30d TTL)
-- **Mesmo login → mesmo CRM**: clica botão CRM → exchange → entra direto sem nova senha
-- **Phone whitelist**: só telefones cadastrados podem invocar a IA do tenant
-- **Stripe Checkout** (esqueleto): `POST /api/billing/checkout` cria session, webhook auto-cria tenant
+- **Login** (`POST /auth/login`): retorna `usr.{payload}.{sig}` token (30d TTL) · **`/auth/verify` aceita user_session E admin** (sessão sobrevive reload)
+- **Cadastre-se agora**: botão no login direciona pra `/pricing#planos`, escolhe plano → Stripe **Embedded Checkout inline** (card do Stripe dentro do app, sem nova aba) com campo "Adicionar código promocional"
+- **`/signup/success`**: mostra **email + senha temporária inline** com botão Copiar (não depende de email funcionar) + redireciona pro login
+- **Phone whitelist** (fail-closed): só telefones cadastrados podem invocar a IA do tenant. Limite por plano: **Starter 1 / Profissional 3 / Empresarial 5** telefones autorizados
+- **Stripe Checkout** ao vivo: `POST /api/billing/checkout` cria sessão (hosted ou embedded via `ui_mode`), webhook auto-cria tenant + temp_password + dispara welcome email/WhatsApp
+- **Cupom CORRETOR2026** (Stripe Promotion Code): zera R$1.297 → R$120/mês forever no plano Empresarial. Uso restrito (200 redenções), distribuído manualmente no grupo de corretores via vídeo. Cliente digita o código no campo "Adicionar código promocional" do checkout
 - **Status do tenant** controlado por Stripe events (active/past_due/cancelled)
+- **Mailer fallback**: se SMTP/Resend/SendGrid não configurado, salva email como JSON em `data/pending-emails/*.json` (zero conteúdo perdido)
 
 ## 📁 Estrutura
 
@@ -793,43 +798,82 @@ pm2 restart clow --update-env   # 15-30s downtime
 
 ---
 
-## 📌 Estado atual (2026-04-26)
+## 📌 Estado atual (2026-04-27)
 
-**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `87448a9`
+**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `5cb7b9e`
+
+### 💰 Planos comerciais (Stripe ao vivo)
+
+| Recurso | **Starter** | **Profissional** ⭐ | **Empresarial** |
+|---|---|---|---|
+| **Preço/mês** | R$ 347 | R$ 697 | R$ 1.297 |
+| Usuários / logins | 1 | 5 | 20 |
+| **Telefones autorizados a comandar a IA** | **1** | **3** | **5** |
+| Números WhatsApp incluso | 1 | 1 | 1 |
+| Limite máximo de números | 1 | 5 | 10 |
+| Z-API extra (R$ 100/mês cada) | — | até 4 | até 9 |
+| Meta Cloud API oficial (BYO grátis) | — | ✓ | ✓ |
+| Mensagens IA / mês | 500 | 3.000 | 8.000 |
+| Excedente por msg | R$ 0,20 | R$ 0,15 | R$ 0,12 |
+| Contatos no CRM | 500 | 5.000 | 50.000 |
+| Boards no Kanban | 2 | 10 | 30 |
+| Automações ativas | 5 | 30 | 100 |
+| Fluxos n8n 24/7 | 1 | 4 | 8 |
+| Sites / apps / planilhas / mês | 5 / 2 / 20 | 30 / 10 / 100 | 100 / 30 / 300 |
+| Histórico de mensagens | 90 dias | 1 ano | 2 anos |
+| API + Webhooks | — | ✓ | ✓ |
+| Suporte | Email | WhatsApp + email | Dedicado 24/7 |
+| SLA uptime | 99% | 99,5% | 99,9% |
+
+**Cupom Piloto `CORRETOR2026`** (Stripe Promotion Code, 200 redenções):
+desconto -R$1.177 forever no Empresarial → **R$120/mês vitalício enquanto manter assinatura**.
+Distribuído manualmente no grupo de corretores via vídeo. Cliente entra no checkout normal, escolhe Empresarial,
+clica "Adicionar código promocional" e digita `CORRETOR2026`. Painel do cupom: [Stripe Dashboard](https://dashboard.stripe.com/promotion_codes).
 
 ### ✅ Production-ready
 
 | Camada | O que tem |
 |---|---|
-| **CRM** | 12 tabelas, 50+ endpoints REST, automations, subscriptions, kanban, agentes, webhook Meta+Z-API, side panel, SSE real-time |
-| **Agente IA** | GLM-5.1 via LiteLLM, 10 ferramentas CRM, sessão persistente, phone whitelist por tenant |
-| **Auth multi-tenant** | Signup/login email+senha (bcrypt), tokens HMAC user_session (30d) e admin (12h), `/auth/verify` aceita ambos |
-| **Billing Stripe** | Checkout ao vivo, webhooks, polling de pagamento PIX/boleto com nudge em 5min, `/signup/success` mostra credenciais inline (não depende de email) |
+| **CRM** | 12 tabelas, 50+ endpoints REST, automations, subscriptions, kanban, agentes, webhook Meta+Z-API, side panel 4 tabs (Conversa/Info/Vínculos/Comentários), SSE real-time. **Vínculos card↔menu** com criação na origem (cardId+contactId pré-preenchidos), sem botão "+ Nova" nos menus laterais |
+| **Agente IA** | GLM-5.1 via LiteLLM, 10 ferramentas CRM, sessão persistente. Phone whitelist **fail-closed** com limite por tier (1/3/5) — `POST /auth/authorized-phones` retorna 403 se exceder |
+| **Auth multi-tenant** | Signup/login email+senha (bcrypt), tokens HMAC user_session (30d) e admin (12h), `/auth/verify` aceita **ambos** (corrige bug que matava sessão a cada reload). Botão "Cadastre-se agora" → `/pricing#planos` |
+| **Billing Stripe** | Checkout ao vivo (live mode), webhooks ponta-a-ponta validados, **Stripe Embedded Checkout** (`ui_mode: embedded`) renderiza card do Stripe **dentro do app** (sem nova aba). Polling PIX/boleto com nudge em 5min. `/signup/success` mostra credenciais inline (botão Copiar). Cupom CORRETOR2026 ativo. `markPaid` avança `nextChargeAt` + salva `lastPaidAt` |
 | **Cluster mode** | PM2 reload zero-downtime, 5 estados in-memory migrados pra Redis (`clusterStore`), scheduler isolado no worker 0 |
-| **Observabilidade** | `/metrics` Prometheus token-protected (12 métricas), Sentry com auto-tagging tenant/route, `/health/live` `/health/ready` `/health/version` |
-| **Backup** | SQLite snapshot WAL-safe horário (CRM + memory), retenção tier hourly/daily/weekly, restore com pre-backup automático |
-| **CI** | 4 jobs paralelos (typecheck, vitest, gitleaks, build) + 2 guards extras (bare `require()` em ESM, smoke import do server.js) |
+| **Observabilidade** | `/metrics` Prometheus token-protected (38 families), Sentry com auto-tagging tenant/route, `/health/live` `/health/ready` `/health/version`, METRICS_TOKEN configurado |
+| **Backup** | SQLite snapshot WAL-safe horário (CRM + memory), retenção tier hourly/daily/weekly, restore com pre-backup automático. **Cron instalado em prod** (`0 * * * *` backup, `30 * * * *` verify). Primeiro snapshot validado: 2026-04-27-00 (4 DBs OK) |
+| **CI** | 4 jobs paralelos (typecheck, vitest, gitleaks, build) + 2 guards extras (bare `require()` em ESM compilado, smoke import do server.js) |
 | **Mailer** | 3 backends (SMTP/Resend/SendGrid), fallback automático em disco (`data/pending-emails/*.json`) se nenhum configurado |
+| **Migrations** | Sistema versionado em `src/crm/migrations/` (idempotente, transaction-wrapped). Versões aplicadas em prod: 1 (initial schema 102 tabelas) + 2 (last_paid_at em crm_subscriptions) |
 | **Ops docs** | Soft-launch checklist, incident runbook, on-call handbook, rollback procedures (em [docs/operations/](docs/operations/)) |
 
-### 📈 Recent improvements (últimos 7 dias)
+### 📈 Recent improvements (últimos 10 dias)
 
-- **`87448a9`** — `/signup/success` mostra email+senha inline (botão Copiar), independe de SMTP. Mailer faz fallback em disco se sem backend.
-- **`ec794a2`** — `/auth/verify` agora aceita `usr.*` (user_session); CRM "Relogar" virou mini-form inline (zero refresh)
+- **`5cb7b9e`** — Aba "Editar" removida do painel do card (4 tabs agora: Conversa/Info/Vínculos/Comentários). Edição via menu contextual do kanban
+- **`ec4437d`** — `max_authorized_phones` por tier (1/3/5) com enforcement no backend (403 se exceder), pill "X de Y" + botão desabilitado na UI Configurações, linha no quadro comparativo da landing
+- **`483bf6b`** — Vínculos card↔menu: nova rota `GET /cards/:id/subscriptions`, seção "Mensalidades" no painel Vínculos, modal "Nova tarefa" do menu pede Cliente + auto-resolve cardId
+- **`07cd4a6`** — Botão "Cobrar no chat" abre painel CRM interno com template prontinho (não wa.me externo). Endpoint `POST /subscriptions/:id/ensure-card` cria/reusa card vinculado
+- **`9ce5cf4`** — Card de mensalidade redesign: dados do cliente (avatar+nome+telefone+tags), ordenação automática (atrasadas→pendentes→pagas→canceladas), botões ghost discretos
+- **`c377629`** — Plano Piloto: removido modal próprio + endpoint dedicado, agora via cupom Stripe `CORRETOR2026` (allow_promotion_codes:true no checkout). UX mais limpa, gestão por dashboard
+- **`adbf595`** — `markPaid` avança `nextChargeAt` 1 ciclo + salva `lastPaidAt`. UI esconde botão quando ciclo pago, pill "Paga"/"Aguardando"/"Atrasada" baseado em estado real
+- **`2bc0086`** — Card de mensalidade redesign visual (pill compacto, vencimento humanizado, botões ghost)
+- **`48db83e`** — Stripe Embedded Checkout no modal piloto + signup tradicional. Substitui `location.href` por `Stripe(pk).initEmbeddedCheckout({clientSecret}).mount()` (card do Stripe dentro do app)
+- **`92a3f8f`** — Sidebar enxuta: removidas 6 abas (Formulários, Campanhas, Busca, Insights AI, Segurança, Privacidade). Panels e backend preservados
+- **`4754c17`** — Cards KPI sem sobra (Relatórios+Tarefas), `color-scheme:dark` global em selects/inputs
+- **`87448a9`** — `/signup/success` mostra email+senha inline (botão Copiar), independe de SMTP. Mailer faz fallback em disco
+- **`ec794a2`** — `/auth/verify` aceita `usr.*` (user_session); CRM "Relogar" virou mini-form inline (zero refresh)
 - **`996ac11`** — CI guard contra bare `require()` em ESM compilado + smoke-import de `dist/server/server.js`
 - **`4ae9044`** — Hotfix prod: `proper-lockfile` via `createRequire(import.meta.url)` (incidente 2026-04-26 que tirou prod do ar)
-- **`8dc0667`** — Polling de pagamento PIX/boleto: banner "demorando mais que esperado" em 5min
+- **`8dc0667`** — Polling PIX/boleto: banner "demorando mais que esperado" em 5min
 - **`1bc714a`** — Docs ops: soft-launch checklist + incident runbook + on-call handbook + rollback
 - **`dc9e291`** — Perf CRM: SQLite WAL tuning + prepared statement cache + query audit + benchmark
 - **`99e5654`** — Observability: Prometheus `/metrics` + Sentry error tracking com auto-tagging
-- Wave anterior: backup hourly snapshot + cluster mode 2 workers + cluster-safe state em Redis
 
 ### ⏭️ Próximas etapas (em aberto)
 
-- **SMTP em produção** — escolher backend (Gmail App Password / Resend / Hostinger) e setar env vars MAILER_* via `pm2 set` (instruções abaixo do README)
+- **SMTP em produção** — escolher backend (Gmail App Password / Resend / Hostinger) e setar env vars MAILER_* via `pm2 set` (instruções abaixo)
+- **Sentry DSN** em produção — criar conta free em sentry.io, copiar DSN e setar `SENTRY_DSN` no `.env` do VPS (errors hoje vão pra `pm2 logs clow --err`)
 - **Branch protection na `main`** — ativar via UI do GitHub (instruções na seção CI)
 - **Sticky session no nginx** — só necessário se aumentar `CLOW_INSTANCES` além de 2 (`sessionPool` ainda é worker-local)
-- **Limpar pending-emails** — se houver acúmulo em `data/pending-emails/`, tem dois caminhos: configurar SMTP (re-envia automático) ou processar manualmente
 - **N8N integration** — 1/4/8 fluxos por plano (esqueleto pronto em `src/n8n/`)
 - **White-label** — logo + cores customizáveis por tenant
 
