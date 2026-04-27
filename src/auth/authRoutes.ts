@@ -218,6 +218,8 @@ app.get('/me', async (c) => {
         status: tenant.status,
         phone: t.phone_e164,
         authorized_phones: t.authorized_phones || [],
+        // UI usa pra mostrar "X de Y" e bloquear botão quando cheio
+        max_authorized_phones: (await import('../tenancy/tiers.js')).getTierConfig(tenant.tier)?.max_authorized_phones ?? 1,
         role: payload.role,
       },
     });
@@ -285,6 +287,22 @@ app.post('/authorized-phones', async (c) => {
   const payload = verifyUserToken(token);
   if (payload) {
     const phones = rawPhones.map((p: string) => normalizePhone(p)).filter((p: string) => p.length >= 10);
+    // Enforca limite por tier (Starter:1 / Profissional:3 / Empresarial:5).
+    // Sem isso, qualquer um pagando R$347 podia adicionar 50 telefones e
+    // virar revenda da IA.
+    const tenant = (await import('../tenancy/tenantStore.js')).getTenant(payload.tid);
+    if (tenant) {
+      const { getTierConfig } = await import('../tenancy/tiers.js');
+      const tier = getTierConfig(tenant.tier);
+      if (tier && phones.length > tier.max_authorized_phones) {
+        return c.json({
+          error: 'tier_phone_limit_exceeded',
+          message: `Seu plano permite no máximo ${tier.max_authorized_phones} telefone(s) autorizado(s). Faça upgrade pra adicionar mais.`,
+          limit: tier.max_authorized_phones,
+          tier: tenant.tier,
+        }, 403);
+      }
+    }
     updateTenant(payload.tid, { authorized_phones: phones } as any);
     return c.json({ ok: true, phones });
   }

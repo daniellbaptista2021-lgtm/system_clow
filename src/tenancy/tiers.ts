@@ -29,6 +29,12 @@ export interface TierConfig {
   // Meta Cloud API: ilimitada, gratuita, BYO credentials (so conta no max_whatsapp_numbers)
   included_whatsapp_numbers: number;
   max_whatsapp_numbers: number;
+  // Telefones autorizados a comandar a IA via WhatsApp pessoal (whitelist).
+  // Diferente de max_whatsapp_numbers (canais conectados pra atender clientes
+  // do tenant). Isso aqui e numero de owners/colaboradores que podem mandar
+  // mensagem PRA o agente do tenant pedindo trabalhos.
+  // Starter:1 / Profissional:3 / Empresarial:5
+  max_authorized_phones: number;
   features: string[];
 }
 
@@ -49,6 +55,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 1,
     included_whatsapp_numbers: 1,
     max_whatsapp_numbers: 1,
+    max_authorized_phones: 1,
     features: ['basic_tools', 'whatsapp'],
   },
   smart: {
@@ -63,6 +70,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 2,
     included_whatsapp_numbers: 3,
     max_whatsapp_numbers: 3,
+    max_authorized_phones: 3,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_basic'],
   },
   profissional: {
@@ -77,6 +85,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 4,
     included_whatsapp_numbers: 1,
     max_whatsapp_numbers: 5,
+    max_authorized_phones: 3,
     features: ['basic_tools', 'whatsapp', 'crm', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'api', 'webhooks'],
   },
   business: {
@@ -91,6 +100,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 8,
     included_whatsapp_numbers: 999,
     max_whatsapp_numbers: 999,
+    max_authorized_phones: 5,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'priority', 'custom_skills'],
   },
   starter: {
@@ -105,6 +115,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 1,
     included_whatsapp_numbers: 1,
     max_whatsapp_numbers: 1,
+    max_authorized_phones: 1,
     features: ['basic_tools', 'whatsapp', 'crm'],
   },
   empresarial: {
@@ -119,6 +130,7 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_n8n_flows_active: 8,
     included_whatsapp_numbers: 1,
     max_whatsapp_numbers: 10,
+    max_authorized_phones: 5,
     features: ['basic_tools', 'whatsapp', 'crm', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'whitelabel', 'api', 'webhooks', 'priority_support', 'custom_integrations'],
   },
 } as const;

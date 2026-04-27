@@ -344,7 +344,7 @@
               const next = me.user.authorized_phones.filter((_, i) => i !== idx);
               await userApi('/auth/authorized-phones', { method: 'POST', body: { phones: next } });
               me.user.authorized_phones = next;
-              renderPhonesInner();
+              renderPhonesAndState();
               toast('Removido', 'success');
             } },
           }, 'Remover') : null,
@@ -353,28 +353,73 @@
     }
     renderPhonesInner();
 
+    const maxPhones = me.user.max_authorized_phones || 1;
+    // Helper pra re-renderizar a contagem "X de Y usados" no header
+    function phoneCountLabel() {
+      const used = (me.user.authorized_phones || []).length;
+      const remaining = maxPhones - used;
+      const color = remaining <= 0 ? '#F87171' : remaining === 1 ? '#F59E0B' : '#22C55E';
+      return el('span', { style: `font-size:11px;padding:3px 9px;border-radius:99px;background:rgba(${remaining <= 0 ? '239,68,68' : remaining === 1 ? '245,158,11' : '34,197,94'},.14);border:1px solid rgba(${remaining <= 0 ? '239,68,68' : remaining === 1 ? '245,158,11' : '34,197,94'},.35);color:${color};font-weight:700;letter-spacing:.3px;text-transform:uppercase` }, `${used} de ${maxPhones}`);
+    }
+    const headerWrap = el('div', { style: 'display:flex;align-items:center;gap:12px;margin:0 0 10px' },
+      el('h3', { style: 'margin:0;font-size:15px' }, 'Telefones autorizados'),
+      phoneCountLabel(),
+    );
+    function refreshHeader() {
+      headerWrap.innerHTML = '';
+      headerWrap.append(
+        el('h3', { style: 'margin:0;font-size:15px' }, 'Telefones autorizados'),
+        phoneCountLabel(),
+      );
+    }
+    const formInput = el('input', { type: 'tel', placeholder: '(21) 99999-8888', style: 'flex:1;padding:10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit' });
+    const formBtn = el('button', { type: 'submit', style: 'padding:10px 20px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit' }, '+ Adicionar');
+    function refreshAddState() {
+      const full = (me.user.authorized_phones || []).length >= maxPhones;
+      formInput.disabled = full;
+      formBtn.disabled = full;
+      formBtn.style.opacity = full ? '0.4' : '1';
+      formBtn.style.cursor = full ? 'not-allowed' : 'pointer';
+      formInput.placeholder = full ? `Limite atingido (${maxPhones} no plano ${me.user.tier})` : '(21) 99999-8888';
+    }
+    // Wrapper que re-renderiza lista + atualiza header (X de Y) + estado do botão
+    function renderPhonesAndState() { renderPhonesInner(); refreshHeader(); refreshAddState(); }
+    refreshAddState();
+
     body.append(el('div', { style: 'max-width:720px;margin:0 auto 20px;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;padding:26px' },
-      el('h3', { style: 'margin:0 0 10px;font-size:15px' }, 'Telefones autorizados'),
-      el('p', { style: 'font-size:12px;color:var(--text-dim);margin:0 0 14px' },
-        'Apenas esses números podem comandar sua IA via WhatsApp pessoal.'),
+      headerWrap,
+      el('p', { style: 'font-size:12px;color:var(--text-dim);margin:0 0 14px;line-height:1.5' },
+        `Apenas esses números podem comandar sua IA via WhatsApp pessoal pedindo trabalhos. Seu plano ${me.user.tier} permite até ${maxPhones} telefone${maxPhones === 1 ? '' : 's'}.`),
       phonesList,
       el('form', { style: 'display:flex;gap:8px',
         on: { submit: async (e) => {
           e.preventDefault();
-          const inp = e.target.querySelector('input');
-          const digits = inp.value.replace(/\D/g, '');
+          if ((me.user.authorized_phones || []).length >= maxPhones) {
+            return toast(`Plano ${me.user.tier} permite no máximo ${maxPhones} telefone(s). Faça upgrade pra adicionar mais.`, 'error');
+          }
+          const digits = formInput.value.replace(/\D/g, '');
           if (digits.length < 10) return toast('Telefone inválido', 'error');
           const full = digits.startsWith('55') ? digits : '55' + digits;
+          if ((me.user.authorized_phones || []).includes(full)) return toast('Esse telefone já está autorizado', 'error');
           const next = [...(me.user.authorized_phones || []), full];
-          await userApi('/auth/authorized-phones', { method: 'POST', body: { phones: next } });
-          me.user.authorized_phones = next;
-          inp.value = '';
-          renderPhonesInner();
-          toast('Adicionado', 'success');
+          try {
+            const resp = await userApi('/auth/authorized-phones', { method: 'POST', body: { phones: next } });
+            // Backend pode rejeitar se exceder limite (race)
+            if (resp?.error === 'tier_phone_limit_exceeded') {
+              return toast(resp.message || 'Limite de telefones excedido', 'error');
+            }
+            me.user.authorized_phones = next;
+            formInput.value = '';
+            renderPhonesAndState();
+            toast('Telefone autorizado', 'success');
+          } catch (err) {
+            const msg = err?.body?.message || err?.message || 'Erro ao adicionar';
+            toast(msg, 'error');
+          }
         } },
       },
-        el('input', { type: 'tel', placeholder: '(21) 99999-8888', style: 'flex:1;padding:10px;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit' }),
-        el('button', { type: 'submit', style: 'padding:10px 20px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit' }, '+ Adicionar'),
+        formInput,
+        formBtn,
       ),
     ));
 
