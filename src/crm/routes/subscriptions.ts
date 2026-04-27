@@ -442,21 +442,37 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     return r ? ok(c, { subscription: r }) : notFound(c, 'subscription');
   });
 
-  // Garante que a sub tem um card vinculado (pra abrir o painel de chat
-  // do CRM com a conversa). Se ja tem, retorna direto. Se nao, cria um
-  // card "Cobranca - {planName}" no primeiro board+coluna disponivel,
-  // vincula a sub a ele, e retorna o cardId. Idempotente.
+  // Garante que a sub tem um card vinculado pra abrir o chat. PRIORIDADE:
+  //   1) Se sub ja tem cardId valido → usa ele.
+  //   2) Se contato tem QUALQUER card existente → usa o mais recente
+  //      (cliente tem 1 card so, conversa eh acumulativa por cliente).
+  //   3) So cria card NOVO se contato nao tem nenhum card em board nenhum.
+  // Em todos os casos, salva o cardId resolvido na sub pra proximo click
+  // ja ir direto. Idempotente — multi-click nunca duplica card.
   app.post('/subscriptions/:id/ensure-card', async (c) => {
     const tid = tenantOf(c);
     const subId = c.req.param('id');
     const sub = store.listSubscriptions(tid).find((s) => s.id === subId);
     if (!sub) return notFound(c, 'subscription');
+
+    // 1) Sub ja tem cardId valido?
     if (sub.cardId) {
-      // Verifica se card ainda existe (pode ter sido deletado)
       const exists = store.getCard(tid, sub.cardId);
-      if (exists) return ok(c, { cardId: sub.cardId, created: false });
+      if (exists) return ok(c, { cardId: sub.cardId, created: false, source: 'sub_already_linked' });
     }
-    // Acha (ou cria) board padrao
+
+    // 2) Contato ja tem cards em qualquer board? (cliente tem 1 ficha so)
+    const existingCards = store.listCardsByContact(tid, sub.contactId);
+    if (existingCards.length > 0) {
+      // listCardsByContact retorna ORDER BY updated_at DESC → primeiro = mais recente
+      const card = existingCards[0]!;
+      // Vincula pra proximo click ir direto, sem refazer essa busca
+      store.updateSubscription(tid, sub.id, { cardId: card.id });
+      return ok(c, { cardId: card.id, created: false, source: 'contact_existing_card' });
+    }
+
+    // 3) Cliente sem nenhum card → cria 1 unico card com NOME DO CLIENTE
+    //    (nao "Cobranca - X", pra esse card ser a ficha unica do cliente)
     let boards = store.listBoards(tid);
     if (!boards.length) {
       store.seedDefaultBoards(tid);
@@ -470,7 +486,7 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     const card = store.createCard(tid, {
       boardId: board.id,
       columnId: col.id,
-      title: `Cobranca - ${sub.planName}`,
+      title: contact?.name || `Cliente ${sub.contactId.slice(0, 8)}`,
       contactId: sub.contactId,
       valueCents: sub.amountCents,
       contactName: contact?.name,
@@ -478,6 +494,6 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     } as any);
     if (!card) return badRequest(c, 'falha ao criar card');
     store.updateSubscription(tid, sub.id, { cardId: card.id });
-    return ok(c, { cardId: card.id, created: true });
+    return ok(c, { cardId: card.id, created: true, source: 'new_card_for_contact' });
   });
 }
