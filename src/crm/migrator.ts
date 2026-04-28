@@ -28,6 +28,7 @@ import type { Database } from 'better-sqlite3';
 import * as m001 from './migrations/001_initial_schema.js';
 import * as m002 from './migrations/002_subscriptions_last_paid_at.js';
 import * as m003 from './migrations/003_channel_ai_agent.js';
+import * as m004 from './migrations/004_column_agents.js';
 
 export interface Migration {
   version: number;
@@ -36,7 +37,7 @@ export interface Migration {
   down(db: Database): void;
 }
 
-const ALL_MIGRATIONS: Migration[] = [m001, m002, m003];
+const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004];
 
 // ─── Validation (runs once at module load) ────────────────────────────────
 

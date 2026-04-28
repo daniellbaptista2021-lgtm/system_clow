@@ -45,6 +45,85 @@ export interface BoardColumn {
   autoRule?: { trigger: string; action: string; params?: Record<string, unknown> } | null;
   isTerminal?: boolean; // e.g. won/lost — closes the deal
   createdAt: number;
+  // ── Onda 62: Multi-agent funnel (migration 004) ───────────────────
+  // Agente IA por coluna do Kanban. agentEnabled=false por padrão —
+  // nada responde cliente sem ativacao explicita do corretor via UI.
+  // agentName eh override opcional da persona (default: tenant.personaName).
+  agentEnabled?: boolean;
+  agentName?: string;
+  agentSystemPrompt?: string;
+  agentRole?: ColumnAgentRole;
+  agentPromoteToColumnId?: string;
+  agentInactivityTimeoutMinutes?: number;
+  agentMaxTurns?: number;
+  agentActiveHoursStart?: string; // 'HH:MM'
+  agentActiveHoursEnd?: string;   // 'HH:MM'
+  agentPromotionCriteria?: string; // texto livre exibido pro agente
+}
+
+export type ColumnAgentRole =
+  | 'qualificador'
+  | 'cotador'
+  | 'closer'
+  | 'finalizador'
+  | 'custom';
+
+// ── Card agent state (1:1 com card) ────────────────────────────────
+// Persiste estado de funcionamento do agente por card: turnos ja
+// trocados, timestamps pra timer de inatividade, dados estruturados ja
+// coletados pela conversa, e log historico de promocoes entre colunas.
+export type CardAgentStatus =
+  | 'active'      // bot ativo, conversando
+  | 'paused'      // pausado por max_turns ou pausa manual
+  | 'escalated'   // escalado pra humano (corretor precisa assumir)
+  | 'done';       // funil concluido (chegou em coluna terminal)
+
+export interface CardAgentPromotionEntry {
+  fromColumnId: string;
+  toColumnId: string;
+  fromRole?: ColumnAgentRole;
+  toRole?: ColumnAgentRole;
+  reason: string;
+  at: number;
+}
+
+export interface CardAgentState {
+  cardId: string;
+  columnId: string;
+  currentAgentRole: ColumnAgentRole;
+  turnsCount: number;
+  lastClientMessageAt?: number;
+  lastAgentMessageAt?: number;
+  inactivityTimerAt?: number;
+  status: CardAgentStatus;
+  collectedData?: Record<string, unknown>;
+  promotionLog?: CardAgentPromotionEntry[];
+  tenantId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Agent metrics (append-only event log) ──────────────────────────
+// Cada evento relevante do funil grava uma linha. Lido pelo dashboard
+// de metricas no PR 7. NAO usado pra logica de runtime — somente
+// analytics.
+export type AgentMetricEvent =
+  | 'promoted'           // card avancou pra proxima coluna
+  | 'lost'               // marcado como perdido
+  | 'escalated'          // escalado pra humano
+  | 'stuck'              // max_turns atingido sem progresso
+  | 'inactive_timeout';  // timer de inatividade disparou
+
+export interface AgentMetric {
+  id: string;
+  tenantId: string;
+  columnId: string;
+  cardId: string;
+  event: AgentMetricEvent;
+  reason?: string;
+  durationInColumnSeconds?: number;
+  turnsInColumn?: number;
+  occurredAt: number;
 }
 
 // ONDA 1 - Contatos Pro: Segments e bulk ops
