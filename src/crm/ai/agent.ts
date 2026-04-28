@@ -18,13 +18,15 @@ import { getCrmDb } from '../schema.js';
 import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
 import type { Channel2 } from '../types.js';
+import { pickAgent, type AgentPick } from '../agents/columnAgentSelector.js';
+import { runColumnAgent } from '../agents/columnAgentRunner.js';
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface ChannelAIConfig {
+export interface ChannelAIConfig {
   enabled: boolean;
   systemPrompt: string;
   model: string;
@@ -71,7 +73,7 @@ export function readChannelAIConfig(channelId: string): ChannelAIConfig | null {
  *  Floor minimo: garantimos pelo menos 10 mensagens de contexto, mesmo
  *  que o config diga menos. Sem contexto suficiente o bot regride e
  *  reapresenta a Safira / repete perguntas. */
-function loadRecentHistory(tenantId: string, customerPhone: string, limit: number): { contactId: string | null; messages: ChatMessage[] } {
+export function loadRecentHistory(tenantId: string, customerPhone: string, limit: number): { contactId: string | null; messages: ChatMessage[] } {
   const contact = store.findContactByPhone(tenantId, customerPhone);
   if (!contact) return { contactId: null, messages: [] };
   const effectiveLimit = Math.max(10, limit || 10);
@@ -113,7 +115,7 @@ function isContactInHumanHandoffColumn(tenantId: string, contactId: string): { p
 }
 
 /** Chama DeepSeek (OpenAI-compatible) com history + system prompt. */
-async function callDeepSeek(
+export async function callDeepSeek(
   systemPrompt: string,
   history: ChatMessage[],
   userMessage: string,
@@ -147,7 +149,7 @@ async function callDeepSeek(
 }
 
 /** Transcreve audio via Whisper (OpenAI). Retorna string vazia em falha. */
-async function transcribeAudio(audioUrl: string): Promise<string> {
+export async function transcribeAudio(audioUrl: string): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     logger.warn('[ai/agent] OPENAI_API_KEY not configured — pulando transcribe');
@@ -192,7 +194,7 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
  *  passar cardId, a activity grava com card_id=NULL e fica invisivel
  *  no painel do card (que filtra por card_id). Resolvemos o card mais
  *  recente do contato (ingestInbound ja criou um pra essa conversa). */
-async function sendReply(
+export async function sendReply(
   channel: Channel2,
   customerPhone: string,
   text: string,
@@ -213,36 +215,95 @@ async function sendReply(
   if (!r.ok) throw new Error(`send failed: ${r.error}`);
 }
 
-interface InboundContext {
+export interface InboundContext {
   channel: Channel2;
   customerPhone: string;
   text?: string;       // texto da mensagem (se for texto)
   audioUrl?: string;   // URL do audio (se for audio)
   imageUrl?: string;   // URL da imagem (se for imagem)
   senderName?: string;
+  // Onda 62 (PR 2): provider message id pro cluster lock
+  // (crm:col-agent:msg:{messageId} via setNxEx). Opcional pra
+  // backward compat — se faltar, usamos fallback baseado em phone+timestamp.
+  messageId?: string;
 }
 
 /**
  * Entry point: chamado pelo webhook handler em background após
  * ingestInbound gravar a mensagem no DB. Faz debounce + processamento.
+ *
+ * Onda 62 (PR 2): antes do debounce, decide via pickAgent se vai rodar
+ * o agente de coluna (novo) ou o de canal (legado, comportamento atual).
+ * Backward compat: se nao tiver agente de coluna ativo, cai no fluxo
+ * antigo sem regressao alguma.
  */
+const COLUMN_AGENT_DEBOUNCE_SECONDS = 8;
+
 export function handleInboundForAI(ctx: InboundContext): void {
   const { channel, customerPhone } = ctx;
-  const config = readChannelAIConfig(channel.id);
-  if (!config) return; // canal não tem AI ativo
 
-  // Debounce: cancela timer anterior do mesmo phone, re-agenda
+  // Decide (pre-debounce) qual caminho. Se for "none", ja short-circuita
+  // sem agendar timer — economiza memoria.
+  // O picker eh chamado de novo no fire do timer (mais abaixo) pra
+  // capturar mudanças que aconteceram durante o debounce (ex: corretor
+  // ativou agente de coluna entre msgs).
+  let initialPick: AgentPick;
+  try {
+    initialPick = pickAgent({ channel, customerPhone });
+  } catch (err: any) {
+    logger.warn('[ai/agent] pickAgent falhou (assume channel fallback):', err?.message);
+    const cfg = readChannelAIConfig(channel.id);
+    initialPick = cfg ? { type: 'channel', channel } : { type: 'none', reason: 'no_agent_configured' };
+  }
+  if (initialPick.type === 'none') return;
+
+  // Debounce key + duracao. Pra channel agent reusa config existente
+  // (que pode ter sido tunada por canal). Pra column agent usa default
+  // (8s — mesmo sweet spot WhatsApp BR).
+  const channelConfig = initialPick.type === 'channel' ? readChannelAIConfig(channel.id) : null;
+  const debounceSeconds = channelConfig?.debounceSeconds ?? COLUMN_AGENT_DEBOUNCE_SECONDS;
+
   const debounceKey = `${channel.id}:${customerPhone}`;
   const existing = _debounceTimers.get(debounceKey);
   if (existing) clearTimeout(existing);
 
   const timer = setTimeout(() => {
     _debounceTimers.delete(debounceKey);
-    runAgent(ctx, config).catch((err) => {
-      logger.error(`[ai/agent] runAgent fail (${customerPhone}):`, err?.message);
+    void dispatchAfterDebounce(ctx).catch((err) => {
+      logger.error(`[ai/agent] dispatch fail (${customerPhone}):`, err?.message);
     });
-  }, config.debounceSeconds * 1000);
+  }, debounceSeconds * 1000);
   _debounceTimers.set(debounceKey, timer);
+}
+
+/** Re-pickAgent no fire do timer (pode ter mudado durante o debounce) e
+ *  roda o runner correspondente. Tudo async, sem retorno — o caller
+ *  (timer callback) ja eh fire-and-forget. */
+async function dispatchAfterDebounce(ctx: InboundContext): Promise<void> {
+  const { channel, customerPhone } = ctx;
+  const pick = pickAgent({ channel, customerPhone });
+  if (pick.type === 'none') {
+    logger.info(`[ai/agent] dispatch=none reason=${pick.reason}`);
+    return;
+  }
+  if (pick.type === 'column') {
+    await runColumnAgent({
+      channel: pick.channel,
+      card: pick.card,
+      column: pick.column,
+      customerPhone,
+      text: ctx.text,
+      audioUrl: ctx.audioUrl,
+      imageUrl: ctx.imageUrl,
+      senderName: ctx.senderName,
+      messageId: ctx.messageId,
+    });
+    return;
+  }
+  // type === 'channel' — fluxo legado (ZERO regressao)
+  const config = readChannelAIConfig(channel.id);
+  if (!config) return; // race: removido durante o debounce
+  await runAgent(ctx, config);
 }
 
 async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<void> {

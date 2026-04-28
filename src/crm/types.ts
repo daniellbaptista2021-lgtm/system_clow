@@ -74,7 +74,8 @@ export type ColumnAgentRole =
 // coletados pela conversa, e log historico de promocoes entre colunas.
 export type CardAgentStatus =
   | 'active'      // bot ativo, conversando
-  | 'paused'      // pausado por max_turns ou pausa manual
+  | 'paused'      // pausado por pausa manual
+  | 'stuck'       // max_turns atingido — preso aguardando intervencao humana
   | 'escalated'   // escalado pra humano (corretor precisa assumir)
   | 'done';       // funil concluido (chegou em coluna terminal)
 
@@ -108,11 +109,14 @@ export interface CardAgentState {
 // de metricas no PR 7. NAO usado pra logica de runtime — somente
 // analytics.
 export type AgentMetricEvent =
-  | 'promoted'           // card avancou pra proxima coluna
-  | 'lost'               // marcado como perdido
-  | 'escalated'          // escalado pra humano
+  | 'executed'           // turno do agente rodou e respondeu cliente
+  | 'blocked'            // turno bloqueado (out_of_hours / max_turns / anti_loop / no_agent)
+  | 'locked_out'         // outro worker ja estava processando esta msg
+  | 'promoted'           // card avancou pra proxima coluna (PR 3)
+  | 'lost'               // marcado como perdido (PR 3)
+  | 'escalated'          // escalado pra humano (PR 3)
   | 'stuck'              // max_turns atingido sem progresso
-  | 'inactive_timeout';  // timer de inatividade disparou
+  | 'inactive_timeout';  // timer de inatividade disparou (PR 4)
 
 export interface AgentMetric {
   id: string;
