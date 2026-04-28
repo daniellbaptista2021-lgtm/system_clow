@@ -73,11 +73,25 @@ export function buildRoutes(pool: SessionPool): Hono {
   });
 
   // ── Helper: Check session ownership ──────────────────────────────
+  // FAIL-CLOSED: bloqueia QUALQUER mismatch ou tenantId ausente.
+  // Bug anterior: `meta.tenantId && requestTenantId && ...` permitia
+  // tenant SaaS acessar sessão criada por admin (meta.tenantId=undefined)
+  // porque o && curto-circuitava. Resultado: PV Corretora via dados do
+  // CRM admin via tools (crm_dashboard etc) — vazamento entre tenants.
   function checkSessionOwnership(sessionId: string, requestTenantId: string | undefined, isAdmin: boolean): string | null {
-    if (isAdmin) return null; // Admin can access everything
+    if (isAdmin) return null; // Admin sempre acessa tudo
     const meta = pool.getMetadata(sessionId);
     if (!meta) return null; // Session not found — will 404 later
-    if (meta.tenantId && requestTenantId && meta.tenantId !== requestTenantId) {
+    // Token user_session sem tenantId no request: bloqueado (invariante)
+    if (!requestTenantId) {
+      return 'Acesso negado: token sem tenant_id valido';
+    }
+    // Sessão criada por admin (sem tenantId) — usuário SaaS NÃO pode reusar
+    if (!meta.tenantId) {
+      return 'Acesso negado: sessao pertence a outro contexto (admin)';
+    }
+    // Tenants diferentes — bloqueio normal
+    if (meta.tenantId !== requestTenantId) {
       return 'Acesso negado: esta sessao pertence a outro usuario';
     }
     return null;
