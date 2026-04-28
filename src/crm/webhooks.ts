@@ -142,7 +142,11 @@ app.post('/zapi/:secret', async (c) => {
     }
   } catch {}
 
-  const parsed = zapi.parseWebhook(payload);
+  // Onda 60: filtra ecos do proprio numero conectado (Z-API as vezes
+  // ecoa outbound de volta como inbound). fetchConnectedPhone tem
+  // cache de 24h em memoria, so faz request real na 1a chamada.
+  const connectedPhone = await zapi.fetchConnectedPhone(channel);
+  const parsed = zapi.parseWebhook(payload, connectedPhone || undefined);
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }
@@ -154,11 +158,14 @@ app.post('/zapi/:secret', async (c) => {
   // Nao bloqueia o 200 OK volta pra Z-API.
   try {
     const items = Array.isArray(payload) ? payload : [payload];
+    const connectedNorm = connectedPhone ? String(connectedPhone).replace(/\D/g, '') : '';
     for (const it of items) {
       if (it?.fromMe === true) continue; // so processa msg do cliente
       if (it?.type && it.type !== 'ReceivedCallback') continue;
       const phone = it?.phone || it?.from;
       if (!phone) continue;
+      // Filtra eco do proprio numero conectado (mesma logica do parser)
+      if (connectedNorm && String(phone).replace(/\D/g, '') === connectedNorm) continue;
       const text = it?.text?.message || it?.message;
       const audioUrl = it?.audio?.audioUrl;
       const imageUrl = it?.image?.imageUrl;

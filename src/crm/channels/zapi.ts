@@ -202,9 +202,19 @@ export interface WebhookValue {
  * Parse Z-API webhook payload.
  * Z-API has multiple webhook formats: messageReceived, statusReceived, etc.
  * We focus on incoming messages (`fromMe: false`).
+ *
+ * @param connectedPhone Z-API tem um modo "receive-all-notifications"
+ *   que ecoa as proprias mensagens enviadas pela API de volta no webhook
+ *   recebido — geralmente com fromMe ausente/false e phone = numero
+ *   conectado da instancia. Se passarmos o numero conectado aqui, a
+ *   gente filtra esses ecos (caso contrario o bot vai responder a
+ *   propria saudacao em looping).
  */
-export function parseWebhook(payload: any): WebhookValue {
+export function parseWebhook(payload: any, connectedPhone?: string): WebhookValue {
   const out: WebhookValue = { messages: [] };
+
+  // Normalizacao do connected phone — só digitos, pra comparar igual.
+  const connectedNorm = connectedPhone ? String(connectedPhone).replace(/\D/g, '') : '';
 
   // Z-API "DeliveryCallback" / "ReceivedCallback" / "MessageStatusCallback"
   // Single-message payloads: { phone, fromMe, isStatusReply, text:{message}, ... }
@@ -231,6 +241,16 @@ export function parseWebhook(payload: any): WebhookValue {
     // Se item.chatLid existe e o phone real esta em outro campo, usariamos —
     // mas inbound de contato real sempre vem com phone=numero real.
     if (typeof phone === 'string' && phone.includes('@lid')) continue;
+
+    // Onda 60: filtrar ECO da propria instancia. Z-API as vezes manda
+    // o webhook recebido com fromMe=false mas phone=numero conectado
+    // quando o "receive-all-notifications" esta ativo. Resultado: cada
+    // outbound do bot virava um message_in fake do proprio numero,
+    // criava contato "5521969927641" duplicado e bagunçava o history.
+    if (connectedNorm) {
+      const phoneNorm = String(phone).replace(/\D/g, '');
+      if (phoneNorm === connectedNorm) continue;
+    }
 
     const base: ParsedInbound = {
       fromPhone: phone,
@@ -318,6 +338,36 @@ export async function fetchMedia(channel: Channel2, mediaUrl: string): Promise<{
 }
 
 
+// ─── DEVICE INFO (Z-API) ────────────────────────────────────────────────
+// GET /instances/{instance}/token/{token}/device → { phone, lid, imgUrl, ... }
+// Retorna o numero conectado da instancia. Usamos pra filtrar ecos no
+// parseWebhook (Z-API as vezes manda outbound de volta como inbound
+// quando "receive-all-notifications" esta ativo).
+//
+// Cache em memoria (24h) pra evitar 1 GET por webhook recebido. O
+// numero conectado raramente muda; se mudar, basta restart.
+const _connectedPhoneCache = new Map<string, { phone: string; ts: number }>();
+const CONNECTED_PHONE_TTL = 24 * 60 * 60 * 1000;
+
+export async function fetchConnectedPhone(channel: Channel2): Promise<string | null> {
+  const cached = _connectedPhoneCache.get(channel.id);
+  if (cached && (Date.now() - cached.ts) < CONNECTED_PHONE_TTL) return cached.phone;
+  try {
+    const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+    if (!creds.instanceId || !creds.token) return null;
+    const u = url(creds, '/device');
+    const r = await fetch(u, { headers: headers(creds) });
+    if (!r.ok) return null;
+    const j: any = await r.json();
+    const phone = String(j?.phone || '');
+    if (!phone) return null;
+    _connectedPhoneCache.set(channel.id, { phone, ts: Date.now() });
+    return phone;
+  } catch {
+    return null;
+  }
+}
+
 // ─── PROFILE PICTURE (Z-API) ────────────────────────────────────────────
 // GET /instances/{instance}/token/{token}/profile-picture/{phone}
 // Retorna { link: string } ou {} se a pessoa nao tem foto/foto privada.
@@ -344,12 +394,21 @@ export async function fetchProfilePicture(channel: Channel2, phone: string): Pro
 // pronto, mandavam msg pro numero, NADA chegava no CRM (porque a Z-API
 // nao sabia pra onde mandar). Bug silencioso.
 //
-// Z-API tem 4 endpoints de webhook configuraveis. Setamos os 3 que
-// importam pro fluxo de atendimento:
-//   - update-webhook-received          → mensagem recebida do cliente
-//   - update-webhook-message-status    → entregue/lido/erro
-//   - update-webhook-connection-status → connected / disconnected
-// O 4o (presence-chat) nao precisamos.
+// Z-API tem ~6 endpoints de webhook configuraveis. Setamos TODOS pra
+// apontarem pro System Clow — assim qualquer evento que a Z-API
+// gerar (recebido/entregue/status/desconexao/etc) chega aqui e e
+// processado ou ignorado pelo parseWebhook (que so liberta
+// ReceivedCallback). Por que setar todos:
+//   1. evita que sobrem URLs antigas (n8n, etc) pegando eventos
+//   2. centraliza o ponto unico de processamento
+//   3. system clow ignora eventos que nao precisa
+// Endpoints:
+//   - update-webhook-received                     → msg recebida
+//   - update-webhook-delivery                     → confirmacao entrega
+//   - update-webhook-message-status               → lido/entregue/erro
+//   - update-webhook-connection-status            → connected/disconnected
+//   - update-webhook-presence-chat                → digitando/online
+//   - update-webhook-receive-all-notifications    → eco de outbound (parser filtra)
 async function setZapiWebhook(creds: ZapiCreds, endpoint: string, webhookUrl: string): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
     const u = url(creds, '/' + endpoint);
@@ -389,8 +448,11 @@ export async function autoConfigureWebhooks(
   const webhookUrl = baseUrl.replace(/\/$/, '') + '/webhooks/crm/zapi/' + channel.webhookSecret;
   const endpoints = [
     'update-webhook-received',
+    'update-webhook-delivery',
     'update-webhook-message-status',
     'update-webhook-connection-status',
+    'update-webhook-presence-chat',
+    'update-webhook-receive-all-notifications',
   ];
   const result: AutoConfigResult = { ok: true, configured: [], failed: [] };
   for (const ep of endpoints) {
