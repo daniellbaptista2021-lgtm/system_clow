@@ -161,29 +161,29 @@ describe('Column Agent Tools — integration', () => {
 
   // ── 2) cotador full flow (gerar_cotacao real do PR 5 + promover) ────
 
-  it('2. cotador chama gerar_cotacao (real, PR 5) + promover_vendedor com tag frio', async () => {
+  it('2. cotador chama gerar_cotacao_sulamerica (PR 5.1) + promover_vendedor com tag frio', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
-    // PR 5: gerar_cotacao agora consulta tenant_plans real — precisa cadastrar
+    // PR 5.1: tool renomeada e usando SulAmerica AP Flex
     const plansStore = await import('../../../src/crm/store/tenantPlansStore.js');
     plansStore.createPlan({
-      tenantId, name: 'Real Pax Essencial Individual',
-      productType: 'funeral', basePriceCents: 2990,
-      coverageSummary: 'Funeral basico',
-      minAge: 0, maxAge: 75, surchargeOutsideRioCents: 800, priority: 10,
+      tenantId, name: 'SulAmérica AP Flex Individual',
+      productType: 'acidentes_pessoais', basePriceCents: 2990,
+      coverageSummary: 'Cobertura nacional',
+      minAge: 1, maxAge: 74, surchargeOutsideRioCents: 0, priority: 10,
     });
     const { card } = setupCard(tenantId, board, cols[1].id, '+5511990000002');
     const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[1], 'cotador');
 
     const cot = await registry.executeToolCall(
-      callTool('gerar_cotacao', { product_type: 'funeral', idade: 40, regiao: 'rio' }),
+      callTool('gerar_cotacao_sulamerica', { idade_titular: 40 }),
       ctx,
     );
     expect(cot.ok).toBe(true);
-    // Shape novo: result.message (texto pronto) + result.plans (lista)
+    // Shape PR 5.1: result.message (texto pronto) + modalidade + total_cents
     expect(typeof (cot.result as any).message).toBe('string');
-    expect(Array.isArray((cot.result as any).plans)).toBe(true);
-    expect((cot.result as any).plans.length).toBeGreaterThan(0);
+    expect((cot.result as any).modalidade).toBe('individual');
+    expect((cot.result as any).total_cents).toBe(2990);
 
     const promo = await registry.executeToolCall(
       callTool('promover_vendedor', { motivo: 'cotacao enviada', tag: 'frio' }),
@@ -289,14 +289,14 @@ describe('Column Agent Tools — integration', () => {
 
   // ── 6) permissao: qualificador tentando gerar_cotacao ────────────────
 
-  it('6. qualificador chamando gerar_cotacao → permission denied', async () => {
+  it('6. qualificador chamando gerar_cotacao_sulamerica → permission denied', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[0].id, '+5511990000006');
     const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[0], 'qualificador');
 
     const r = await registry.executeToolCall(
-      callTool('gerar_cotacao', { idade: 30 }),
+      callTool('gerar_cotacao_sulamerica', { idade_titular: 30 }),
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -345,9 +345,10 @@ describe('Column Agent Tools — integration', () => {
 
     const cpfClaro = '11144477735';
     const r = await registry.executeToolCall(
+      // PR 5.1: shape novo — endereco_completo (nome do campo mudou)
       callTool('salvar_dados_proposta', {
         cpf: cpfClaro, rg: '12.345.678-9',
-        endereco: { cep: '01310100', cidade: 'Sao Paulo', uf: 'SP' },
+        endereco_completo: { cep: '01310100', cidade: 'Sao Paulo', uf: 'SP' },
       }),
       ctx,
     );
@@ -364,7 +365,7 @@ describe('Column Agent Tools — integration', () => {
     expect(raw).not.toContain('Sao Paulo');
     // Tem o shape sensitive cifrado
     expect(raw).toContain('cpf_enc');
-    expect(raw).toContain('endereco_enc');
+    expect(raw).toContain('endereco_completo_enc'); // PR 5.1: nome novo do campo
 
     // Decrypt funciona pra finalizador via ler_dados_card unmask
     const unmasked = await registry.executeToolCall(

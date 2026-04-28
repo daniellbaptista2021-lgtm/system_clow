@@ -7,7 +7,7 @@ import type { ToolDef } from './types.js';
 
 const consultarMargemDesconto: ToolDef = {
   name: 'consultar_margem_desconto',
-  description: 'Retorna a margem maxima de desconto que voce pode oferecer pra um plano. Hardcoded em 10% nesta versao — config por tenant vem em PR futuro.',
+  description: 'Retorna a margem maxima de desconto autorizada pra um plano. Pra SulAmerica AP Flex eh sempre 0% — voce NAO oferece desconto sob nenhuma circunstancia. Use essa tool so pra confirmar que nao tem margem antes de responder ao cliente.',
   roles: ['closer'],
   parameters: {
     type: 'object',
@@ -20,8 +20,8 @@ const consultarMargemDesconto: ToolDef = {
     return {
       ok: true,
       result: {
-        margem_pct: 10,
-        observacao: 'Margem default 10% — configuravel por tenant no futuro.',
+        margem_pct: 0,
+        observacao: 'SulAmérica AP Flex não tem margem de desconto autorizada. NUNCA ofereça desconto. Se cliente pedir, redirecione pro valor dos benefícios.',
       },
     };
   },

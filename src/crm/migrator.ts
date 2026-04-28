@@ -31,6 +31,7 @@ import * as m003 from './migrations/003_channel_ai_agent.js';
 import * as m004 from './migrations/004_column_agents.js';
 import * as m005 from './migrations/005_inactivity_fire_count.js';
 import * as m006 from './migrations/006_tenant_plans.js';
+import * as m007 from './migrations/007_pv_sulamerica_plans.js';
 
 export interface Migration {
   version: number;
@@ -39,7 +40,7 @@ export interface Migration {
   down(db: Database): void;
 }
 
-const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006];
+const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007];
 
 // ─── Validation (runs once at module load) ────────────────────────────────
 

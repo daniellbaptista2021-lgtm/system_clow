@@ -1,142 +1,113 @@
 /**
- * quotationEngine — calculo de cotacao real plugado nos planos do tenant.
+ * quotationEngine — pipeline de cotacao SulAmerica AP Flex (PR 5.1, Onda 62).
  *
- * Pra a tool gerar_cotacao (PR 5 da Onda 62) substituir o mock fixo
- * antigo. Pega planos ativos do tenant, calcula preco com base nos
- * dados de qualificacao (idade, dependentes, regiao), filtra elegiveis,
- * formata mensagem WhatsApp-friendly.
- *
- * Regras especificas do produto (Real Pax) ficam em realPaxRules.ts
- * pra esse arquivo permanecer agnostico.
+ * Substitui a versao anterior baseada em Real Pax. Usa as regras de
+ * sulamericaRules.ts:
+ *   - selecao automatica de modalidade (Individual/Casal/Familiar/Familiar Ampliado)
+ *   - calculo de preco com adicionais (filhos>21 e dependentes extras)
+ *   - validacao de idade do titular (max 74)
+ *   - mensagem formatada palavra-por-palavra do template do n8n
  */
 import type {
-  TenantPlan,
   QualificationData,
-  PricedPlan,
   QuotationSnapshot,
   ProductType,
+  Modalidade,
 } from '../../types.js';
 import { listPlansForTenant } from '../../store/tenantPlansStore.js';
 import {
+  calculateForPlan,
+  calculateSulamericaPrice,
+  selectModalidade,
+  formatSulamericaQuotation,
   scrubPlanName,
-  formatPriceLine,
-  formatHeader,
-  formatCallToAction,
-} from './realPaxRules.js';
+  TITULAR_MAX_AGE,
+} from './sulamericaRules.js';
 
-const MAX_PLANS_IN_QUOTE = 4;
-
-/** Calcula o preco final pra um plano dado os dados de qualificacao.
- *  Retorna PricedPlan com eligible=false + rejectedReason se idade fora
- *  da faixa. Senao calcula:
- *    - basePriceCents = plan.basePriceCents + (numeroDependentes * additional_per_dep)
- *    - outsideRioPriceCents = basePriceCents + plan.surchargeOutsideRioCents (se >0) */
-export function calculatePriceForPlan(plan: TenantPlan, qual: QualificationData): PricedPlan {
-  const { idade, numeroDependentes } = qual;
-
-  // 1) Idade fora da faixa?
-  if (typeof idade === 'number') {
-    if (typeof plan.minAge === 'number' && idade < plan.minAge) {
-      return { plan, basePriceCents: 0, eligible: false, rejectedReason: 'min_age_below' };
-    }
-    if (typeof plan.maxAge === 'number' && idade > plan.maxAge) {
-      return { plan, basePriceCents: 0, eligible: false, rejectedReason: 'max_age_exceeded' };
-    }
-  }
-
-  // 2) Calcula preco base com dependentes (se aplicavel)
-  let basePriceCents = plan.basePriceCents;
-  if (plan.allowsDependents && plan.additionalPerDependentCents > 0 && numeroDependentes && numeroDependentes > 0) {
-    basePriceCents += numeroDependentes * plan.additionalPerDependentCents;
-  }
-
-  // 3) Preco fora do Rio (se surcharge > 0)
-  const outsideRioPriceCents = plan.surchargeOutsideRioCents > 0
-    ? basePriceCents + plan.surchargeOutsideRioCents
-    : undefined;
-
-  return { plan, basePriceCents, outsideRioPriceCents, eligible: true };
-}
+// Re-export pra back-compat com PR 5 (callers de calculatePriceForPlan)
+export { calculateForPlan as calculatePriceForPlan } from './sulamericaRules.js';
+export { formatSulamericaQuotation as formatQuotationMessage } from './sulamericaRules.js';
 
 export interface QuotationResult {
   ok: boolean;
-  error?: 'tenant_sem_planos_cadastrados' | 'sem_plano_compativel_idade' | string;
-  message?: string; // texto pronto pro cliente
+  error?:
+    | 'tenant_sem_planos_cadastrados'
+    | 'sem_plano_compativel_idade'
+    | 'titular_acima_idade_maxima'
+    | string;
+  message?: string;
   snapshot?: QuotationSnapshot;
-  plans?: PricedPlan[];
+  modalidade?: Modalidade;
+  totalCents?: number;
 }
 
 export interface BuildQuotationInput {
   tenantId: string;
-  productType: ProductType;
+  productType?: ProductType;
   qualification: QualificationData;
   customerName?: string;
 }
 
-/** Pipeline completo: lista planos → calcula precos → filtra elegiveis →
- *  formata mensagem → retorna texto + snapshot. */
 export function buildQuotation(input: BuildQuotationInput): QuotationResult {
-  const { tenantId, productType, qualification, customerName } = input;
-  const region: 'rio' | 'fora_do_rio' | 'desconhecida' = qualification.regiao || 'desconhecida';
+  const { tenantId, qualification, customerName } = input;
+  const productType = input.productType ?? 'acidentes_pessoais';
 
-  // 1) Lista planos do tenant pro tipo
+  // 1) Lista planos do tenant pra esse tipo
   const plans = listPlansForTenant(tenantId, productType);
   if (plans.length === 0) {
     return { ok: false, error: 'tenant_sem_planos_cadastrados' };
   }
 
-  // 2) Calcula preco pra cada
-  const priced = plans.map((p) => calculatePriceForPlan(p, qualification));
-
-  // 3) Filtra elegiveis
-  const eligible = priced.filter((p) => p.eligible);
-  if (eligible.length === 0) {
-    return { ok: false, error: 'sem_plano_compativel_idade', plans: priced };
+  // 2) Idade do titular: regra dura SulAmerica — > 74 rejeita
+  const idadeTitular = qualification.idadeTitular ?? qualification.idade;
+  if (typeof idadeTitular === 'number' && idadeTitular > TITULAR_MAX_AGE) {
+    return { ok: false, error: 'titular_acima_idade_maxima' };
   }
 
-  // 4) Pega top N (ja vem ordenado por priority do store)
-  const top = eligible.slice(0, MAX_PLANS_IN_QUOTE);
+  // 3) Seleciona modalidade (se nao foi passada)
+  const modalidade: Modalidade = qualification.modalidade ?? selectModalidade(qualification);
+  const qualEffective: QualificationData = { ...qualification, modalidade };
 
-  // 5) Formata mensagem
-  const message = formatQuotationMessage({ priced: top, region, customerName });
+  // 4) Calcula preco
+  const priceResult = calculateSulamericaPrice(qualEffective);
 
-  // 6) Snapshot pra cache no card_agent_state
+  // 5) Valida que pelo menos 1 plano cadastrado eh elegivel (defesa contra
+  //    tenant que cadastrou min/max age fora do padrao SulAmerica).
+  const matchingPlans = plans.filter((p) => {
+    const priced = calculateForPlan(p, qualEffective);
+    return priced.eligible;
+  });
+  if (matchingPlans.length === 0) {
+    return { ok: false, error: 'sem_plano_compativel_idade' };
+  }
+
+  // 6) Formata mensagem (palavra-por-palavra do n8n template)
+  const message = formatSulamericaQuotation({
+    qualification: qualEffective,
+    priceResult,
+    customerName,
+  });
+
+  // 7) Snapshot (so dados da cotacao, sem PII)
   const snapshot: QuotationSnapshot = {
     productType,
-    region,
+    region: 'desconhecida', // SulAmerica eh nacional, sem region surcharge
     customerName,
-    qualification,
-    plans: top.map((p) => ({
-      name: scrubPlanName(p.plan.name),
-      coverageSummary: p.plan.coverageSummary,
-      basePriceCents: p.basePriceCents,
-      outsideRioPriceCents: p.outsideRioPriceCents,
+    qualification: qualEffective,
+    plans: matchingPlans.slice(0, 4).map((p) => ({
+      name: scrubPlanName(p.name),
+      coverageSummary: p.coverageSummary,
+      basePriceCents: priceResult.totalCents,
+      outsideRioPriceCents: undefined,
     })),
     calculatedAt: Date.now(),
   };
 
-  return { ok: true, message, snapshot, plans: top };
-}
-
-interface FormatInput {
-  priced: PricedPlan[];
-  region: 'rio' | 'fora_do_rio' | 'desconhecida';
-  customerName?: string;
-}
-
-/** Renderiza a mensagem final pra mandar pro cliente via WhatsApp. */
-export function formatQuotationMessage(input: FormatInput): string {
-  const { priced, region, customerName } = input;
-  const lines: string[] = [];
-  lines.push(formatHeader(customerName));
-  lines.push(''); // espaco apos header
-  for (const p of priced) {
-    const safeName = scrubPlanName(p.plan.name);
-    lines.push(`📋 *${safeName}*`);
-    lines.push(p.plan.coverageSummary);
-    lines.push(formatPriceLine(p, region));
-    lines.push(''); // espaco entre planos
-  }
-  lines.push(formatCallToAction());
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return {
+    ok: true,
+    message,
+    snapshot,
+    modalidade,
+    totalCents: priceResult.totalCents,
+  };
 }
