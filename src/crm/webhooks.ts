@@ -198,6 +198,8 @@ app.post('/zapi/:secret', async (c) => {
         audioUrl,
         imageUrl,
         senderName,
+        // Onda 62 (PR 2): propaga messageId pro cluster lock do column agent
+        messageId: it?.messageId || it?.id,
       });
     }
   } catch (err: any) {

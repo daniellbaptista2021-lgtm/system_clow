@@ -153,10 +153,23 @@ export function deleteColumn(tenantId: string, columnId: string): boolean {
 }
 
 function rowToColumn(r: any): BoardColumn {
+  // Onda 62 (migration 004): leitura defensiva dos campos de agente.
+  // Colunas criadas antes da migration podem nao ter as colunas (raro,
+  // mas idempotente) → entao usamos `r.foo ?? undefined`.
   return {
     id: r.id, boardId: r.board_id, name: r.name, position: r.position, color: r.color,
     autoRule: J.parse(r.auto_rule_json, null),
     isTerminal: r.is_terminal === 1, createdAt: r.created_at,
+    agentEnabled: r.agent_enabled === 1,
+    agentName: r.agent_name ?? undefined,
+    agentSystemPrompt: r.agent_system_prompt ?? undefined,
+    agentRole: r.agent_role ?? undefined,
+    agentPromoteToColumnId: r.agent_promote_to_column_id ?? undefined,
+    agentInactivityTimeoutMinutes: r.agent_inactivity_timeout_minutes ?? undefined,
+    agentMaxTurns: r.agent_max_turns ?? undefined,
+    agentActiveHoursStart: r.agent_active_hours_start ?? undefined,
+    agentActiveHoursEnd: r.agent_active_hours_end ?? undefined,
+    agentPromotionCriteria: r.agent_promotion_criteria ?? undefined,
   };
 }
 

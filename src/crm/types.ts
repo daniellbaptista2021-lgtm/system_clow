@@ -45,6 +45,153 @@ export interface BoardColumn {
   autoRule?: { trigger: string; action: string; params?: Record<string, unknown> } | null;
   isTerminal?: boolean; // e.g. won/lost — closes the deal
   createdAt: number;
+  // ── Onda 62: Multi-agent funnel (migration 004) ───────────────────
+  // Agente IA por coluna do Kanban. agentEnabled=false por padrão —
+  // nada responde cliente sem ativacao explicita do corretor via UI.
+  // agentName eh override opcional da persona (default: tenant.personaName).
+  agentEnabled?: boolean;
+  agentName?: string;
+  agentSystemPrompt?: string;
+  agentRole?: ColumnAgentRole;
+  agentPromoteToColumnId?: string;
+  agentInactivityTimeoutMinutes?: number;
+  agentMaxTurns?: number;
+  agentActiveHoursStart?: string; // 'HH:MM'
+  agentActiveHoursEnd?: string;   // 'HH:MM'
+  agentPromotionCriteria?: string; // texto livre exibido pro agente
+}
+
+export type ColumnAgentRole =
+  | 'qualificador'
+  | 'cotador'
+  | 'closer'
+  | 'finalizador'
+  | 'custom';
+
+// ── Card agent state (1:1 com card) ────────────────────────────────
+// Persiste estado de funcionamento do agente por card: turnos ja
+// trocados, timestamps pra timer de inatividade, dados estruturados ja
+// coletados pela conversa, e log historico de promocoes entre colunas.
+export type CardAgentStatus =
+  | 'active'      // bot ativo, conversando
+  | 'paused'      // pausado por pausa manual
+  | 'stuck'       // max_turns atingido — preso aguardando intervencao humana
+  | 'escalated'   // escalado pra humano (corretor precisa assumir)
+  | 'done';       // funil concluido (chegou em coluna terminal)
+
+export interface CardAgentPromotionEntry {
+  fromColumnId: string;
+  toColumnId: string;
+  fromRole?: ColumnAgentRole;
+  toRole?: ColumnAgentRole;
+  reason: string;
+  at: number;
+}
+
+export interface CardAgentState {
+  cardId: string;
+  columnId: string;
+  currentAgentRole: ColumnAgentRole;
+  turnsCount: number;
+  lastClientMessageAt?: number;
+  lastAgentMessageAt?: number;
+  inactivityTimerAt?: number;
+  /** Quantas vezes o timer de inatividade disparou desde ultima resposta
+   *  do cliente. Reseta em recordAgentTurn('client') e em executePromotion.
+   *  Acima de 2, scheduler forca marcar_morno (PR 4). */
+  inactivityFireCount?: number;
+  status: CardAgentStatus;
+  collectedData?: Record<string, unknown>;
+  promotionLog?: CardAgentPromotionEntry[];
+  tenantId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Agent metrics (append-only event log) ──────────────────────────
+// Cada evento relevante do funil grava uma linha. Lido pelo dashboard
+// de metricas no PR 7. NAO usado pra logica de runtime — somente
+// analytics.
+export type AgentMetricEvent =
+  | 'executed'           // turno do agente rodou e respondeu cliente
+  | 'blocked'            // turno bloqueado (out_of_hours / max_turns / anti_loop / no_agent)
+  | 'locked_out'         // outro worker ja estava processando esta msg
+  | 'promoted'           // card avancou pra proxima coluna (PR 3)
+  | 'lost'               // marcado como perdido (PR 3)
+  | 'escalated'          // escalado pra humano (PR 3)
+  | 'stuck'              // max_turns atingido sem progresso
+  | 'inactive_timeout'   // timer de inatividade disparou (PR 4)
+  | 'tool_called'        // PR 3: agente chamou uma tool com sucesso
+  | 'tool_failed'        // PR 3: tool falhou (validacao, permissao, erro)
+  | 'tool_loop_max';     // PR 3: bateu o limite de iteracoes LLM↔tool
+
+// ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
+export type ProductType =
+  | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial' | 'outro';
+
+export interface TenantPlan {
+  id: string;
+  tenantId: string;
+  name: string;
+  productType: ProductType;
+  basePriceCents: number;
+  coverageSummary: string;
+  minAge?: number;
+  maxAge?: number;
+  allowsDependents: boolean;
+  additionalPerDependentCents: number;
+  surchargeOutsideRioCents: number;
+  active: boolean;
+  priority: number;
+  createdAt: number;
+  updatedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** Dados que o cotador usa pra calcular o preco. Vem de
+ *  state.collected_data.qualification + extras passados pela tool. */
+export interface QualificationData {
+  idade?: number;
+  composicaoFamiliar?: string;
+  tipoPlano?: string;
+  numeroDependentes?: number;
+  regiao?: 'rio' | 'fora_do_rio' | 'desconhecida';
+}
+
+/** Resultado do calculo de preco pra um plano. */
+export interface PricedPlan {
+  plan: TenantPlan;
+  basePriceCents: number;          // preco para regiao 'rio'
+  outsideRioPriceCents?: number;   // preco fora do rio (com surcharge), se aplicavel
+  rejectedReason?: string;         // 'max_age_exceeded' | 'min_age_below' | etc
+  eligible: boolean;
+}
+
+/** Snapshot da cotacao salvo em collected_data.last_quotation. */
+export interface QuotationSnapshot {
+  productType: ProductType;
+  region: 'rio' | 'fora_do_rio' | 'desconhecida';
+  customerName?: string;
+  qualification: QualificationData;
+  plans: Array<{
+    name: string;
+    coverageSummary: string;
+    basePriceCents: number;
+    outsideRioPriceCents?: number;
+  }>;
+  calculatedAt: number;
+}
+
+export interface AgentMetric {
+  id: string;
+  tenantId: string;
+  columnId: string;
+  cardId: string;
+  event: AgentMetricEvent;
+  reason?: string;
+  durationInColumnSeconds?: number;
+  turnsInColumn?: number;
+  occurredAt: number;
 }
 
 // ONDA 1 - Contatos Pro: Segments e bulk ops

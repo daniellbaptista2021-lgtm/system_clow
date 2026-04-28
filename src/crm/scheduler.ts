@@ -25,10 +25,13 @@ import * as lgpd from './lgpd.js';
 import { logger } from '../utils/logger.js';
 
 const TICK_INTERVAL_MS = 60_000;
+const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
 const STALE_DAYS = 7;
 const DUE_APPROACHING_HOURS = 24;
 
 let _timer: NodeJS.Timeout | null = null;
+let _inactivityTimer: NodeJS.Timeout | null = null;
+let _runningInactivityTick = false;
 let _runningTick = false;
 
 /**
@@ -62,11 +65,34 @@ export function startScheduler(): void {
   _timer = setInterval(() => { void tick(); }, TICK_INTERVAL_MS);
   // Run once shortly after boot (10s) to process any due items
   setTimeout(() => { void tick(); }, 10_000);
-  logger.info(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s, worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`);
+
+  // Onda 62 PR 4: sub-tick de inatividade (30s) — varre cards com timer
+  // vencido e dispara agente de coluna pra agir (cobrar/morno/frio/perdido).
+  _inactivityTimer = setInterval(() => { void inactivityTick(); }, INACTIVITY_TICK_INTERVAL_MS);
+  setTimeout(() => { void inactivityTick(); }, 15_000);
+
+  logger.info(
+    `[CRM] Scheduler started (main tick ${TICK_INTERVAL_MS / 1000}s, inactivity tick ${INACTIVITY_TICK_INTERVAL_MS / 1000}s, ` +
+    `worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`,
+  );
 }
 
 export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
+  if (_inactivityTimer) { clearInterval(_inactivityTimer); _inactivityTimer = null; }
+}
+
+async function inactivityTick(): Promise<void> {
+  if (_runningInactivityTick) return; // skip se anterior ainda nao acabou
+  _runningInactivityTick = true;
+  try {
+    const { tickInactivity } = await import('./agents/inactivityScheduler.js');
+    await tickInactivity();
+  } catch (err: any) {
+    logger.warn('[inactivity-tick] err:', err?.message);
+  } finally {
+    _runningInactivityTick = false;
+  }
 }
 
 
