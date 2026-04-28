@@ -2776,16 +2776,6 @@ async function openAIAgentModal(channel) {
   if (cfg.enabled) enabledChk.checked = true;
   const audioChk = el('input', { type: 'checkbox' });
   if (cfg.audioEnabled) audioChk.checked = true;
-  const modelSel = el('select', { style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%' });
-  for (const m of [
-    { v: 'deepseek-chat', l: 'DeepSeek Chat (rápido + barato — recomendado)' },
-    { v: 'deepseek-reasoner', l: 'DeepSeek Reasoner (mais inteligente, mais lento)' },
-    { v: 'gpt-4o-mini', l: 'GPT-4o-mini (OpenAI — fallback)' },
-  ]) {
-    const o = el('option', { value: m.v }, m.l);
-    if (cfg.model === m.v) o.selected = true;
-    modelSel.append(o);
-  }
   const presetSel = el('select', { style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%;margin-bottom:10px' });
   for (const p of presets) presetSel.append(el('option', { value: p.prompt }, p.name));
   presetSel.addEventListener('change', () => {
@@ -2807,7 +2797,6 @@ async function openAIAgentModal(channel) {
       await api(`/channels/${channel.id}/ai-config`, { method: 'PATCH', body: {
         enabled: enabledChk.checked,
         systemPrompt: promptArea.value.trim(),
-        model: modelSel.value,
         audioEnabled: audioChk.checked,
         maxHistory: parseInt(historyInput.value, 10) || 20,
         debounceSeconds: parseInt(debounceInput.value, 10) || 8,
@@ -2829,7 +2818,6 @@ async function openAIAgentModal(channel) {
     el('div', { class: 'field' }, el('label', {}, 'Preset (opcional)'), presetSel),
     el('div', { class: 'field' }, el('label', {}, 'System prompt *'), promptArea),
     el('div', { style: 'display:flex;gap:10px;margin-top:10px' },
-      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Modelo'), modelSel),
       el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Histórico (msgs)'), historyInput),
       el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Debounce (s)'), debounceInput),
     ),

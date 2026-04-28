@@ -479,7 +479,7 @@ export function registerChannelsRoutes(app: Hono): void {
     const sets: string[] = []; const params: any[] = [];
     if (body.enabled !== undefined)         { sets.push('ai_enabled = ?');         params.push(body.enabled ? 1 : 0); }
     if (body.systemPrompt !== undefined)    { sets.push('ai_system_prompt = ?');   params.push(String(body.systemPrompt || '')); }
-    if (body.model !== undefined)           { sets.push('ai_model = ?');           params.push(String(body.model || 'deepseek-chat')); }
+    // body.model ignorado de proposito — modelo eh fixo deepseek-chat
     if (body.audioEnabled !== undefined)    { sets.push('ai_audio_enabled = ?');   params.push(body.audioEnabled ? 1 : 0); }
     if (body.maxHistory !== undefined)      { sets.push('ai_max_history = ?');     params.push(Math.max(1, Math.min(100, Number(body.maxHistory) || 20))); }
     if (body.debounceSeconds !== undefined) { sets.push('ai_debounce_seconds = ?'); params.push(Math.max(0, Math.min(60, Number(body.debounceSeconds) || 8))); }

@@ -52,7 +52,9 @@ export function readChannelAIConfig(channelId: string): ChannelAIConfig | null {
   return {
     enabled: true,
     systemPrompt: String(r.ai_system_prompt),
-    model: r.ai_model || 'deepseek-chat',
+    // Modelo FIXO em deepseek-chat — regra absoluta. Coluna ai_model
+    // do schema fica vestigial pra retrocompat, mas e ignorada.
+    model: 'deepseek-chat',
     audioEnabled: r.ai_audio_enabled !== 0,
     maxHistory: Number(r.ai_max_history || 20),
     debounceSeconds: Number(r.ai_debounce_seconds || 8),
