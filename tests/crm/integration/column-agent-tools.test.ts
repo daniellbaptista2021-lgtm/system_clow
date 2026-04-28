@@ -159,21 +159,31 @@ describe('Column Agent Tools — integration', () => {
     expect(metrics.some((m: any) => m.event === 'promoted')).toBe(true);
   });
 
-  // ── 2) cotador com tag 'frio' ────────────────────────────────────────
+  // ── 2) cotador full flow (gerar_cotacao real do PR 5 + promover) ────
 
-  it('2. cotador chama gerar_cotacao (mock) + promover_vendedor com tag frio', async () => {
+  it('2. cotador chama gerar_cotacao (real, PR 5) + promover_vendedor com tag frio', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
+    // PR 5: gerar_cotacao agora consulta tenant_plans real — precisa cadastrar
+    const plansStore = await import('../../../src/crm/store/tenantPlansStore.js');
+    plansStore.createPlan({
+      tenantId, name: 'Real Pax Essencial Individual',
+      productType: 'funeral', basePriceCents: 2990,
+      coverageSummary: 'Funeral basico',
+      minAge: 0, maxAge: 75, surchargeOutsideRioCents: 800, priority: 10,
+    });
     const { card } = setupCard(tenantId, board, cols[1].id, '+5511990000002');
     const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[1], 'cotador');
 
     const cot = await registry.executeToolCall(
-      callTool('gerar_cotacao', { idade: 40, tipo_plano: 'funeral' }),
+      callTool('gerar_cotacao', { product_type: 'funeral', idade: 40, regiao: 'rio' }),
       ctx,
     );
     expect(cot.ok).toBe(true);
-    expect(Array.isArray((cot.result as any).planos)).toBe(true);
-    expect((cot.result as any).planos.length).toBeGreaterThan(0);
+    // Shape novo: result.message (texto pronto) + result.plans (lista)
+    expect(typeof (cot.result as any).message).toBe('string');
+    expect(Array.isArray((cot.result as any).plans)).toBe(true);
+    expect((cot.result as any).plans.length).toBeGreaterThan(0);
 
     const promo = await registry.executeToolCall(
       callTool('promover_vendedor', { motivo: 'cotacao enviada', tag: 'frio' }),

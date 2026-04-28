@@ -125,6 +125,63 @@ export type AgentMetricEvent =
   | 'tool_failed'        // PR 3: tool falhou (validacao, permissao, erro)
   | 'tool_loop_max';     // PR 3: bateu o limite de iteracoes LLM↔tool
 
+// ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
+export type ProductType =
+  | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial' | 'outro';
+
+export interface TenantPlan {
+  id: string;
+  tenantId: string;
+  name: string;
+  productType: ProductType;
+  basePriceCents: number;
+  coverageSummary: string;
+  minAge?: number;
+  maxAge?: number;
+  allowsDependents: boolean;
+  additionalPerDependentCents: number;
+  surchargeOutsideRioCents: number;
+  active: boolean;
+  priority: number;
+  createdAt: number;
+  updatedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** Dados que o cotador usa pra calcular o preco. Vem de
+ *  state.collected_data.qualification + extras passados pela tool. */
+export interface QualificationData {
+  idade?: number;
+  composicaoFamiliar?: string;
+  tipoPlano?: string;
+  numeroDependentes?: number;
+  regiao?: 'rio' | 'fora_do_rio' | 'desconhecida';
+}
+
+/** Resultado do calculo de preco pra um plano. */
+export interface PricedPlan {
+  plan: TenantPlan;
+  basePriceCents: number;          // preco para regiao 'rio'
+  outsideRioPriceCents?: number;   // preco fora do rio (com surcharge), se aplicavel
+  rejectedReason?: string;         // 'max_age_exceeded' | 'min_age_below' | etc
+  eligible: boolean;
+}
+
+/** Snapshot da cotacao salvo em collected_data.last_quotation. */
+export interface QuotationSnapshot {
+  productType: ProductType;
+  region: 'rio' | 'fora_do_rio' | 'desconhecida';
+  customerName?: string;
+  qualification: QualificationData;
+  plans: Array<{
+    name: string;
+    coverageSummary: string;
+    basePriceCents: number;
+    outsideRioPriceCents?: number;
+  }>;
+  calculatedAt: number;
+}
+
 export interface AgentMetric {
   id: string;
   tenantId: string;

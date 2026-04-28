@@ -241,6 +241,9 @@ const lerDadosCard: ToolDef = {
       sensitiveOut = maskAllSensitive(sensitive);
     }
 
+    // PR 5: expõe last_quotation se houver (snapshot da ultima cotacao gerada).
+    // Closer + Finalizador usam pra ter contexto exato dos planos sem reler historico.
+    const lastQuotation = (collected as any).last_quotation ?? null;
     return {
       ok: true,
       result: {
@@ -251,6 +254,7 @@ const lerDadosCard: ToolDef = {
         qualification,
         sensitive: sensitiveOut,
         sensitive_fields_filled: listSensitiveFields(sensitive),
+        last_quotation: lastQuotation,
         column: { id: ctx.column.id, name: ctx.column.name, role: ctx.role },
         turns: fresh.turnsCount,
       },
