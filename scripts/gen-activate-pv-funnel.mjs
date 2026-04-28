@@ -12,21 +12,17 @@ import { DEFAULT_PROMPTS, DEFAULT_PROMOTION_CRITERIA } from '/opt/system-clow/di
 const TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
 
 // Mapeamento role → coluna existente do PV (Pipeline de Vendas)
+// PR 5.2: 4 estagios → 3 estagios SDR. Coluna "Negociação" fica SEM bot
+// (passada visual manual). Cotador + Closer consolidados em Educador.
 const STAGES = [
   {
     role: 'qualificador',
     columnId: 'crm_col_ef28102e464b', // Lead novo
     columnName: 'Lead novo',
-    promoteTo: 'crm_col_94c4d692a8b3', // Negociação
+    promoteTo: 'crm_col_534d6959a178', // pula Negociação, vai direto pra Agendado
   },
   {
-    role: 'cotador',
-    columnId: 'crm_col_94c4d692a8b3', // Negociação
-    columnName: 'Negociação',
-    promoteTo: 'crm_col_534d6959a178', // Agendado
-  },
-  {
-    role: 'closer',
+    role: 'educador',
     columnId: 'crm_col_534d6959a178', // Agendado
     columnName: 'Agendado',
     promoteTo: 'crm_col_7090fc2ce1a9', // Lançar venda
@@ -38,6 +34,10 @@ const STAGES = [
     promoteTo: 'crm_col_pendente_daniel', // Pendente Daniel (handoff humano)
   },
 ];
+
+// Coluna "Negociação" (crm_col_94c4d692a8b3) fica explicitamente
+// DESLIGADA — sem bot. SQL desativa essa coluna ao final.
+const NEGOCIACAO_COL_ID = 'crm_col_94c4d692a8b3';
 
 const esc = (s) => s.replace(/'/g, "''");
 
@@ -71,6 +71,17 @@ for (const stage of STAGES) {
   console.log(`WHERE id = '${stage.columnId}';`);
   console.log(``);
 }
+
+// PR 5.2: garantir que coluna "Negociação" fica SEM bot (passada visual)
+console.log(`-- Negociação → SEM bot (passada visual manual, sem agente IA)`);
+console.log(`UPDATE crm_columns SET`);
+console.log(`  agent_enabled = 0,`);
+console.log(`  agent_role = NULL,`);
+console.log(`  agent_promote_to_column_id = NULL,`);
+console.log(`  agent_system_prompt = NULL,`);
+console.log(`  agent_promotion_criteria = NULL`);
+console.log(`WHERE id = '${NEGOCIACAO_COL_ID}';`);
+console.log(``);
 
 console.log(`COMMIT;`);
 console.log(``);

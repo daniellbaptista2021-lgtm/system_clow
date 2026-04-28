@@ -17,10 +17,12 @@ import {
   recordAgentMetric,
 } from '../../store/cardAgentStateStore.js';
 import { encryptPII, listSensitiveFields, type SensitiveBag } from '../piiCrypto.js';
+import { buildQuotation } from '../quotation/quotationEngine.js';
 import * as outbound from '../../outboundWebhooks.js';
 import * as store from '../../store.js';
 import { validatePromotionTarget, executePromotion } from './common.js';
 import type { ToolDef } from './types.js';
+import type { QualificationData } from '../../types.js';
 
 // ─── validar_cpf ─────────────────────────────────────────────────────────
 
@@ -270,6 +272,38 @@ const promoverPendenteDaniel: ToolDef = {
     }
 
     if (!v.target) return { ok: false, error: 'no_target' };
+
+    // PR 5.2: ANTES de promover, calcula snapshot da cotacao silenciosamente
+    // pra Daniel humano ter o valor de referencia. NAO eh chamado por LLM,
+    // NAO retorna texto pro cliente. Pure utility.
+    try {
+      const fresh = getCardAgentState(ctx.card.id);
+      const collected = (fresh?.collectedData ?? {}) as Record<string, unknown>;
+      const qual = (collected.qualification ?? {}) as Partial<QualificationData>;
+      // So calcula se ainda nao tem snapshot OU se qualification mudou desde
+      // o ultimo. Sempre seguro: idempotente.
+      const result = buildQuotation({
+        tenantId: ctx.tenantId,
+        productType: 'acidentes_pessoais',
+        qualification: qual as QualificationData,
+        customerName: qual.nomeTitular || ctx.card.title,
+      });
+      if (result.ok) {
+        upsertCardAgentState({
+          cardId: ctx.card.id,
+          columnId: ctx.column.id,
+          currentAgentRole: ctx.role,
+          tenantId: ctx.tenantId,
+          collectedData: { ...collected, last_quotation: result.snapshot },
+        });
+      } else {
+        logger.warn(`[tool.promover_pendente_daniel] snapshot calc falhou: ${result.error} (segue promocao)`);
+      }
+    } catch (err: any) {
+      logger.warn('[tool.promover_pendente_daniel] snapshot helper threw:', err?.message);
+      // Nao bloqueia a promocao — Daniel pode calcular manualmente.
+    }
+
     const promo = executePromotion(ctx, v.target, motivo, 'custom');
     if (!promo.ok) return promo;
 

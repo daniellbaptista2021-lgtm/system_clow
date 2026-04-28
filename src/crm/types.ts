@@ -61,12 +61,19 @@ export interface BoardColumn {
   agentPromotionCriteria?: string; // texto livre exibido pro agente
 }
 
+// PR 5.2: 4 estagios → 3 estagios (modelo SDR puro). Educador substitui
+// Cotador + Closer. Cotador/Closer marcados @deprecated mas mantidos no
+// type pra compat com prompts custom existentes que ja foram salvos no DB
+// — migration 008 converte rows existentes pra 'educador'.
 export type ColumnAgentRole =
   | 'qualificador'
-  | 'cotador'
-  | 'closer'
+  | 'educador'
   | 'finalizador'
-  | 'custom';
+  | 'custom'
+  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  | 'cotador'
+  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  | 'closer';
 
 // ── Card agent state (1:1 com card) ────────────────────────────────
 // Persiste estado de funcionamento do agente por card: turnos ja

@@ -80,7 +80,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     });
   }
 
-  function setupCardCtx(tenantId: string, role = 'cotador') {
+  function setupCardCtx(tenantId: string, role = 'educador') {
     const board = store.seedDefaultBoards(tenantId);
     const cols = store.listColumns(tenantId, board.id);
     const contact = store.createContact(tenantId, { name: 'Joao Teste', phone: '+55119000-' + randomBytes(2).toString('hex'), source: 'test' });
@@ -241,18 +241,18 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     expect(r.totalCents).toBe(2990);
   });
 
-  // ─── Scenario 8: Closer NUNCA oferece desconto ──────────────────────
+  // ─── Scenario 8 (PR 5.2): Educador NAO tem tool de desconto ─────────
 
-  it('8. consultar_margem_desconto retorna 0% pra SulAmerica AP Flex', async () => {
+  it('8. consultar_margem_desconto NAO existe mais (Educador nao consulta margem)', async () => {
     const tenantId = makeTenant();
-    const ctx = setupCardCtx(tenantId, 'closer');
+    const ctx = setupCardCtx(tenantId, 'educador');
     const r = await registry.executeToolCall(
       callTool('consultar_margem_desconto', { plano: 'SulAmérica AP Flex Familiar' }),
       ctx,
     );
-    expect(r.ok).toBe(true);
-    expect((r.result as any).margem_pct).toBe(0);
-    expect((r.result as any).observacao).toContain('NUNCA ofereça desconto');
+    // Tool foi removida no PR 5.2 — registry retorna 'tool_unknown'
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('tool_unknown');
   });
 
   // ─── Scenario 9: validar_cpf rigoroso (formato + digito) ────────────
@@ -337,46 +337,35 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
 
   // ─── Edge: Tenant sem planos ─────────────────────────────────────────
 
-  it('Tenant sem planos cadastrados → erro + escalate', async () => {
+  it('Tenant sem planos cadastrados → buildQuotation retorna erro', () => {
     const tenantId = makeTenant(); // sem seed
-    const ctx = setupCardCtx(tenantId, 'cotador');
-    const r = await registry.executeToolCall(
-      callTool('gerar_cotacao_sulamerica', { idade_titular: 30 }),
-      ctx,
-    );
+    const r = engine.buildQuotation({
+      tenantId,
+      qualification: { idadeTitular: 30 },
+    });
     expect(r.ok).toBe(false);
     expect(r.error).toBe('tenant_sem_planos_cadastrados');
-    const metrics = agentState.listAgentMetricsForCard(ctx.card.id);
-    expect(metrics.some((m: any) => m.event === 'escalated' && /tenant_sem_planos/.test(m.reason))).toBe(true);
   });
 
-  // ─── Edge: gerar_cotacao_sulamerica via tool com qualification salva ──
+  // ─── Edge: buildQuotation direto (engine, sem tool LLM) ──────────────
 
-  it('Tool gerar_cotacao_sulamerica le qualification ja salvo + merge args', async () => {
+  it('buildQuotation usa qualification estruturada e calcula modalidade', () => {
     const tenantId = makeTenant();
     seedSulamericaPlans(tenantId);
-    const ctx = setupCardCtx(tenantId, 'cotador');
-    // Salva qualification previa simulando Qualificador
-    agentState.upsertCardAgentState({
-      cardId: ctx.card.id, columnId: ctx.column.id, currentAgentRole: 'cotador',
+    const r = engine.buildQuotation({
       tenantId,
-      collectedData: {
-        qualification: {
-          nomeTitular: 'José',
-          idadeTitular: 50,
-          conjuge: { idade: 48 },
-          filhosMenores21: [{ idade: 16 }],
-        },
+      qualification: {
+        nomeTitular: 'José',
+        idadeTitular: 50,
+        conjuge: { idade: 48 },
+        filhosMenores21: [{ idade: 16 }],
       },
+      customerName: 'José',
     });
-    const r = await registry.executeToolCall(
-      callTool('gerar_cotacao_sulamerica', {}), // sem args, usa o salvo
-      ctx,
-    );
     expect(r.ok).toBe(true);
-    expect((r.result as any).modalidade).toBe('familiar');
-    expect((r.result as any).total_cents).toBe(4990);
-    expect((r.userVisible as string)).toMatch(/José/);
+    expect(r.modalidade).toBe('familiar');
+    expect(r.totalCents).toBe(4990);
+    expect(r.message).toMatch(/José/);
   });
 
   // ─── Edge: scrub Real Pax → SulAmerica ──────────────────────────────
@@ -400,33 +389,67 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
 
   // ─── Snapshot persistido ─────────────────────────────────────────────
 
-  it('Snapshot da cotação persiste em collected_data.last_quotation', async () => {
+  it('PR 5.2: snapshot persiste em collected_data.last_quotation via promover_pendente_daniel', async () => {
     const tenantId = makeTenant();
     seedSulamericaPlans(tenantId);
-    const ctx = setupCardCtx(tenantId, 'cotador');
+    const ctxFinal = setupCardCtx(tenantId, 'finalizador');
+    // Pre-popula qualification (Qualificador faria isso)
+    agentState.upsertCardAgentState({
+      cardId: ctxFinal.card.id, columnId: ctxFinal.column.id, currentAgentRole: 'finalizador',
+      tenantId,
+      collectedData: {
+        qualification: {
+          nomeTitular: 'José',
+          idadeTitular: 40,
+          conjuge: { idade: 38 },
+        },
+      },
+    });
+    // Configura coluna destino (Pendente Daniel) na coluna do Finalizador
+    const db = schema.getCrmDb();
+    const targetCol = await import('../../../src/crm/store.js').then((s) =>
+      s.createColumn(tenantId, { boardId: ctxFinal.card.boardId, name: 'Pendente Daniel', color: '#ccc' })
+    );
+    db.prepare(`UPDATE crm_columns SET agent_promote_to_column_id = ? WHERE id = ?`)
+      .run(targetCol.id, ctxFinal.column.id);
+    const updatedColumn = (await import('../../../src/crm/store.js')).listColumns(tenantId, ctxFinal.card.boardId)
+      .find((c: any) => c.id === ctxFinal.column.id);
+    const ctxFinal2 = { ...ctxFinal, column: updatedColumn };
+
+    // Chama promover_pendente_daniel — internamente calcula e salva snapshot
     const r = await registry.executeToolCall(
-      callTool('gerar_cotacao_sulamerica', { idade_titular: 40, tem_conjuge: true, idade_conjuge: 38 }),
-      ctx,
+      callTool('promover_pendente_daniel', { motivo: 'dados completos' }),
+      ctxFinal2,
     );
     expect(r.ok).toBe(true);
-    const stateAfter = agentState.getCardAgentState(ctx.card.id);
+    const stateAfter = agentState.getCardAgentState(ctxFinal.card.id);
     const lq = (stateAfter.collectedData as any).last_quotation;
     expect(lq).toBeTruthy();
     expect(lq.qualification.modalidade).toBe('casal');
   });
 
-  // ─── Closer le last_quotation ────────────────────────────────────────
+  // ─── ler_dados_card retorna last_quotation pra educador ──────────────
 
-  it('Closer chama ler_dados_card → recebe last_quotation', async () => {
+  it('Educador chama ler_dados_card → recebe last_quotation salvo', async () => {
     const tenantId = makeTenant();
     seedSulamericaPlans(tenantId);
-    const ctxCotador = setupCardCtx(tenantId, 'cotador');
-    await registry.executeToolCall(
-      callTool('gerar_cotacao_sulamerica', { idade_titular: 35 }),
-      ctxCotador,
-    );
-    const ctxCloser = { ...ctxCotador, role: 'closer' as const };
-    const r = await registry.executeToolCall(callTool('ler_dados_card', {}), ctxCloser);
+    const ctxEducador = setupCardCtx(tenantId, 'educador');
+    // Simula snapshot salvo (em prod, eh setado via promover_pendente_daniel)
+    agentState.upsertCardAgentState({
+      cardId: ctxEducador.card.id, columnId: ctxEducador.column.id, currentAgentRole: 'educador',
+      tenantId,
+      collectedData: {
+        qualification: { nomeTitular: 'João', idadeTitular: 35 },
+        last_quotation: {
+          productType: 'acidentes_pessoais',
+          modalidade: 'individual',
+          qualification: { nomeTitular: 'João', idadeTitular: 35, modalidade: 'individual' },
+          plans: [{ name: 'SulAmérica AP Flex Individual', basePriceCents: 2990, coverageSummary: 'x' }],
+          calculatedAt: Date.now(),
+        },
+      },
+    });
+    const r = await registry.executeToolCall(callTool('ler_dados_card', {}), ctxEducador);
     expect(r.ok).toBe(true);
     expect(r.result.last_quotation).toBeTruthy();
     expect(r.result.last_quotation.qualification.modalidade).toBe('individual');

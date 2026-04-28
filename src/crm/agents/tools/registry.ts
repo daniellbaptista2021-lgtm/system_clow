@@ -6,17 +6,20 @@ import { logger } from '../../../utils/logger.js';
 import { recordAgentMetric } from '../../store/cardAgentStateStore.js';
 import { COMMON_TOOLS } from './common.js';
 import { QUALIFICADOR_TOOLS } from './qualificador.js';
-import { COTADOR_TOOLS } from './cotador.js';
-import { CLOSER_TOOLS } from './closer.js';
+import { EDUCADOR_TOOLS } from './educador.js';
 import { FINALIZADOR_TOOLS } from './finalizador.js';
 import type { ToolDef, ToolContext, ToolResult, LLMToolDef, LLMToolCall } from './types.js';
 import type { ColumnAgentRole } from '../../types.js';
 
+// PR 5.2: 4 estagios → 3 estagios. Educador substitui Cotador + Closer.
+// Tools antigas (gerar_cotacao_sulamerica, consultar_margem_desconto,
+// promover_vendedor) foram removidas — Educador nao cota nem consulta
+// desconto. gerar_cotacao_sulamerica continua como helper interno
+// (chamado por promover_pendente_daniel pra snapshot do Daniel humano).
 const ALL_TOOLS: ToolDef[] = [
   ...COMMON_TOOLS,
   ...QUALIFICADOR_TOOLS,
-  ...COTADOR_TOOLS,
-  ...CLOSER_TOOLS,
+  ...EDUCADOR_TOOLS,
   ...FINALIZADOR_TOOLS,
 ];
 
