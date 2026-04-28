@@ -44,6 +44,7 @@ export async function ingestInbound(channel: Channel2, msg: {
   mediaFilename?: string;
   context?: { messageId?: string };
   timestamp: number;
+  fromMe?: boolean; // Onda 61: Z-API ecoa msg que o corretor digitou no app/WA Web do numero conectado
 }): Promise<InboundResult> {
   const tenantId = channel.tenantId;
 
@@ -98,11 +99,15 @@ export async function ingestInbound(channel: Channel2, msg: {
   }
 
   // 6. Log activity
+  // Onda 61: fromMe=true → corretor enviou direto pelo app/WA Web do numero
+  // conectado. Loga como message_out / direction:'out' pra aparecer no
+  // history do CRM. Idempotencia (passo 1) ja absorve eco de envio via API.
+  const isOutbound = msg.fromMe === true;
   const activity = store.logActivity(tenantId, {
     cardId: card?.id, contactId: contact.id,
-    type: 'message_in',
+    type: isOutbound ? 'message_out' : 'message_in',
     channel: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
-    direction: 'in',
+    direction: isOutbound ? 'out' : 'in',
     content,
     mediaUrl,
     mediaType: msg.type,
@@ -110,26 +115,34 @@ export async function ingestInbound(channel: Channel2, msg: {
     metadata: {
       channelId: channel.id,
       channelName: channel.name,
-      fromPhone: msg.fromPhone,
+      ...(isOutbound ? { toPhone: msg.fromPhone, sentFromDevice: true } : { fromPhone: msg.fromPhone }),
       timestamp: msg.timestamp,
       ...(msg.context ? { replyToMessageId: msg.context.messageId } : {}),
       ...(savedFilename ? { savedFilename } : {}),
     },
   });
 
-  // 7. Update channel last inbound (non-critical)
-  try {
-    store.updateChannel(tenantId, channel.id, { lastInboundAt: Date.now(), status: 'active' });
-  } catch { /* noop */ }
-
-  // 8. Mark as read (best-effort, async)
-  if (channel.type === 'meta') {
-    void meta.markAsRead(channel, msg.messageId);
-  } else if (channel.type === 'zapi') {
-    void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
+  // 7. Update channel last inbound (non-critical) — só pra direction=in
+  if (!isOutbound) {
+    try {
+      store.updateChannel(tenantId, channel.id, { lastInboundAt: Date.now(), status: 'active' });
+    } catch { /* noop */ }
   }
 
-  void automations.emit({ trigger: 'inbound_message', tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id, text: msg.text || msg.caption || '' });
+  // 8. Mark as read (best-effort, async) — só pra inbound real
+  if (!isOutbound) {
+    if (channel.type === 'meta') {
+      void meta.markAsRead(channel, msg.messageId);
+    } else if (channel.type === 'zapi') {
+      void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
+    }
+  }
+
+  void automations.emit({
+    trigger: isOutbound ? 'outbound_message' : 'inbound_message',
+    tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id,
+    text: msg.text || msg.caption || '',
+  });
   return { ok: true, contactId: contact.id, cardId: card?.id, activityId: activity.id };
 }
 

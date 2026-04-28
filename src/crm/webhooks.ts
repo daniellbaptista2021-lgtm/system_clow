@@ -146,6 +146,26 @@ app.post('/zapi/:secret', async (c) => {
   // ecoa outbound de volta como inbound). fetchConnectedPhone tem
   // cache de 24h em memoria, so faz request real na 1a chamada.
   const connectedPhone = await zapi.fetchConnectedPhone(channel);
+
+  // Onda 61: resolve LIDs (WhatsApp internal IDs) em telefones reais antes
+  // de parsear. Quando o corretor responde direto pelo celular pra alguem
+  // cujo numero esta protegido por LID, Z-API manda phone=NNN@lid. Sem
+  // resolver, o parser descarta (filtro @lid) e a msg fica invisivel.
+  try {
+    const items = Array.isArray(payload) ? payload : [payload];
+    for (const it of items) {
+      if (it && typeof it.phone === 'string' && it.phone.endsWith('@lid')) {
+        const real = await zapi.fetchPhoneFromLid(channel, it.phone);
+        if (real) {
+          it.chatLid = it.chatLid || it.phone;
+          it.phone = real;
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn('[crm-webhook] LID resolve failed:', err?.message);
+  }
+
   const parsed = zapi.parseWebhook(payload, connectedPhone || undefined);
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
