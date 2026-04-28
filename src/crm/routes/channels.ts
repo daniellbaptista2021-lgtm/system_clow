@@ -383,7 +383,22 @@ export function registerChannelsRoutes(app: Hono): void {
       phoneNumberId: body.type === 'meta' ? body.credentials.phoneNumberId : undefined,
       status: 'pending', // until first webhook validates
     });
-    return ok(c, { channel: maskedChannel(ch) }, 201);
+    // Auto-configura webhooks na Z-API pra eliminar o passo manual de
+    // colar URL no painel deles. Sem isso, cliente salvava canal e msgs
+    // recebidas SUMIAM (Z-API nao sabia pra onde mandar).
+    if (body.type === 'zapi') {
+      try {
+        const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+        const zapi = await import('../channels/zapi.js');
+        const r = await zapi.autoConfigureWebhooks(ch, baseUrl);
+        if (!r.ok) {
+          (c as any).set('zapiAutoConfig', { ok: false, configured: r.configured, failed: r.failed });
+        }
+      } catch (err: any) {
+        (c as any).set('zapiAutoConfig', { ok: false, error: err?.message });
+      }
+    }
+    return ok(c, { channel: maskedChannel(ch), zapiAutoConfig: (c as any).get('zapiAutoConfig') }, 201);
   });
   app.get('/channels/:id', (c) => {
     const ch = store.getChannel(tenantOf(c), c.req.param('id'));
@@ -405,7 +420,33 @@ export function registerChannelsRoutes(app: Hono): void {
       if (body.credentials.phoneNumberId) patch.phoneNumberId = body.credentials.phoneNumberId;
     }
     const upd = store.updateChannel(tid, id, patch);
-    return upd ? ok(c, { channel: maskedChannel(upd) }) : notFound(c, 'channel');
+    if (!upd) return notFound(c, 'channel');
+    // Re-configura webhooks na Z-API se as credenciais mudaram (instanceId/token
+    // novos exigem nova chamada de update-webhook-*). Idempotente.
+    let zapiAutoConfig: any = null;
+    if (upd.type === 'zapi' && body.credentials) {
+      try {
+        const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+        const zapi = await import('../channels/zapi.js');
+        zapiAutoConfig = await zapi.autoConfigureWebhooks(upd, baseUrl);
+      } catch (err: any) {
+        zapiAutoConfig = { ok: false, error: err?.message };
+      }
+    }
+    return ok(c, { channel: maskedChannel(upd), zapiAutoConfig });
+  });
+  // Endpoint pra forcar reconfigure dos webhooks de um canal Z-API
+  // existente. Util pra canais antigos criados antes da auto-config OU
+  // se o user mudar a URL publica do System Clow.
+  app.post('/channels/:id/zapi-reconfigure-webhooks', async (c) => {
+    const tid = tenantOf(c);
+    const ch = store.getChannel(tid, c.req.param('id'));
+    if (!ch) return notFound(c, 'channel');
+    if (ch.type !== 'zapi') return badRequest(c, 'channel is not zapi');
+    const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+    const zapi = await import('../channels/zapi.js');
+    const r = await zapi.autoConfigureWebhooks(ch, baseUrl);
+    return ok(c, r);
   });
   app.get('/channels/:id/webhook-info', (c) => {
     const tid = tenantOf(c);

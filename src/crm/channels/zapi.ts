@@ -337,3 +337,72 @@ export async function fetchProfilePicture(channel: Channel2, phone: string): Pro
     return null;
   }
 }
+
+// ─── AUTO-CONFIGURE WEBHOOKS ON Z-API ──────────────────────────────────
+// Sem isso, o user tinha que ir no painel da Z-API e colar manualmente
+// a URL do webhook. Resultado: clientes salvavam o canal achando que tava
+// pronto, mandavam msg pro numero, NADA chegava no CRM (porque a Z-API
+// nao sabia pra onde mandar). Bug silencioso.
+//
+// Z-API tem 4 endpoints de webhook configuraveis. Setamos os 3 que
+// importam pro fluxo de atendimento:
+//   - update-webhook-received          → mensagem recebida do cliente
+//   - update-webhook-message-status    → entregue/lido/erro
+//   - update-webhook-connection-status → connected / disconnected
+// O 4o (presence-chat) nao precisamos.
+async function setZapiWebhook(creds: ZapiCreds, endpoint: string, webhookUrl: string): Promise<{ ok: boolean; status?: number; error?: string }> {
+  try {
+    const u = url(creds, '/' + endpoint);
+    const r = await fetch(u, {
+      method: 'PUT',
+      headers: headers(creds),
+      body: JSON.stringify({ value: webhookUrl }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      return { ok: false, status: r.status, error: txt.slice(0, 200) };
+    }
+    return { ok: true, status: r.status };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'unknown' };
+  }
+}
+
+export interface AutoConfigResult {
+  ok: boolean;
+  configured: string[]; // endpoints que setaram com sucesso
+  failed: { endpoint: string; error: string }[];
+}
+
+/**
+ * Configura todos os webhooks do Z-API pra apontar pra URL canonical
+ * do canal (`/webhooks/crm/zapi/<webhookSecret>`). Idempotente.
+ *
+ * @param channel canal completo (com credentialsEncrypted)
+ * @param baseUrl URL pública do System Clow (ex: https://system-clow.pvcorretor01.com.br)
+ */
+export async function autoConfigureWebhooks(
+  channel: Channel2,
+  baseUrl: string,
+): Promise<AutoConfigResult> {
+  const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+  const webhookUrl = baseUrl.replace(/\/$/, '') + '/webhooks/crm/zapi/' + channel.webhookSecret;
+  const endpoints = [
+    'update-webhook-received',
+    'update-webhook-message-status',
+    'update-webhook-connection-status',
+  ];
+  const result: AutoConfigResult = { ok: true, configured: [], failed: [] };
+  for (const ep of endpoints) {
+    const r = await setZapiWebhook(creds, ep, webhookUrl);
+    if (r.ok) {
+      result.configured.push(ep);
+      logger.info(`[zapi.autoConfig] ✓ ${ep} → ${webhookUrl}`);
+    } else {
+      result.failed.push({ endpoint: ep, error: r.error || 'http_' + r.status });
+      result.ok = false;
+      logger.warn(`[zapi.autoConfig] ✗ ${ep}: ${r.error || 'http_' + r.status}`);
+    }
+  }
+  return result;
+}
