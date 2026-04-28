@@ -148,6 +148,34 @@ app.post('/zapi/:secret', async (c) => {
   }
   // Forward to agent (Z-API webhook endpoint exists in whatsappAgent adapter)
   void forwardToAgent('/webhooks/zapi', payload, undefined, channel.tenantId);
+
+  // Dispara agente AI em background (debounce 8s no proprio handler).
+  // Se canal nao tem ai_enabled=1 + ai_system_prompt, retorna no-op.
+  // Nao bloqueia o 200 OK volta pra Z-API.
+  try {
+    const items = Array.isArray(payload) ? payload : [payload];
+    for (const it of items) {
+      if (it?.fromMe === true) continue; // so processa msg do cliente
+      if (it?.type && it.type !== 'ReceivedCallback') continue;
+      const phone = it?.phone || it?.from;
+      if (!phone) continue;
+      const text = it?.text?.message || it?.message;
+      const audioUrl = it?.audio?.audioUrl;
+      const imageUrl = it?.image?.imageUrl;
+      const senderName = it?.senderName || it?.chatName;
+      const aiAgent = await import('./ai/agent.js');
+      aiAgent.handleInboundForAI({
+        channel,
+        customerPhone: String(phone),
+        text,
+        audioUrl,
+        imageUrl,
+        senderName,
+      });
+    }
+  } catch (err: any) {
+    logger.warn('[zapi-webhook] AI agent dispatch failed:', err?.message);
+  }
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 

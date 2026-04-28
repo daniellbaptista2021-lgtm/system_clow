@@ -2733,9 +2733,11 @@ function renderChannelsList() {
         el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
-      el('div', { style: 'margin-top:10px;display:flex;gap:6px' },
-        el('button', { class: 'save-btn', style: 'flex:1;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px',
-          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Ver webhook URL & instruções'),
+      el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap' },
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:200px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px',
+          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Ver webhook URL'),
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#22C55E,#16A34A);color:#fff;font-size:12px;padding:9px;font-weight:700',
+          on: { click: () => openAIAgentModal(ch) } }, '🤖 Agente IA'),
         el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 16px;font-size:12px',
           on: { click: async () => {
             if (!await confirmDialog('Remover canal', `Apagar canal "${ch.name}"? Atividades antigas permanecem.`, 'Apagar')) return;
@@ -2751,6 +2753,100 @@ function renderChannelsList() {
   }
 }
 
+
+// ─── Agente IA por canal — config inline (replica n8n bot nativamente) ─
+async function openAIAgentModal(channel) {
+  // Carrega config atual do backend
+  let cfg;
+  try { cfg = await api(`/channels/${channel.id}/ai-config`); }
+  catch (e) { toast('Erro ao carregar config: ' + e.message, 'error'); return; }
+  const presets = [
+    { name: '— Selecione um preset opcional —', prompt: '' },
+    { name: 'Corretor de Seguros (Funeral/Vida)', prompt: 'Você é um vendedor virtual da corretora de seguros.\n\nFLUXO: saudação → coletar nome → idade do titular + tipo de plano (individual/familiar) → dependentes (se familiar) → cotação → fechamento.\n\nREGRAS:\n- Respostas curtas (3-4 frases máx)\n- Nunca inventar valores\n- Linguagem simples, emojis com moderação\n- Se não souber, encaminha pro corretor humano\n- Se cliente já respondeu, NÃO repita pergunta\n- Se cliente mandar várias infos juntas, processa tudo de uma vez\n\nPLANO: Funeral + seguro morte acidental. Não é plano de saúde.' },
+    { name: 'Imobiliária (Locação/Venda)', prompt: 'Você é um(a) consultor(a) virtual da imobiliária.\n\nFLUXO: saudação → coletar tipo de imóvel desejado (casa/apto, comprar/alugar) → bairros de interesse → faixa de preço → quantidade de quartos → enviar 3 opções da carteira → marcar visita.\n\nREGRAS:\n- Tom amigável e profissional\n- Se cliente quer agendar visita, transfere pra corretor humano\n- Sempre confirma cidade antes de mostrar imóveis\n- Não promete valores específicos sem confirmar com humano' },
+    { name: 'E-commerce (Atendimento)', prompt: 'Você é o atendente virtual da loja.\n\nFLUXO: saudação → identificar dúvida (rastreio, troca, defeito, info de produto) → resolver ou encaminhar pra humano.\n\nREGRAS:\n- Para rastreio, peça código do pedido\n- Para devolução, peça motivo + foto se for defeito\n- Nunca prometa estorno sem aprovação humana\n- Tom solicito e claro' },
+    { name: 'SDR Geral (Pré-vendas)', prompt: 'Você é um SDR (pré-vendedor) da empresa.\n\nMISSÃO: qualificar leads. Coletar nome, empresa, cargo, dor principal e budget aproximado. Depois agenda call com closer humano.\n\nREGRAS:\n- Não vende, qualifica\n- Pergunta no máximo 2 coisas por mensagem\n- Se lead frio, encerra educadamente\n- Se quente, agenda imediatamente' },
+  ];
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const promptArea = el('textarea', {
+    rows: '14', placeholder: 'Cole ou escreva o system prompt do seu agente...',
+    style: 'width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:"SF Mono",Consolas,monospace;font-size:12px;padding:12px;resize:vertical;line-height:1.5',
+  }, cfg.systemPrompt || '');
+  const enabledChk = el('input', { type: 'checkbox' });
+  if (cfg.enabled) enabledChk.checked = true;
+  const audioChk = el('input', { type: 'checkbox' });
+  if (cfg.audioEnabled) audioChk.checked = true;
+  const modelSel = el('select', { style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%' });
+  for (const m of [
+    { v: 'deepseek-chat', l: 'DeepSeek Chat (rápido + barato — recomendado)' },
+    { v: 'deepseek-reasoner', l: 'DeepSeek Reasoner (mais inteligente, mais lento)' },
+    { v: 'gpt-4o-mini', l: 'GPT-4o-mini (OpenAI — fallback)' },
+  ]) {
+    const o = el('option', { value: m.v }, m.l);
+    if (cfg.model === m.v) o.selected = true;
+    modelSel.append(o);
+  }
+  const presetSel = el('select', { style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%;margin-bottom:10px' });
+  for (const p of presets) presetSel.append(el('option', { value: p.prompt }, p.name));
+  presetSel.addEventListener('change', () => {
+    if (presetSel.value && (!promptArea.value.trim() || confirm('Substituir o prompt atual pelo preset selecionado?'))) {
+      promptArea.value = presetSel.value;
+    }
+  });
+  const debounceInput = el('input', {
+    type: 'number', min: '0', max: '60', value: String(cfg.debounceSeconds ?? 8),
+    style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%',
+  });
+  const historyInput = el('input', {
+    type: 'number', min: '1', max: '100', value: String(cfg.maxHistory ?? 20),
+    style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%',
+  });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/channels/${channel.id}/ai-config`, { method: 'PATCH', body: {
+        enabled: enabledChk.checked,
+        systemPrompt: promptArea.value.trim(),
+        model: modelSel.value,
+        audioEnabled: audioChk.checked,
+        maxHistory: parseInt(historyInput.value, 10) || 20,
+        debounceSeconds: parseInt(debounceInput.value, 10) || 8,
+      }});
+      toast(enabledChk.checked ? '🤖 Agente IA ativado' : 'Configuração salva', 'success');
+      backdrop.remove();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    el('div', { style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
+      'Ativa um agente de IA que atende automaticamente clientes neste canal WhatsApp. Cliente manda mensagem → agente responde com base no system prompt. Suporta texto e áudio (transcrito via Whisper). Use ',
+      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
+      ' e ',
+      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
+      ' no prompt pra personalizar.',
+    ),
+    el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer' },
+      enabledChk, el('span', { style: 'font-weight:600' }, 'Ativar agente IA neste canal')),
+    el('div', { class: 'field' }, el('label', {}, 'Preset (opcional)'), presetSel),
+    el('div', { class: 'field' }, el('label', {}, 'System prompt *'), promptArea),
+    el('div', { style: 'display:flex;gap:10px;margin-top:10px' },
+      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Modelo'), modelSel),
+      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Histórico (msgs)'), historyInput),
+      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Debounce (s)'), debounceInput),
+    ),
+    el('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer' },
+      audioChk, el('span', {}, 'Transcrever áudio (Whisper) antes de processar')),
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Salvar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal', style: 'max-width:760px' },
+    el('h3', { style: 'margin:0 0 8px' }, '🤖 Agente IA — ' + channel.name),
+    form,
+  ));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
 
 // ─── Webhook helpers ───────────────────────────────────────────────────
 function copyToClipboard(text) {

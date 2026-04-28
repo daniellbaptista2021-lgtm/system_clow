@@ -448,6 +448,47 @@ export function registerChannelsRoutes(app: Hono): void {
     const r = await zapi.autoConfigureWebhooks(ch, baseUrl);
     return ok(c, r);
   });
+  // ── AI Agent config (per channel) ────────────────────────────────────
+  app.get('/channels/:id/ai-config', (c) => {
+    const tid = tenantOf(c);
+    const id = c.req.param('id');
+    const ch = store.getChannel(tid, id);
+    if (!ch) return notFound(c, 'channel');
+    const db = getCrmDb();
+    const r = db.prepare(`
+      SELECT ai_enabled, ai_system_prompt, ai_model, ai_audio_enabled,
+             ai_max_history, ai_debounce_seconds
+      FROM crm_channels WHERE id = ? AND tenant_id = ?
+    `).get(id, tid) as any;
+    return ok(c, {
+      enabled: !!r?.ai_enabled,
+      systemPrompt: r?.ai_system_prompt || '',
+      model: r?.ai_model || 'deepseek-chat',
+      audioEnabled: r ? r.ai_audio_enabled !== 0 : true,
+      maxHistory: Number(r?.ai_max_history || 20),
+      debounceSeconds: Number(r?.ai_debounce_seconds || 8),
+    });
+  });
+  app.patch('/channels/:id/ai-config', async (c) => {
+    const tid = tenantOf(c);
+    const id = c.req.param('id');
+    const ch = store.getChannel(tid, id);
+    if (!ch) return notFound(c, 'channel');
+    const body = await c.req.json().catch(() => ({})) as any;
+    const db = getCrmDb();
+    const sets: string[] = []; const params: any[] = [];
+    if (body.enabled !== undefined)         { sets.push('ai_enabled = ?');         params.push(body.enabled ? 1 : 0); }
+    if (body.systemPrompt !== undefined)    { sets.push('ai_system_prompt = ?');   params.push(String(body.systemPrompt || '')); }
+    if (body.model !== undefined)           { sets.push('ai_model = ?');           params.push(String(body.model || 'deepseek-chat')); }
+    if (body.audioEnabled !== undefined)    { sets.push('ai_audio_enabled = ?');   params.push(body.audioEnabled ? 1 : 0); }
+    if (body.maxHistory !== undefined)      { sets.push('ai_max_history = ?');     params.push(Math.max(1, Math.min(100, Number(body.maxHistory) || 20))); }
+    if (body.debounceSeconds !== undefined) { sets.push('ai_debounce_seconds = ?'); params.push(Math.max(0, Math.min(60, Number(body.debounceSeconds) || 8))); }
+    if (!sets.length) return badRequest(c, 'no fields to update');
+    params.push(id, tid);
+    db.prepare(`UPDATE crm_channels SET ${sets.join(', ')} WHERE id = ? AND tenant_id = ?`).run(...params);
+    return ok(c, { ok: true });
+  });
+
   app.get('/channels/:id/webhook-info', (c) => {
     const tid = tenantOf(c);
     const ch = store.getChannel(tid, c.req.param('id'));
