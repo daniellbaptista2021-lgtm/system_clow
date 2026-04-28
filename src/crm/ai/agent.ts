@@ -114,6 +114,55 @@ function isContactInHumanHandoffColumn(tenantId: string, contactId: string): { p
   return { paused: false };
 }
 
+/**
+ * Variante com function calling (PR 3 da Onda 62). Recebe lista
+ * crua de mensagens (incluindo role:'tool' + tool_call_id) e tools
+ * no formato OpenAI/DeepSeek.
+ *
+ * Diferente de callDeepSeek (texto only), retorna o `message` cru pra o
+ * caller decidir se eh texto final ou tem tool_calls.
+ */
+export interface DeepSeekToolMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+  tool_call_id?: string;
+  name?: string;
+}
+
+export async function callDeepSeekWithTools(
+  messages: DeepSeekToolMessage[],
+  tools: unknown[],
+  model = 'deepseek-chat',
+): Promise<DeepSeekToolMessage> {
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!key) throw new Error('DEEPSEEK_API_KEY not configured');
+  const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: model || 'deepseek-chat',
+      messages,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.6,
+      max_tokens: 1500,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`deepseek http_${r.status}: ${body.slice(0, 200)}`);
+  }
+  const d: any = await r.json();
+  const msg = d?.choices?.[0]?.message;
+  if (!msg) throw new Error('deepseek: empty message in response');
+  return msg as DeepSeekToolMessage;
+}
+
 /** Chama DeepSeek (OpenAI-compatible) com history + system prompt. */
 export async function callDeepSeek(
   systemPrompt: string,

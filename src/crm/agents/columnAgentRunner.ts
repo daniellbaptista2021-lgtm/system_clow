@@ -24,11 +24,12 @@ import { logger } from '../../utils/logger.js';
 import { getCluster } from '../../utils/clusterStore.js';
 import { getTenant } from '../../tenancy/tenantStore.js';
 import {
-  callDeepSeek,
+  callDeepSeekWithTools,
   transcribeAudio,
   loadRecentHistory,
   sendReply,
   type ChatMessage,
+  type DeepSeekToolMessage,
 } from '../ai/agent.js';
 import {
   getCardAgentState,
@@ -37,6 +38,8 @@ import {
   setCardAgentStatus,
   recordAgentMetric,
 } from '../store/cardAgentStateStore.js';
+import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.js';
+import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
 import type { Channel2, Card, BoardColumn, ColumnAgentRole } from '../types.js';
 
@@ -49,6 +52,7 @@ const DEFAULT_HOURS_START = '08:00';
 const DEFAULT_HOURS_END = '21:00';
 const LOCK_TTL_SECONDS = 60;
 const TENANT_TIMEZONE = 'America/Sao_Paulo'; // hardcoded — decisao 4 do PR 2
+const MAX_TOOL_ITERATIONS = 4; // PR 3: limite LLM↔tool por turno
 
 /** Mensagem padrao fora de horario. {{start}} eh substituido pelo horario
  *  inicial da coluna. Justificativa pra hardcode em decisao 3 do PR 2. */
@@ -196,7 +200,7 @@ export async function runColumnAgent(input: RunColumnAgentInput): Promise<RunRes
     customer_phone: customerPhone,
   });
 
-  // Reforco anti-regressao (mesmo do channel agent — vide ai/agent.ts:296).
+  // Reforco anti-regressao + briefing das tools disponiveis
   const contextRules = `
 
 # REGRAS DE CONTEXTO (CRITICAS — NAO IGNORAR)
@@ -205,14 +209,18 @@ export async function runColumnAgent(input: RunColumnAgentInput): Promise<RunRes
 - NUNCA pergunte algo que o cliente JA respondeu nas mensagens anteriores. Use a informacao que ele ja deu.
 - Continue de ONDE PAROU.
 
-# PROMOCAO ENTRE COLUNAS
-Voce esta na coluna "${column.name}" (role: ${role}). Esta versao do sistema (PR 2)
-NAO tem ainda as tools de promocao habilitadas — entao APENAS responda o cliente.
-NAO chame promover_qualificado / promover_vendedor / etc nesta versao. Esses
-serao habilitados num upgrade futuro.
+# COLUNA ATUAL
+Voce esta na coluna "${column.name}" (role: ${role}).
 
-# CRITERIOS DE PROMOCAO (referencia, nao chame tools ainda)
-${column.agentPromotionCriteria || '(nao definidos)'}
+# CRITERIOS DE PROMOCAO
+Voce SO PODE chamar a tool de promocao quando TODOS os itens abaixo forem true:
+${column.agentPromotionCriteria || '(criterios nao definidos pelo admin — promote pode ser chamado por contexto)'}
+
+# COMO USAR TOOLS
+- Voce tem acesso a tools especificas (vide tools list no payload).
+- USE SEMPRE A TOOL CERTA: ex: "salvar_dados_qualificacao" pra gravar dados, "promover_*" pra avancar.
+- NAO chame a mesma tool de promocao 2x na mesma resposta — se chamar 2x, o sistema retorna 'already_promoted' e voce pode parar.
+- Se cliente pede humano, xinga, ou voce ficou sem saber prosseguir → escalar_humano(motivo).
 `;
   const finalSystemPrompt = systemPrompt + contextRules;
 
@@ -222,31 +230,115 @@ ${column.agentPromotionCriteria || '(nao definidos)'}
   );
 
   // Marca turno do cliente ANTES de chamar LLM (turns_count++).
-  // Se o LLM falhar, ja contamos esse turno — evita loop infinito de
-  // retry pra mesma msg (que aumentaria turns_count infinitamente
-  // e bloquearia eventualmente, mas a custa de varias chamadas de LLM
-  // perdidas).
+  // Se o LLM falhar, ja contamos esse turno — evita loop infinito.
   recordAgentTurn(card.id, 'client');
   state = getCardAgentState(card.id) ?? state;
 
-  // 8) Chama DeepSeek
-  let reply: string;
-  try {
-    reply = await callDeepSeek(finalSystemPrompt, history, userMessage, 'deepseek-chat');
-  } catch (err: any) {
-    logger.error('[col-agent.runner] DeepSeek falhou:', err?.message);
-    recordAgentMetric({
-      tenantId, columnId: column.id, cardId: card.id,
-      event: 'blocked', reason: 'llm_error',
+  // 8) Tool loop (PR 3 da Onda 62) — max MAX_TOOL_ITERATIONS
+  const tools = getToolsForRole(role);
+  const llmTools = toLLMTools(tools);
+
+  // Monta messages no formato DeepSeek/OpenAI
+  const messages: DeepSeekToolMessage[] = [
+    { role: 'system', content: finalSystemPrompt },
+    ...history.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: userMessage },
+  ];
+
+  let finalText = '';
+  let iteration = 0;
+  let lastReplyForAntiLoop = '';
+
+  while (iteration < MAX_TOOL_ITERATIONS) {
+    iteration++;
+    let llmMsg: DeepSeekToolMessage;
+    try {
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat');
+    } catch (err: any) {
+      logger.error('[col-agent.runner] DeepSeek falhou:', err?.message);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'blocked', reason: 'llm_error',
+      });
+      return { status: 'error', message: err?.message || 'llm_error' };
+    }
+
+    const toolCalls = llmMsg.tool_calls ?? [];
+    if (toolCalls.length === 0) {
+      // Sem tool_calls — texto final
+      finalText = String(llmMsg.content || '').trim();
+      break;
+    }
+
+    // Append assistant message com tool_calls + executa cada tool + append results
+    messages.push({
+      role: 'assistant',
+      content: llmMsg.content ?? '',
+      tool_calls: toolCalls,
     });
-    return { status: 'error', message: err?.message || 'llm_error' };
+
+    // Re-resolve state pre tools (importante: card pode ter sido movido
+    // por uma promocao em iteracao anterior; ctx precisa do estado atual
+    // pra que validatePromotionTarget detecte idempotencia).
+    const freshState = getCardAgentState(card.id) ?? state;
+    // Re-resolve coluna + card atualizados
+    const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
+    const refreshedColumn = store.listColumns(tenantId, card.boardId!)
+      .find((c) => c.id === refreshedCard.columnId) ?? column;
+    const refreshedRole = (refreshedColumn.agentRole ?? freshState.currentAgentRole ?? role) as ColumnAgentRole;
+
+    const toolCtx: ToolContext = {
+      tenantId,
+      channel,
+      card: refreshedCard,
+      column: refreshedColumn,
+      state: freshState,
+      customerPhone,
+      role: refreshedRole,
+    };
+
+    for (const tc of toolCalls) {
+      const result = await executeToolCall(tc, toolCtx);
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        name: tc.function.name,
+        content: JSON.stringify(result),
+      });
+    }
+    // Volta o loop pra LLM processar os results
+    lastReplyForAntiLoop = String(llmMsg.content || '');
   }
 
-  // 9) Anti-loop (mesma logica do channel agent)
+  if (iteration >= MAX_TOOL_ITERATIONS && !finalText) {
+    // Hit limit — registra e retorna erro
+    logger.warn(`[col-agent.runner] tool_loop_max card=${card.id}`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'tool_loop_max',
+      reason: `iterations=${iteration}`,
+      turnsInColumn: state.turnsCount,
+    });
+    return { status: 'error', message: 'tool_loop_max_iterations' };
+  }
+
+  if (!finalText) {
+    // LLM nao mandou texto (so chamou tools sem responder cliente).
+    // Loga e nao envia nada — alguns flows sao validos (ex: marcar_perdido
+    // sem despedida; promote sem mensagem).
+    logger.info(`[col-agent.runner] no final text card=${card.id} (so tools)`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'executed', reason: 'tools_only_no_reply',
+    });
+    return { status: 'executed', reply: '' };
+  }
+
+  // 9) Anti-loop (texto final vs ultima resposta do bot no historico)
   const recentOut = history.filter((m: ChatMessage) => m.role === 'assistant').slice(-1)[0];
   if (recentOut?.content) {
     const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 100).toLowerCase();
-    if (norm(recentOut.content) === norm(reply)) {
+    if (norm(recentOut.content) === norm(finalText)) {
       logger.warn(`[col-agent.runner] anti-loop bloqueou resposta para ${customerPhone}`);
       recordAgentMetric({
         tenantId, columnId: column.id, cardId: card.id,
@@ -258,7 +350,7 @@ ${column.agentPromotionCriteria || '(nao definidos)'}
 
   // 10) Envia (sendOutbound loga message_out + bumpa card pro topo)
   try {
-    await sendReply(channel, customerPhone, reply, contactId);
+    await sendReply(channel, customerPhone, finalText, contactId);
   } catch (err: any) {
     logger.error('[col-agent.runner] send falhou:', err?.message);
     return { status: 'error', message: err?.message || 'send_failed' };
@@ -275,9 +367,10 @@ ${column.agentPromotionCriteria || '(nao definidos)'}
   });
   logger.info(
     `[col-agent.runner] ✓ executed card=${card.id} role=${role} ` +
-      `column="${column.name}" turns=${finalState.turnsCount}`,
+      `column="${column.name}" turns=${finalState.turnsCount} iter=${iteration}`,
   );
-  return { status: 'executed', reply };
+  void lastReplyForAntiLoop; // kept for future debugging
+  return { status: 'executed', reply: finalText };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────

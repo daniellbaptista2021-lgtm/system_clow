@@ -116,7 +116,10 @@ export type AgentMetricEvent =
   | 'lost'               // marcado como perdido (PR 3)
   | 'escalated'          // escalado pra humano (PR 3)
   | 'stuck'              // max_turns atingido sem progresso
-  | 'inactive_timeout';  // timer de inatividade disparou (PR 4)
+  | 'inactive_timeout'   // timer de inatividade disparou (PR 4)
+  | 'tool_called'        // PR 3: agente chamou uma tool com sucesso
+  | 'tool_failed'        // PR 3: tool falhou (validacao, permissao, erro)
+  | 'tool_loop_max';     // PR 3: bateu o limite de iteracoes LLM↔tool
 
 export interface AgentMetric {
   id: string;

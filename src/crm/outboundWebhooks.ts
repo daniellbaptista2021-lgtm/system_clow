@@ -17,12 +17,14 @@ const now = () => Date.now();
 export type WebhookEvent =
   | 'contact.created' | 'contact.updated' | 'contact.deleted'
   | 'card.created' | 'card.updated' | 'card.moved' | 'card.won' | 'card.lost' | 'card.deleted'
+  | 'card.ready_for_human'  // Onda 62 (PR 3): finalizador concluiu, dados prontos
   | 'activity.logged'
   | 'proposal.sent' | 'proposal.signed' | 'proposal.rejected'
   | 'appointment.created' | 'appointment.cancelled'
   | 'task.created' | 'task.completed'
   | 'campaign.sent'
-  | 'form.submitted';
+  | 'form.submitted'
+  | 'agent.escalated';      // Onda 62 (PR 3): agente IA escalou pra humano
 
 export interface OutboundWebhook {
   id: string;

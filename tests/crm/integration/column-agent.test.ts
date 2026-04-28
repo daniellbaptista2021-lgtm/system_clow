@@ -18,7 +18,9 @@ import { randomBytes } from 'crypto';
 const TEST_DB_PATH = '/tmp/clow-col-agent-test-' + randomBytes(6).toString('hex') + '.db';
 process.env.CRM_DB_PATH = TEST_DB_PATH;
 
-// Mocks: callDeepSeek e sendReply. Substitui ANTES de qualquer import.
+// Mocks: callDeepSeekWithTools (PR 3) e sendReply. Substitui ANTES de qualquer import.
+// PR 3 trocou callDeepSeek -> callDeepSeekWithTools (function calling) — esses mocks
+// retornam um DeepSeekToolMessage (sem tool_calls = resposta texto final).
 const mockCallDeepSeek = vi.fn();
 const mockSendReply = vi.fn();
 
@@ -26,10 +28,15 @@ vi.mock('../../../src/crm/ai/agent.js', async () => {
   const actual = await vi.importActual<any>('../../../src/crm/ai/agent.js');
   return {
     ...actual,
-    callDeepSeek: mockCallDeepSeek,
+    callDeepSeekWithTools: mockCallDeepSeek,
     sendReply: mockSendReply,
   };
 });
+
+// Helper: monta uma resposta DeepSeek "texto final, sem tool_calls"
+function llmTextReply(text: string) {
+  return { role: 'assistant' as const, content: text };
+}
 
 describe('Column Agent — integration', () => {
   let schema: any, store: any, runner: any, selector: any, agentState: any;
@@ -145,7 +152,7 @@ describe('Column Agent — integration', () => {
     expect(pick.column.id).toBe(column.id);
     expect(pick.card.id).toBe(card.id);
 
-    mockCallDeepSeek.mockResolvedValue('Olá! Sou a Safira, posso te ajudar?');
+    mockCallDeepSeek.mockResolvedValue(llmTextReply('Olá! Sou a Safira, posso te ajudar?'));
     mockSendReply.mockResolvedValue(undefined);
 
     const result = await runner.runColumnAgent({
@@ -159,10 +166,13 @@ describe('Column Agent — integration', () => {
     expect(mockCallDeepSeek).toHaveBeenCalledTimes(1);
     expect(mockSendReply).toHaveBeenCalledTimes(1);
 
-    // System prompt foi renderizado com placeholders substituidos
-    const [systemPrompt] = mockCallDeepSeek.mock.calls[0];
-    expect(systemPrompt).toContain('Safira');
-    expect(systemPrompt).not.toContain('{{persona_name}}');
+    // System prompt foi renderizado com placeholders substituidos.
+    // PR 3 muda assinatura: callDeepSeekWithTools(messages, tools, model)
+    // — system prompt eh messages[0].content
+    const [messages] = mockCallDeepSeek.mock.calls[0];
+    expect(messages[0].role).toBe('system');
+    expect(messages[0].content).toContain('Safira');
+    expect(messages[0].content).not.toContain('{{persona_name}}');
 
     // Estado persistido
     const state = agentState.getCardAgentState(card.id);
@@ -275,7 +285,7 @@ describe('Column Agent — integration', () => {
     // LLM atrasa 60ms pra dar tempo do segundo runner tentar adquirir lock
     mockCallDeepSeek.mockImplementation(async () => {
       await new Promise((r) => setTimeout(r, 60));
-      return 'resposta concorrente';
+      return llmTextReply('resposta concorrente');
     });
     mockSendReply.mockResolvedValue(undefined);
 
@@ -328,7 +338,7 @@ describe('Column Agent — integration', () => {
     });
 
     // LLM tenta responder a mesma coisa de novo
-    mockCallDeepSeek.mockResolvedValue(X);
+    mockCallDeepSeek.mockResolvedValue(llmTextReply(X));
     mockSendReply.mockResolvedValue(undefined);
 
     const result = await runner.runColumnAgent({
