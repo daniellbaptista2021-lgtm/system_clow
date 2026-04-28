@@ -1541,6 +1541,34 @@ async function toggleRecording() {
 }
 
 // ─── New card modal ────────────────────────────────────────────────────
+// Modal pra criar nova coluna no board atual.
+// Bate em POST /boards/:id/columns com { name, color, isTerminal }
+// Recarrega o pipeline ao final pra mostrar a coluna nova no kanban.
+async function openNewColumnModal() {
+  const boardId = state.currentBoardId;
+  if (!boardId) { toast('Selecione um board primeiro', 'error'); return; }
+  await buildModal('Nova coluna', [
+    { name: 'name', label: 'Nome da coluna', required: true, placeholder: 'Ex: Aguardando aprovação' },
+    { name: 'color', label: 'Cor (hex)', value: '#9B59FC', attrs: { type: 'color' } },
+    { name: 'isTerminal', label: 'É coluna terminal? (Ganho/Perdido)', type: 'select', value: 'no', options: [
+      { value: 'no', label: 'Não — coluna intermediária' },
+      { value: 'yes', label: 'Sim — finaliza o card aqui' },
+    ]},
+  ], async (v) => {
+    if (!v.name?.trim()) { toast('Nome obrigatório', 'error'); return false; }
+    try {
+      await api(`/boards/${boardId}/columns`, { method: 'POST', body: {
+        name: v.name.trim(),
+        color: v.color || '#9B59FC',
+        isTerminal: v.isTerminal === 'yes',
+      }});
+      toast('Coluna criada', 'success');
+      await loadPipeline(boardId);
+      renderKanban();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  });
+}
+
 async function openNewCardModal(columnId = null) {
   const contacts = state.contacts.length ? state.contacts : (await loadContacts(), state.contacts);
   const backdrop = el('div', { class: 'modal-backdrop' });
@@ -3586,6 +3614,7 @@ function wireEvents() {
     toast('Atualizado', 'success');
   });
   wire('#newCardBtn', 'click', () => openNewCardModal());
+  wire('#newColumnBtn', 'click', () => openNewColumnModal());
   wire('#newChannelBtn', 'click', openNewChannelModal);
   wire('#newContactBtn', 'click', openNewContactModal);
   wire('#importContactsBtn', 'click', () => openImportContactsModal());
