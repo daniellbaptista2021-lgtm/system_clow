@@ -21,6 +21,9 @@ import { z } from 'zod';
 import { buildTool, type ToolResult, type ToolUseContext } from '../Tool.js';
 import * as crm from '../../crm/store.js';
 import { sendOutbound } from '../../crm/inbox.js';
+import { markPaid as billingMarkPaid } from '../../crm/billing.js';
+import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tasks.js';
+import { createAppointment as calCreate } from '../../crm/calendar.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 function tid(ctx: ToolUseContext): string {
@@ -508,6 +511,183 @@ export const CrmDashboardTool = buildTool<z.infer<typeof DashboardSchema>>({
   },
 });
 
+// ════════════════════════════════════════════════════════════════════════
+// 11. crm_create_subscription (mensalidade recorrente)
+// ════════════════════════════════════════════════════════════════════════
+const CreateSubscriptionSchema = z.object({
+  contactId: z.string().describe('ID do contato (use crm_find_or_create_contact antes se nao tiver)'),
+  cardId: z.string().optional().describe('ID do card pra vincular (opcional)'),
+  planName: z.string().describe('Nome do plano (ex: "Sulamerica Vida", "MAG", "Plano Bronze")'),
+  amount: z.number().describe('Valor em REAIS (ex: 178 = R$178,00)'),
+  cycle: z.enum(['monthly','weekly','quarterly','yearly','one_time']).describe('Ciclo de cobranca'),
+  firstChargeDate: z.string().describe('Data da PRIMEIRA cobranca em ISO ou YYYY-MM-DD (ex: "2026-05-10")'),
+});
+
+export const CrmCreateSubscriptionTool = buildTool<z.infer<typeof CreateSubscriptionSchema>>({
+  name: 'crm_create_subscription',
+  searchHint: 'crm subscription mensalidade cobrança recorrente plano',
+  description: 'Cria uma mensalidade/assinatura recorrente pra um cliente. Vai cobrar lembretes T-3/T-1/T-0 via WhatsApp automaticamente.',
+  inputSchema: CreateSubscriptionSchema,
+  userFacingName: (i) => i ? `crm_create_subscription(${i.planName})` : 'crm_create_subscription',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.planName,
+  renderToolUseMessage: (i) => `Criar mensalidade: ${i.planName} R$${i.amount} ${i.cycle}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const dt = new Date(input.firstChargeDate);
+    if (isNaN(dt.getTime())) return { output: null, outputText: 'Data invalida' };
+    const sub = crm.createSubscription(t, {
+      contactId: input.contactId, cardId: input.cardId,
+      planName: input.planName, amountCents: Math.round(input.amount * 100),
+      cycle: input.cycle, nextChargeAt: dt.getTime(),
+    });
+    return { output: sub, outputText: `Mensalidade criada: ${input.planName} ${fmtMoney(sub.amountCents)} ${input.cycle}, primeira cobranca ${dt.toLocaleDateString('pt-BR')}` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 12. crm_mark_subscription_paid (dar baixa em mensalidade)
+// ════════════════════════════════════════════════════════════════════════
+const MarkSubscriptionPaidSchema = z.object({
+  subscriptionId: z.string().optional().describe('ID da assinatura (use se souber)'),
+  contactId: z.string().optional().describe('ID do contato — pega a 1a sub ativa dele se subscriptionId vazio'),
+  contactName: z.string().optional().describe('Nome do contato pra fuzzy lookup (ex: "Daniel Baptista")'),
+});
+
+export const CrmMarkSubscriptionPaidTool = buildTool<z.infer<typeof MarkSubscriptionPaidSchema>>({
+  name: 'crm_mark_subscription_paid',
+  searchHint: 'crm subscription paid mensalidade pago baixa cobrança recebida',
+  description: 'Marca uma mensalidade como paga. Avanca next_charge_at pro proximo ciclo. Use quando user disser "X pagou", "recebi pagamento de Y".',
+  inputSchema: MarkSubscriptionPaidSchema,
+  userFacingName: () => 'crm_mark_subscription_paid',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => false,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.contactName || 'mark paid',
+  renderToolUseMessage: (i) => `Marcar paga: ${i.contactName || i.subscriptionId || i.contactId}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    let subId = input.subscriptionId;
+    if (!subId) {
+      let contactId = input.contactId;
+      if (!contactId && input.contactName) {
+        // Fuzzy: busca contato por nome
+        const contacts = crm.listContacts(t, { limit: 200 });
+        const found = contacts.find(c => c.name?.toLowerCase().includes(input.contactName!.toLowerCase()));
+        contactId = found?.id;
+      }
+      if (!contactId) return { output: null, outputText: 'Não achei o contato. Forneça subscriptionId ou contactId.' };
+      const subs = crm.listSubscriptions(t).filter((s: any) => s.contactId === contactId && (s.status === 'active' || s.status === 'past_due'));
+      if (!subs.length) return { output: null, outputText: 'Esse contato não tem mensalidade ativa.' };
+      subId = subs[0].id;
+    }
+    const r = billingMarkPaid(t, subId);
+    if (!r) return { output: null, outputText: 'Mensalidade não encontrada' };
+    return { output: r, outputText: `✓ ${r.planName} marcada como paga. Próxima cobrança: ${new Date(r.nextChargeAt).toLocaleDateString('pt-BR')}` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 13. crm_create_task (tarefa/follow-up com prazo)
+// ════════════════════════════════════════════════════════════════════════
+const CreateTaskSchema = z.object({
+  title: z.string().describe('Título curto (ex: "Cobrar Daniel pelo plano", "Ligar pro João sobre proposta")'),
+  type: z.enum(['call','email','meeting','followup','other']).optional().describe('Tipo (default: followup)'),
+  priority: z.enum(['low','med','high','urgent']).optional().describe('Prioridade (default: med)'),
+  dueInHours: z.number().optional().describe('Prazo em horas a partir de agora (ex: 24 = amanhã, 168 = 1 semana)'),
+  dueDate: z.string().optional().describe('OU data específica em ISO/YYYY-MM-DD (alternativa a dueInHours)'),
+  contactId: z.string().optional(),
+  cardId: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const CrmCreateTaskTool = buildTool<z.infer<typeof CreateTaskSchema>>({
+  name: 'crm_create_task',
+  searchHint: 'crm task tarefa followup follow-up acompanhar lembrete',
+  description: 'Cria uma tarefa com prazo. Use pra "follow-up amanhã", "ligar pro X em 2 dias", "cobrar mensalidade do Y semana que vem".',
+  inputSchema: CreateTaskSchema,
+  userFacingName: (i) => i ? `crm_create_task(${i.title.slice(0,40)})` : 'crm_create_task',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.title,
+  renderToolUseMessage: (i) => `Tarefa: ${i.title.slice(0,50)}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    let dueAt: number | undefined;
+    if (input.dueInHours) dueAt = Date.now() + input.dueInHours * 3600_000;
+    else if (input.dueDate) {
+      const dt = new Date(input.dueDate);
+      if (!isNaN(dt.getTime())) dueAt = dt.getTime();
+    }
+    const task = tasksCreate(t, {
+      title: input.title,
+      description: input.description,
+      type: input.type || 'followup',
+      priority: input.priority || 'med',
+      dueAt,
+      contactId: input.contactId,
+      cardId: input.cardId,
+    });
+    const when = dueAt ? new Date(dueAt).toLocaleString('pt-BR') : 'sem prazo';
+    return { output: task, outputText: `✓ Tarefa criada: "${input.title}" — ${when} [${input.priority || 'med'}]` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 14. crm_create_appointment (agendar reunião/ligação)
+// ════════════════════════════════════════════════════════════════════════
+const CreateAppointmentSchema = z.object({
+  title: z.string().describe('Título (ex: "Reunião proposta Daniel", "Ligação João — fechamento")'),
+  startsAt: z.string().describe('Inicio em ISO ou YYYY-MM-DD HH:MM (ex: "2026-05-15 14:00")'),
+  durationMinutes: z.number().optional().describe('Duração em minutos (default: 30)'),
+  type: z.enum(['call','meeting','visit','demo','other']).optional(),
+  location: z.string().optional().describe('Local físico ou link (ex: "Google Meet: meet.google.com/...")'),
+  contactId: z.string().optional(),
+  cardId: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const CrmCreateAppointmentTool = buildTool<z.infer<typeof CreateAppointmentSchema>>({
+  name: 'crm_create_appointment',
+  searchHint: 'crm appointment reunião agenda agendar marcar meeting call',
+  description: 'Agenda uma reunião/ligação/visita. Aparece na agenda do CRM.',
+  inputSchema: CreateAppointmentSchema,
+  userFacingName: (i) => i ? `crm_create_appointment(${i.title.slice(0,40)})` : 'crm_create_appointment',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.title,
+  renderToolUseMessage: (i) => `Agendar: ${i.title.slice(0,40)} @ ${i.startsAt}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const start = new Date(input.startsAt);
+    if (isNaN(start.getTime())) return { output: null, outputText: 'Data invalida' };
+    const dur = input.durationMinutes ?? 30;
+    const appt = calCreate(t, {
+      title: input.title,
+      startsAt: start.getTime(),
+      endsAt: start.getTime() + dur * 60_000,
+      type: input.type || 'meeting',
+      location: input.location,
+      contactId: input.contactId,
+      cardId: input.cardId,
+      notes: input.notes,
+    } as any);
+    return { output: appt, outputText: `✓ Agendado: "${input.title}" em ${start.toLocaleString('pt-BR')} (${dur}min)` };
+  },
+});
+
 // ─── Registry: array exposto pra tools.ts ───────────────────────────────
 export const CrmTools = [
   CrmFindOrCreateContactTool,
@@ -520,4 +700,8 @@ export const CrmTools = [
   CrmGetContactTool,
   CrmCreateReminderTool,
   CrmDashboardTool,
+  CrmCreateSubscriptionTool,
+  CrmMarkSubscriptionPaidTool,
+  CrmCreateTaskTool,
+  CrmCreateAppointmentTool,
 ];
