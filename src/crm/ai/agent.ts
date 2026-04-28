@@ -15,6 +15,7 @@
  */
 import { logger } from '../../utils/logger.js';
 import { getCrmDb } from '../schema.js';
+import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
 import type { Channel2 } from '../types.js';
 
@@ -61,33 +62,25 @@ export function readChannelAIConfig(channelId: string): ChannelAIConfig | null {
 }
 
 /** Pega últimas N mensagens da timeline do contato (crm_activities).
- *  Acha contato pelo phone e busca message_in/message_out cronológicas.
- *  Limita ao canal específico pra evitar misturar conversas de canais
- *  diferentes do mesmo cliente (ex.: WA e email). */
-function loadRecentHistory(tenantId: string, channelId: string, customerPhone: string, limit: number): ChatMessage[] {
-  const db = getCrmDb();
-  // Acha contato pelo phone (normalizado, com ou sem 55, sem caracteres extra)
-  const phoneNorm = customerPhone.replace(/\D/g, '');
-  const contact = db.prepare(`
-    SELECT id FROM crm_contacts
-    WHERE tenant_id = ?
-      AND REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', '') LIKE ?
-    LIMIT 1
-  `).get(tenantId, '%' + phoneNorm + '%') as { id?: string } | undefined;
-  if (!contact?.id) return [];
-  const rows = db.prepare(`
-    SELECT content, type, created_at
-    FROM crm_activities
-    WHERE tenant_id = ?
-      AND contact_id = ?
-      AND type IN ('message_in', 'message_out')
-    ORDER BY created_at DESC
-    LIMIT ?
-  `).all(tenantId, contact.id, limit) as Array<{ content: string; type: string; created_at: number }>;
-  return rows.reverse().map((r) => ({
-    role: r.type === 'message_out' ? 'assistant' as const : 'user' as const,
-    content: r.content || '',
-  })).filter((m) => m.content.length > 0);
+ *  Usa findContactByPhone (matching 3-niveis: exact, cleaned, ultimos 10
+ *  digitos) — phone do Z-API vem com 55, contato no DB pode estar sem.
+ *  Antes a gente fazia LIKE '%phone%' que falhava quando o phone do
+ *  webhook (5521...) era MAIOR que o do contato (21...) — bot achava
+ *  toda interacao primeira e mandava saudacao infinita. */
+function loadRecentHistory(tenantId: string, customerPhone: string, limit: number): { contactId: string | null; messages: ChatMessage[] } {
+  const contact = store.findContactByPhone(tenantId, customerPhone);
+  if (!contact) return { contactId: null, messages: [] };
+  // listActivitiesByContact ja retorna ASC; pegamos os ultimos N invertendo o slice
+  const all = store.listActivitiesByContact(tenantId, contact.id, 1000);
+  const msgs = all.filter((a) => a.type === 'message_in' || a.type === 'message_out');
+  const recent = msgs.slice(-limit);
+  return {
+    contactId: contact.id,
+    messages: recent.map((a) => ({
+      role: a.type === 'message_out' ? 'assistant' as const : 'user' as const,
+      content: a.content || '',
+    })).filter((m) => m.content.length > 0),
+  };
 }
 
 /** Chama DeepSeek (OpenAI-compatible) com history + system prompt. */
@@ -164,9 +157,30 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
  *  Sem isso, agent ficava em looping: nao via proprias respostas no
  *  history, achava sempre que era primeira interacao, mandava saudacao
  *  de novo. Reusa sendOutbound de inbox.ts (envia + log activity +
- *  trigger automations). */
-async function sendReply(channel: Channel2, customerPhone: string, text: string): Promise<void> {
-  const r = await sendOutbound(channel, { to: customerPhone, text });
+ *  trigger automations).
+ *
+ *  IMPORTANTE: passamos contactId+cardId pro sendOutbound. Se nao
+ *  passar cardId, a activity grava com card_id=NULL e fica invisivel
+ *  no painel do card (que filtra por card_id). Resolvemos o card mais
+ *  recente do contato (ingestInbound ja criou um pra essa conversa). */
+async function sendReply(
+  channel: Channel2,
+  customerPhone: string,
+  text: string,
+  contactId: string | null,
+): Promise<void> {
+  let cardId: string | undefined;
+  if (contactId) {
+    const cards = store.listCardsByContact(channel.tenantId, contactId);
+    // listCardsByContact retorna ORDER BY updated_at DESC -> primeiro = mais recente
+    if (cards.length > 0) cardId = cards[0].id;
+  }
+  const r = await sendOutbound(channel, {
+    to: customerPhone,
+    text,
+    contactId: contactId || undefined,
+    cardId,
+  });
   if (!r.ok) throw new Error(`send failed: ${r.error}`);
 }
 
@@ -205,33 +219,34 @@ export function handleInboundForAI(ctx: InboundContext): void {
 async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<void> {
   const { channel, customerPhone, senderName } = ctx;
 
-  // 1. Resolve texto da mensagem
+  // 1. Resolve contato + history numa unica chamada (reusa contactId
+  //    pro anti-loop e pro sendReply, evita 3 lookups redundantes).
+  const { contactId, messages: history } = loadRecentHistory(channel.tenantId, customerPhone, config.maxHistory);
+
+  // 2. Resolve texto da mensagem
   let userMessage = ctx.text || '';
   if (!userMessage && ctx.audioUrl) {
     if (!config.audioEnabled) {
       await sendReply(channel, customerPhone,
-        'No momento só consigo te atender com mensagens de texto. Me manda sua dúvida por escrito? 😊');
+        'No momento só consigo te atender com mensagens de texto. Me manda sua dúvida por escrito? 😊', contactId);
       return;
     }
     userMessage = await transcribeAudio(ctx.audioUrl);
     if (!userMessage) {
       await sendReply(channel, customerPhone,
-        'Não consegui entender o áudio. Pode mandar por escrito? 🙂');
+        'Não consegui entender o áudio. Pode mandar por escrito? 🙂', contactId);
       return;
     }
   }
   if (!userMessage && ctx.imageUrl) {
     await sendReply(channel, customerPhone,
-      'No momento só consigo te atender com mensagens de texto ou áudio. Me manda sua dúvida por escrito ou em áudio? 😊');
+      'No momento só consigo te atender com mensagens de texto ou áudio. Me manda sua dúvida por escrito ou em áudio? 😊', contactId);
     return;
   }
   if (!userMessage) {
     logger.info(`[ai/agent] mensagem sem texto/audio/imagem — ignorando`);
     return;
   }
-
-  // 2. Carrega history das últimas N msgs do contato
-  const history = loadRecentHistory(channel.tenantId, channel.id, customerPhone, config.maxHistory);
 
   // 3. Substitui {{customer_name}} no system prompt se existir
   const systemPrompt = config.systemPrompt
@@ -247,35 +262,28 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
     return;
   }
 
-  // 5. Anti-loop: se a ultima message_out foi ha < 30s e e quase identica
-  //    a resposta nova, NAO envia (evita o bot mandar saudacao 3x seguidas
-  //    quando o user manda 3 msgs rapidas que cabem todas no debounce).
-  try {
-    const db = getCrmDb();
-    const phoneNorm = customerPhone.replace(/\D/g, '');
-    const lastOut = db.prepare(`
-      SELECT a.content, a.created_at
-      FROM crm_activities a
-      JOIN crm_contacts c ON c.id = a.contact_id
-      WHERE a.tenant_id = ?
-        AND a.type = 'message_out'
-        AND REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', ''), '(', '') LIKE ?
-      ORDER BY a.created_at DESC LIMIT 1
-    `).get(channel.tenantId, '%' + phoneNorm + '%') as { content?: string; created_at?: number } | undefined;
-    if (lastOut?.content && lastOut.created_at && (Date.now() - lastOut.created_at) < 30_000) {
-      // Similaridade rapida: mesmos primeiros 80 chars = bloqueia
-      const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase();
-      if (norm(lastOut.content) === norm(reply)) {
-        logger.warn(`[ai/agent] anti-loop: resposta duplicada bloqueada para ${customerPhone}`);
-        return;
+  // 5. Anti-loop: se a ultima resposta do bot (no history que ja
+  //    carregamos) e quase identica a nova, bloqueia. Isso evita
+  //    saudacao 3x seguidas quando o user manda multiplas msgs
+  //    rapidas que cabem todas no debounce, ou quando o LLM regride
+  //    pra "Oi sou a Safira..." mesmo ja tendo se apresentado.
+  if (contactId) {
+    try {
+      const recentOut = history.filter((m) => m.role === 'assistant').slice(-1)[0];
+      if (recentOut?.content) {
+        const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 100).toLowerCase();
+        if (norm(recentOut.content) === norm(reply)) {
+          logger.warn(`[ai/agent] anti-loop: resposta duplicada bloqueada para ${customerPhone}`);
+          return;
+        }
       }
-    }
-  } catch (err: any) { /* nao bloqueia o envio se anti-loop falhar */ }
+    } catch { /* nao bloqueia se anti-loop falhar */ }
+  }
 
-  // 6. Envia via canal (E grava message_out via sendOutbound)
+  // 6. Envia via canal (E grava message_out + card_id via sendOutbound)
   try {
-    await sendReply(channel, customerPhone, reply);
-    logger.info(`[ai/agent] ✓ resposta enviada para ${customerPhone} (${reply.length} chars)`);
+    await sendReply(channel, customerPhone, reply, contactId);
+    logger.info(`[ai/agent] ✓ resposta enviada para ${customerPhone} (${reply.length} chars, contactId=${contactId || 'novo'})`);
   } catch (err: any) {
     logger.error('[ai/agent] send falhou:', err?.message);
   }
