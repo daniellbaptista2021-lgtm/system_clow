@@ -325,6 +325,8 @@ export function executePromotion(
     currentAgentRole: toRole,
     tenantId: ctx.tenantId,
     turnsCount: 0, // reset turns na nova coluna
+    inactivityTimerAt: null, // PR 4: nova coluna re-arma se quiser
+    inactivityFireCount: 0,
     promotionLog: log,
     status: 'active',
   });

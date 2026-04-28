@@ -42,6 +42,7 @@ function rowToState(r: any): CardAgentState {
     lastClientMessageAt: r.last_client_message_at ?? undefined,
     lastAgentMessageAt: r.last_agent_message_at ?? undefined,
     inactivityTimerAt: r.inactivity_timer_at ?? undefined,
+    inactivityFireCount: r.inactivity_fire_count ?? 0,
     status: r.status as CardAgentStatus,
     collectedData: J.parse(r.collected_data, undefined as Record<string, unknown> | undefined),
     promotionLog: J.parse(r.promotion_log, undefined as CardAgentPromotionEntry[] | undefined),
@@ -67,6 +68,7 @@ interface UpsertInput {
   lastClientMessageAt?: number;
   lastAgentMessageAt?: number;
   inactivityTimerAt?: number | null;
+  inactivityFireCount?: number;
   status?: CardAgentStatus;
   collectedData?: Record<string, unknown>;
   promotionLog?: CardAgentPromotionEntry[];
@@ -98,18 +100,19 @@ export function upsertCardAgentState(input: UpsertInput): CardAgentState {
       promotionLog: input.promotionLog ?? existing.promotionLog,
       updatedAt: ts,
     };
+    merged.inactivityFireCount = input.inactivityFireCount ?? existing.inactivityFireCount ?? 0;
     db.prepare(`
       UPDATE crm_card_agent_state SET
         column_id = ?, current_agent_role = ?, tenant_id = ?,
         turns_count = ?, last_client_message_at = ?, last_agent_message_at = ?,
-        inactivity_timer_at = ?, status = ?,
+        inactivity_timer_at = ?, inactivity_fire_count = ?, status = ?,
         collected_data = ?, promotion_log = ?,
         updated_at = ?
       WHERE card_id = ?
     `).run(
       merged.columnId, merged.currentAgentRole, merged.tenantId,
       merged.turnsCount, merged.lastClientMessageAt ?? null, merged.lastAgentMessageAt ?? null,
-      merged.inactivityTimerAt ?? null, merged.status,
+      merged.inactivityTimerAt ?? null, merged.inactivityFireCount, merged.status,
       merged.collectedData ? J.stringify(merged.collectedData) : null,
       merged.promotionLog ? J.stringify(merged.promotionLog) : null,
       merged.updatedAt, merged.cardId,
@@ -124,6 +127,7 @@ export function upsertCardAgentState(input: UpsertInput): CardAgentState {
     lastClientMessageAt: input.lastClientMessageAt,
     lastAgentMessageAt: input.lastAgentMessageAt,
     inactivityTimerAt: input.inactivityTimerAt ?? undefined,
+    inactivityFireCount: input.inactivityFireCount ?? 0,
     status: input.status ?? 'active',
     collectedData: input.collectedData,
     promotionLog: input.promotionLog,
@@ -135,13 +139,13 @@ export function upsertCardAgentState(input: UpsertInput): CardAgentState {
     INSERT INTO crm_card_agent_state (
       card_id, column_id, current_agent_role,
       turns_count, last_client_message_at, last_agent_message_at,
-      inactivity_timer_at, status, collected_data, promotion_log,
+      inactivity_timer_at, inactivity_fire_count, status, collected_data, promotion_log,
       tenant_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     fresh.cardId, fresh.columnId, fresh.currentAgentRole,
     fresh.turnsCount, fresh.lastClientMessageAt ?? null, fresh.lastAgentMessageAt ?? null,
-    fresh.inactivityTimerAt ?? null, fresh.status,
+    fresh.inactivityTimerAt ?? null, fresh.inactivityFireCount, fresh.status,
     fresh.collectedData ? J.stringify(fresh.collectedData) : null,
     fresh.promotionLog ? J.stringify(fresh.promotionLog) : null,
     fresh.tenantId, fresh.createdAt, fresh.updatedAt,
@@ -149,7 +153,14 @@ export function upsertCardAgentState(input: UpsertInput): CardAgentState {
   return fresh;
 }
 
-/** Incrementa turns_count atomicamente e atualiza timestamps. */
+/**
+ * Incrementa turns_count atomicamente e atualiza timestamps.
+ *
+ * Onda 62 PR 4: side='client' tambem RESETA o timer de inatividade (re-arma
+ * com agent_inactivity_timeout_minutes da coluna ATUAL via JOIN) E zera
+ * inactivity_fire_count. Tudo numa unica UPDATE — sem janela de race
+ * onde cliente responde mas o timer ja apontava pro passado.
+ */
 export function recordAgentTurn(cardId: string, side: 'client' | 'agent'): void {
   const db = getCrmDb();
   const ts = now();
@@ -158,9 +169,14 @@ export function recordAgentTurn(cardId: string, side: 'client' | 'agent'): void 
       UPDATE crm_card_agent_state SET
         turns_count = turns_count + 1,
         last_client_message_at = ?,
+        inactivity_timer_at = ? + COALESCE(
+          (SELECT agent_inactivity_timeout_minutes FROM crm_columns WHERE id = column_id),
+          20
+        ) * 60000,
+        inactivity_fire_count = 0,
         updated_at = ?
       WHERE card_id = ?
-    `).run(ts, ts, cardId);
+    `).run(ts, ts, ts, cardId);
   } else {
     db.prepare(`
       UPDATE crm_card_agent_state SET
@@ -169,6 +185,32 @@ export function recordAgentTurn(cardId: string, side: 'client' | 'agent'): void 
       WHERE card_id = ?
     `).run(ts, ts, cardId);
   }
+}
+
+/** Incrementa o contador de disparos de inatividade. Retorna o novo valor. */
+export function incrementInactivityFireCount(cardId: string): number {
+  const db = getCrmDb();
+  db.prepare(`
+    UPDATE crm_card_agent_state SET
+      inactivity_fire_count = inactivity_fire_count + 1,
+      updated_at = ?
+    WHERE card_id = ?
+  `).run(now(), cardId);
+  const r = db.prepare(`SELECT inactivity_fire_count FROM crm_card_agent_state WHERE card_id = ?`)
+    .get(cardId) as { inactivity_fire_count?: number } | undefined;
+  return r?.inactivity_fire_count ?? 0;
+}
+
+/** Limpa o timer (e.g., apos card promovido — proxima coluna re-arma se quiser). */
+export function clearInactivityTimer(cardId: string): void {
+  const db = getCrmDb();
+  db.prepare(`
+    UPDATE crm_card_agent_state SET
+      inactivity_timer_at = NULL,
+      inactivity_fire_count = 0,
+      updated_at = ?
+    WHERE card_id = ?
+  `).run(now(), cardId);
 }
 
 export function setCardAgentStatus(cardId: string, status: CardAgentStatus): void {

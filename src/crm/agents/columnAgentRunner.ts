@@ -373,6 +373,169 @@ ${column.agentPromotionCriteria || '(criterios nao definidos pelo admin — prom
   return { status: 'executed', reply: finalText };
 }
 
+// ─── PR 4: runFromInactivityFire ─────────────────────────────────────────
+//
+// Entry point chamado pelo inactivityScheduler quando um timer dispara.
+// Diferencas do runColumnAgent normal:
+//  - NAO tem mensagem do cliente — injetamos uma instrucao "[SYSTEM]" como
+//    pseudo-user message pro LLM decidir o que fazer.
+//  - NAO chama recordAgentTurn('client') — nao houve turno do cliente.
+//  - NAO checa max_turns — o ponto eh ele decidir, nao bloquear.
+//  - NAO checa horario ativo — o scheduler ja postergou se preciso.
+//  - Cluster lock ja foi adquirido pelo scheduler.
+//  - Tem acesso a TODAS as tools do role (escalar/morno/perdido/promover frio).
+
+export interface InactivityFireInput {
+  channel: Channel2;
+  card: Card;
+  column: BoardColumn;
+  /** Numero do disparo (1 = primeira vez, 2 = segunda). 3+ ja foi forcado morno
+   *  pelo scheduler antes de chegar aqui. */
+  fireCount: number;
+  /** Minutos desde que o timer venceu. */
+  elapsedMin: number;
+}
+
+export async function runFromInactivityFire(input: InactivityFireInput): Promise<RunResult> {
+  const { channel, card, column, fireCount, elapsedMin } = input;
+  const tenantId = channel.tenantId;
+  const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
+  // Tenta resolver phone do contato pra context
+  const contact = card.contactId ? store.getContact?.(tenantId, card.contactId) : null;
+  const customerPhone = contact?.phone || '';
+
+  // Estado atual
+  let state = getCardAgentState(card.id);
+  if (!state) {
+    state = upsertCardAgentState({
+      cardId: card.id, columnId: column.id, currentAgentRole: role,
+      tenantId, status: 'active',
+    });
+  }
+
+  // Persona
+  const personaName = column.agentName?.trim() || DEFAULT_PERSONA_NAME;
+  const tenant = getTenant(tenantId);
+  const tenantName = tenant?.name || 'a empresa';
+
+  const systemPrompt = renderPrompt(column.agentSystemPrompt!, {
+    persona_name: personaName,
+    tenant_name: tenantName,
+    customer_name: contact?.name || 'cliente',
+    customer_phone: customerPhone,
+  });
+
+  // Instrucao especial — injetada como user-msg porque DeepSeek lida melhor
+  // assim. Cliente NAO ve essa msg (so o LLM).
+  const instruction = buildInactivityInstruction(fireCount, elapsedMin, role);
+
+  // History real (sem incluir a injecao — historico do CRM)
+  const { contactId, messages: history } = loadRecentHistory(
+    tenantId, customerPhone, DEFAULT_MAX_HISTORY,
+  );
+
+  // Tool loop simplificado (sem recordAgentTurn 'client', sem anti-loop)
+  const tools = getToolsForRole(role);
+  const llmTools = toLLMTools(tools);
+  const messages: DeepSeekToolMessage[] = [
+    { role: 'system', content: systemPrompt + INACTIVITY_CONTEXT_BLURB },
+    ...history.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: instruction },
+  ];
+
+  let finalText = '';
+  let iter = 0;
+  while (iter < MAX_TOOL_ITERATIONS) {
+    iter++;
+    let llmMsg: DeepSeekToolMessage;
+    try {
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat');
+    } catch (err: any) {
+      logger.error('[col-agent.runFromFire] DeepSeek falhou:', err?.message);
+      return { status: 'error', message: err?.message || 'llm_error' };
+    }
+    const toolCalls = llmMsg.tool_calls ?? [];
+    if (toolCalls.length === 0) {
+      finalText = String(llmMsg.content || '').trim();
+      break;
+    }
+    messages.push({ role: 'assistant', content: llmMsg.content ?? '', tool_calls: toolCalls });
+
+    // Re-resolve state apos potential promote
+    const fresh = getCardAgentState(card.id) ?? state;
+    const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
+    const refreshedColumn = store.listColumns(tenantId, card.boardId!)
+      .find((c) => c.id === refreshedCard.columnId) ?? column;
+    const refreshedRole = (refreshedColumn.agentRole ?? fresh.currentAgentRole ?? role) as ColumnAgentRole;
+
+    const toolCtx: ToolContext = {
+      tenantId, channel, card: refreshedCard, column: refreshedColumn,
+      state: fresh, customerPhone, role: refreshedRole,
+    };
+
+    for (const tc of toolCalls) {
+      const result = await executeToolCall(tc, toolCtx);
+      messages.push({
+        role: 'tool', tool_call_id: tc.id, name: tc.function.name,
+        content: JSON.stringify(result),
+      });
+    }
+  }
+
+  if (iter >= MAX_TOOL_ITERATIONS && !finalText) {
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'tool_loop_max', reason: `inactivity_fire iter=${iter}`,
+    });
+    return { status: 'error', message: 'tool_loop_max_iterations' };
+  }
+
+  // Envia texto final (se houver). Se LLM so chamou tools (ex: marcar_morno
+  // sem mensagem), nao mandamos nada — comportamento valido.
+  if (finalText) {
+    try {
+      await sendReply(channel, customerPhone, finalText, contactId);
+      recordAgentTurn(card.id, 'agent');
+    } catch (err: any) {
+      logger.error('[col-agent.runFromFire] send falhou:', err?.message);
+      return { status: 'error', message: err?.message || 'send_failed' };
+    }
+  }
+
+  recordAgentMetric({
+    tenantId, columnId: column.id, cardId: card.id,
+    event: 'executed', reason: `from_inactivity_fire fire_count=${fireCount} iter=${iter}`,
+  });
+  logger.info(
+    `[col-agent.runFromFire] ✓ card=${card.id} role=${role} fire=${fireCount} ` +
+      `elapsed=${elapsedMin}min iter=${iter} hadText=${!!finalText}`,
+  );
+  return { status: 'executed', reply: finalText };
+}
+
+const INACTIVITY_CONTEXT_BLURB = `
+
+# CONTEXTO DE INATIVIDADE
+Cliente nao respondeu apos sua ultima mensagem. O sistema disparou um timer
+de inatividade. Use as tools disponiveis pra agir — voce pode:
+- Mandar UMA mensagem de cobranca gentil (so primeira ou segunda vez)
+- Chamar marcar_morno se cliente parece desinteressado
+- Promover com tag='frio' (so pra cotador) pro proximo agente tentar
+- Marcar perdido se ja tentou cobrar antes sem sucesso
+
+NAO mande mais de 1 mensagem por disparo. NAO se reapresente.
+`;
+
+function buildInactivityInstruction(fireCount: number, elapsedMin: number, role: ColumnAgentRole): string {
+  const headline = fireCount === 1
+    ? `Cliente nao respondeu ha ${elapsedMin} minutos.`
+    : `Cliente continua sem responder (${fireCount}a tentativa, ${elapsedMin}min desde ultimo timer).`;
+  const guidance = fireCount === 1
+    ? `Avalie o contexto da conversa e decida: (a) cobrar gentilmente UMA vez, (b) marcar_morno + agendar D+2, (c) promover com tag 'frio' (so se voce eh cotador), ou (d) marcar_perdido se ja deu sinais claros de desinteresse antes.`
+    : `Voce ja tentou ${fireCount - 1}x. Forte preferencia: marcar_morno, marcar_perdido, ou promover com tag='frio'. NOVA cobrança so se houver razao especifica no historico.`;
+  return `[SYSTEM:inactivity_fire] ${headline} Role atual: ${role}. ${guidance}`;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 /** Substitui {{key}} no template pelo valor do dict. Sem template engine. */

@@ -96,6 +96,10 @@ export interface CardAgentState {
   lastClientMessageAt?: number;
   lastAgentMessageAt?: number;
   inactivityTimerAt?: number;
+  /** Quantas vezes o timer de inatividade disparou desde ultima resposta
+   *  do cliente. Reseta em recordAgentTurn('client') e em executePromotion.
+   *  Acima de 2, scheduler forca marcar_morno (PR 4). */
+  inactivityFireCount?: number;
   status: CardAgentStatus;
   collectedData?: Record<string, unknown>;
   promotionLog?: CardAgentPromotionEntry[];
