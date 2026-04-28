@@ -2733,12 +2733,13 @@ function renderChannelsList() {
         el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
-      el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap' },
-        el('button', { class: 'save-btn', style: 'flex:1;min-width:200px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px',
-          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Ver webhook URL'),
-        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#22C55E,#16A34A);color:#fff;font-size:12px;padding:9px;font-weight:700',
-          on: { click: () => openAIAgentModal(ch) } }, '🤖 Agente IA'),
-        el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 16px;font-size:12px',
+      el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center' },
+        renderAIToggleButton(ch),
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px;font-weight:700',
+          on: { click: () => openAIAgentModal(ch) } }, '⚙️ Configurar IA'),
+        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:rgba(74,158,255,.12);color:#4A9EFF;border:1px solid rgba(74,158,255,.35);font-size:12px;padding:9px 12px',
+          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Webhook'),
+        el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 14px;font-size:12px',
           on: { click: async () => {
             if (!await confirmDialog('Remover canal', `Apagar canal "${ch.name}"? Atividades antigas permanecem.`, 'Apagar')) return;
             await api(`/channels/${ch.id}`, { method: 'DELETE' });
@@ -2751,6 +2752,44 @@ function renderChannelsList() {
     attachListItemContextMenu(chRow, (x, y) => showChannelContextMenu(ch, x, y));
     l.append(chRow);
   }
+}
+
+// ─── Toggle ON/OFF rapido do agente IA por canal ────────────────────────
+// Renderiza um botao pill que mostra estado atual e flipa em 1 clique.
+// PATCH /ai-config com so o campo enabled — nao precisa modal completo
+// (caso o user precise pausar o bot rapido pra atender ele mesmo).
+function renderAIToggleButton(ch) {
+  // Estado in-memory: lemos sob demanda o ai-config, cacheamos no state.
+  state.aiConfigCache = state.aiConfigCache || {};
+  const cached = state.aiConfigCache[ch.id];
+  const enabled = cached?.enabled === true;
+  // Se ainda nao temos dado, marca como "carregando" e busca
+  if (cached === undefined) {
+    api(`/channels/${ch.id}/ai-config`).then((cfg) => {
+      state.aiConfigCache[ch.id] = { enabled: !!cfg.enabled };
+      renderChannelsList();
+    }).catch(() => { state.aiConfigCache[ch.id] = { enabled: false }; });
+  }
+  const bg = enabled
+    ? 'linear-gradient(135deg,#22C55E,#16A34A)'
+    : 'linear-gradient(135deg,#525252,#404040)';
+  const label = enabled ? '🤖 IA: ON' : '🤖 IA: OFF';
+  return el('button', {
+    class: 'save-btn',
+    style: `flex:0 1 auto;min-width:110px;background:${bg};color:#fff;font-size:12px;padding:9px 14px;font-weight:700`,
+    title: enabled ? 'Clique pra DESLIGAR o agente IA' : 'Clique pra LIGAR o agente IA',
+    on: { click: async () => {
+      try {
+        const next = !enabled;
+        await api(`/channels/${ch.id}/ai-config`, { method: 'PATCH', body: { enabled: next } });
+        state.aiConfigCache[ch.id] = { enabled: next };
+        toast(next ? '🤖 Agente IA LIGADO' : '🤖 Agente IA DESLIGADO', 'success');
+        renderChannelsList();
+      } catch (err) {
+        toast('Erro: ' + (err.message || err), 'error');
+      }
+    } },
+  }, label);
 }
 
 

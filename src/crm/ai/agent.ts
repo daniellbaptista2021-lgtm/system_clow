@@ -66,14 +66,19 @@ export function readChannelAIConfig(channelId: string): ChannelAIConfig | null {
  *  digitos) — phone do Z-API vem com 55, contato no DB pode estar sem.
  *  Antes a gente fazia LIKE '%phone%' que falhava quando o phone do
  *  webhook (5521...) era MAIOR que o do contato (21...) — bot achava
- *  toda interacao primeira e mandava saudacao infinita. */
+ *  toda interacao primeira e mandava saudacao infinita.
+ *
+ *  Floor minimo: garantimos pelo menos 10 mensagens de contexto, mesmo
+ *  que o config diga menos. Sem contexto suficiente o bot regride e
+ *  reapresenta a Safira / repete perguntas. */
 function loadRecentHistory(tenantId: string, customerPhone: string, limit: number): { contactId: string | null; messages: ChatMessage[] } {
   const contact = store.findContactByPhone(tenantId, customerPhone);
   if (!contact) return { contactId: null, messages: [] };
+  const effectiveLimit = Math.max(10, limit || 10);
   // listActivitiesByContact ja retorna ASC; pegamos os ultimos N invertendo o slice
   const all = store.listActivitiesByContact(tenantId, contact.id, 1000);
   const msgs = all.filter((a) => a.type === 'message_in' || a.type === 'message_out');
-  const recent = msgs.slice(-limit);
+  const recent = msgs.slice(-effectiveLimit);
   return {
     contactId: contact.id,
     messages: recent.map((a) => ({
@@ -81,6 +86,30 @@ function loadRecentHistory(tenantId: string, customerPhone: string, limit: numbe
       content: a.content || '',
     })).filter((m) => m.content.length > 0),
   };
+}
+
+/** Checa se o contato esta numa coluna onde o bot NAO deve responder
+ *  (em tratativa com humano). Padrao: qualquer coluna cujo nome contem
+ *  "qualificado" — eh onde o corretor humano assume a conversa.
+ *
+ *  Tambem aceita colunas com sinalizadores explicitos no nome:
+ *  "[no-bot]", "[humano]", "[manual]" (case-insensitive) — pra dar
+ *  flexibilidade sem precisar de schema change. */
+function isContactInHumanHandoffColumn(tenantId: string, contactId: string): { paused: boolean; columnName?: string } {
+  const cards = store.listCardsByContact(tenantId, contactId);
+  if (cards.length === 0) return { paused: false };
+  const card = cards[0]; // listCardsByContact retorna ORDER BY updated_at DESC
+  if (!card.boardId || !card.columnId) return { paused: false };
+  const columns = store.listColumns(tenantId, card.boardId);
+  const col = columns.find((c) => c.id === card.columnId);
+  if (!col) return { paused: false };
+  const name = (col.name || '').toLowerCase();
+  // Triggers: nome contem palavra-chave de tratativa humana
+  const humanKeywords = ['qualificado', '[no-bot]', '[humano]', '[manual]'];
+  for (const kw of humanKeywords) {
+    if (name.includes(kw)) return { paused: true, columnName: col.name };
+  }
+  return { paused: false };
 }
 
 /** Chama DeepSeek (OpenAI-compatible) com history + system prompt. */
@@ -223,6 +252,18 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
   //    pro anti-loop e pro sendReply, evita 3 lookups redundantes).
   const { contactId, messages: history } = loadRecentHistory(channel.tenantId, customerPhone, config.maxHistory);
 
+  // 1.5. REGRA IMPRESCINDIVEL: se o contato esta na coluna "Qualificado"
+  //      (ou outra marcada com [no-bot]/[humano]/[manual]), nao responder.
+  //      Cliente esta em tratativa com humano — bot atrapalha. Esse check
+  //      vem ANTES de qualquer transcricao/LLM call pra economizar custo.
+  if (contactId) {
+    const handoff = isContactInHumanHandoffColumn(channel.tenantId, contactId);
+    if (handoff.paused) {
+      logger.info(`[ai/agent] contato ${customerPhone} esta na coluna "${handoff.columnName}" — bot pausado (tratativa humana)`);
+      return;
+    }
+  }
+
   // 2. Resolve texto da mensagem
   let userMessage = ctx.text || '';
   if (!userMessage && ctx.audioUrl) {
@@ -248,8 +289,20 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
     return;
   }
 
-  // 3. Substitui {{customer_name}} no system prompt se existir
-  const systemPrompt = config.systemPrompt
+  // 3. Monta system prompt: substitui placeholders + injeta reforco de
+  //    contexto. O prompt do user e bom mas LLMs as vezes ignoram o
+  //    historico e regridem pra "Oi sou a Safira" mesmo apos varias
+  //    rodadas. Esse anexo no fim e mais resistente a essa regressao.
+  const contextRules = `
+
+# REGRAS DE CONTEXTO (CRITICAS — NAO IGNORAR)
+- Voce ESTA no meio de uma conversa em andamento. Leia atentamente as ultimas mensagens trocadas antes de responder.
+- NUNCA se reapresente se ja fez sua apresentacao nesta conversa (basta olhar o historico acima).
+- NUNCA pergunte algo que o cliente JA respondeu nas mensagens anteriores. Use a informacao que ele ja deu.
+- Se a ultima coisa que voce disse foi uma pergunta, agora e hora de processar a resposta dele e seguir com o fluxo, NAO repetir a pergunta.
+- Continue de ONDE PAROU: olhe sua ultima resposta no historico e veja qual era o proximo passo.
+`;
+  const systemPrompt = (config.systemPrompt + contextRules)
     .replace(/\{\{customer_name\}\}/g, senderName || 'cliente')
     .replace(/\{\{customer_phone\}\}/g, customerPhone);
 
