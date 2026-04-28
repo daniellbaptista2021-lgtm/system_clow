@@ -15,8 +15,7 @@
  */
 import { logger } from '../../utils/logger.js';
 import { getCrmDb } from '../schema.js';
-import * as zapi from '../channels/zapi.js';
-import * as meta from '../channels/meta.js';
+import { sendOutbound } from '../inbox.js';
 import type { Channel2 } from '../types.js';
 
 interface ChatMessage {
@@ -161,17 +160,14 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
   }
 }
 
-/** Envia resposta de volta pelo canal (Z-API ou Meta). */
+/** Envia resposta de volta pelo canal E grava como message_out no CRM.
+ *  Sem isso, agent ficava em looping: nao via proprias respostas no
+ *  history, achava sempre que era primeira interacao, mandava saudacao
+ *  de novo. Reusa sendOutbound de inbox.ts (envia + log activity +
+ *  trigger automations). */
 async function sendReply(channel: Channel2, customerPhone: string, text: string): Promise<void> {
-  if (channel.type === 'zapi') {
-    const r = await zapi.sendMessage(channel, { to: customerPhone, text });
-    if (!r.ok) throw new Error(`zapi send failed: ${r.error?.message}`);
-  } else if (channel.type === 'meta') {
-    const r = await meta.sendMessage(channel, { to: customerPhone, text });
-    if (!r.ok) throw new Error(`meta send failed: ${r.error?.message}`);
-  } else {
-    throw new Error(`unknown channel type: ${channel.type}`);
-  }
+  const r = await sendOutbound(channel, { to: customerPhone, text });
+  if (!r.ok) throw new Error(`send failed: ${r.error}`);
 }
 
 interface InboundContext {
@@ -251,7 +247,32 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
     return;
   }
 
-  // 5. Envia via canal
+  // 5. Anti-loop: se a ultima message_out foi ha < 30s e e quase identica
+  //    a resposta nova, NAO envia (evita o bot mandar saudacao 3x seguidas
+  //    quando o user manda 3 msgs rapidas que cabem todas no debounce).
+  try {
+    const db = getCrmDb();
+    const phoneNorm = customerPhone.replace(/\D/g, '');
+    const lastOut = db.prepare(`
+      SELECT a.content, a.created_at
+      FROM crm_activities a
+      JOIN crm_contacts c ON c.id = a.contact_id
+      WHERE a.tenant_id = ?
+        AND a.type = 'message_out'
+        AND REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), ' ', ''), '-', ''), '(', '') LIKE ?
+      ORDER BY a.created_at DESC LIMIT 1
+    `).get(channel.tenantId, '%' + phoneNorm + '%') as { content?: string; created_at?: number } | undefined;
+    if (lastOut?.content && lastOut.created_at && (Date.now() - lastOut.created_at) < 30_000) {
+      // Similaridade rapida: mesmos primeiros 80 chars = bloqueia
+      const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase();
+      if (norm(lastOut.content) === norm(reply)) {
+        logger.warn(`[ai/agent] anti-loop: resposta duplicada bloqueada para ${customerPhone}`);
+        return;
+      }
+    }
+  } catch (err: any) { /* nao bloqueia o envio se anti-loop falhar */ }
+
+  // 6. Envia via canal (E grava message_out via sendOutbound)
   try {
     await sendReply(channel, customerPhone, reply);
     logger.info(`[ai/agent] ✓ resposta enviada para ${customerPhone} (${reply.length} chars)`);
