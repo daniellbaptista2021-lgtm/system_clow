@@ -72,6 +72,20 @@ function getSessionModeFromEntries(entries: any[], fallback: 'server' | 'coordin
   return fallback;
 }
 
+/** Recupera o tenantId persistido em session_start. Necessario pra rehydrate
+ *  preservar ownership quando outro worker do PM2 cluster atende a msg de uma
+ *  sessao criada noutro worker (pool em memoria nao e compartilhado). */
+function getSessionTenantIdFromEntries(entries: any[]): string | undefined {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry?.type === 'session_start' && entry.value && typeof entry.value === 'object') {
+      const tid = (entry.value as Record<string, unknown>).tenantId;
+      if (typeof tid === 'string' && tid) return tid;
+    }
+  }
+  return undefined;
+}
+
 function transcriptEntriesToApiMessages(entries: any[]): ClovMessage[] {
   return entries.reduce<ClovMessage[]>((messages, entry) => {
     if (entry?.role === 'assistant' && typeof entry.content === 'string') {
@@ -276,6 +290,7 @@ export class SessionPool {
       await saveSessionMetadataForSession(sessionId, 'session_start', {
         cwd,
         mode: options.mode || 'server',
+        tenantId,
         createdAt: Date.now(),
       });
     }
@@ -304,15 +319,16 @@ export class SessionPool {
 
   // ─── Get (with disk rehydration) ────────────────────────────────────
 
-  async get(sessionId: string): Promise<QueryEngine | null> {
+  async get(sessionId: string, opts?: { tenantIdHint?: string; isAdmin?: boolean }): Promise<QueryEngine | null> {
     const entry = this.engines.get(sessionId);
     if (entry) {
       entry.lastAccess = Date.now();
       return entry.engine;
     }
 
-    // Try rehydrate from disk
-    return this.tryRehydrate(sessionId);
+    // Try rehydrate from disk — passa tenantIdHint pra preservar ownership
+    // em cluster mode (pool em memoria nao compartilhado entre workers).
+    return this.tryRehydrate(sessionId, opts);
   }
 
   // ─── Get or Create ──────────────────────────────────────────────────
@@ -401,19 +417,28 @@ export class SessionPool {
 
   // ─── Disk Rehydration ───────────────────────────────────────────────
 
-  private async tryRehydrate(sessionId: string): Promise<QueryEngine | null> {
+  private async tryRehydrate(sessionId: string, opts?: { tenantIdHint?: string; isAdmin?: boolean }): Promise<QueryEngine | null> {
     try {
       const entries = await loadTranscriptFile(sessionId);
       if (entries.length === 0) return null;
 
       const cwd = getSessionCwdFromEntries(entries, process.cwd());
       const mode = getSessionModeFromEntries(entries, 'server');
+      // BUG 2026-04-29: rehydrate criava engine sem tenantId, fazendo tools
+      // de CRM caírem em fail-closed (ou no fallback 'default' antigo, que
+      // vazava dados entre tenants). Agora le tenantId do session_start
+      // persistido. Hint do request e fallback adicional caso o disco seja
+      // de uma sessao antiga sem tenantId persistido.
+      const persistedTenantId = getSessionTenantIdFromEntries(entries);
+      const tenantIdResolved = persistedTenantId || opts?.tenantIdHint;
       const engine = await this.create(sessionId, {
         cwd,
         workspaceRoot: cwd,
+        tenantId: tenantIdResolved,
         tenantTier: undefined,
         mode,
         persistSessionStart: false,
+        isAdmin: opts?.isAdmin,
       });
 
       const historyMessages = transcriptEntriesToApiMessages(entries);

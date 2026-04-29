@@ -207,7 +207,7 @@ export function buildRoutes(pool: SessionPool): Hono {
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
     }
 
-    let engine = await pool.get(sessionId);
+    let engine = await pool.get(sessionId, { tenantIdHint: requestTenantId, isAdmin });
     if (!engine) {
       // Auto-create session if it doesn't exist
       const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
@@ -414,7 +414,7 @@ export function buildRoutes(pool: SessionPool): Hono {
     const ownershipError = checkSessionOwnership(sessionId, reqTenantId, isAdmin);
     if (ownershipError) return c.json({ error: 'access_denied', message: ownershipError }, 403);
 
-    const engine = await pool.get(sessionId);
+    const engine = await pool.get(sessionId, { tenantIdHint: reqTenantId, isAdmin });
     if (!engine) return c.json({ error: 'session_not_found' }, 404);
 
     const messages = engine.getMessages();
@@ -461,7 +461,9 @@ export function buildRoutes(pool: SessionPool): Hono {
   // ── Session Cache Metrics ───────────────────────────────────────────
   app.get('/v1/sessions/:id/metrics', async (c) => {
     const sessionId = c.req.param('id');
-    const engine = await pool.get(sessionId);
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get('authMode') === 'admin_session';
+    const engine = await pool.get(sessionId, { tenantIdHint: reqTenantId, isAdmin });
     if (!engine) {
       return c.json({ error: 'session_not_found' }, 404);
     }
