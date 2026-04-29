@@ -24,6 +24,7 @@ import { sendOutbound } from '../../crm/inbox.js';
 import { markPaid as billingMarkPaid } from '../../crm/billing.js';
 import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tasks.js';
 import { createAppointment as calCreate } from '../../crm/calendar.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 //
@@ -43,6 +44,9 @@ function tid(ctx: ToolUseContext): string {
       `crm_tool_tenant_missing: ctx.tenantId vazio (sessionId=${ctx.sessionId ?? 'unknown'}). Tool de CRM bloqueada por seguranca — nao caiu em tenant default. Caller upstream perdeu o tenantId; investigue resolveTenantForMeta / sessionPool / authMiddleware.`,
     );
   }
+  // Audit log — toda chamada de tool de CRM marca o tenant ativo no journal
+  // pra debug de "que tenant a IA tava operando quando aconteceu X".
+  logger.info(`[crm-tool] tenant=${t.slice(0, 8)} session=${(ctx.sessionId || '?').slice(0, 8)}`);
   return t;
 }
 
