@@ -61,12 +61,19 @@ export interface BoardColumn {
   agentPromotionCriteria?: string; // texto livre exibido pro agente
 }
 
+// PR 5.2: 4 estagios → 3 estagios (modelo SDR puro). Educador substitui
+// Cotador + Closer. Cotador/Closer marcados @deprecated mas mantidos no
+// type pra compat com prompts custom existentes que ja foram salvos no DB
+// — migration 008 converte rows existentes pra 'educador'.
 export type ColumnAgentRole =
   | 'qualificador'
-  | 'cotador'
-  | 'closer'
+  | 'educador'
   | 'finalizador'
-  | 'custom';
+  | 'custom'
+  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  | 'cotador'
+  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  | 'closer';
 
 // ── Card agent state (1:1 com card) ────────────────────────────────
 // Persiste estado de funcionamento do agente por card: turnos ja
@@ -127,7 +134,9 @@ export type AgentMetricEvent =
 
 // ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
 export type ProductType =
-  | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial' | 'outro';
+  | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial'
+  | 'acidentes_pessoais' // PR 5.1: SulAmerica AP Flex
+  | 'outro';
 
 export interface TenantPlan {
   id: string;
@@ -149,11 +158,36 @@ export interface TenantPlan {
 }
 
 /** Dados que o cotador usa pra calcular o preco. Vem de
- *  state.collected_data.qualification + extras passados pela tool. */
+ *  state.collected_data.qualification + extras passados pela tool.
+ *  PR 5.1: estrutura ajustada pra SDR SulAmerica AP Flex. */
+export type Modalidade = 'individual' | 'casal' | 'familiar' | 'familiar_ampliado';
+
 export interface QualificationData {
+  /** Nome do titular (primeiro nome ou social — sem PII forte). */
+  nomeTitular?: string;
+  /** Idade do titular. Regra SulAmerica: titular precisa ter <= 74. */
+  idadeTitular?: number;
+  /** Modalidade derivada da composicao familiar. */
+  modalidade?: Modalidade;
+  /** Conjuge (se aplicavel). */
+  conjuge?: { idade?: number };
+  /** Filhos com idade <= 21 (entram no plano Familiar sem custo extra). */
+  filhosMenores21?: Array<{ idade: number }>;
+  /** Filhos com idade > 21 (cada um adiciona R$ 8 ao base). */
+  filhosMaiores21?: Array<{ idade: number }>;
+  /** Tem pais como dependentes? Forca modalidade Familiar Ampliado. */
+  pais?: boolean;
+  /** Tem sogros como dependentes? Forca modalidade Familiar Ampliado. */
+  sogros?: boolean;
+  /** Outros dependentes alem dos categorizados (cada um +R$ 10). */
+  dependentesExtras?: number;
+  /** Cliente demonstrou interesse real (nao "tô só vendo"). */
+  intencaoReal?: boolean;
+  /** Pra SulAmerica eh sempre 'acidentes_pessoais'. Pre-PR-5.1 era 'funeral'. */
+  tipoPlano?: string;
+  /** DEPRECATED — mantido pra back-compat com dados ja salvos no DB. */
   idade?: number;
   composicaoFamiliar?: string;
-  tipoPlano?: string;
   numeroDependentes?: number;
   regiao?: 'rio' | 'fora_do_rio' | 'desconhecida';
 }

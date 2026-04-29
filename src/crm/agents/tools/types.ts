@@ -10,7 +10,7 @@
  *   { type: 'function', function: { name, description, parameters: {...} } }
  *
  * Tools com roles=['*'] sao "comuns" — qualquer agente de coluna chama.
- * Tools com roles=['cotador'] sao especificas do role.
+ * Tools com roles=['educador'] sao especificas do role (PR 5.2: 3 estagios SDR).
  */
 import type { Channel2, Card, BoardColumn, CardAgentState, ColumnAgentRole } from '../../types.js';
 

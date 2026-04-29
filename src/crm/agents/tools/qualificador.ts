@@ -46,7 +46,7 @@ const salvarDadosQualificacao: ToolDef = {
 
 const promoverQualificado: ToolDef = {
   name: 'promover_qualificado',
-  description: 'Move o card pra coluna seguinte (Qualificados/Cotador). So chame quando o checklist de qualificacao estiver 100% completo (nome, idade, tipo de plano, composicao familiar se aplicavel, interesse confirmado).',
+  description: 'Move o card pra coluna do Educador (PR 5.2). So chame quando o checklist de qualificacao estiver 100% completo: nome, idade titular (<=74), composicao familiar identificada, idades de TODOS os dependentes, e cliente confirmou intencao real (nao "to so pesquisando").',
   roles: ['qualificador'],
   parameters: {
     type: 'object',
@@ -62,7 +62,7 @@ const promoverQualificado: ToolDef = {
     if (!v.ok || !v.target) {
       return { ok: false, error: v.error || 'invalid_target' };
     }
-    return executePromotion(ctx, v.target, motivo, 'cotador');
+    return executePromotion(ctx, v.target, motivo, 'educador');
   },
 };
 
