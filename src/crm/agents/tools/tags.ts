@@ -85,4 +85,36 @@ export function applyTagSystem(cardId: string, tag: string): boolean {
   }
 }
 
+/** Remove tag de um card. Idempotente — DELETE se nao existir e no-op. */
+export function removeTagSystem(cardId: string, tag: string): boolean {
+  try {
+    const db = getCrmDb();
+    const info = db.prepare(`DELETE FROM crm_card_tags WHERE card_id = ? AND tag = ?`).run(cardId, tag);
+    return info.changes > 0;
+  } catch (err: any) {
+    logger.warn(`[removeTagSystem] erro: ${err?.message}`);
+    return false;
+  }
+}
+
+/** Lista cardIds que tem uma tag especifica num tenant. JOIN com crm_cards
+ *  pra garantir tenant isolation. */
+export function listCardIdsByTag(tenantId: string, tag: string, limit = 200): string[] {
+  try {
+    const db = getCrmDb();
+    const rows = db.prepare(`
+      SELECT t.card_id AS card_id
+      FROM crm_card_tags t
+      JOIN crm_cards c ON c.id = t.card_id
+      WHERE c.tenant_id = ? AND t.tag = ?
+      ORDER BY t.applied_at DESC
+      LIMIT ?
+    `).all(tenantId, tag, limit) as Array<{ card_id: string }>;
+    return rows.map((r) => r.card_id);
+  } catch (err: any) {
+    logger.warn(`[listCardIdsByTag] erro: ${err?.message}`);
+    return [];
+  }
+}
+
 export const TAG_TOOLS: ToolDef[] = [aplicarTag];

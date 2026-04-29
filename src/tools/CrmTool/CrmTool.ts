@@ -25,6 +25,12 @@ import { markPaid as billingMarkPaid } from '../../crm/billing.js';
 import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tasks.js';
 import { createAppointment as calCreate } from '../../crm/calendar.js';
 import { logger } from '../../utils/logger.js';
+import {
+  applyTagSystem,
+  removeTagSystem,
+  listCardTags,
+  listCardIdsByTag,
+} from '../../crm/agents/tools/tags.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 //
@@ -973,6 +979,248 @@ a qualquer momento — use isso.`,
   },
 });
 
+// ════════════════════════════════════════════════════════════════════════
+// crm_list_cards — lista cards detalhados com filtros (coluna/tag/label)
+// ════════════════════════════════════════════════════════════════════════
+const ListCardsSchema = z.object({
+  boardName: z.string().optional().describe('Nome do board (default: principal)'),
+  columnName: z.string().optional().describe('Filtra por coluna (ex: "Lead novo"). Se omitido, lista de todas as colunas do board.'),
+  tag: z.string().optional().describe('Filtra cards que tem esta tag (ex: "aguardando_cotacao", "qualificado_funeral")'),
+  label: z.string().optional().describe('Filtra por label do card (ex: "urgente", "vip")'),
+  limit: z.number().optional().describe('Max resultados (default 100)'),
+});
+
+export const CrmListCardsTool = buildTool<z.infer<typeof ListCardsSchema>>({
+  name: 'crm_list_cards',
+  searchHint: 'crm cards lista list filter tag column board',
+  description: `Lista cards detalhados (id, titulo, contato, telefone, coluna, tags, valor) com filtros
+opcionais por coluna, tag ou label. USE ISSO quando o usuario pedir "cards com tag X",
+"cards do Lead novo", "cards do funil", etc. Retorna array de cards pronto pra iterar
+(mover, mandar mensagem, atualizar).`,
+  inputSchema: ListCardsSchema,
+  userFacingName: (i) => {
+    const parts = [i?.columnName, i?.tag ? `tag=${i.tag}` : null].filter(Boolean);
+    return parts.length ? `crm_list_cards(${parts.join(', ')})` : 'crm_list_cards';
+  },
+  isReadOnly: () => true,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.columnName || i.tag || 'cards',
+  renderToolUseMessage: (i) => `Listar cards${i.columnName ? ` em "${i.columnName}"` : ''}${i.tag ? ` com tag "${i.tag}"` : ''}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const limit = input.limit ?? 100;
+
+    // Resolve board
+    const boards = crm.listBoards(t);
+    const board = input.boardName
+      ? boards.find((b) => b.name.toLowerCase().includes(input.boardName!.toLowerCase()))
+      : boards[0];
+    if (!board) return { output: { cards: [] }, outputText: 'Nenhum board encontrado.' };
+    const cols = crm.listColumns(t, board.id);
+
+    // Resolve coluna alvo (opcional)
+    let cards: any[];
+    let columnFilter: string | null = null;
+    if (input.columnName) {
+      const col = cols.find((c) => c.name.toLowerCase().includes(input.columnName!.toLowerCase()));
+      if (!col) return { output: { cards: [] }, outputText: `Coluna "${input.columnName}" nao encontrada.` };
+      columnFilter = col.name;
+      cards = crm.listCardsByColumn(t, col.id);
+    } else {
+      cards = crm.listCardsByBoard(t, board.id);
+    }
+
+    // Filtra por tag (faz lookup em crm_card_tags) — intersecta com cards do board.
+    if (input.tag) {
+      const tag = input.tag.trim().toLowerCase();
+      const idsWithTag = new Set(listCardIdsByTag(t, tag, 1000));
+      cards = cards.filter((c) => idsWithTag.has(c.id));
+    }
+
+    // Filtra por label (label fica no proprio crm_cards, array json)
+    if (input.label) {
+      const lbl = input.label.toLowerCase();
+      cards = cards.filter((c) => Array.isArray(c.labels) && c.labels.some((l: string) => l.toLowerCase() === lbl));
+    }
+
+    // Paginacao + decora com info do contato e tags
+    const sliced = cards.slice(0, limit);
+    const colMap = new Map(cols.map((c) => [c.id, c.name]));
+    const decorated = sliced.map((c) => {
+      const contact = c.contactId ? crm.getContact?.(t, c.contactId) : null;
+      return {
+        id: c.id,
+        title: c.title,
+        contactId: c.contactId,
+        contactName: contact?.name || null,
+        contactPhone: contact?.phone || null,
+        columnName: colMap.get(c.columnId) || c.columnId,
+        labels: c.labels || [],
+        tags: listCardTags(c.id),
+        valueCents: c.valueCents,
+        probability: c.probability,
+      };
+    });
+
+    const filterDesc = [
+      `board="${board.name}"`,
+      columnFilter ? `coluna="${columnFilter}"` : null,
+      input.tag ? `tag="${input.tag}"` : null,
+      input.label ? `label="${input.label}"` : null,
+    ].filter(Boolean).join(', ');
+    const lines = decorated.map((c, i) =>
+      `  ${i + 1}. ${c.title}${c.contactName ? ` (${c.contactName}${c.contactPhone ? ` ${c.contactPhone}` : ''})` : ''} — ${c.columnName}${c.tags.length ? ` [${c.tags.join(',')}]` : ''}`,
+    );
+    return {
+      output: { cards: decorated, total: cards.length, returned: decorated.length, filter: filterDesc },
+      outputText: `${decorated.length}/${cards.length} cards (${filterDesc}):\n${lines.join('\n') || '(vazio)'}`,
+    };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_apply_tag — adiciona tag em um card
+// ════════════════════════════════════════════════════════════════════════
+const ApplyTagSchema = z.object({
+  cardId: z.string().describe('ID do card (use crm_list_cards pra achar)'),
+  tag: z.string().describe('Tag em snake_case (ex: "aguardando_cotacao", "vip")'),
+});
+
+export const CrmApplyTagTool = buildTool<z.infer<typeof ApplyTagSchema>>({
+  name: 'crm_apply_tag',
+  searchHint: 'crm card tag apply add label classify',
+  description: 'Aplica uma tag em um card. Idempotente (re-aplicar nao faz nada). Tags sao usadas pra classificar/segmentar leads.',
+  inputSchema: ApplyTagSchema,
+  userFacingName: (i) => i ? `crm_apply_tag(${i.tag})` : 'crm_apply_tag',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.tag,
+  renderToolUseMessage: (i) => `Aplicar tag "${i.tag}"`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const card = crm.getCard?.(t, input.cardId);
+    if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
+    const tag = input.tag.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 50);
+    const inserted = applyTagSystem(input.cardId, tag);
+    return { output: { tag, inserted }, outputText: inserted ? `✓ Tag "${tag}" aplicada.` : `(ja tinha) Tag "${tag}".` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_remove_tag — remove tag de um card
+// ════════════════════════════════════════════════════════════════════════
+const RemoveTagSchema = z.object({
+  cardId: z.string().describe('ID do card'),
+  tag: z.string().describe('Tag a remover'),
+});
+
+export const CrmRemoveTagTool = buildTool<z.infer<typeof RemoveTagSchema>>({
+  name: 'crm_remove_tag',
+  searchHint: 'crm card tag remove delete unclassify',
+  description: 'Remove uma tag de um card. Idempotente — se nao tinha, no-op.',
+  inputSchema: RemoveTagSchema,
+  userFacingName: (i) => i ? `crm_remove_tag(${i.tag})` : 'crm_remove_tag',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.tag,
+  renderToolUseMessage: (i) => `Remover tag "${i.tag}"`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const card = crm.getCard?.(t, input.cardId);
+    if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
+    const removed = removeTagSystem(input.cardId, input.tag.trim().toLowerCase());
+    return { output: { tag: input.tag, removed }, outputText: removed ? `✓ Tag "${input.tag}" removida.` : `(nao tinha) Tag "${input.tag}".` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_send_whatsapp_batch — manda WhatsApp pra varios cards/contatos com delay
+// ════════════════════════════════════════════════════════════════════════
+const SendWhatsAppBatchSchema = z.object({
+  cardIds: z.array(z.string()).describe('Lista de cardIds (use crm_list_cards pra obter)'),
+  message: z.string().describe('Texto da mensagem (mesma pra todos). Suporta WhatsApp markdown (*negrito* _italico_).'),
+  delayMinutes: z.number().optional().describe('Intervalo em minutos entre mensagens (default 0 = imediato). Ex: 5 = espera 5min entre cada envio.'),
+});
+
+export const CrmSendWhatsAppBatchTool = buildTool<z.infer<typeof SendWhatsAppBatchSchema>>({
+  name: 'crm_send_whatsapp_batch',
+  searchHint: 'crm whatsapp batch broadcast lote disparo intervalo delay',
+  description: `Manda WhatsApp pra varios contatos a partir de uma lista de cards, com intervalo
+configuravel entre cada envio. Use pra disparos em lote ("manda boa tarde pra todos os cards
+com tag X com 5min de intervalo"). Cada card tem que ter contato com telefone. Sucesso e falhas
+sao retornados por card.`,
+  inputSchema: SendWhatsAppBatchSchema,
+  userFacingName: (i) => i ? `crm_send_whatsapp_batch(${i.cardIds.length} cards, ${i.delayMinutes ?? 0}min)` : 'crm_send_whatsapp_batch',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => false,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: () => 'batch',
+  renderToolUseMessage: (i) => `Disparar ${i.cardIds.length} mensagem(ns) WhatsApp com ${i.delayMinutes ?? 0}min de intervalo`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const delayMs = Math.max(0, (input.delayMinutes ?? 0) * 60 * 1000);
+
+    // Resolve channel WhatsApp do tenant
+    const channels = crm.listChannels?.(t) || [];
+    const channel = channels.find((c: any) => (c.type === 'meta' || c.type === 'zapi') && c.status !== 'inactive');
+    if (!channel) {
+      return { output: { error: 'no_channel' }, outputText: '❌ Nenhum canal WhatsApp ativo neste tenant.', isError: true };
+    }
+
+    const results: Array<{ cardId: string; status: 'sent' | 'scheduled' | 'failed'; reason?: string; scheduledFor?: number }> = [];
+    let scheduledCount = 0;
+
+    for (let i = 0; i < input.cardIds.length; i++) {
+      const cardId = input.cardIds[i];
+      const card = crm.getCard?.(t, cardId);
+      if (!card || !card.contactId) { results.push({ cardId, status: 'failed', reason: 'card_or_contact_missing' }); continue; }
+      const contact = crm.getContact?.(t, card.contactId);
+      if (!contact?.phone) { results.push({ cardId, status: 'failed', reason: 'contact_without_phone' }); continue; }
+
+      const offsetMs = i * delayMs;
+      if (offsetMs === 0) {
+        // Envio imediato
+        try {
+          await sendOutbound(channel as any, { to: contact.phone, text: input.message });
+          results.push({ cardId, status: 'sent' });
+        } catch (err: any) {
+          results.push({ cardId, status: 'failed', reason: err?.message || 'send_failed' });
+        }
+      } else {
+        // Agendado: dispara via setTimeout (memoria do worker — nao sobrevive restart;
+        // ok pra batches curtos. Pra agendamentos longos, usar crm_create_reminder).
+        const dueAt = Date.now() + offsetMs;
+        const phoneCapture = contact.phone;
+        const channelCapture = channel as any;
+        const messageCapture = input.message;
+        setTimeout(() => {
+          sendOutbound(channelCapture, { to: phoneCapture, text: messageCapture }).catch((err) => {
+            logger.warn(`[crm_send_whatsapp_batch] envio agendado falhou cardId=${cardId}: ${err?.message}`);
+          });
+        }, offsetMs);
+        scheduledCount += 1;
+        results.push({ cardId, status: 'scheduled', scheduledFor: dueAt });
+      }
+    }
+
+    const sent = results.filter((r) => r.status === 'sent').length;
+    const failed = results.filter((r) => r.status === 'failed').length;
+    const summary = `📤 Batch: ${sent} enviados imediato + ${scheduledCount} agendados${failed ? `, ${failed} falharam` : ''} (intervalo ${input.delayMinutes ?? 0}min).`;
+    return { output: { results, sent, scheduled: scheduledCount, failed }, outputText: summary };
+  },
+});
+
 // ─── Registry: array exposto pra tools.ts ───────────────────────────────
 export const CrmTools = [
   CrmFindOrCreateContactTool,
@@ -999,4 +1247,9 @@ export const CrmTools = [
   CrmConfigureColumnAgentTool,
   CrmDisableColumnAgentTool,
   CrmUpdateCardTool,
+  // PR 7.5: tools de operacao em lote (lista por tag/coluna, tag mgmt, batch WA)
+  CrmListCardsTool,
+  CrmApplyTagTool,
+  CrmRemoveTagTool,
+  CrmSendWhatsAppBatchTool,
 ];
