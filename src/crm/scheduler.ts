@@ -26,12 +26,15 @@ import { logger } from '../utils/logger.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
+const COLUMN_TIMER_TICK_INTERVAL_MS = 60_000; // PR 7.0
 const STALE_DAYS = 7;
 const DUE_APPROACHING_HOURS = 24;
 
 let _timer: NodeJS.Timeout | null = null;
 let _inactivityTimer: NodeJS.Timeout | null = null;
+let _columnTimerTimer: NodeJS.Timeout | null = null;
 let _runningInactivityTick = false;
+let _runningColumnTimerTick = false;
 let _runningTick = false;
 
 /**
@@ -71,8 +74,13 @@ export function startScheduler(): void {
   _inactivityTimer = setInterval(() => { void inactivityTick(); }, INACTIVITY_TICK_INTERVAL_MS);
   setTimeout(() => { void inactivityTick(); }, 15_000);
 
+  // PR 7.0: column timer scheduler (entry_delay / chase / followup)
+  _columnTimerTimer = setInterval(() => { void columnTimerTick(); }, COLUMN_TIMER_TICK_INTERVAL_MS);
+  setTimeout(() => { void columnTimerTick(); }, 20_000);
+
   logger.info(
     `[CRM] Scheduler started (main tick ${TICK_INTERVAL_MS / 1000}s, inactivity tick ${INACTIVITY_TICK_INTERVAL_MS / 1000}s, ` +
+    `column-timer tick ${COLUMN_TIMER_TICK_INTERVAL_MS / 1000}s, ` +
     `worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`,
   );
 }
@@ -80,6 +88,20 @@ export function startScheduler(): void {
 export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
   if (_inactivityTimer) { clearInterval(_inactivityTimer); _inactivityTimer = null; }
+  if (_columnTimerTimer) { clearInterval(_columnTimerTimer); _columnTimerTimer = null; }
+}
+
+async function columnTimerTick(): Promise<void> {
+  if (_runningColumnTimerTick) return;
+  _runningColumnTimerTick = true;
+  try {
+    const { tickColumnTimers } = await import('./agents/columnTimerScheduler.js');
+    await tickColumnTimers();
+  } catch (err: any) {
+    logger.warn('[column-timer-tick] err:', err?.message);
+  } finally {
+    _runningColumnTimerTick = false;
+  }
 }
 
 async function inactivityTick(): Promise<void> {

@@ -395,7 +395,7 @@ describe('Column Agent Tools — integration', () => {
       educadorCtx,
     );
     expect(educadorUnmask.ok).toBe(false);
-    expect(educadorUnmask.error).toContain('unmask_only_for_coletor_dados');
+    expect(educadorUnmask.error).toContain('unmask_only_for_coletor');
 
     // Educador sem unmask → ok, vem mascarado
     const educadorMask = await registry.executeToolCall(

@@ -73,7 +73,8 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   it('1. Qualificador prompt contem mensagem de acolhimento + pergunta critica', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     expect(p).toContain('Oi! Sou a {{persona_name}}, da *PV Corretora*');
-    expect(p).toContain('Você viu nosso anúncio do *Plano Funeral SulAmérica*');
+    // PR 7.0: acolhimento natural mais aberto (era "Você viu nosso anúncio")
+    expect(p).toMatch(/Vi sua mensagem|primeiro nome/i);
   });
 
   // ─── 2. Qualificador oferece ESCOLHA (funeral vs plano completo) ───
@@ -81,24 +82,27 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   it('2. Qualificador prompt oferece escolha funeral simples vs plano completo', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     expect(p).toContain('1️⃣');
-    expect(p).toContain('proteção funeral');
+    expect(p).toMatch(/prote[çc][ãa]o\s+funeral/i);
     expect(p).toContain('2️⃣');
     expect(p).toMatch(/seguro de vida.*doen[çc]as graves|doen[çc]as graves.*cirurgia/);
-    expect(p).toContain('Qual dos dois faz mais sentido');
+    // PR 7.0: pergunta final mais natural (era "Qual dos dois faz mais sentido")
+    expect(p).toMatch(/Qual\s+(dos\s+dois|encaixa\s+melhor)/i);
   });
 
   // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
 
-  it('3. Qualificador prompt instrui NAO falar valor errado', () => {
+  it('3. Qualificador prompt instrui NAO citar valor em R$', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+fale\s+valor\s+errado/i);
+    // PR 7.0: regra mais rigida (era "NAO fale valor errado")
+    expect(p).toMatch(/NUNCA\s+cite\s+valor\s+em\s+R\$/i);
   });
 
   // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
 
   it('4. Qualificador prompt instrui NAO pedir CPF/RG/dados sensiveis', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+fale\s+CPF\/RG/i);
+    // PR 7.0: phrase mudou de "NAO fale" pra "NUNCA peça"
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+(fale|pe[çc]a)\s+CPF\/?RG/i);
   });
 
   // ─── 5. Qualificador NAO menciona "corretora oficial SulAmerica" ──
@@ -126,12 +130,14 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 7. Vendedor Funeral TEM autoridade pra cotar + falar valor ────
 
-  it('7. Vendedor Funeral prompt instrui usar gerar_cotacao_sulamerica e fechar venda', () => {
-    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
-    expect(p).toContain('gerar_cotacao_sulamerica');
-    expect(p).toMatch(/COTA|VENDEDOR|fecha/i);
-    // Vendedor Funeral nao inventa desconto
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
+  it('7. Cotador prompt instrui usar gerar_cotacao_sulamerica; Vendedor fecha venda', () => {
+    // PR 7.0: cotacao virou responsabilidade do COTADOR (nao do Vendedor).
+    // Vendedor agora fecha venda com perguntas abertas.
+    const cot = prompts.PROMPT_COTADOR;
+    expect(cot).toContain('gerar_cotacao_sulamerica');
+    const vend = prompts.PROMPT_VENDEDOR;
+    expect(vend).toMatch(/Vender|fecha|VENDEDOR/i);
+    expect(vend).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
   });
 
   // ─── 8. Vendedor Funeral NAO oferece desconto ──────────────────────
@@ -143,10 +149,11 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 9. Vendedor Funeral trata objecao "tá caro" ───────────────────
 
-  it('9. Vendedor Funeral prompt tem template pra objecao "tá caro"', () => {
-    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+  it('9. Vendedor prompt tem template pra objecao "tá caro" com ancoragem por dia', () => {
+    const p = prompts.PROMPT_VENDEDOR;
     expect(p).toMatch(/T[áa] caro/);
-    expect(p).toMatch(/menos de R\$\s*1 por dia/i);
+    // PR 7.0: divisao por dia atualizada pra R$ 1,67 (49,90/30)
+    expect(p).toMatch(/menos\s+de\s+R\$\s*1[,.]67\s+por\s+dia/i);
   });
 
   // ─── 10. Coletor de Dados menciona Daniel especificamente ──────────
@@ -163,7 +170,8 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     const p = prompts.PROMPT_COLETOR_DADOS;
     expect(p).toContain('CONSENTIMENTO LGPD');
     expect(p).toContain('Antes de pegar seus dados');
-    expect(p).toMatch(/Tudo bem\?/);
+    // PR 7.0: pergunta consultiva (era "Tudo bem?", agora "Tudo bem se eu coletar?")
+    expect(p).toMatch(/Tudo\s+bem[^?]*\?/);
   });
 
   // ─── 12. Finalizador valida CPF "137.44793737" como invalido ──────
@@ -196,18 +204,26 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   // ─── 14. Roles deprecated (cotador / closer / educador / finalizador) ──
 
   it('14. Sistema NAO expoe tools pra roles deprecated', () => {
-    // PR 6.0: cotador, closer, educador, finalizador todos deprecated
-    for (const oldRole of ['cotador', 'closer', 'educador', 'finalizador']) {
+    // PR 7.0: cotador agora eh role ATIVO. Os deprecated reais sao:
+    // closer, educador, finalizador.
+    for (const oldRole of ['closer', 'educador', 'finalizador']) {
       const tools = registry.getToolsForRole(oldRole);
       const specific = tools.filter((t: any) => !t.roles.includes('*'));
       expect(specific.length).toBe(0);
     }
-    // PR 6.0: gerar_cotacao_sulamerica VOLTOU (Vendedor Funeral usa).
-    // consultar_margem_desconto + promover_vendedor + promover_fechamento removidas.
+    // PR 7.0: novas tools de promocao + tags + followup
     const allNames = registry.listAllToolNames();
     expect(allNames).toContain('gerar_cotacao_sulamerica');
-    expect(allNames).toContain('promover_para_coletor_dados');
-    expect(allNames).toContain('promover_para_vendedor_funeral');
+    expect(allNames).toContain('promover_para_coletor_dados');     // legacy
+    expect(allNames).toContain('promover_para_vendedor_funeral');  // legacy
+    expect(allNames).toContain('promover_para_qualificado');       // PR 7.0
+    expect(allNames).toContain('promover_para_vendedor');          // PR 7.0
+    expect(allNames).toContain('promover_para_coletor');           // PR 7.0
+    expect(allNames).toContain('promover_para_lancar_venda');      // PR 7.0
+    expect(allNames).toContain('aplicar_tag');                     // PR 7.0
+    expect(allNames).toContain('mover_para_followup');             // PR 7.0
+    expect(allNames).toContain('voltou_para_vendedor');            // PR 7.0
+    expect(allNames).toContain('deletar_card_final');              // PR 7.0
     expect(allNames).not.toContain('consultar_margem_desconto');
     expect(allNames).not.toContain('promover_vendedor');
     expect(allNames).not.toContain('promover_fechamento');

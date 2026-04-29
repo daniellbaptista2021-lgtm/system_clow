@@ -59,28 +59,46 @@ export interface BoardColumn {
   agentActiveHoursStart?: string; // 'HH:MM'
   agentActiveHoursEnd?: string;   // 'HH:MM'
   agentPromotionCriteria?: string; // texto livre exibido pro agente
+  // ── PR 7.0: funil v2 timer-driven (migration 011) ─────────────────
+  /** Role do agente no novo enum v2. Mapeado no Hydrate de coluna. */
+  agentRoleType?: ColumnAgentRole;
+  /** Quantos minutos esperar apos card chegar na coluna pra disparar o
+   *  agente (entry trigger). 0 = dispara so quando cliente manda msg.
+   *  Ex: 5 = espera 5min depois que card foi promovido. */
+  agentEntryDelayMinutes?: number;
+  /** Steps de cobranca pra cliente que nao respondeu apos bot mandar msg.
+   *  JSON array de minutos. Ex: [30, 120, 360] = 30min, 2h, 6h. */
+  agentNoResponseChaseStepsJson?: string;
+  /** Steps de followup escalonados quando card esta na coluna Follow Up.
+   *  JSON array de horas. Ex: [24, 48, 72]. */
+  agentFollowupStepsHoursJson?: string;
 }
 
-// PR 6.0: bot vendedor completo. Modelo final:
-//   qualificador     — acolhe, oferece escolha (funeral simples vs plano completo)
-//   vendedor_funeral — cota + apresenta valor + fecha venda funeral SOZINHO
-//   coletor_dados    — LGPD + 17 campos + forma pagamento
-// Educador / finalizador renomeados via migration 010. Cotador / closer
-// foram convertidos pra educador na migration 008 e agora educador vira
-// vendedor_funeral. Roles antigos mantidos no type @deprecated pra compat
-// com rows existentes ate migrations rodarem.
+// PR 7.0: funil v2 timer-driven. 5 roles:
+//   qualificador  — acolhe + identifica (Lead novo)
+//   cotador       — manda cotação SulAmerica (Qualificado, timer 5min)
+//   vendedor      — fecha venda (Vendedor, timer 4min + chase 30/120/360)
+//   coletor       — coleta 17 campos LGPD (Coletar Dados, chase 30/120/360)
+//   followupper   — recupera lead morno (Follow Up, steps 24/48/72h + delete 96h)
+// Migration 011 renomeia rows existentes (vendedor_funeral → vendedor,
+// coletor_dados → coletor). Roles antigos mantidos @deprecated pra compat
+// com rows ja persistidos antes da migration rodar.
 export type ColumnAgentRole =
   | 'qualificador'
-  | 'vendedor_funeral'
-  | 'coletor_dados'
-  | 'custom'
-  /** @deprecated PR 6.0: renomeado pra 'vendedor_funeral'. Migration 010 converte. */
-  | 'educador'
-  /** @deprecated PR 6.0: renomeado pra 'coletor_dados'. Migration 010 converte. */
-  | 'finalizador'
-  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor_funeral'. */
   | 'cotador'
-  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor_funeral'. */
+  | 'vendedor'
+  | 'coletor'
+  | 'followupper'
+  | 'custom'
+  /** @deprecated PR 7.0: renomeado pra 'vendedor'. Migration 011 converte. */
+  | 'vendedor_funeral'
+  /** @deprecated PR 7.0: renomeado pra 'coletor'. Migration 011 converte. */
+  | 'coletor_dados'
+  /** @deprecated PR 6.0: renomeado pra 'vendedor_funeral' → 'vendedor' (PR 7.0). */
+  | 'educador'
+  /** @deprecated PR 6.0: renomeado pra 'coletor_dados' → 'coletor' (PR 7.0). */
+  | 'finalizador'
+  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor'. */
   | 'closer';
 
 // ── Card agent state (1:1 com card) ────────────────────────────────
@@ -341,6 +359,25 @@ export interface Card {
   // Onda 48
   unreadCount?: number;
   lastInboundAt?: number;
+  // PR 7.0: timer-driven funnel (migration 011)
+  /** Timestamp da ultima msg do bot (any role). Reseta a cada bot.send. */
+  lastBotMessageAt?: number;
+  /** Timestamp da ultima msg do cliente. Reseta chase quando cliente responde. */
+  lastClientMessageAt?: number;
+  /** Quando card move pra Follow Up, salva ID da coluna de origem pra
+   *  poder voltar pra Vendedor (sempre voltam pra Vendedor por design). */
+  followupOriginColumnId?: string;
+  /** Timestamp do ultimo column move (pra calcular tempo na coluna). */
+  columnChangedAt?: number;
+}
+
+// PR 7.0: tags estruturadas em crm_card_tags. Usadas pra evitar disparar
+// chase/followup steps duplicados, e pra dashboard de funil.
+export interface CardTag {
+  cardId: string;
+  tag: string;
+  appliedAt: number;
+  appliedBy?: string; // 'system' ou role do agente
 }
 
 export interface Activity {

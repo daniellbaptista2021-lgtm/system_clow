@@ -8,20 +8,28 @@ import { COMMON_TOOLS } from './common.js';
 import { QUALIFICADOR_TOOLS } from './qualificador.js';
 import { VENDEDOR_FUNERAL_TOOLS } from './vendedor_funeral.js';
 import { COLETOR_DADOS_TOOLS } from './coletor_dados.js';
+import { TAG_TOOLS } from './tags.js';
+import { PROMOCAO_TOOLS } from './promocao.js';
+import { FOLLOWUP_TOOLS } from './followup.js';
 import type { ToolDef, ToolContext, ToolResult, LLMToolDef, LLMToolCall } from './types.js';
 import type { ColumnAgentRole } from '../../types.js';
 
-// PR 6.0: bot vendedor completo. 3 roles:
-//   qualificador     — acolhe, oferece escolha, coleta (ou escala)
-//   vendedor_funeral — cota + fecha venda funeral SOZINHO (com tool gerar_cotacao_sulamerica)
-//   coletor_dados    — LGPD + 17 campos + forma pagamento
-// Migration 010 renomeia rows existentes (educador → vendedor_funeral,
-// finalizador → coletor_dados).
+// PR 7.0: funil v2 timer-driven. 5 roles:
+//   qualificador  — acolhe + identifica (Lead novo)
+//   cotador       — manda cotação SulAmerica (Qualificado, timer 5min)
+//   vendedor      — fecha venda (Vendedor, timer 4min + chase 30/120/360)
+//   coletor       — coleta 17 campos LGPD (Coletar Dados, chase 30/120/360)
+//   followupper   — recupera lead morno (Follow Up, steps 24/48/72h + delete 96h)
+// Roles antigos (vendedor_funeral, coletor_dados) mantidos no enum como
+// deprecated pra back-compat com rows do DB ate migration 011 rodar.
 const ALL_TOOLS: ToolDef[] = [
   ...COMMON_TOOLS,
   ...QUALIFICADOR_TOOLS,
   ...VENDEDOR_FUNERAL_TOOLS,
   ...COLETOR_DADOS_TOOLS,
+  ...TAG_TOOLS,
+  ...PROMOCAO_TOOLS,
+  ...FOLLOWUP_TOOLS,
 ];
 
 // ─── Validacao da registry no module load ────────────────────────────────

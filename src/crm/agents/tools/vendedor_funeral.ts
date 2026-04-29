@@ -28,7 +28,7 @@ import type { QualificationData, Modalidade } from '../../types.js';
 const gerarCotacaoSulamerica: ToolDef = {
   name: 'gerar_cotacao_sulamerica',
   description: 'Cota o plano funeral SulAmerica AP Flex e retorna mensagem oficial pronta pra mandar pro cliente (palavra-por-palavra do template). Le qualification do collected_data automaticamente — voce so precisa passar dados que o cliente DEU AGORA e nao estavam salvos. Salva snapshot em collected_data.last_quotation. Use userVisible direto, NAO reformule.',
-  roles: ['vendedor_funeral'],
+  roles: ['vendedor_funeral', 'vendedor', 'cotador'],
   parameters: {
     type: 'object',
     properties: {
@@ -142,7 +142,7 @@ const gerarCotacaoSulamerica: ToolDef = {
 const promoverParaColetorDados: ToolDef = {
   name: 'promover_para_coletor_dados',
   description: 'Move o card pra coluna do Coletor de Dados (Lançar venda). So chame quando o cliente sinalizou fechamento CLARO ("quero", "vamos lá", "manda os dados", "fecha aí" ou equivalente) E entendeu que recebe a proposta antes de pagar. NUNCA promova sem cliente confirmar.',
-  roles: ['vendedor_funeral'],
+  roles: ['vendedor_funeral', 'vendedor', 'cotador'],
   parameters: {
     type: 'object',
     properties: {

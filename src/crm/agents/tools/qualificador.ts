@@ -11,8 +11,8 @@ import type { ToolDef } from './types.js';
 
 const salvarDadosQualificacao: ToolDef = {
   name: 'salvar_dados_qualificacao',
-  description: 'Salva dados estruturados de qualificacao do lead (nome, idade, tipo de plano, composicao familiar, observacoes). Faz merge com o que ja existe — passe so os campos que voce confirmou agora.',
-  roles: ['qualificador'],
+  description: 'Salva dados estruturados de qualificacao do lead (nome, idade, tipo de plano, composicao familiar, forma_pagamento, observacoes). Faz merge com o que ja existe — passe so os campos que voce confirmou agora.',
+  roles: ['qualificador', 'cotador', 'vendedor', 'vendedor_funeral'],
   parameters: {
     type: 'object',
     properties: {
