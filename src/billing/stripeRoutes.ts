@@ -21,34 +21,53 @@
  */
 
 import { Hono } from 'hono';
-import { findTenantByEmail, createTenant, updateTenant } from '../tenancy/tenantStore.js';
+import { findTenantByEmail, createTenant, updateTenant, findTenantByApiKeyHash, hashApiKey } from '../tenancy/tenantStore.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { sendWelcomeEmail } from '../notifications/mailer.js';
 import { sendWelcomeWhatsApp } from '../notifications/whatsapper.js';
+import { verifyUserToken } from '../auth/authRoutes.js';
+import { verifyAdminSessionToken } from '../server/middleware/tenantAuth.js';
 import { logger } from '../utils/logger.js';
 
 const app = new Hono();
 
 /**
  * Resolve tenantId pra endpoints de billing autenticados (whatsapp-addon,
- * portal). Antes aceitava `body.tenantId || header('x-clow-tenant-id')`
- * sem validar — qualquer user logado podia adicionar/remover WA-addon ou
- * abrir Customer Portal de outro tenant. Agora:
- *   - se contexto tem tenantId (user_session ou api_key) → usa ele,
- *     ignorando body/header (impossível operar fora do próprio tenant).
- *   - se for admin (admin_session ou clow_sonnet) → aceita body.tenantId
- *     ou header pra impersonação intencional.
- *   - senão → null (caller retorna 403).
+ * portal). NOTA: `/api/billing/*` NÃO passa pelo tenantAuth middleware
+ * (alguns endpoints são públicos: /checkout, /config). Por isso validamos
+ * o token Bearer inline aqui.
+ *
+ * Antes aceitava `body.tenantId || header('x-clow-tenant-id')` sem validar
+ * — qualquer user logado podia adicionar/remover WA-addon ou abrir
+ * Customer Portal de outro tenant. Agora:
+ *   - User autenticado (user_session ou api_key clow_*) → usa o tenantId
+ *     do próprio token, ignora body/header.
+ *   - Admin (admin_session) → aceita body.tenantId ou header pra impersonação.
+ *   - Sem token válido → null (caller retorna 403).
  */
 function resolveBillingTenant(c: any, body: any): string | null {
-  const ctxTid = c.get?.('tenantId');
-  if (typeof ctxTid === 'string' && ctxTid.trim()) return ctxTid;
-  const authMode = c.get?.('authMode');
-  if (authMode === 'admin_session' || authMode === 'clow_sonnet') {
+  const auth = c.req.header('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return null;
+
+  // 1) admin session token
+  const adm = verifyAdminSessionToken(token);
+  if (adm.ok) {
     const t = body?.tenantId || c.req.header('x-clow-tenant-id');
-    if (typeof t === 'string' && t.trim()) return t;
+    return typeof t === 'string' && t.trim() ? t : null;
   }
+
+  // 2) user_session token (usr.*)
+  const userPayload = verifyUserToken(token);
+  if (userPayload) return userPayload.tid;
+
+  // 3) clow_* api key
+  if (token.startsWith('clow_')) {
+    const tenant = findTenantByApiKeyHash(hashApiKey(token));
+    if (tenant) return tenant.id;
+  }
+
   return null;
 }
 
@@ -294,6 +313,11 @@ app.post('/webhooks/stripe', async (c) => {
     return c.json({ received: true });
   } catch (err: any) {
     logger.error('[stripe webhook] processing error:', err.message);
+    // Erros de metadata incompleta: retorna 500 pra Stripe retentar (até 3d).
+    // Outros erros: 200 pra evitar loop de retry de bugs de código.
+    if (typeof err.message === 'string' && err.message.startsWith('stripe_webhook_missing_')) {
+      return c.json({ error: err.message }, 500);
+    }
     return c.json({ received: true, error: err.message });
   }
 });
@@ -304,41 +328,61 @@ async function provisionFromSession(session: any): Promise<void> {
   const email = String(md.email || session.customer_email || '').toLowerCase();
   if (!email) return;
 
+  // Validação fail-closed do metadata. Antes:
+  //   `tier: md.plan || 'starter'` cliente paga Profissional, vira Starter.
+  //   `authorized_phones: [md.phone]` se phone vazio, [undefined] = sem WA.
+  // Agora: plan é OBRIGATÓRIO; phone só obrigatório pra CRIAR tenant novo
+  // (no upgrade reusa phone do tenant existente).
+  // Se webhook chegar incompleto: throw → 500 → Stripe retenta (24h backoff).
+  const VALID_TIERS = new Set(['starter', 'profissional', 'empresarial']);
+  const plan = typeof md.plan === 'string' ? md.plan.toLowerCase() : '';
+  if (!VALID_TIERS.has(plan)) {
+    logger.error(`[stripe] webhook session=${session.id} email=${email} sem plan válido (md.plan=${md.plan}); aguardando retry`);
+    throw new Error(`stripe_webhook_missing_plan: ${session.id}`);
+  }
+
   const existing = findTenantByEmail(email);
   if (existing) {
     updateTenant(existing.id, {
-      tier: md.plan || existing.tier,
+      tier: plan,
       stripe_customer_id: session.customer,
       stripe_subscription_id: session.subscription,
       status: 'active',
     } as any);
-    logger.info(`[stripe] upgraded ${email} to ${md.plan}`);
+    logger.info(`[stripe] upgraded ${email} to ${plan}`);
     return;
+  }
+
+  // Tenant NOVO — agora phone é obrigatório
+  const phone = typeof md.phone === 'string' ? md.phone.trim() : '';
+  if (!phone) {
+    logger.error(`[stripe] webhook session=${session.id} email=${email} criando tenant novo sem phone; aguardando retry`);
+    throw new Error(`stripe_webhook_missing_phone: ${session.id}`);
   }
 
   const tempPassword = randomBytes(9).toString('base64url'); // 12 chars, legível
   const password_hash = await bcrypt.hash(tempPassword, 10);
-  const { tenant } = createTenant({ email, name: md.full_name || email, tier: (md.plan as any) || 'starter' });
+  const { tenant } = createTenant({ email, name: md.full_name || email, tier: plan as any });
   const isPilot = md.is_pilot === 'true' || md.is_pilot === true;
   updateTenant(tenant.id, {
     password_hash,
     full_name: md.full_name,
     cpf: md.cpf,
-    phone_e164: md.phone,
-    authorized_phones: [md.phone],
+    phone_e164: phone,
+    authorized_phones: [phone],
     stripe_customer_id: session.customer,
     stripe_subscription_id: session.subscription,
     status: 'active',
     temp_password_for_email: tempPassword,
     ...(isPilot ? { is_pilot: true, pilot_started_at: new Date().toISOString() } : {}),
   } as any);
-  logger.info(`[stripe] created tenant ${email} (${md.plan}${isPilot ? ' PILOT' : ''}); disparando email + whatsapp`);
+  logger.info(`[stripe] created tenant ${email} (${plan}${isPilot ? ' PILOT' : ''}); disparando email + whatsapp`);
 
   // Dispara email + WhatsApp em paralelo; nenhum é bloqueante
   const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
   Promise.allSettled([
-    sendWelcomeEmail(email, md.full_name || email, tempPassword, md.plan || 'starter'),
-    md.phone ? sendWelcomeWhatsApp(md.phone, md.full_name || email, tempPassword, md.plan || 'starter', loginUrl) : Promise.resolve({ ok: false, error: 'no_phone' }),
+    sendWelcomeEmail(email, md.full_name || email, tempPassword, plan),
+    sendWelcomeWhatsApp(phone, md.full_name || email, tempPassword, plan, loginUrl),
   ]).then(results => {
     const [emailR, waR] = results;
     logger.info('[stripe] welcome:', {
@@ -465,10 +509,11 @@ function escapeHtml(s: string): string {
 import { getTenant as _getTenantOnda53 } from '../tenancy/tenantStore.js';
 import { TIERS as _TIERS_O53, type TierName as _TierName_O53 } from '../tenancy/tiers.js';
 
-// GET /api/billing/whatsapp-addon/status?tenantId=...
+// GET /api/billing/whatsapp-addon/status — usa tenantId do contexto auth.
+// Antes aceitava query/header sem cross-check → enumeração de tenants.
 app.get('/api/billing/whatsapp-addon/status', async (c) => {
-  const tenantId = c.req.query('tenantId') || c.req.header('x-clow-tenant-id');
-  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const tenantId = resolveBillingTenant(c, {});
+  if (!tenantId) return c.json({ error: 'forbidden', message: 'Login necessário.' }, 403);
   const t = _getTenantOnda53(tenantId);
   if (!t) return c.json({ error: 'tenant_not_found' }, 404);
   const tierCfg = _TIERS_O53[t.tier as _TierName_O53];

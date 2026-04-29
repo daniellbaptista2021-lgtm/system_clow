@@ -28,6 +28,7 @@ import { audit } from '../tenancy/auditLog.js';
 import { recordClowUsage } from './middleware/clowSonnetGuard.js';
 import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
 import { detectGreeting, handleSlashCommand } from './slashCommands.js';
+import { isCoordinatorAllowedForTier } from '../coordinator/modeDetection.js';
 import { getMissionRunner } from './missions.js';
 import {
   flushSession,
@@ -134,7 +135,14 @@ export function buildRoutes(pool: SessionPool): Hono {
       requestedCwd = workspaceRoot;
     }
 
-    const sessionMode = body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server';
+    const wantsCoordinator = body.mode === 'coordinator' || body.coordinator === true;
+    if (wantsCoordinator && !isAdmin && !isCoordinatorAllowedForTier(tenantTier || 'starter')) {
+      return c.json({
+        error: 'tier_required',
+        message: 'Coordinator mode é exclusivo dos planos Profissional e Empresarial.',
+      }, 403);
+    }
+    const sessionMode = wantsCoordinator ? 'coordinator' : 'server';
 
     const options: CreateSessionOptions = {
       cwd: requestedCwd,
@@ -226,12 +234,19 @@ export function buildRoutes(pool: SessionPool): Hono {
         autoWorkspace = requestTenantId ? getTenantWorkspaceDir(requestTenantId) : process.cwd();
         autoCwd = autoWorkspace;
       }
+      const wantsCoord = body.mode === 'coordinator' || body.coordinator === true;
+      if (wantsCoord && !isAdmin && !isCoordinatorAllowedForTier(tenantTier || 'starter')) {
+        return c.json({
+          error: 'tier_required',
+          message: 'Coordinator mode é exclusivo dos planos Profissional e Empresarial.',
+        }, 403);
+      }
       engine = await pool.create(sessionId, {
         cwd: autoCwd,
         workspaceRoot: autoWorkspace,
         tenantId: requestTenantId,
         tenantTier,
-        mode: body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server',
+        mode: wantsCoord ? 'coordinator' : 'server',
         isAdmin,
       });
     }
