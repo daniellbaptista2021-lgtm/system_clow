@@ -66,8 +66,11 @@ for (const stage of STAGES) {
   console.log(`  agent_promote_to_column_id = '${stage.promoteTo}',`);
   console.log(`  agent_max_turns = 30,`);
   console.log(`  agent_inactivity_timeout_minutes = 20,`);
-  console.log(`  agent_active_hours_start = '08:00',`);
-  console.log(`  agent_active_hours_end = '21:00'`);
+  // PR 5.3: 24/7. PV (e qualquer tenant brasileiro de seguro/funeral)
+  // atende madrugada e fim de semana — bot nao pode dizer "te respondo
+  // as 08:00" pra lead que entrou as 22h.
+  console.log(`  agent_active_hours_start = '00:00',`);
+  console.log(`  agent_active_hours_end = '23:59'`);
   console.log(`WHERE id = '${stage.columnId}';`);
   console.log(``);
 }

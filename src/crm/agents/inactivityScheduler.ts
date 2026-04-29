@@ -147,9 +147,10 @@ export async function tickInactivity(): Promise<{ processed: number; skipped: nu
 }
 
 async function processOneCard(row: EligibleRow): Promise<'done'> {
-  // 1) Horario ativo? Se nao, posterga
-  if (!isWithinActiveHours(row.hours_start || '08:00', row.hours_end || '21:00', getCurrentHourMinuteBRT())) {
-    const nextStart = computeNextActiveStart(row.hours_start || '08:00', row.hours_end || '21:00');
+  // 1) Horario ativo? Se nao, posterga.
+  //    PR 5.3: default 24/7 quando coluna nao tem horario setado.
+  if (!isWithinActiveHours(row.hours_start || '00:00', row.hours_end || '23:59', getCurrentHourMinuteBRT())) {
+    const nextStart = computeNextActiveStart(row.hours_start || '00:00', row.hours_end || '23:59');
     upsertCardAgentState({
       cardId: row.card_id, columnId: row.column_id,
       currentAgentRole: 'custom', // role atual no DB nao muda — upsert preserva

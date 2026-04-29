@@ -48,8 +48,9 @@ import type { Channel2, Card, BoardColumn, ColumnAgentRole } from '../types.js';
 const DEFAULT_PERSONA_NAME = 'Safira';
 const DEFAULT_MAX_HISTORY = 20;
 const DEFAULT_MAX_TURNS = 30;
-const DEFAULT_HOURS_START = '08:00';
-const DEFAULT_HOURS_END = '21:00';
+// PR 5.3: default 24/7. Tenant que quiser limitar configura explicitamente.
+const DEFAULT_HOURS_START = '00:00';
+const DEFAULT_HOURS_END = '23:59';
 const LOCK_TTL_SECONDS = 60;
 const TENANT_TIMEZONE = 'America/Sao_Paulo'; // hardcoded — decisao 4 do PR 2
 const MAX_TOOL_ITERATIONS = 4; // PR 3: limite LLM↔tool por turno

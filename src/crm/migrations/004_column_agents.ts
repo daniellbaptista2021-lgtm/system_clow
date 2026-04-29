@@ -53,8 +53,12 @@ export function up(db: Database): void {
       ['agent_promote_to_column_id', 'TEXT'],
       ['agent_inactivity_timeout_minutes', 'INTEGER NOT NULL DEFAULT 20'],
       ['agent_max_turns', 'INTEGER NOT NULL DEFAULT 30'],
-      ['agent_active_hours_start', `TEXT NOT NULL DEFAULT '08:00'`],
-      ['agent_active_hours_end', `TEXT NOT NULL DEFAULT '21:00'`],
+      // PR 5.3 (post-bug producao): default 24/7. Tenant que quiser
+      // limitar horario configura explicitamente via UI futura.
+      // Default seguro = atender SEMPRE — leads que entram de madrugada
+      // nao podem ouvir "te respondo as 08:00".
+      ['agent_active_hours_start', `TEXT NOT NULL DEFAULT '00:00'`],
+      ['agent_active_hours_end', `TEXT NOT NULL DEFAULT '23:59'`],
       ['agent_promotion_criteria', 'TEXT'],
     ];
     for (const [col, def] of adds) {
