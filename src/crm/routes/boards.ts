@@ -509,6 +509,171 @@ export function registerBoardsRoutes(app: Hono): void {
 
     return ok(c, result);
   });
+  // ─── PR 7.1: Agent config por coluna ────────────────────────────────────
+
+  app.get('/columns/:id/agent-config', (c) => {
+    const tid = tenantOf(c);
+    const colId = c.req.param('id');
+    const db = getCrmDb();
+    const row = db.prepare(`
+      SELECT col.*, b.tenant_id AS board_tenant_id
+      FROM crm_columns col
+      JOIN crm_boards b ON b.id = col.board_id
+      WHERE col.id = ?
+    `).get(colId) as any;
+    if (!row) return notFound(c, 'column');
+    if (row.board_tenant_id !== tid) return c.json({ error: 'forbidden' }, 403);
+
+    return ok(c, {
+      column_id: row.id,
+      column_name: row.name,
+      board_id: row.board_id,
+      agent_enabled: !!row.agent_enabled,
+      agent_role_type: row.agent_role_type ?? row.agent_role ?? null,
+      agent_name: row.agent_name ?? null,
+      agent_system_prompt: row.agent_system_prompt ?? null,
+      agent_promotion_criteria: row.agent_promotion_criteria ?? null,
+      agent_promote_to_column_id: row.agent_promote_to_column_id ?? null,
+      agent_entry_delay_minutes: row.agent_entry_delay_minutes ?? 0,
+      agent_no_response_chase_steps_json: row.agent_no_response_chase_steps_json ?? null,
+      agent_followup_steps_hours_json: row.agent_followup_steps_hours_json ?? null,
+      agent_active_hours_start: row.agent_active_hours_start ?? '00:00',
+      agent_active_hours_end: row.agent_active_hours_end ?? '23:59',
+      agent_max_turns: row.agent_max_turns ?? 30,
+      agent_inactivity_timeout_minutes: row.agent_inactivity_timeout_minutes ?? 20,
+    });
+  });
+
+  app.put('/columns/:id/agent-config', async (c) => {
+    const tid = tenantOf(c);
+    const colId = c.req.param('id');
+    const userId = ((c as any).get?.('userId') || (c as any).get?.('agentId') || null) as string | null;
+    const body = await c.req.json().catch(() => ({})) as any;
+
+    const db = getCrmDb();
+    const before = db.prepare(`
+      SELECT col.*, b.tenant_id AS board_tenant_id
+      FROM crm_columns col
+      JOIN crm_boards b ON b.id = col.board_id
+      WHERE col.id = ?
+    `).get(colId) as any;
+    if (!before) return notFound(c, 'column');
+    if (before.board_tenant_id !== tid) return c.json({ error: 'forbidden' }, 403);
+
+    // Validacao
+    const VALID_ROLES = ['qualificador', 'cotador', 'vendedor', 'coletor', 'followupper', 'custom'];
+    if (body.agent_role_type !== undefined && body.agent_role_type !== null
+        && !VALID_ROLES.includes(body.agent_role_type)) {
+      return badRequest(c, 'agent_role_type invalid', { allowed: VALID_ROLES });
+    }
+    if (body.agent_enabled === true && !String(body.agent_system_prompt ?? '').trim()) {
+      return badRequest(c, 'agent_system_prompt obrigatorio quando agent_enabled=true');
+    }
+    const validateStepsJson = (s: unknown, label: string): { ok: true } | { ok: false; err: string } => {
+      if (s === null || s === undefined || s === '') return { ok: true };
+      try {
+        const arr = JSON.parse(String(s));
+        if (!Array.isArray(arr)) return { ok: false, err: `${label} deve ser array` };
+        if (!arr.every((n) => Number.isInteger(n) && n > 0)) {
+          return { ok: false, err: `${label} deve conter inteiros positivos` };
+        }
+        return { ok: true };
+      } catch {
+        return { ok: false, err: `${label} JSON invalido` };
+      }
+    };
+    const v1 = validateStepsJson(body.agent_no_response_chase_steps_json, 'chase_steps');
+    if (!v1.ok) return badRequest(c, v1.err);
+    const v2 = validateStepsJson(body.agent_followup_steps_hours_json, 'followup_steps');
+    if (!v2.ok) return badRequest(c, v2.err);
+
+    const isHHMM = (s: unknown) => typeof s === 'string' && /^\d{2}:\d{2}$/.test(s);
+    if (body.agent_active_hours_start !== undefined && !isHHMM(body.agent_active_hours_start)) {
+      return badRequest(c, 'agent_active_hours_start deve ser HH:MM');
+    }
+    if (body.agent_active_hours_end !== undefined && !isHHMM(body.agent_active_hours_end)) {
+      return badRequest(c, 'agent_active_hours_end deve ser HH:MM');
+    }
+    if (body.agent_max_turns !== undefined &&
+        (!Number.isInteger(body.agent_max_turns) || body.agent_max_turns <= 0)) {
+      return badRequest(c, 'agent_max_turns deve ser inteiro > 0');
+    }
+
+    // Update
+    const fields: Array<{ col: string; val: unknown }> = [];
+    const candidates: Record<string, string> = {
+      agent_enabled: 'agent_enabled',
+      agent_role_type: 'agent_role_type',
+      agent_name: 'agent_name',
+      agent_system_prompt: 'agent_system_prompt',
+      agent_promotion_criteria: 'agent_promotion_criteria',
+      agent_promote_to_column_id: 'agent_promote_to_column_id',
+      agent_entry_delay_minutes: 'agent_entry_delay_minutes',
+      agent_no_response_chase_steps_json: 'agent_no_response_chase_steps_json',
+      agent_followup_steps_hours_json: 'agent_followup_steps_hours_json',
+      agent_active_hours_start: 'agent_active_hours_start',
+      agent_active_hours_end: 'agent_active_hours_end',
+      agent_max_turns: 'agent_max_turns',
+      agent_inactivity_timeout_minutes: 'agent_inactivity_timeout_minutes',
+    };
+    for (const [k, dbCol] of Object.entries(candidates)) {
+      if (body[k] !== undefined) {
+        let val: any = body[k];
+        if (k === 'agent_enabled') val = val ? 1 : 0;
+        fields.push({ col: dbCol, val });
+      }
+    }
+    // Sync agent_role com agent_role_type pra compat com runner antigo
+    if (body.agent_role_type !== undefined) {
+      fields.push({ col: 'agent_role', val: body.agent_role_type });
+    }
+
+    if (fields.length > 0) {
+      const setSql = fields.map((f) => `${f.col} = ?`).join(', ');
+      const params = fields.map((f) => f.val);
+      db.prepare(`UPDATE crm_columns SET ${setSql} WHERE id = ?`).run(...params, colId);
+    }
+
+    const after = db.prepare(`SELECT * FROM crm_columns WHERE id = ?`).get(colId) as any;
+
+    // Audit log
+    try {
+      db.prepare(`
+        INSERT INTO crm_agent_config_audit (tenant_id, user_id, column_id, action, before_json, after_json, occurred_at)
+        VALUES (?, ?, ?, 'column_agent_config_changed', ?, ?, ?)
+      `).run(tid, userId, colId, JSON.stringify({
+        agent_enabled: !!before.agent_enabled,
+        agent_role_type: before.agent_role_type,
+        agent_system_prompt: before.agent_system_prompt,
+      }), JSON.stringify({
+        agent_enabled: !!after.agent_enabled,
+        agent_role_type: after.agent_role_type,
+        agent_system_prompt: after.agent_system_prompt,
+      }), Date.now());
+    } catch { /* nao bloqueia se audit falhar */ }
+
+    return ok(c, { ok: true, column: after });
+  });
+
+  app.get('/agents/default-prompts', async (c) => {
+    const _tid = tenantOf(c);
+    const dp = await import('../agents/defaultPrompts.js');
+    const out: Record<string, any> = {};
+    for (const role of ['qualificador', 'cotador', 'vendedor', 'coletor', 'followupper'] as const) {
+      out[role] = {
+        prompt: dp.DEFAULT_PROMPTS[role],
+        criteria: dp.DEFAULT_PROMOTION_CRITERIA[role],
+        suggested_promote_to_role: dp.DEFAULT_PROMOTE_TO_ROLE[role],
+        entry_delay_minutes: dp.DEFAULT_TIMERS[role].entryDelayMinutes,
+        chase_steps_json: dp.DEFAULT_TIMERS[role].chaseStepsMinutes
+          ? JSON.stringify(dp.DEFAULT_TIMERS[role].chaseStepsMinutes) : null,
+        followup_steps_hours_json: dp.DEFAULT_TIMERS[role].followupStepsHours
+          ? JSON.stringify(dp.DEFAULT_TIMERS[role].followupStepsHours) : null,
+      };
+    }
+    return ok(c, { roles: out });
+  });
+
   app.patch('/columns/:id/wip-limit', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
     const limit = body.wip_limit === null ? null : (typeof body.wip_limit === 'number' ? body.wip_limit : null);

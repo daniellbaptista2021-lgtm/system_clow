@@ -36,6 +36,7 @@ import * as m008 from './migrations/008_role_consolidation.js';
 import * as m009 from './migrations/009_default_24x7.js';
 import * as m010 from './migrations/010_role_rename_final.js';
 import * as m011 from './migrations/011_funnel_v2_timer_driven.js';
+import * as m012 from './migrations/012_agent_config_audit.js';
 
 export interface Migration {
   version: number;
@@ -44,7 +45,7 @@ export interface Migration {
   down(db: Database): void;
 }
 
-const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011];
+const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012];
 
 // ─── Validation (runs once at module load) ────────────────────────────────
 
