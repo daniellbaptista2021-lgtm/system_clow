@@ -21,22 +21,39 @@ import type { AutomationLog, AssignmentRule, AssignmentConditions, AssignmentLog
 import type { ChannelTemplate, ChannelHealth, ChannelMetrics } from '.././types.js';
 import { now, getAutoAssign, getCommitStock, getPublish, getEmit, nid, J, HEADER_ALIASES } from './_internals.js';
 import type { ImportResult, EvalContext } from './_internals.js';
+import { seedDefaultRoles, listRoles, assignRoleToAgent } from '../security.js';
 
 
 export function createAgent(tenantId: string, input: {
   name: string; email: string; phone?: string; role?: AgentRole; apiKeyHash?: string;
 }): Agent {
   const db = getCrmDb();
+  // Default 'owner' (acesso total dentro do tenant) em vez de 'agent'.
+  // Decisão SaaS: cada cliente pode adicionar sub-usuário e quer que ele
+  // faça tudo sem configurar permissões. Cliente que QUISER granular
+  // passa role explícito ('agent', 'viewer'). 'admin' é sinônimo prático
+  // de owner — só não é assignável via UI por enquanto.
   const a: Agent = {
     id: nid('crm_agent'),
     tenantId, name: input.name, email: input.email.toLowerCase(),
-    phone: input.phone, role: input.role ?? 'agent', active: true,
+    phone: input.phone, role: input.role ?? 'owner', active: true,
     apiKeyHash: input.apiKeyHash, createdAt: now(),
   };
   db.prepare(`
     INSERT INTO crm_agents (id, tenant_id, name, email, phone, role, active, api_key_hash, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(a.id, a.tenantId, a.name, a.email, a.phone ?? null, a.role, a.apiKeyHash ?? null, a.createdAt);
+
+  // Auto-atribui RBAC 'owner' (admin.full) se o role criado for owner/admin.
+  // Garante que o sub-usuário ja entra com acesso pleno via hasPermission.
+  if (a.role === 'owner' || a.role === 'admin') {
+    try {
+      seedDefaultRoles(tenantId); // idempotente
+      const ownerRole = listRoles(tenantId).find((r) => r.name === 'owner' && r.isAdmin);
+      if (ownerRole) assignRoleToAgent(tenantId, a.id, ownerRole.id);
+    } catch { /* nao bloqueia criacao se RBAC nao estiver disponivel */ }
+  }
+
   return a;
 }
 

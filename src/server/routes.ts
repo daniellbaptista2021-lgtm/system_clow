@@ -254,8 +254,10 @@ export function buildRoutes(pool: SessionPool): Hono {
     }
 
     // ─── Intercept slash commands ────────────────────────────────────
+    // Slash commands rodam isolados por session quando admin não tem tenant.
+    // Antes caia em 'default' que e tenant real → vazamento entre sessions.
     const cmdResult = await handleSlashCommand(message, {
-      tenantId: tenantId || 'default',
+      tenantId: tenantId || `__admin_${sessionId}__`,
       sessionId,
       isAdmin,
       missionRunner: getMissionRunner(),

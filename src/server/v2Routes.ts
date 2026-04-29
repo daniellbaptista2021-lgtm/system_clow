@@ -10,13 +10,20 @@
  */
 
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { getCrmDb } from '../crm/schema.js';
 import { encodeCursor, decodeCursor } from '../crm/cursor.js';
 
 const app = new Hono();
 
 function tenantOf(c: any): string {
-  return c.get?.('tenantId') || c.get?.('tenant_id') || 'default';
+  const t = c.get?.('tenantId') || c.get?.('tenant_id');
+  if (typeof t !== 'string' || !t.trim()) {
+    // Fail-closed: tenantAuth middleware deveria ter setado.
+    // Throw vira 401 via Hono onError (igual ao helper das routes /v1/crm).
+    throw new HTTPException(401, { message: 'tenant_context_missing' });
+  }
+  return t;
 }
 
 function errV2(c: any, code: string, message: string, status: number = 400, details?: any) {

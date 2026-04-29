@@ -30,6 +30,28 @@ import { logger } from '../utils/logger.js';
 
 const app = new Hono();
 
+/**
+ * Resolve tenantId pra endpoints de billing autenticados (whatsapp-addon,
+ * portal). Antes aceitava `body.tenantId || header('x-clow-tenant-id')`
+ * sem validar — qualquer user logado podia adicionar/remover WA-addon ou
+ * abrir Customer Portal de outro tenant. Agora:
+ *   - se contexto tem tenantId (user_session ou api_key) → usa ele,
+ *     ignorando body/header (impossível operar fora do próprio tenant).
+ *   - se for admin (admin_session ou clow_sonnet) → aceita body.tenantId
+ *     ou header pra impersonação intencional.
+ *   - senão → null (caller retorna 403).
+ */
+function resolveBillingTenant(c: any, body: any): string | null {
+  const ctxTid = c.get?.('tenantId');
+  if (typeof ctxTid === 'string' && ctxTid.trim()) return ctxTid;
+  const authMode = c.get?.('authMode');
+  if (authMode === 'admin_session' || authMode === 'clow_sonnet') {
+    const t = body?.tenantId || c.req.header('x-clow-tenant-id');
+    if (typeof t === 'string' && t.trim()) return t;
+  }
+  return null;
+}
+
 // Price IDs resolvidos em REQUEST time (env carrega depois do import)
 function priceIds(): Record<string, string | undefined> {
   return {
@@ -479,8 +501,8 @@ app.get('/api/billing/whatsapp-addon/status', async (c) => {
 // POST /api/billing/whatsapp-addon/add  body: { tenantId }
 app.post('/api/billing/whatsapp-addon/add', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
-  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const tenantId = resolveBillingTenant(c, body);
+  if (!tenantId) return c.json({ error: 'forbidden', message: 'Você só pode operar billing do seu próprio tenant.' }, 403);
   const t = _getTenantOnda53(tenantId);
   if (!t) return c.json({ error: 'tenant_not_found' }, 404);
   if (!t.stripe_subscription_id) return c.json({ error: 'no_subscription', message: 'Cliente sem assinatura ativa.' }, 400);
@@ -534,8 +556,8 @@ app.post('/api/billing/whatsapp-addon/add', async (c) => {
 // POST /api/billing/whatsapp-addon/remove  body: { tenantId }
 app.post('/api/billing/whatsapp-addon/remove', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
-  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const tenantId = resolveBillingTenant(c, body);
+  if (!tenantId) return c.json({ error: 'forbidden', message: 'Você só pode operar billing do seu próprio tenant.' }, 403);
   const t = _getTenantOnda53(tenantId);
   if (!t || !t.stripe_subscription_id) return c.json({ error: 'no_subscription' }, 400);
 
@@ -568,8 +590,8 @@ app.post('/api/billing/whatsapp-addon/remove', async (c) => {
 // POST /api/billing/portal — abre Customer Portal pra atualizar cartao
 app.post('/api/billing/portal', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
-  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const tenantId = resolveBillingTenant(c, body);
+  if (!tenantId) return c.json({ error: 'forbidden', message: 'Você só pode operar billing do seu próprio tenant.' }, 403);
   const t = _getTenantOnda53(tenantId);
   if (!t || !t.stripe_customer_id) return c.json({ error: 'no_customer' }, 400);
   try {
@@ -594,8 +616,8 @@ app.post('/api/billing/portal', async (c) => {
 // Apos pagamento, webhook adiciona item a subscription principal.
 app.post('/api/billing/whatsapp-addon/checkout', async (c) => {
   const body = await c.req.json().catch(() => ({})) as any;
-  const tenantId = body.tenantId || c.req.header('x-clow-tenant-id');
-  if (!tenantId) return c.json({ error: 'missing_tenant' }, 400);
+  const tenantId = resolveBillingTenant(c, body);
+  if (!tenantId) return c.json({ error: 'forbidden', message: 'Você só pode operar billing do seu próprio tenant.' }, 403);
   const t = _getTenantOnda53(tenantId);
   if (!t) return c.json({ error: 'tenant_not_found' }, 404);
 

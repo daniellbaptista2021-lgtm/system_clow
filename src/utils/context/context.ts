@@ -384,7 +384,9 @@ export async function assembleFullContext(tenantId?: string, isAdmin: boolean = 
   // Inject persistent memory from past sessions
   try {
     const { generateMemoryContext } = await import('../../memory/MemoryContextInjector.js');
-    const persistentMemory = generateMemoryContext(tenantId || 'default');
+    // Fallback explicito pra '__admin__' (mesmo padrao do sessionPool.ts).
+    // Antes caia em 'default' = tenant real, vazando memoria entre tenants.
+    const persistentMemory = generateMemoryContext(tenantId || '__admin__');
     if (persistentMemory) {
       fullPrompt += '\n\n' + persistentMemory;
     }

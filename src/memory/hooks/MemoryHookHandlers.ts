@@ -38,7 +38,7 @@ function getStore(tenantId: string = 'default'): MemoryStore {
  */
 export async function handleSessionStart(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
 
     // Record this session
@@ -72,7 +72,7 @@ export async function handleSessionStart(input: HookInput): Promise<HookOutput |
  */
 export async function handlePostToolUse(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
     const toolName = input.tool_name || 'unknown';
 
@@ -127,7 +127,7 @@ export async function handlePostToolUse(input: HookInput): Promise<HookOutput | 
  */
 export async function handleSessionEnd(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
 
     const observations = store.getSessionObservations(input.session_id);

@@ -2,6 +2,7 @@
 // Edit this file directly; scripts/split-routes.cjs is retained only as a record
 // of how the original was decomposed (it ran once against the .ts.bak snapshot).
 import { Hono } from 'hono';
+import { tenantOf } from './_helpers.js';
 import * as store from '.././store.js';
 import { encryptJson, decryptJson, maskSecret } from '.././crypto.js';
 import { sendOutbound } from '.././inbox.js';
@@ -56,11 +57,6 @@ import { logger } from '../../utils/logger.js';
  */
 
 // ─── Helpers ────────────────────────────────────────────────────────────
-function tenantOf(c: any): string {
-  const t = c.get?.('tenantId') || c.get?.('tenant_id');
-  return t || 'default';
-}
-
 function badRequest(c: any, msg: string, details?: unknown) {
   return c.json({ error: 'bad_request', message: msg, details }, 400);
 }

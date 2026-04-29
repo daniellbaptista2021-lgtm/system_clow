@@ -26,6 +26,8 @@ import {
   createTenant, findTenantByEmail, getTenant, updateTenant, listTenants,
   type Tenant,
 } from '../tenancy/tenantStore.js';
+import { createAgent, listAgents } from '../crm/store/agentsStore.js';
+import { seedDefaultRoles, listRoles, assignRoleToAgent } from '../crm/security.js';
 import { logger } from '../utils/logger.js';
 
 const app = new Hono();
@@ -83,6 +85,39 @@ export function verifyUserToken(token: string | undefined): UserSessionPayload |
   if (payload.type !== 'user_session') return null;
   if (payload.exp < Date.now()) return null;
   return payload;
+}
+
+// ─── RBAC bootstrap (idempotent) ────────────────────────────────────────
+/**
+ * Garante que o tenant tem (a) roles built-in seedadas, (b) um agent owner
+ * em crm_agents com active=1, role='owner', (c) RBAC role 'owner'
+ * (admin.full) atribuído ao agent.
+ *
+ * Idempotente: pode chamar múltiplas vezes sem efeito colateral. Roda no
+ * signup (path principal) e lazy no login (backfill pra tenants criados
+ * antes desse fix).
+ *
+ * NÃO modifica registros existentes — só adiciona o que falta. Cliente que
+ * tem RBAC granular configurado manualmente não tem nada sobrescrito.
+ */
+export function bootstrapTenantRBAC(tenantId: string, name: string, email: string, phone?: string): void {
+  // 1) Seed roles built-in (no-op se já tem)
+  seedDefaultRoles(tenantId);
+
+  // 2) Garante agent owner
+  const agents = listAgents(tenantId);
+  let owner = agents.find((a) => a.email === email.toLowerCase());
+  if (!owner) {
+    owner = createAgent(tenantId, {
+      name, email: email.toLowerCase(), phone, role: 'owner' as any,
+    });
+  }
+
+  // 3) Atribui RBAC owner (admin.full)
+  const ownerRole = listRoles(tenantId).find((r) => r.name === 'owner' && r.isAdmin);
+  if (ownerRole) {
+    assignRoleToAgent(tenantId, owner.id, ownerRole.id);
+  }
 }
 
 // ─── Validation helpers ─────────────────────────────────────────────────
@@ -153,6 +188,15 @@ app.post('/signup', async (c) => {
     authorized_phones: [normalizePhone(phone)],
   } as any);
 
+  // Bootstrap RBAC + owner agent (idempotente — ver bootstrapTenantRBAC).
+  // Falha aqui não bloqueia signup; loga e segue (cliente ainda consegue
+  // logar e usar painel — RBAC backfill roda lazy no /login se faltar).
+  try {
+    bootstrapTenantRBAC(tenant.id, full_name, email.toLowerCase(), normalizePhone(phone));
+  } catch (err) {
+    logger.warn('[auth/signup] bootstrapTenantRBAC falhou (segue mesmo assim):', (err as Error).message);
+  }
+
   const token = signUserToken({
     tid: tenant.id, uid: tenant.id, email: email.toLowerCase(), role: 'owner',
   });
@@ -185,6 +229,15 @@ app.post('/login', async (c) => {
 
   // Touch last_login_at
   updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
+
+  // Lazy backfill RBAC pra tenants criados antes do fix de signup.
+  // Idempotente — só adiciona o que falta.
+  try {
+    const t = tenant as any;
+    bootstrapTenantRBAC(tenant.id, t.full_name || tenant.name, tenant.email, t.phone_e164);
+  } catch (err) {
+    logger.warn('[auth/login] bootstrapTenantRBAC falhou (segue mesmo assim):', (err as Error).message);
+  }
 
   const token = signUserToken({
     tid: tenant.id, uid: tenant.id, email: tenant.email, role: 'owner',
