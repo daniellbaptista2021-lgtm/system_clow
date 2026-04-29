@@ -23,10 +23,16 @@
   // ─── HTTP helpers ──────────────────────────────────────────────────────
 
   async function api(path, init = {}) {
-    const headers = init.headers || {};
-    headers['Content-Type'] = 'application/json';
-    // Reusa apiKey do crm.js global se disponivel
-    if (window.CRM_API_KEY) headers['X-API-Key'] = window.CRM_API_KEY;
+    // Mesma autenticação do resto do app (crm.js usa Authorization: Bearer).
+    // Backend (tenantAuth.ts) só aceita esse header — X-API-Key é ignorado.
+    const apiKey = (window.state && window.state.apiKey)
+      || localStorage.getItem('clow_crm_key')
+      || localStorage.getItem('clow_token');
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    Object.assign(headers, init.headers || {});
+
     const res = await fetch('/v1/crm' + path, { ...init, headers });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
@@ -51,12 +57,11 @@
       .agent-config-modal { background:#1f2937; color:#e5e7eb; padding:24px; border-radius:12px; max-width:680px; width:92vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family: ui-sans-serif, system-ui, sans-serif; }
       .agent-config-modal h2 { margin:0 0 16px 0; font-size:18px; }
       .agent-config-modal label { display:block; margin-top:12px; font-size:13px; font-weight:600; color:#cbd5e1; }
-      .agent-config-modal input, .agent-config-modal select, .agent-config-modal textarea {
+      .agent-config-modal input[type="text"], .agent-config-modal input[type="number"], .agent-config-modal select, .agent-config-modal textarea {
         width:100%; box-sizing:border-box; padding:8px; border:1px solid #374151; border-radius:6px;
         background:#111827; color:#f1f5f9; margin-top:4px; font-family: ui-monospace, monospace; font-size:13px;
       }
       .agent-config-modal textarea { min-height:120px; resize:vertical; font-family: ui-monospace, monospace; font-size:12px; }
-      .agent-config-modal .switch-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
       .agent-config-modal .row { display:flex; gap:12px; }
       .agent-config-modal .row > * { flex:1; }
       .agent-config-modal .footer { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
@@ -66,10 +71,42 @@
       .agent-config-modal .btn-default { background:#3b82f6; color:white; margin-right:auto; }
       .agent-config-modal .err { color:#ef4444; font-size:12px; margin-top:6px; }
       .agent-config-modal .hint { color:#94a3b8; font-size:11px; font-weight:400; margin-left:6px; }
-      .col-agent-btn { padding:4px 10px; border-radius:14px; border:1px solid #374151; background:#1f2937;
-        color:#cbd5e1; cursor:pointer; font-size:11px; margin-left:6px; }
-      .col-agent-btn.active { background:#16a34a; color:white; border-color:#16a34a; }
-      .col-agent-btn.paused { background:#f59e0b; color:white; border-color:#f59e0b; }
+
+      /* Toggle switch (visual, sem mudar o checkbox) */
+      .agent-config-modal .switch-row { display:flex; align-items:center; gap:10px; margin-top:8px; }
+      .agent-config-modal .switch-row label { margin-top:0; }
+      .agent-config-modal .toggle { position:relative; display:inline-block; width:44px; height:24px; vertical-align:middle; flex-shrink:0; }
+      .agent-config-modal .toggle input { opacity:0; width:0; height:0; }
+      .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:#374151; border-radius:24px; transition:.2s; }
+      .agent-config-modal .toggle .slider::before { content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
+      .agent-config-modal .toggle input:checked + .slider { background:#22c55e; }
+      .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
+
+      /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
+      .col-agent-btn {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: var(--bg-3); border: 1px solid var(--border);
+        color: var(--text-dim); cursor: pointer;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 11px; font-weight: 500; line-height: 1;
+        transition: all 0.15s ease;
+      }
+      .col-agent-btn:hover {
+        background: var(--bg-4); color: var(--text-2); border-color: var(--border-2);
+      }
+      .col-agent-btn.active {
+        color: var(--purple); border-color: var(--border-2);
+        background: rgba(155, 89, 252, 0.08);
+      }
+      .col-agent-btn.active:hover { background: rgba(155, 89, 252, 0.15); }
+      .col-agent-btn.paused { color: #f59e0b; }
+
+      /* Layout consistente da .col-head com 4 elementos: title | count | agent-btn | menu-btn */
+      .col-head { gap: 8px; }
+      .col-head .col-title { margin-right: auto; }
+      .col-head .col-count,
+      .col-head .col-agent-btn,
+      .col-head .col-menu-btn { flex-shrink: 0; }
     `;
     document.head.appendChild(style);
   }
@@ -81,8 +118,8 @@
         <h2>Configurar agente: <em>${escapeHtml(cfg.column_name || '')}</em></h2>
 
         <div class="switch-row">
-          <input type="checkbox" id="agcfg-enabled" ${cfg.agent_enabled ? 'checked' : ''}/>
-          <label for="agcfg-enabled" style="display:inline; margin-top:0;">🟢 Agente ativo</label>
+          <label class="toggle"><input type="checkbox" id="agcfg-enabled" ${cfg.agent_enabled ? 'checked' : ''}/><span class="slider"></span></label>
+          <label for="agcfg-enabled">Agente ativo</label>
         </div>
 
         <label>Role do agente <span class="hint">— qual papel no funil</span></label>
@@ -282,47 +319,127 @@
   }
 
   function refreshColumnBadge(columnId, enabled) {
-    const btn = document.querySelector(`.col-agent-btn[data-col-id="${columnId}"]`);
-    if (!btn) return;
-    btn.classList.toggle('active', !!enabled);
-    btn.textContent = enabled ? '🟢 Agente ativo' : '⚙️ Agente';
+    if (_agentBadgeCache.map) _agentBadgeCache.map[columnId] = !!enabled;
+    document.querySelectorAll(`.col-agent-btn[data-col-id="${columnId}"]`).forEach((btn) => {
+      btn.classList.toggle('active', !!enabled);
+      btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
+      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
+    });
   }
 
   // ─── Auto-inject nos column headers ────────────────────────────────────
+  //
+  // Estrutura real do Kanban (crm.js linhas 260-275):
+  //   .kanban-col[data-column-id="X"]
+  //     .col-head            ← AQUI vai o botão (header da coluna)
+  //       .col-title
+  //       .col-count
+  //       .col-menu-btn (⋯)
+  //     .col-body[data-column-id="X"]    ← cards aqui (NÃO injetar)
+  //       .card[data-column-id="X"] ...  ← cards têm data-column-id também!
+  //     .col-foot                        ← rodapé "+ Adicionar card" (NÃO injetar)
+  //
+  // Bug anterior: usava `[data-column-id]` que pegava .kanban-col, .col-body
+  // e CADA card. Resultado: botão duplicado em N lugares.
+
+  function getCurrentBoardId() {
+    return document.getElementById('boardSelector')?.value || null;
+  }
+
+  const _agentBadgeCache = { boardId: null, map: {}, ts: 0 };
+
+  function applyBadgeMap(map) {
+    document.querySelectorAll('.col-agent-btn').forEach((btn) => {
+      const enabled = !!map[btn.dataset.colId];
+      btn.classList.toggle('active', enabled);
+      btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
+      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
+    });
+  }
+
+  async function refreshBadges(force) {
+    const boardId = getCurrentBoardId();
+    if (!boardId) return;
+    const now = Date.now();
+    if (!force && _agentBadgeCache.boardId === boardId && (now - _agentBadgeCache.ts) < 5000) {
+      applyBadgeMap(_agentBadgeCache.map);
+      return;
+    }
+    try {
+      const r = await api(`/boards/${boardId}/columns`);
+      const map = {};
+      for (const col of (r.columns || [])) map[col.id] = !!col.agentEnabled;
+      _agentBadgeCache.boardId = boardId;
+      _agentBadgeCache.map = map;
+      _agentBadgeCache.ts = now;
+      applyBadgeMap(map);
+    } catch { /* silencioso */ }
+  }
 
   function injectButtons() {
-    // Tenta varios seletores comuns do Kanban
-    const headers = document.querySelectorAll('[data-column-id], .kanban-column-header, .column-header');
-    headers.forEach((h) => {
-      const colId = h.getAttribute('data-column-id') || h.dataset.columnId
-        || h.closest('[data-column-id]')?.getAttribute('data-column-id');
+    // Seletor PRECISO: somente .col-head (header) DIRETO descendente de .kanban-col.
+    // Garante que NUNCA injeta em .col-foot, .col-body ou em cards.
+    const boardId = getCurrentBoardId();
+    document.querySelectorAll('.kanban-col > .col-head').forEach((head) => {
+      const col = head.parentElement;
+      const colId = col?.getAttribute('data-column-id') || col?.dataset?.columnId;
       if (!colId) return;
-      if (h.querySelector('.col-agent-btn')) return; // ja injetado
+      if (head.querySelector('.col-agent-btn')) return; // idempotente
+      const enabled = !!_agentBadgeCache.map[colId];
       const btn = document.createElement('button');
-      btn.className = 'col-agent-btn';
+      btn.className = 'col-agent-btn' + (enabled ? ' active' : '');
       btn.dataset.colId = colId;
-      btn.textContent = '⚙️ Agente';
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const boardId = h.closest('[data-board-id]')?.getAttribute('data-board-id') || null;
-        openConfigModal(colId, boardId);
-      });
-      h.appendChild(btn);
+      if (boardId) btn.dataset.boardId = boardId;
+      btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
+      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
+      // Inserir ANTES do menu (⋯) — fica [...title...] [count] [⚙️ Agente] [⋯]
+      const menu = head.querySelector('.col-menu-btn');
+      if (menu) head.insertBefore(btn, menu);
+      else head.appendChild(btn);
     });
   }
 
-  // Hook: re-injeta a cada repaint do kanban (best-effort)
-  const observer = new MutationObserver(() => injectButtons());
-  if (document.body) {
+  // Click delegation no document — sobrevive a re-renders do Kanban
+  // e funciona pra botões injetados após o load.
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.col-agent-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const colId = btn.dataset.colId;
+      const boardId = btn.dataset.boardId
+        || document.querySelector('[data-current-board-id]')?.dataset.currentBoardId
+        || getCurrentBoardId();
+      await openConfigModal(colId, boardId);
+    } catch (err) {
+      console.error('[agent-config] erro abrindo modal:', err);
+      if (window.toast) window.toast('Erro ao abrir configuração: ' + err.message, 'error');
+      else alert('Erro: ' + err.message);
+    }
+  });
+
+  // MutationObserver com debounce (evita loop infinito + thrashing)
+  let _debounceTick = null;
+  const observer = new MutationObserver(() => {
+    if (_debounceTick) return;
+    _debounceTick = requestAnimationFrame(() => {
+      _debounceTick = null;
+      injectButtons();
+      refreshBadges();
+    });
+  });
+
+  function start() {
     observer.observe(document.body, { childList: true, subtree: true });
     injectButtons();
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      observer.observe(document.body, { childList: true, subtree: true });
-      injectButtons();
-    });
+    refreshBadges();
   }
+
+  if (document.body) start();
+  else document.addEventListener('DOMContentLoaded', start);
 
   // Expose pra debug / testes
   window.openAgentConfigModal = openConfigModal;
+  window.__agentConfigDebug = { injectButtons, refreshBadges, _agentBadgeCache };
 })();
