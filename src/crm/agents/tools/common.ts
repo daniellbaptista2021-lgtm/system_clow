@@ -281,9 +281,10 @@ const lerDadosCard: ToolDef = {
 
     let sensitiveOut: Record<string, string> | Record<string, unknown>;
     if (wantsUnmask) {
-      if (ctx.role !== 'coletor_dados') {
-        // Defesa em profundidade: outros roles nunca veem PII em claro
-        return { ok: false, error: 'unmask_only_for_coletor_dados' };
+      if (ctx.role !== 'coletor_dados' && ctx.role !== 'coletor') {
+        // Defesa em profundidade: outros roles nunca veem PII em claro.
+        // PR 7.0: aceita 'coletor' (novo nome) alem de 'coletor_dados' (deprecated).
+        return { ok: false, error: 'unmask_only_for_coletor' };
       }
       // Decifra tudo (so role coletor_dados chega aqui)
       sensitiveOut = decryptAllSensitive(sensitive);
