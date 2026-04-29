@@ -44,14 +44,17 @@ const salvarDadosQualificacao: ToolDef = {
   },
 };
 
-const promoverQualificado: ToolDef = {
-  name: 'promover_qualificado',
-  description: 'Move o card pra coluna do Educador (PR 5.2). So chame quando o checklist de qualificacao estiver 100% completo: nome, idade titular (<=74), composicao familiar identificada, idades de TODOS os dependentes, e cliente confirmou intencao real (nao "to so pesquisando").',
+// PR 6.0: tool nova com nome semantico "promover_para_vendedor_funeral".
+// Mantemos alias legacy "promover_qualificado" pra prompts antigos no DB
+// que ainda nao foram regenerados — ambos funcionam identicamente.
+const promoverParaVendedorFuneral: ToolDef = {
+  name: 'promover_para_vendedor_funeral',
+  description: 'Move o card pra coluna do Vendedor Funeral. SO chame quando o cliente: (1) escolheu o plano FUNERAL (nao quis o plano completo com vida/doencas/cirurgia), (2) confirmou nome, (3) informou idade <= 74, (4) deu composicao familiar completa (cônjuge / filhos / pais / sogros / extras com idades), (5) demonstrou interesse real.',
   roles: ['qualificador'],
   parameters: {
     type: 'object',
     properties: {
-      motivo: { type: 'string', description: 'Resumo do que foi qualificado, 1 frase.' },
+      motivo: { type: 'string', description: 'Resumo da qualificacao (modalidade provavel + composicao).' },
     },
     required: ['motivo'],
   },
@@ -62,11 +65,20 @@ const promoverQualificado: ToolDef = {
     if (!v.ok || !v.target) {
       return { ok: false, error: v.error || 'invalid_target' };
     }
-    return executePromotion(ctx, v.target, motivo, 'educador');
+    return executePromotion(ctx, v.target, motivo, 'vendedor_funeral');
   },
+};
+
+// Alias legacy — prompts antigos no DB ainda chamam "promover_qualificado"
+// ate o admin regenerar via gen-activate-pv-funnel.mjs. Mesmo comportamento.
+const promoverQualificadoLegacy: ToolDef = {
+  ...promoverParaVendedorFuneral,
+  name: 'promover_qualificado',
+  description: '[ALIAS LEGACY] Mesmo que promover_para_vendedor_funeral. Mantido pra prompts antigos no DB.',
 };
 
 export const QUALIFICADOR_TOOLS: ToolDef[] = [
   salvarDadosQualificacao,
-  promoverQualificado,
+  promoverParaVendedorFuneral,
+  promoverQualificadoLegacy,
 ];

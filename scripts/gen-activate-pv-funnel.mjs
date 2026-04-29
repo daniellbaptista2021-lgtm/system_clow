@@ -12,8 +12,11 @@ import { DEFAULT_PROMPTS, DEFAULT_PROMOTION_CRITERIA } from '/opt/system-clow/di
 const TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
 
 // Mapeamento role → coluna existente do PV (Pipeline de Vendas)
-// PR 5.2: 4 estagios → 3 estagios SDR. Coluna "Negociação" fica SEM bot
-// (passada visual manual). Cotador + Closer consolidados em Educador.
+// PR 6.0: bot vendedor completo. 3 roles:
+//   qualificador     — Lead novo  → promove pra Agendado (pula Negociacao)
+//   vendedor_funeral — Agendado    → promove pra Lançar venda
+//   coletor_dados    — Lançar venda → promove pra Pendente Daniel (humano)
+// Coluna Negociação fica passada visual sem bot.
 const STAGES = [
   {
     role: 'qualificador',
@@ -22,13 +25,13 @@ const STAGES = [
     promoteTo: 'crm_col_534d6959a178', // pula Negociação, vai direto pra Agendado
   },
   {
-    role: 'educador',
+    role: 'vendedor_funeral',
     columnId: 'crm_col_534d6959a178', // Agendado
     columnName: 'Agendado',
     promoteTo: 'crm_col_7090fc2ce1a9', // Lançar venda
   },
   {
-    role: 'finalizador',
+    role: 'coletor_dados',
     columnId: 'crm_col_7090fc2ce1a9', // Lançar venda
     columnName: 'Lançar venda',
     promoteTo: 'crm_col_pendente_daniel', // Pendente Daniel (handoff humano)

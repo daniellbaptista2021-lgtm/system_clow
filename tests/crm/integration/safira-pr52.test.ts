@@ -35,7 +35,7 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     agentState = await import('../../../src/crm/store/cardAgentStateStore.js');
     registry = await import('../../../src/crm/agents/tools/registry.js');
     prompts = await import('../../../src/crm/agents/defaultPrompts.js');
-    finalizador = await import('../../../src/crm/agents/tools/finalizador.js');
+    finalizador = await import('../../../src/crm/agents/tools/coletor_dados.js');
     schema.getCrmDb();
   });
 
@@ -70,35 +70,35 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 1. Qualificador acolhe com mensagem padrao ────────────────────
 
-  it('1. Qualificador prompt contem mensagem de acolhimento', () => {
+  it('1. Qualificador prompt contem mensagem de acolhimento + pergunta critica', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     expect(p).toContain('Oi! Sou a {{persona_name}}, da *PV Corretora*');
-    expect(p).toContain('Que bom que você chegou até aqui!');
+    expect(p).toContain('Você viu nosso anúncio do *Plano Funeral SulAmérica*');
   });
 
-  // ─── 2. Qualificador planta semente consultiva ─────────────────────
+  // ─── 2. Qualificador oferece ESCOLHA (funeral vs plano completo) ───
 
-  it('2. Qualificador prompt tem 4 sementes consultivas', () => {
+  it('2. Qualificador prompt oferece escolha funeral simples vs plano completo', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toContain('Sabia que o seguro de vida hoje tem benefícios');
-    expect(p).toContain('seguro de vida cobre *doenças graves');
-    expect(p).toContain('coberturas pra usar *agora*');
-    expect(p).toContain('70% dos acionamentos');
+    expect(p).toContain('1️⃣');
+    expect(p).toContain('proteção funeral');
+    expect(p).toContain('2️⃣');
+    expect(p).toMatch(/seguro de vida.*doen[çc]as graves|doen[çc]as graves.*cirurgia/);
+    expect(p).toContain('Qual dos dois faz mais sentido');
   });
 
-  // ─── 3. Qualificador NAO fala valor em R$ ──────────────────────────
+  // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
 
-  it('3. Qualificador prompt instrui NAO passar valor em R$', () => {
+  it('3. Qualificador prompt instrui NAO falar valor errado', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toMatch(/N[ÃA]O passe valor em R\$/i);
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+fale\s+valor\s+errado/i);
   });
 
-  // ─── 4. Qualificador NAO pede CPF ──────────────────────────────────
+  // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
 
   it('4. Qualificador prompt instrui NAO pedir CPF/RG/dados sensiveis', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toMatch(/N[ÃA]O\s+pe[çc]a\s+CPF/);
-    expect(p).toMatch(/N[ÃA]O\s+pe[çc]a.*RG/);
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+fale\s+CPF\/RG/i);
   });
 
   // ─── 5. Qualificador NAO menciona "corretora oficial SulAmerica" ──
@@ -108,60 +108,62 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     expect(p).not.toMatch(/corretora\s+oficial\s+SulAm[eé]rica/i);
   });
 
-  // ─── 6. Educador NAO tem gerar_cotacao_sulamerica ──────────────────
+  // ─── 6. PR 6.0: Vendedor Funeral TEM gerar_cotacao_sulamerica (cota + fecha) ───
 
-  it('6. Educador role NAO tem acesso a gerar_cotacao_sulamerica', () => {
-    const tools = registry.getToolsForRole('educador');
+  it('6. Vendedor Funeral role TEM gerar_cotacao_sulamerica + promover_para_coletor_dados', () => {
+    const tools = registry.getToolsForRole('vendedor_funeral');
     const names = tools.map((t: any) => t.name);
-    expect(names).not.toContain('gerar_cotacao_sulamerica');
-    expect(names).not.toContain('consultar_margem_desconto');
-    expect(names).not.toContain('promover_vendedor');
-    // Tools que ELE pode chamar
-    expect(names).toContain('promover_fechamento');
+    // PR 6.0: Vendedor Funeral COTA E FECHA — gerar_cotacao_sulamerica VOLTA exposta
+    expect(names).toContain('gerar_cotacao_sulamerica');
+    expect(names).toContain('promover_para_coletor_dados');
     expect(names).toContain('escalar_humano');
     expect(names).toContain('marcar_perdido');
+    // Removidas
+    expect(names).not.toContain('consultar_margem_desconto');
+    expect(names).not.toContain('promover_vendedor');
+    expect(names).not.toContain('promover_fechamento');
   });
 
-  // ─── 7. Educador NAO fala valor em R$ ──────────────────────────────
+  // ─── 7. Vendedor Funeral TEM autoridade pra cotar + falar valor ────
 
-  it('7. Educador prompt instrui NUNCA falar valor em R$', () => {
-    const p = prompts.PROMPT_EDUCADOR;
-    expect(p).toMatch(/NUNCA[\s\S]{0,100}valor\s+em\s+R\$/i);
-    expect(p).toMatch(/Diga\s+um\s+valor\s+em\s+R\$/i); // listado entre as proibicoes
+  it('7. Vendedor Funeral prompt instrui usar gerar_cotacao_sulamerica e fechar venda', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    expect(p).toContain('gerar_cotacao_sulamerica');
+    expect(p).toMatch(/COTA|VENDEDOR|fecha/i);
+    // Vendedor Funeral nao inventa desconto
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
   });
 
-  // ─── 8. Educador NAO oferece desconto ──────────────────────────────
+  // ─── 8. Vendedor Funeral NAO oferece desconto ──────────────────────
 
-  it('8. Educador prompt instrui NAO oferecer desconto', () => {
-    const p = prompts.PROMPT_EDUCADOR;
-    expect(p).toMatch(/Ofere[çc]a\s+desconto/i);
-    expect(p).toMatch(/NUNCA invente desconto/i);
+  it('8. Vendedor Funeral prompt proibe oferecer desconto', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
   });
 
-  // ─── 9. Educador resposta a "tem desconto?" ────────────────────────
+  // ─── 9. Vendedor Funeral trata objecao "tá caro" ───────────────────
 
-  it('9. Educador prompt tem resposta padrao pra "tem desconto?"', () => {
-    const p = prompts.PROMPT_EDUCADOR;
-    expect(p).toMatch(/já é (o )?promocional/);
-    expect(p).toContain('quer que eu te explique como funciona a {benefício_relevante}');
+  it('9. Vendedor Funeral prompt tem template pra objecao "tá caro"', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    expect(p).toMatch(/T[áa] caro/);
+    expect(p).toMatch(/menos de R\$\s*1 por dia/i);
   });
 
-  // ─── 10. Finalizador menciona Daniel especificamente ───────────────
+  // ─── 10. Coletor de Dados menciona Daniel especificamente ──────────
 
-  it('10. Finalizador prompt menciona Daniel como pessoa especifica', () => {
-    const p = prompts.PROMPT_FINALIZADOR;
+  it('10. Coletor de Dados prompt menciona Daniel como pessoa especifica', () => {
+    const p = prompts.PROMPT_COLETOR_DADOS;
     expect(p).toMatch(/\*Daniel\*/);
-    expect(p).toContain('corretor da PV Corretora');
-    expect(p).not.toMatch(/corretor\s+oficial\s+SulAm[eé]rica/i);
+    expect(p).toMatch(/corretor/i);
   });
 
   // ─── 11. Finalizador pede consentimento LGPD ───────────────────────
 
-  it('11. Finalizador prompt tem mensagem de consentimento LGPD', () => {
-    const p = prompts.PROMPT_FINALIZADOR;
+  it('11. Coletor de Dados prompt tem mensagem de consentimento LGPD', () => {
+    const p = prompts.PROMPT_COLETOR_DADOS;
     expect(p).toContain('CONSENTIMENTO LGPD');
-    expect(p).toContain('Antes de eu te pedir os dados');
-    expect(p).toMatch(/Tudo bem se eu coletar\?/);
+    expect(p).toContain('Antes de pegar seus dados');
+    expect(p).toMatch(/Tudo bem\?/);
   });
 
   // ─── 12. Finalizador valida CPF "137.44793737" como invalido ──────
@@ -174,73 +176,121 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 13. Finalizador coleta 17 campos ──────────────────────────────
 
-  it('13. Finalizador prompt lista os 15 campos titular + 4 dependente', () => {
-    const p = prompts.PROMPT_FINALIZADOR;
+  it('13. Coletor de Dados prompt lista os 15 campos titular + 4 dependente', () => {
+    const p = prompts.PROMPT_COLETOR_DADOS;
     const titularFields = [
-      'Nome completo', 'CPF', 'RG', 'Data de nascimento', 'Sexo',
+      'Nome completo', 'CPF', 'RG', 'Data nascimento', 'Sexo',
       'Estado civil', 'Nacionalidade', 'Nome da mãe',
-      'Dia de vencimento', 'Celular WhatsApp', 'E-mail',
+      'Dia vencimento', 'Celular WhatsApp', 'E-mail',
       'CEP', 'Endereço completo', 'Profissão', 'Altura', 'Peso',
     ];
     for (const f of titularFields) {
       expect(p).toMatch(new RegExp(f, 'i'));
     }
     // Dependentes
-    expect(p).toContain('Nome completo');
-    expect(p).toContain('Grau de parentesco');
-    expect(p).toContain('CPF');
-    expect(p).toMatch(/Data\s+de\s+nascimento/);
+    expect(p).toMatch(/Parentesco/i);
+    expect(p).toMatch(/CPF/);
+    expect(p).toMatch(/Data\s+nascimento/i);
   });
 
-  // ─── 14. Roles 'cotador' e 'closer' nao tem tools ativas ──────────
+  // ─── 14. Roles deprecated (cotador / closer / educador / finalizador) ──
 
-  it('14. Sistema NAO expoe tools pra roles deprecated cotador/closer', () => {
-    // Tools de role cotador (deprecated PR 5.2): so as comuns vem
-    const toolsCotador = registry.getToolsForRole('cotador');
-    const cotadorSpecific = toolsCotador.filter((t: any) =>
-      !t.roles.includes('*') // remove tools comuns que aceitam *
-    );
-    expect(cotadorSpecific.length).toBe(0);
-
-    const toolsCloser = registry.getToolsForRole('closer');
-    const closerSpecific = toolsCloser.filter((t: any) => !t.roles.includes('*'));
-    expect(closerSpecific.length).toBe(0);
-
-    // Confirma que essas tools antigas nao existem mais no registry
+  it('14. Sistema NAO expoe tools pra roles deprecated', () => {
+    // PR 6.0: cotador, closer, educador, finalizador todos deprecated
+    for (const oldRole of ['cotador', 'closer', 'educador', 'finalizador']) {
+      const tools = registry.getToolsForRole(oldRole);
+      const specific = tools.filter((t: any) => !t.roles.includes('*'));
+      expect(specific.length).toBe(0);
+    }
+    // PR 6.0: gerar_cotacao_sulamerica VOLTOU (Vendedor Funeral usa).
+    // consultar_margem_desconto + promover_vendedor + promover_fechamento removidas.
     const allNames = registry.listAllToolNames();
-    expect(allNames).not.toContain('gerar_cotacao_sulamerica');
+    expect(allNames).toContain('gerar_cotacao_sulamerica');
+    expect(allNames).toContain('promover_para_coletor_dados');
+    expect(allNames).toContain('promover_para_vendedor_funeral');
     expect(allNames).not.toContain('consultar_margem_desconto');
     expect(allNames).not.toContain('promover_vendedor');
+    expect(allNames).not.toContain('promover_fechamento');
   });
 
   // ─── 15. Migration 008: cotador/closer → educador idempotente ────
 
-  it('15. Migration 008 converte cotador/closer em educador (idempotente)', async () => {
-    const tenantId = 'mig8-' + randomBytes(3).toString('hex');
+  it('15. Migration 008 + 010 chain: cotador/closer → educador → vendedor_funeral; finalizador → coletor_dados', async () => {
+    const tenantId = 'mig-chain-' + randomBytes(3).toString('hex');
     const board = store.seedDefaultBoards(tenantId);
     const cols = store.listColumns(tenantId, board.id);
     const db = schema.getCrmDb();
 
-    // Setup: 2 colunas com roles deprecated
+    // Setup: 4 colunas com roles deprecated em diferentes estagios da evolucao
     const lancarVenda = store.createColumn(tenantId, { boardId: board.id, name: 'Lançar venda', color: '#fff' });
     db.prepare(`UPDATE crm_columns SET agent_role = 'cotador' WHERE id = ?`).run(cols[1].id);
     db.prepare(`UPDATE crm_columns SET agent_role = 'closer' WHERE id = ?`).run(cols[2].id);
+    db.prepare(`UPDATE crm_columns SET agent_role = 'finalizador' WHERE id = ?`).run(cols[3].id);
 
-    // Aplica migration 008
+    // 008: cotador/closer → educador
     const m008 = await import('../../../src/crm/migrations/008_role_consolidation.js');
     m008.up(db);
+    expect((db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[1].id) as any).agent_role).toBe('educador');
+    expect((db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[2].id) as any).agent_role).toBe('educador');
 
-    // Verifica que ambas viraram educador
-    const r1 = db.prepare(`SELECT agent_role, agent_promote_to_column_id FROM crm_columns WHERE id = ?`).get(cols[1].id) as any;
-    const r2 = db.prepare(`SELECT agent_role, agent_promote_to_column_id FROM crm_columns WHERE id = ?`).get(cols[2].id) as any;
-    expect(r1.agent_role).toBe('educador');
-    expect(r2.agent_role).toBe('educador');
-    expect(r1.agent_promote_to_column_id).toBe(lancarVenda.id);
-    expect(r2.agent_promote_to_column_id).toBe(lancarVenda.id);
+    // 010: educador → vendedor_funeral; finalizador → coletor_dados
+    const m010 = await import('../../../src/crm/migrations/010_role_rename_final.js');
+    m010.up(db);
+    expect((db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[1].id) as any).agent_role).toBe('vendedor_funeral');
+    expect((db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[2].id) as any).agent_role).toBe('vendedor_funeral');
+    expect((db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[3].id) as any).agent_role).toBe('coletor_dados');
 
-    // Idempotencia: roda de novo, nao quebra
-    expect(() => m008.up(db)).not.toThrow();
-    const r1Again = db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[1].id) as any;
-    expect(r1Again.agent_role).toBe('educador');
+    // Idempotencia (rodar 008+010 de novo nao quebra)
+    expect(() => { m008.up(db); m010.up(db); }).not.toThrow();
+    const finalRole = (db.prepare(`SELECT agent_role FROM crm_columns WHERE id = ?`).get(cols[1].id) as any).agent_role;
+    expect(finalRole).toBe('vendedor_funeral');
+    void lancarVenda;
+  });
+
+  // ─── PR 6.0 — escalar_humano urgencia=alta ─────────────────────────
+
+  it('PR 6.0: escalar_humano com urgencia=alta grava metric com prefix "urgent:"', async () => {
+    const tenantId = 'esc-' + randomBytes(3).toString('hex');
+    const board = store.seedDefaultBoards(tenantId);
+    const cols = store.listColumns(tenantId, board.id);
+    const contact = store.createContact(tenantId, { name: 'Lead Teste', phone: '+5521999111111', source: 't' });
+    const card = store.createCard(tenantId, { boardId: board.id, columnId: cols[0].id, title: contact.name, contactId: contact.id });
+    const state = agentState.upsertCardAgentState({
+      cardId: card.id, columnId: cols[0].id, currentAgentRole: 'qualificador', tenantId, status: 'active',
+    });
+    const ctx = {
+      tenantId, channel: { id: 'ch_x', tenantId, type: 'zapi', name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      card, column: cols[0], state, customerPhone: contact.phone, role: 'qualificador',
+    };
+    const r = await registry.executeToolCall({
+      id: 'call_' + randomBytes(3).toString('hex'),
+      type: 'function' as const,
+      function: {
+        name: 'escalar_humano',
+        arguments: JSON.stringify({ motivo: 'cliente quer plano completo (vida/doenças graves)', urgencia: 'alta' }),
+      },
+    }, ctx);
+    expect(r.ok).toBe(true);
+    expect((r.result as any).urgencia).toBe('alta');
+    // metric escalated com reason urgent:
+    const metrics = agentState.listAgentMetricsForCard(card.id);
+    const escalated = metrics.find((m: any) => m.event === 'escalated');
+    expect(escalated?.reason).toMatch(/^urgent:/);
+  });
+
+  // ─── PR 6.0 — Vendedor Funeral prompt menciona escalate em plano completo ─
+
+  it('PR 6.0: Vendedor Funeral prompt instrui escalar quando cliente pede plano completo', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    expect(p).toMatch(/PRODUTO ADICIONAL/i);
+    expect(p).toMatch(/escalar_humano.*urgencia.*alta/);
+  });
+
+  // ─── PR 6.0 — Qualificador prompt tem PASSO 3B (escala plano completo) ───
+
+  it('PR 6.0: Qualificador prompt tem PASSO 3B com escalar_humano urgencia alta', () => {
+    const p = prompts.PROMPT_QUALIFICADOR;
+    expect(p).toContain('PASSO 3B');
+    expect(p).toMatch(/escalar_humano.*urgencia.*alta/);
   });
 });

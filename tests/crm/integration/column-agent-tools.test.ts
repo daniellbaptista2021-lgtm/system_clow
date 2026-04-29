@@ -5,7 +5,7 @@
  *  1. Qualificador chama salvar_dados_qualificacao + promover_qualificado
  *     → card move pra coluna correta, collected_data persiste, role muda
  *  2. Cotador chama gerar_cotacao (mock) + promover_vendedor com tag 'frio'
- *  3. Closer chama promover_fechamento sem destino configurado → erro
+ *  3. Closer chama promover_para_coletor_dados sem destino configurado → erro
  *  4. Finalizador chama validar_cpf invalido (digito errado) → false
  *  5. Finalizador chama promover_pendente_daniel → outbound webhook
  *     'card.ready_for_human' eh disparado
@@ -66,8 +66,8 @@ describe('Column Agent Tools — integration', () => {
     // Coluna intermediaria entre Lead novo e Educador fica sem agente.
     const promotePairs = [
       [cols[0].id, cols[2].id, 'qualificador'],         // Lead novo → Agendado (educador)
-      [cols[2].id, cols[3].id, 'educador'],             // Agendado → Lançar venda
-      [cols[3].id, null, 'finalizador'],                // Lançar venda (sem destino default)
+      [cols[2].id, cols[3].id, 'vendedor_funeral'],             // Agendado → Lançar venda
+      [cols[3].id, null, 'coletor_dados'],                // Lançar venda (sem destino default)
     ] as const;
     for (const [sourceId, destId, role] of promotePairs) {
       db.prepare(`
@@ -150,10 +150,10 @@ describe('Column Agent Tools — integration', () => {
     // State atualizado: role=educador, columnId=cols[2].id, turnsCount=0
     const stateAfter = agentState.getCardAgentState(card.id);
     expect(stateAfter.columnId).toBe(cols[2].id);
-    expect(stateAfter.currentAgentRole).toBe('educador');
+    expect(stateAfter.currentAgentRole).toBe('vendedor_funeral');
     expect(stateAfter.turnsCount).toBe(0);
     expect(stateAfter.promotionLog?.length).toBe(1);
-    expect(stateAfter.promotionLog?.[0].toRole).toBe('educador');
+    expect(stateAfter.promotionLog?.[0].toRole).toBe('vendedor_funeral');
 
     // Metric promoted gravado
     const metrics = agentState.listAgentMetricsForCard(card.id);
@@ -162,35 +162,36 @@ describe('Column Agent Tools — integration', () => {
 
   // ── 2) educador promove pro finalizador (PR 5.2) ────────────────────
 
-  it('2. educador chama promover_fechamento → card move pro finalizador', async () => {
+  it('2. educador chama promover_para_coletor_dados → card move pro finalizador', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[2].id, '+5511990000002');
-    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'educador');
+    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'vendedor_funeral');
 
     const promo = await registry.executeToolCall(
-      callTool('promover_fechamento', { motivo: 'cliente disse manda os dados' }),
+      callTool('promover_para_coletor_dados', { motivo: 'cliente disse manda os dados' }),
       ctx,
     );
     expect(promo.ok).toBe(true);
     expect((promo.result as any).moved_to.id).toBe(cols[3].id);
 
     const stateAfter = agentState.getCardAgentState(card.id);
-    expect(stateAfter.currentAgentRole).toBe('finalizador');
+    expect(stateAfter.currentAgentRole).toBe('coletor_dados');
     expect(stateAfter.columnId).toBe(cols[3].id);
 
     const metrics = agentState.listAgentMetricsForCard(card.id);
     expect(metrics.some((m: any) => m.event === 'promoted')).toBe(true);
   });
 
-  // PR 5.2: gerar_cotacao_sulamerica + consultar_margem_desconto + promover_vendedor
-  // foram removidas. Educador NAO tem essas tools.
-  it('2b. tools removidas no PR 5.2 nao existem mais (educador NAO cota)', async () => {
+  // PR 6.0: gerar_cotacao_sulamerica VOLTOU (Vendedor Funeral usa pra cotar +
+  // mandar mensagem oficial). consultar_margem_desconto + promover_vendedor +
+  // promover_fechamento (PR 5.2) foram removidas.
+  it('2b. tools antigas removidas no PR 6.0 nao existem mais', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[2].id, '+5511990000002b');
-    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'educador');
-    for (const removedTool of ['gerar_cotacao_sulamerica', 'consultar_margem_desconto', 'promover_vendedor']) {
+    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'vendedor_funeral');
+    for (const removedTool of ['consultar_margem_desconto', 'promover_vendedor', 'promover_fechamento']) {
       const r = await registry.executeToolCall(callTool(removedTool, {}), ctx);
       expect(r.ok).toBe(false);
       expect(r.error).toContain('tool_unknown');
@@ -228,7 +229,7 @@ describe('Column Agent Tools — integration', () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[3].id, '+5511990000004');
-    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[3], 'finalizador');
+    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[3], 'coletor_dados');
 
     const bad = await registry.executeToolCall(
       callTool('validar_cpf', { cpf: '12345678900' }), // digitos invalidos
@@ -267,7 +268,7 @@ describe('Column Agent Tools — integration', () => {
 
     const { card } = setupCard(tenantId, board, cols[3].id, '+5511990000005');
     const refreshedCol = store.listColumns(tenantId, board.id).find((c: any) => c.id === cols[3].id);
-    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, refreshedCol, 'finalizador');
+    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, refreshedCol, 'coletor_dados');
 
     const r = await registry.executeToolCall(
       callTool('promover_pendente_daniel', { motivo: 'dados ok' }),
@@ -286,14 +287,14 @@ describe('Column Agent Tools — integration', () => {
 
   // ── 6) permissao: qualificador tentando gerar_cotacao ────────────────
 
-  it('6. qualificador chamando promover_fechamento (educador-only) → permission denied', async () => {
+  it('6. qualificador chamando promover_para_coletor_dados (educador-only) → permission denied', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[0].id, '+5511990000006');
     const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[0], 'qualificador');
 
     const r = await registry.executeToolCall(
-      callTool('promover_fechamento', { motivo: 'tentativa indevida' }),
+      callTool('promover_para_coletor_dados', { motivo: 'tentativa indevida' }),
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -339,7 +340,7 @@ describe('Column Agent Tools — integration', () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[3].id, '+5511990000008');
-    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[3], 'finalizador');
+    const ctx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[3], 'coletor_dados');
 
     const cpfClaro = '11144477735';
     const r = await registry.executeToolCall(
@@ -381,20 +382,20 @@ describe('Column Agent Tools — integration', () => {
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[2].id, '+5511990000009');
     // Forca cripto via finalizador primeiro
-    const finalCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'finalizador');
+    const finalCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'coletor_dados');
     await registry.executeToolCall(
       callTool('salvar_dados_proposta', { cpf: '11144477735' }),
       finalCtx,
     );
 
     // PR 5.2: Educador (substitui closer) com unmask=true → DEVE FALHAR
-    const educadorCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'educador');
+    const educadorCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'vendedor_funeral');
     const educadorUnmask = await registry.executeToolCall(
       callTool('ler_dados_card', { unmask: true }),
       educadorCtx,
     );
     expect(educadorUnmask.ok).toBe(false);
-    expect(educadorUnmask.error).toContain('unmask_only_for_finalizador');
+    expect(educadorUnmask.error).toContain('unmask_only_for_coletor_dados');
 
     // Educador sem unmask → ok, vem mascarado
     const educadorMask = await registry.executeToolCall(
