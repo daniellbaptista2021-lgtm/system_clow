@@ -6,21 +6,22 @@ import { logger } from '../../../utils/logger.js';
 import { recordAgentMetric } from '../../store/cardAgentStateStore.js';
 import { COMMON_TOOLS } from './common.js';
 import { QUALIFICADOR_TOOLS } from './qualificador.js';
-import { EDUCADOR_TOOLS } from './educador.js';
-import { FINALIZADOR_TOOLS } from './finalizador.js';
+import { VENDEDOR_FUNERAL_TOOLS } from './vendedor_funeral.js';
+import { COLETOR_DADOS_TOOLS } from './coletor_dados.js';
 import type { ToolDef, ToolContext, ToolResult, LLMToolDef, LLMToolCall } from './types.js';
 import type { ColumnAgentRole } from '../../types.js';
 
-// PR 5.2: 4 estagios → 3 estagios. Educador substitui Cotador + Closer.
-// Tools antigas (gerar_cotacao_sulamerica, consultar_margem_desconto,
-// promover_vendedor) foram removidas — Educador nao cota nem consulta
-// desconto. gerar_cotacao_sulamerica continua como helper interno
-// (chamado por promover_pendente_daniel pra snapshot do Daniel humano).
+// PR 6.0: bot vendedor completo. 3 roles:
+//   qualificador     — acolhe, oferece escolha, coleta (ou escala)
+//   vendedor_funeral — cota + fecha venda funeral SOZINHO (com tool gerar_cotacao_sulamerica)
+//   coletor_dados    — LGPD + 17 campos + forma pagamento
+// Migration 010 renomeia rows existentes (educador → vendedor_funeral,
+// finalizador → coletor_dados).
 const ALL_TOOLS: ToolDef[] = [
   ...COMMON_TOOLS,
   ...QUALIFICADOR_TOOLS,
-  ...EDUCADOR_TOOLS,
-  ...FINALIZADOR_TOOLS,
+  ...VENDEDOR_FUNERAL_TOOLS,
+  ...COLETOR_DADOS_TOOLS,
 ];
 
 // ─── Validacao da registry no module load ────────────────────────────────

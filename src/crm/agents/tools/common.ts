@@ -25,43 +25,93 @@ const J = {
 
 const escalarHumano: ToolDef = {
   name: 'escalar_humano',
-  description: 'Pausa o atendimento automático e notifica o time humano. Use quando o cliente pediu humano explicitamente, xingou, demonstrou frustração intensa, ou você ficou sem saber como prosseguir.',
+  description: 'Pausa o atendimento automático e notifica o time humano. Use quando o cliente pediu humano explicitamente, xingou, demonstrou frustração intensa, ou você ficou sem saber como prosseguir. Se cliente sinalizou interesse em PLANO COMPLETO (vida/doenças graves/cirurgia/DIT), passe urgencia="alta" — manda alerta WhatsApp pro corretor pessoal AGORA.',
   roles: ['*'],
   parameters: {
     type: 'object',
     properties: {
       motivo: { type: 'string', description: 'Razão objetiva da escalação (1 frase).' },
+      urgencia: {
+        type: 'string',
+        description: '"alta" pra lead quente (interesse plano completo). "normal" pra demais casos.',
+        enum: ['alta', 'normal'],
+      },
     },
     required: ['motivo'],
   },
   async execute(args, ctx) {
     const motivo = String(args.motivo || '').trim() || 'sem_motivo';
+    const urgencia = (args.urgencia === 'alta' ? 'alta' : 'normal') as 'alta' | 'normal';
+
     setCardAgentStatus(ctx.card.id, 'escalated');
     recordAgentMetric({
       tenantId: ctx.tenantId, columnId: ctx.column.id, cardId: ctx.card.id,
-      event: 'escalated', reason: motivo,
+      event: 'escalated',
+      reason: urgencia === 'alta' ? `urgent: ${motivo}` : motivo,
       turnsInColumn: ctx.state.turnsCount,
     });
-    // Outbound webhook pro tenant (Telegram/WhatsApp/email do Daniel etc)
+
+    // Tenta achar nome do contato pra incluir no alerta
+    let contactName: string | undefined;
+    try {
+      const contact = ctx.card.contactId ? store.getContact?.(ctx.tenantId, ctx.card.contactId) : null;
+      contactName = contact?.name;
+    } catch { /* nao bloqueia */ }
+
+    // Outbound webhook pro tenant (Telegram / WhatsApp / email do Daniel etc)
     try {
       await outbound.emit(ctx.tenantId, 'agent.escalated', {
         cardId: ctx.card.id,
         cardTitle: ctx.card.title,
+        contactName,
         contactPhone: ctx.customerPhone,
         columnId: ctx.column.id,
         columnName: ctx.column.name,
         role: ctx.role,
+        urgencia,
         reason: motivo,
         turnsInColumn: ctx.state.turnsCount,
       });
     } catch (err: any) {
       logger.warn('[tool.escalar_humano] outbound emit falhou:', err?.message);
     }
-    logger.info(`[tool.escalar_humano] card=${ctx.card.id} reason="${motivo}"`);
-    return { ok: true, result: 'escalated', userVisible:
-      'Vou te transferir pra um especialista humano. Já já alguém da equipe entra em contato! 🙏' };
+
+    // PR 6.0: alerta WhatsApp pessoal do Daniel se urgencia=alta + URGENT_ALERT_PHONE setado
+    if (urgencia === 'alta' && process.env.URGENT_ALERT_PHONE) {
+      void sendUrgentWhatsAppAlert(ctx, motivo, contactName).catch((err: any) => {
+        logger.warn('[tool.escalar_humano] urgent alert WhatsApp falhou:', err?.message);
+      });
+    }
+
+    logger.info(`[tool.escalar_humano] card=${ctx.card.id} urgencia=${urgencia} reason="${motivo}"`);
+    return { ok: true, result: { escalated: true, urgencia }, userVisible:
+      'Vou te transferir pra um especialista. Já já alguém da equipe entra em contato! 🙏' };
   },
 };
+
+/** Envia alerta urgente via WhatsApp do channel atual pro Daniel pessoal.
+ *  URGENT_ALERT_PHONE no .env eh o numero do corretor (ex: 5521990423520).
+ *  Usa o canal Z-API/Meta do tenant pra enviar — meio simples mas funcional. */
+async function sendUrgentWhatsAppAlert(
+  ctx: ToolContext,
+  motivo: string,
+  contactName?: string,
+): Promise<void> {
+  const phone = (process.env.URGENT_ALERT_PHONE || '').replace(/\D/g, '');
+  if (!phone) return;
+  const cardUrl = `${process.env.PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br'}/crm/?card=${ctx.card.id}`;
+  const text = `🚨 *LEAD QUENTE — INTERESSE PLANO COMPLETO* 🚨\n\n` +
+    `👤 Cliente: *${contactName || ctx.card.title || 'sem nome'}*\n` +
+    `📞 Telefone: ${ctx.customerPhone}\n` +
+    `💬 Motivo: ${motivo}\n` +
+    `📋 Card: ${cardUrl}\n\n` +
+    `_Bot encaminhou na hora — fala com ele AGORA._`;
+
+  // sendOutbound do inbox.ts usa o channel passado pra mandar texto.
+  // Importamos dinamicamente pra evitar circular.
+  const { sendOutbound } = await import('../../inbox.js');
+  await sendOutbound(ctx.channel, { to: phone, text });
+}
 
 // ─── marcar_perdido ──────────────────────────────────────────────────────
 
@@ -214,12 +264,12 @@ const consultarHistorico: ToolDef = {
 
 const lerDadosCard: ToolDef = {
   name: 'ler_dados_card',
-  description: 'Retorna os dados estruturados ja coletados pelo agente neste card (qualificacao + lista de campos sensitive ja preenchidos, mascarados). Se voce eh o role finalizador e precisa do valor REAL de algum campo sensitive (pra validar/usar), passa unmask=true.',
+  description: 'Retorna os dados estruturados ja coletados pelo agente neste card (qualificacao + lista de campos sensitive ja preenchidos, mascarados). Se voce eh o role coletor_dados e precisa do valor REAL de algum campo sensitive (pra validar/usar), passa unmask=true.',
   roles: ['*'],
   parameters: {
     type: 'object',
     properties: {
-      unmask: { type: 'boolean', description: 'Se true, retorna dados sensitive em CLARO. SO funciona se role=finalizador.' },
+      unmask: { type: 'boolean', description: 'Se true, retorna dados sensitive em CLARO. SO funciona se role=coletor_dados.' },
     },
   },
   execute(args, ctx) {
@@ -231,11 +281,11 @@ const lerDadosCard: ToolDef = {
 
     let sensitiveOut: Record<string, string> | Record<string, unknown>;
     if (wantsUnmask) {
-      if (ctx.role !== 'finalizador') {
+      if (ctx.role !== 'coletor_dados') {
         // Defesa em profundidade: outros roles nunca veem PII em claro
-        return { ok: false, error: 'unmask_only_for_finalizador' };
+        return { ok: false, error: 'unmask_only_for_coletor_dados' };
       }
-      // Decifra tudo (so role finalizador chega aqui)
+      // Decifra tudo (so role coletor_dados chega aqui)
       sensitiveOut = decryptAllSensitive(sensitive);
     } else {
       sensitiveOut = maskAllSensitive(sensitive);

@@ -61,18 +61,26 @@ export interface BoardColumn {
   agentPromotionCriteria?: string; // texto livre exibido pro agente
 }
 
-// PR 5.2: 4 estagios → 3 estagios (modelo SDR puro). Educador substitui
-// Cotador + Closer. Cotador/Closer marcados @deprecated mas mantidos no
-// type pra compat com prompts custom existentes que ja foram salvos no DB
-// — migration 008 converte rows existentes pra 'educador'.
+// PR 6.0: bot vendedor completo. Modelo final:
+//   qualificador     — acolhe, oferece escolha (funeral simples vs plano completo)
+//   vendedor_funeral — cota + apresenta valor + fecha venda funeral SOZINHO
+//   coletor_dados    — LGPD + 17 campos + forma pagamento
+// Educador / finalizador renomeados via migration 010. Cotador / closer
+// foram convertidos pra educador na migration 008 e agora educador vira
+// vendedor_funeral. Roles antigos mantidos no type @deprecated pra compat
+// com rows existentes ate migrations rodarem.
 export type ColumnAgentRole =
   | 'qualificador'
-  | 'educador'
-  | 'finalizador'
+  | 'vendedor_funeral'
+  | 'coletor_dados'
   | 'custom'
-  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  /** @deprecated PR 6.0: renomeado pra 'vendedor_funeral'. Migration 010 converte. */
+  | 'educador'
+  /** @deprecated PR 6.0: renomeado pra 'coletor_dados'. Migration 010 converte. */
+  | 'finalizador'
+  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor_funeral'. */
   | 'cotador'
-  /** @deprecated PR 5.2: substituido por 'educador'. Migration 008 converte. */
+  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor_funeral'. */
   | 'closer';
 
 // ── Card agent state (1:1 com card) ────────────────────────────────

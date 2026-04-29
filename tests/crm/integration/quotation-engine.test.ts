@@ -80,7 +80,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     });
   }
 
-  function setupCardCtx(tenantId: string, role = 'educador') {
+  function setupCardCtx(tenantId: string, role = 'vendedor_funeral') {
     const board = store.seedDefaultBoards(tenantId);
     const cols = store.listColumns(tenantId, board.id);
     const contact = store.createContact(tenantId, { name: 'Joao Teste', phone: '+55119000-' + randomBytes(2).toString('hex'), source: 'test' });
@@ -245,7 +245,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
 
   it('8. consultar_margem_desconto NAO existe mais (Educador nao consulta margem)', async () => {
     const tenantId = makeTenant();
-    const ctx = setupCardCtx(tenantId, 'educador');
+    const ctx = setupCardCtx(tenantId, 'vendedor_funeral');
     const r = await registry.executeToolCall(
       callTool('consultar_margem_desconto', { plano: 'SulAmérica AP Flex Familiar' }),
       ctx,
@@ -259,7 +259,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
 
   it('9. validar_cpf rejeita formatos bagunçados (PR 5.1 fix)', async () => {
     const tenantId = makeTenant();
-    const ctx = setupCardCtx(tenantId, 'finalizador');
+    const ctx = setupCardCtx(tenantId, 'coletor_dados');
 
     // Bagunçado — formato quebrado mesmo com 11 digitos somando OK
     const bad1 = await registry.executeToolCall(callTool('validar_cpf', { cpf: '137.44793737' }), ctx);
@@ -392,10 +392,10 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
   it('PR 5.2: snapshot persiste em collected_data.last_quotation via promover_pendente_daniel', async () => {
     const tenantId = makeTenant();
     seedSulamericaPlans(tenantId);
-    const ctxFinal = setupCardCtx(tenantId, 'finalizador');
+    const ctxFinal = setupCardCtx(tenantId, 'coletor_dados');
     // Pre-popula qualification (Qualificador faria isso)
     agentState.upsertCardAgentState({
-      cardId: ctxFinal.card.id, columnId: ctxFinal.column.id, currentAgentRole: 'finalizador',
+      cardId: ctxFinal.card.id, columnId: ctxFinal.column.id, currentAgentRole: 'coletor_dados',
       tenantId,
       collectedData: {
         qualification: {
@@ -433,10 +433,10 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
   it('Educador chama ler_dados_card → recebe last_quotation salvo', async () => {
     const tenantId = makeTenant();
     seedSulamericaPlans(tenantId);
-    const ctxEducador = setupCardCtx(tenantId, 'educador');
+    const ctxEducador = setupCardCtx(tenantId, 'vendedor_funeral');
     // Simula snapshot salvo (em prod, eh setado via promover_pendente_daniel)
     agentState.upsertCardAgentState({
-      cardId: ctxEducador.card.id, columnId: ctxEducador.column.id, currentAgentRole: 'educador',
+      cardId: ctxEducador.card.id, columnId: ctxEducador.column.id, currentAgentRole: 'vendedor_funeral',
       tenantId,
       collectedData: {
         qualification: { nomeTitular: 'João', idadeTitular: 35 },
@@ -459,7 +459,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
 
   it('salvar_dados_proposta cifra 16 campos titular + dependentes (PR 5.1 17 fields)', async () => {
     const tenantId = makeTenant();
-    const ctx = setupCardCtx(tenantId, 'finalizador');
+    const ctx = setupCardCtx(tenantId, 'coletor_dados');
     const r = await registry.executeToolCall(callTool('salvar_dados_proposta', {
       nome_completo: 'José Pereira da Silva',
       cpf: '11144477735',

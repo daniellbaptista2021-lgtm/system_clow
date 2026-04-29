@@ -1,5 +1,5 @@
 /**
- * Tools do role 'finalizador' — coleta dados pra emissao da proposta
+ * Tools do role 'coletor_dados' — coleta dados pra emissao da proposta
  * SulAmerica AP Flex (PR 5.1), valida formato, cifra dados sensiveis,
  * e promove pro Daniel humano.
  *
@@ -69,7 +69,7 @@ export function isValidCPF(cpf: string): boolean {
 const validarCpf: ToolDef = {
   name: 'validar_cpf',
   description: 'Valida CPF (formato + digito verificador). Aceita 2 formatos: 11 digitos puros ("12345678900") ou mascarado ("123.456.789-00"). Qualquer formato bagunçado retorna invalido. Use ANTES de salvar.',
-  roles: ['finalizador'],
+  roles: ['coletor_dados'],
   parameters: {
     type: 'object',
     properties: {
@@ -95,7 +95,7 @@ const validarCpf: ToolDef = {
 const validarCep: ToolDef = {
   name: 'validar_cep',
   description: 'Valida o formato do CEP (8 digitos). Aceita "XXXXXXXX" ou "XXXXX-XXX". Stub: nao consulta ViaCEP nesta versao.',
-  roles: ['finalizador'],
+  roles: ['coletor_dados'],
   parameters: {
     type: 'object',
     properties: {
@@ -147,7 +147,7 @@ interface DadosProposta {
 const salvarDadosProposta: ToolDef = {
   name: 'salvar_dados_proposta',
   description: 'Salva dados pessoais do titular e dependentes pra proposta SulAmerica AP Flex. Cada campo eh cifrado individualmente (AES-256-GCM). Chame multiplas vezes — faz merge. Campos do titular: nome_completo, cpf, rg, data_nascimento, sexo, estado_civil, nacionalidade, nome_mae, dia_vencimento (1-28), celular, email, cep, endereco_completo (objeto), profissao, altura, peso. Dependentes: array de { nome_completo, parentesco, cpf, data_nascimento }. NUNCA salva senha ou cartao.',
-  roles: ['finalizador'],
+  roles: ['coletor_dados'],
   parameters: {
     type: 'object',
     properties: {
@@ -234,7 +234,7 @@ const salvarDadosProposta: ToolDef = {
 const promoverPendenteDaniel: ToolDef = {
   name: 'promover_pendente_daniel',
   description: 'Move o card pra coluna "Pendente Daniel" (humano vai finalizar a venda na seguradora). So chame com TODOS os dados coletados e validados. Dispara webhook card.ready_for_human (notifica Daniel via outbound webhook configurado).',
-  roles: ['finalizador'],
+  roles: ['coletor_dados'],
   parameters: {
     type: 'object',
     properties: {
@@ -332,7 +332,7 @@ const promoverPendenteDaniel: ToolDef = {
   },
 };
 
-export const FINALIZADOR_TOOLS: ToolDef[] = [
+export const COLETOR_DADOS_TOOLS: ToolDef[] = [
   validarCpf,
   validarCep,
   salvarDadosProposta,
