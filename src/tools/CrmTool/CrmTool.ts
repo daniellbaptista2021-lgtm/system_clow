@@ -26,8 +26,24 @@ import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tas
 import { createAppointment as calCreate } from '../../crm/calendar.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+//
+// Resolve o tenantId do contexto da chamada. FAIL-CLOSED por design: se
+// ctx.tenantId nao esta setado, lanca — JAMAIS cai num tenant default,
+// porque caso contrario as tools de CRM vazam dados entre tenants quando
+// o caminho de resolucao upstream (webhook → resolveTenantForMeta, sessao
+// admin reusada, header faltante etc) deixa o campo vazio.
+//
+// Bug 2026-04-29: o fallback antigo `ctx.tenantId || 'default'` fazia o
+// agente System Clow consultar dados do tenant 'default' (admin/dev) quando
+// usuarios SaaS interagiam — mostrou cards/valores que nao eram deles.
 function tid(ctx: ToolUseContext): string {
-  return ctx.tenantId || 'default';
+  const t = ctx.tenantId;
+  if (typeof t !== 'string' || !t.trim()) {
+    throw new Error(
+      `crm_tool_tenant_missing: ctx.tenantId vazio (sessionId=${ctx.sessionId ?? 'unknown'}). Tool de CRM bloqueada por seguranca — nao caiu em tenant default. Caller upstream perdeu o tenantId; investigue resolveTenantForMeta / sessionPool / authMiddleware.`,
+    );
+  }
+  return t;
 }
 
 function fmtMoney(cents: number): string {

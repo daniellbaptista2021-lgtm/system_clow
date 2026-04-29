@@ -52,7 +52,22 @@ async function isPhoneAuthorized(tenantId: string, phone: string): Promise<boole
 }
 
 
-async function resolveTenantForMeta(req: { header: (k: string) => string | undefined }, phoneNumberId?: string): Promise<string> {
+/**
+ * Resolve o tenant que deve receber esta mensagem inbound.
+ *
+ * Ordem de resolucao:
+ *  1. Header `x-clow-tenant-id` (set quando CRM forwarda inbound a outro service)
+ *  2. Lookup de canal por phone_number_id no CRM
+ *  3. Fallback admin SOMENTE se phoneNumberId == META_WA_PHONE_NUMBER_ID do .env
+ *     (numero oficial do admin/dev)
+ *  4. Caso contrario retorna null — caller precisa rejeitar a msg em vez de
+ *     atender com tenant errado.
+ *
+ * Bug 2026-04-29: o fallback antigo retornava 'default' incondicionalmente,
+ * fazendo qualquer numero nao mapeado cair no tenant 'default' (admin/dev) —
+ * agente respondia o cliente com dados/CRM de outro tenant.
+ */
+async function resolveTenantForMeta(req: { header: (k: string) => string | undefined }, phoneNumberId?: string): Promise<string | null> {
   const headerTid = req.header('x-clow-tenant-id');
   if (headerTid) return headerTid;
   if (phoneNumberId) {
@@ -61,8 +76,11 @@ async function resolveTenantForMeta(req: { header: (k: string) => string | undef
       const channel = findChannelByPhoneId(phoneNumberId);
       if (channel) return channel.tenantId;
     } catch { /* CRM module unavailable, fall through */ }
+    // Fallback admin: so se for o numero oficial do admin (configurado via .env)
+    if (phoneNumberId === process.env.META_WA_PHONE_NUMBER_ID) return 'default';
+    return null;
   }
-  return 'default';
+  return null;
 }
 
 
@@ -679,8 +697,9 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
 
   // ── Webhook Receiver (POST) — Incoming messages ────────────────────────
   app.post('/webhooks/meta', async (c) => {
-    // Resolve tenant: header from CRM forward, OR lookup by phone_number_id
-    let tenantId = 'default';
+    // Resolve tenant: header from CRM forward, OR lookup by phone_number_id.
+    // Inicia null — sem tenant resolvido nao processa (fail-closed).
+    let tenantId: string | null = null;
 
     const config = getMetaConfig();
     if (!config) {
@@ -707,6 +726,13 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     // Resolve tenant from header (set by CRM forward) or by phone_number_id lookup
     const phoneNumberId = payload?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     tenantId = await resolveTenantForMeta(c.req, phoneNumberId);
+
+    // FAIL-CLOSED: sem tenant resolvido nao processa — antes caia em 'default'
+    // (tenant admin/dev) e respondia o cliente com dados de outro CRM.
+    if (!tenantId) {
+      logger.warn(`[meta-wa] tenant nao resolvido (phone_number_id=${phoneNumberId ?? '?'}, from=${phone}) — msg ignorada`);
+      return c.json({ ok: true });
+    }
 
     // Admin path (tenantId='default'): sem quota - admin tem acesso pleno
     if (tenantId !== 'default') {

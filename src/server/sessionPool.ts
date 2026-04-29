@@ -197,8 +197,10 @@ export class SessionPool {
     for (const pluginHook of pluginSystem.getHooks()) {
       hookEngine.addHook(pluginHook);
     }
-    // Initialize persistent memory hooks (SQLite-backed)
-    await initMemorySystem(hookEngine, tenantId || 'default');
+    // Initialize persistent memory hooks (SQLite-backed).
+    // Fallback explicito pra '__admin__' quando nao ha tenant — antes caia
+    // em 'default' que e tenant de dados real, vazando memoria entre tenants.
+    await initMemorySystem(hookEngine, tenantId || '__admin__');
     const hookDispatcher = new HookEventDispatcher(hookEngine, {
       sessionId,
       transcriptPath: getSessionFilePath(sessionId),
