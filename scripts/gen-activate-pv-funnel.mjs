@@ -13,21 +13,21 @@ const TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
 
 // Mapeamento role → coluna existente do PV (Pipeline de Vendas)
 // PR 6.0: bot vendedor completo. 3 roles:
-//   qualificador     — Lead novo  → promove pra Agendado (pula Negociacao)
-//   vendedor_funeral — Agendado    → promove pra Lançar venda
+//   qualificador     — Lead novo    → promove pra Negociação
+//   vendedor_funeral — Negociação   → promove pra Lançar venda
 //   coletor_dados    — Lançar venda → promove pra Pendente Daniel (humano)
-// Coluna Negociação fica passada visual sem bot.
+// Coluna Agendado fica passada visual sem bot (nome zumbi do desenho SDR antigo).
 const STAGES = [
   {
     role: 'qualificador',
     columnId: 'crm_col_ef28102e464b', // Lead novo
     columnName: 'Lead novo',
-    promoteTo: 'crm_col_534d6959a178', // pula Negociação, vai direto pra Agendado
+    promoteTo: 'crm_col_94c4d692a8b3', // Negociação
   },
   {
     role: 'vendedor_funeral',
-    columnId: 'crm_col_534d6959a178', // Agendado
-    columnName: 'Agendado',
+    columnId: 'crm_col_94c4d692a8b3', // Negociação (vendedor cota + fecha venda aqui)
+    columnName: 'Negociação',
     promoteTo: 'crm_col_7090fc2ce1a9', // Lançar venda
   },
   {
@@ -38,9 +38,9 @@ const STAGES = [
   },
 ];
 
-// Coluna "Negociação" (crm_col_94c4d692a8b3) fica explicitamente
-// DESLIGADA — sem bot. SQL desativa essa coluna ao final.
-const NEGOCIACAO_COL_ID = 'crm_col_94c4d692a8b3';
+// Coluna "Agendado" (crm_col_534d6959a178) fica explicitamente
+// DESLIGADA — sem bot, passada visual manual (nome zumbi do desenho antigo).
+const AGENDADO_COL_ID = 'crm_col_534d6959a178';
 
 const esc = (s) => s.replace(/'/g, "''");
 
@@ -78,15 +78,16 @@ for (const stage of STAGES) {
   console.log(``);
 }
 
-// PR 5.2: garantir que coluna "Negociação" fica SEM bot (passada visual)
-console.log(`-- Negociação → SEM bot (passada visual manual, sem agente IA)`);
+// PR 6.0: garantir que coluna "Agendado" fica SEM bot (passada visual)
+// Vendedor migrou pra Negociação — Agendado vira nome zumbi do desenho SDR antigo.
+console.log(`-- Agendado → SEM bot (passada visual manual, sem agente IA)`);
 console.log(`UPDATE crm_columns SET`);
 console.log(`  agent_enabled = 0,`);
 console.log(`  agent_role = NULL,`);
 console.log(`  agent_promote_to_column_id = NULL,`);
 console.log(`  agent_system_prompt = NULL,`);
 console.log(`  agent_promotion_criteria = NULL`);
-console.log(`WHERE id = '${NEGOCIACAO_COL_ID}';`);
+console.log(`WHERE id = '${AGENDADO_COL_ID}';`);
 console.log(``);
 
 console.log(`COMMIT;`);
