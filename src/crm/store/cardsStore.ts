@@ -51,12 +51,13 @@ export function createCard(tenantId: string, input: {
   };
   db.prepare(`
     INSERT INTO crm_cards (id, tenant_id, board_id, column_id, title, description, contact_id, owner_agent_id,
-      value_cents, probability, labels_json, due_date, position, custom_fields_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      value_cents, probability, labels_json, due_date, position, custom_fields_json, created_at, updated_at,
+      column_changed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(card.id, card.tenantId, card.boardId, card.columnId, card.title, card.description ?? null,
     card.contactId ?? null, card.ownerAgentId ?? null, card.valueCents, card.probability,
     J.stringify(card.labels), card.dueDate ?? null, card.position, J.stringify(card.customFields),
-    card.createdAt, card.updatedAt);
+    card.createdAt, card.updatedAt, card.createdAt);
   logActivity(tenantId, { cardId: card.id, contactId: card.contactId, type: 'system', channel: 'manual',
     content: `Card criado na coluna ${card.columnId}` });
   void (async () => { (await getEmit())({ trigger: 'card_created', tenantId, cardId: card.id, contactId: card.contactId }); (await getAutoAssign())(tenantId, card.id); (await getPublish())(tenantId, 'card', { action: 'created', cardId: card.id }); })();
@@ -128,6 +129,8 @@ export function moveCard(tenantId: string, cardId: string, toColumnId: string, p
   const pos = position ?? getNextCardPosition(db, toColumnId);
   const moved = updateCard(tenantId, cardId, { columnId: toColumnId, position: pos });
   if (moved && moved.columnId !== existing.columnId) {
+    db.prepare('UPDATE crm_cards SET column_changed_at = ? WHERE id = ? AND tenant_id = ?')
+      .run(Date.now(), cardId, tenantId);
     logActivity(tenantId, {
       cardId, contactId: existing.contactId, type: 'stage_change', channel: 'manual',
       content: `Movido de ${existing.columnId} para ${toColumnId}`,
@@ -169,8 +172,9 @@ export function reorderCard(
   const tx = db.transaction(() => {
     // Atualiza coluna do card movido
     if (fromColumnId !== toColumnId) {
-      db.prepare(`UPDATE crm_cards SET column_id = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`)
-        .run(toColumnId, Date.now(), cardId, tenantId);
+      const nowMs = Date.now();
+      db.prepare(`UPDATE crm_cards SET column_id = ?, updated_at = ?, column_changed_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(toColumnId, nowMs, nowMs, cardId, tenantId);
     }
     // Renumera todos os cards da coluna
     const stmt = db.prepare(`UPDATE crm_cards SET position = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`);
@@ -276,11 +280,11 @@ export function logActivity(tenantId: string, input: {
       }
       // Onda 48: contador de mensagens nao respondidas (estilo WhatsApp)
       if (a.type === 'message_in') {
-        db.prepare('UPDATE crm_cards SET unread_count = COALESCE(unread_count,0) + 1, last_inbound_at = ? WHERE id = ? AND tenant_id = ?')
-          .run(a.createdAt, a.cardId, tenantId);
+        db.prepare('UPDATE crm_cards SET unread_count = COALESCE(unread_count,0) + 1, last_inbound_at = ?, last_client_message_at = ? WHERE id = ? AND tenant_id = ?')
+          .run(a.createdAt, a.createdAt, a.cardId, tenantId);
       } else if (a.type === 'message_out') {
-        db.prepare('UPDATE crm_cards SET unread_count = 0 WHERE id = ? AND tenant_id = ?')
-          .run(a.cardId, tenantId);
+        db.prepare('UPDATE crm_cards SET unread_count = 0, last_bot_message_at = ? WHERE id = ? AND tenant_id = ?')
+          .run(a.createdAt, a.cardId, tenantId);
       }
     }
   }
