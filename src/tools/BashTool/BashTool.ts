@@ -17,6 +17,7 @@ import { CommandClassifier } from './commandClassifier.js';
 import { CommandValidator } from './commandValidator.js';
 import { OutputProcessor } from './outputProcessor.js';
 import { SandboxRunner } from './sandboxRunner.js';
+import { validateBashCommand } from '../../tenancy/bashSandbox.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
 
 // ─── Shared instances (per-session via registry) ────────────────────────────
@@ -150,18 +151,31 @@ Commands timeout after 120 seconds by default.`,
   interruptBehavior() { return 'cancel' as const; },
 
   // ── Validation (before permission) ────────────────────────────────────
+  //
+  // PR 7.6 (2026-04-29): tenant SaaS pode rodar bash no SEU workspace
+  // isolado (/opt/clow-workspaces/<tid>), com whitelist de comandos e
+  // blocked patterns/paths definidos em src/tenancy/bashSandbox.ts.
+  // Antes era um bloqueio total ("BASH_NOT_ALLOWED_FOR_USER") que travava
+  // tarefas legitimas. Daniel: "todo o uso igual ao do claude code poder
+  // nas maos — apenas regras de nao fazer alteracoes de sistema em si
+  // proprio." Bash do tenant roda dentro do workspace do tenant via
+  // SandboxRunner (firejail/bwrap quando disponivel) e bashSandbox bloqueia
+  // pm2/systemctl/sudo/.env/src/server/etc.
   async validateInput(input: BashInput, _ctx: ToolUseContext): Promise<ValidationResult> {
     const v = CommandValidator.validate(input.command);
     if (!v.valid) return { valid: false, message: v.reason, errorCode: v.code };
 
     const isMultiTenantContext = Boolean(_ctx.tenantId && _ctx.tenantId !== 'default' && _ctx.workspaceRoot);
     if (isMultiTenantContext) {
-      // TENANT: bloqueia tudo (usuario comum nunca roda bash no servidor)
-      return {
-        valid: false,
-        message: 'Essas operacoes sao exclusivas do administrador do sistema. Posso te ajudar com outras tarefas — criar sites, apps, planilhas, debug de codigo, consultas, relatorios.',
-        errorCode: 'BASH_NOT_ALLOWED_FOR_USER',
-      };
+      const sandbox = validateBashCommand(input.command, _ctx.workspaceRoot!, false);
+      if (!sandbox.allowed) {
+        return {
+          valid: false,
+          message: sandbox.reason || 'Comando bloqueado por politica de seguranca do workspace.',
+          errorCode: 'BASH_SANDBOX_DENIED',
+        };
+      }
+      return { valid: true };
     }
 
     // ADMIN: requer senha destravada na sessao (NUNCA persiste entre sessoes)

@@ -209,21 +209,30 @@ export function buildRoutes(pool: SessionPool): Hono {
 
     let engine = await pool.get(sessionId, { tenantIdHint: requestTenantId, isAdmin });
     if (!engine) {
-      // Auto-create session if it doesn't exist
-      const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
-      const tenantWorkspaceRoot =
-        typeof tenant?.workspaceRoot === 'string'
-          ? tenant.workspaceRoot
-          : typeof tenant?.workspace_root === 'string'
-            ? tenant.workspace_root
-            : undefined;
+      // Auto-create session if it doesn't exist.
+      // Pra user SaaS: workspace SEMPRE forcado em getTenantWorkspaceDir(tenantId)
+      // (igual ao POST /v1/sessions explicito linhas 122-135). Sem isso o
+      // bash do tenant cai em /opt/system-clow (codigo do sistema) e o
+      // sandbox bloqueia tudo.
+      let autoCwd: string;
+      let autoWorkspace: string;
+      if (isAdmin) {
+        autoCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
+        const tenantWorkspaceRoot =
+          typeof tenant?.workspaceRoot === 'string' ? tenant.workspaceRoot
+            : typeof tenant?.workspace_root === 'string' ? (tenant.workspace_root as string) : undefined;
+        autoWorkspace = typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || autoCwd;
+      } else {
+        autoWorkspace = requestTenantId ? getTenantWorkspaceDir(requestTenantId) : process.cwd();
+        autoCwd = autoWorkspace;
+      }
       engine = await pool.create(sessionId, {
-        cwd: requestedCwd,
-        workspaceRoot: typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || requestedCwd,
+        cwd: autoCwd,
+        workspaceRoot: autoWorkspace,
         tenantId: requestTenantId,
         tenantTier,
         mode: body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server',
-        isAdmin: (c as any).get("authMode") === "admin_session",
+        isAdmin,
       });
     }
 

@@ -140,6 +140,11 @@ export class SessionPool {
     const tenantId = options.tenantId;
     const tenantTier = options.tenantTier;
     const mode = options.mode || 'server';
+    // Garante que o workspace do tenant existe (mkdirp). Sem isso, bash cwd
+    // pode falhar ao spawn em workspace recem-criado de tenant novo.
+    if (tenantId && workspaceRoot && workspaceRoot.startsWith('/opt/clow-workspaces/')) {
+      try { fs.mkdirSync(workspaceRoot, { recursive: true }); } catch { /* noop */ }
+    }
     const baseToolPool = tenantTier
       ? filterToolsForTier(getTools(undefined, this.mcpManager || undefined), tenantTier)
       : getTools(undefined, this.mcpManager || undefined);
@@ -253,6 +258,9 @@ export class SessionPool {
       sessionId,
       cwd,
       permissionMode: 'default',
+      tenantId,
+      workspaceRoot,
+      tier: tenantTier,
     }));
 
     const engine = new QueryEngine({
