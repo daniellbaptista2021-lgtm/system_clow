@@ -164,12 +164,16 @@ function rowToColumn(r: any): BoardColumn {
     agentName: r.agent_name ?? undefined,
     agentSystemPrompt: r.agent_system_prompt ?? undefined,
     agentRole: r.agent_role ?? undefined,
+    agentRoleType: r.agent_role_type ?? undefined,
     agentPromoteToColumnId: r.agent_promote_to_column_id ?? undefined,
     agentInactivityTimeoutMinutes: r.agent_inactivity_timeout_minutes ?? undefined,
     agentMaxTurns: r.agent_max_turns ?? undefined,
     agentActiveHoursStart: r.agent_active_hours_start ?? undefined,
     agentActiveHoursEnd: r.agent_active_hours_end ?? undefined,
     agentPromotionCriteria: r.agent_promotion_criteria ?? undefined,
+    agentEntryDelayMinutes: r.agent_entry_delay_minutes ?? undefined,
+    agentNoResponseChaseStepsJson: r.agent_no_response_chase_steps_json ?? undefined,
+    agentFollowupStepsHoursJson: r.agent_followup_steps_hours_json ?? undefined,
   };
 }
 

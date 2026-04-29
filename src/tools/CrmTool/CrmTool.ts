@@ -5,21 +5,21 @@
  * a multi-tenant session, only that tenant's data is touched.
  *
  * Tools exposed:
- *   - crm_find_or_create_contact
- *   - crm_create_card
- *   - crm_move_card
- *   - crm_add_note
- *   - crm_send_whatsapp
- *   - crm_search
- *   - crm_pipeline
- *   - crm_get_contact
- *   - crm_create_reminder
- *   - crm_dashboard
+ *   Operação de dados:
+ *   - crm_find_or_create_contact, crm_create_card, crm_move_card, crm_add_note,
+ *     crm_send_whatsapp, crm_search, crm_pipeline, crm_get_contact,
+ *     crm_create_reminder, crm_dashboard, crm_create_subscription,
+ *     crm_mark_subscription_paid, crm_create_task, crm_create_appointment
+ *   Configuração (System Clow monta o funnel pro cliente):
+ *   - crm_list_boards, crm_create_board, crm_list_columns, crm_create_column,
+ *     crm_update_column, crm_delete_column, crm_configure_column_agent,
+ *     crm_disable_column_agent, crm_update_card
  */
 
 import { z } from 'zod';
 import { buildTool, type ToolResult, type ToolUseContext } from '../Tool.js';
 import * as crm from '../../crm/store.js';
+import { getCrmDb } from '../../crm/schema.js';
 import { sendOutbound } from '../../crm/inbox.js';
 import { markPaid as billingMarkPaid } from '../../crm/billing.js';
 import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tasks.js';
@@ -688,6 +688,271 @@ export const CrmCreateAppointmentTool = buildTool<z.infer<typeof CreateAppointme
   },
 });
 
+// ════════════════════════════════════════════════════════════════════════
+// CONFIG TOOLS — System Clow monta funnels para tenants (qualquer nicho).
+// Workflow conversacional documentado em src/skills/builtin/crm-funnel-setup.md
+// ════════════════════════════════════════════════════════════════════════
+
+// 15. crm_list_boards
+const ListBoardsSchema = z.object({});
+export const CrmListBoardsTool = buildTool<z.infer<typeof ListBoardsSchema>>({
+  name: 'crm_list_boards',
+  searchHint: 'crm boards list config',
+  description: `Lista todos os boards (funis) do tenant com id, nome, tipo. Use antes de configurar
+colunas ou agentes pra saber qual board está sendo trabalhado.`,
+  inputSchema: ListBoardsSchema,
+  isReadOnly: () => true,
+  async call(_input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const boards = crm.listBoards(t);
+    if (boards.length === 0) return { output: { boards: [] }, outputText: 'Nenhum board ainda. Use crm_create_board ou crm_setup_funnel_template pra criar.' };
+    return { output: { boards }, outputText: `${boards.length} board(s):\n${boards.map(b => `- ${b.name} (id=${b.id}, type=${b.type})`).join('\n')}` };
+  },
+});
+
+// 16. crm_create_board
+const CreateBoardSchema = z.object({
+  name: z.string().describe('Nome do board (ex: "Vendas", "Suporte", "Onboarding")'),
+  type: z.enum(['sales', 'support', 'custom']).optional().default('sales').describe('Tipo do board'),
+});
+export const CrmCreateBoardTool = buildTool<z.infer<typeof CreateBoardSchema>>({
+  name: 'crm_create_board',
+  searchHint: 'crm board create new',
+  description: `Cria um novo board (funil) vazio. Útil quando o cliente tem mais de um produto/fluxo
+e quer separar (ex: board "Plano Funeral" e board "Plano Saúde"). NÃO cria colunas — use crm_create_column depois.`,
+  inputSchema: CreateBoardSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const board = crm.createBoard(t, { name: input.name, type: input.type as any });
+    return { output: { board }, outputText: `✓ Board criado: "${board.name}" (id=${board.id})` };
+  },
+});
+
+// 17. crm_list_columns
+const ListColumnsSchema = z.object({
+  boardId: z.string().optional().describe('Id do board. Se omitido, usa o board principal do tenant.'),
+});
+export const CrmListColumnsTool = buildTool<z.infer<typeof ListColumnsSchema>>({
+  name: 'crm_list_columns',
+  searchHint: 'crm columns list config agent',
+  description: `Lista colunas de um board com TODA configuração de agente (role, prompt, entry_delay,
+chase, followup, promote_to). Use antes de mexer em qualquer coluna pra ver o estado atual.`,
+  inputSchema: ListColumnsSchema,
+  isReadOnly: () => true,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const boardId = input.boardId ?? ensureBoardForTenant(t).id;
+    const cols = crm.listColumns(t, boardId);
+    if (cols.length === 0) return { output: { columns: [] }, outputText: `Board ${boardId} sem colunas.` };
+    const lines = cols.map(c => {
+      const agent = c.agentEnabled
+        ? ` [agent=${c.agentRole ?? '?'}, entry=${c.agentEntryDelayMinutes ?? 0}min, chase=${c.agentNoResponseChaseStepsJson ?? '-'}, fu=${c.agentFollowupStepsHoursJson ?? '-'}, promote→${c.agentPromoteToColumnId ?? '-'}]`
+        : '';
+      return `- ${c.name} (id=${c.id}, pos=${c.position}${c.isTerminal ? ', terminal' : ''})${agent}`;
+    });
+    return { output: { columns: cols }, outputText: `${cols.length} coluna(s):\n${lines.join('\n')}` };
+  },
+});
+
+// 18. crm_create_column
+const CreateColumnSchema = z.object({
+  boardId: z.string().describe('Id do board onde criar a coluna'),
+  name: z.string().describe('Nome da coluna (ex: "Lead novo", "Qualificado", "Negociação")'),
+  color: z.string().optional().describe('Cor hex (ex: "#9B59FC")'),
+  isTerminal: z.boolean().optional().default(false).describe('true se é coluna final (Ganho/Perdido)'),
+});
+export const CrmCreateColumnTool = buildTool<z.infer<typeof CreateColumnSchema>>({
+  name: 'crm_create_column',
+  searchHint: 'crm column create stage funnel',
+  description: `Cria uma coluna (estágio) no board. Posição é automática (final do board).
+Pra configurar agente IA da coluna, chame crm_configure_column_agent depois.`,
+  inputSchema: CreateColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const col = crm.createColumn(t, { boardId: input.boardId, name: input.name, color: input.color, isTerminal: input.isTerminal });
+    if (!col) return { output: { error: 'board_not_found' }, outputText: `❌ Board ${input.boardId} não encontrado pra este tenant.`, isError: true };
+    return { output: { column: col }, outputText: `✓ Coluna "${col.name}" criada (id=${col.id}, pos=${col.position})` };
+  },
+});
+
+// 19. crm_update_column
+const UpdateColumnSchema = z.object({
+  columnId: z.string(),
+  name: z.string().optional().describe('Novo nome'),
+  position: z.number().int().optional().describe('Nova posição (order)'),
+  color: z.string().optional(),
+  isTerminal: z.boolean().optional(),
+  stageType: z.enum(['open', 'won', 'lost']).optional().describe('Tipo de estágio'),
+});
+export const CrmUpdateColumnTool = buildTool<z.infer<typeof UpdateColumnSchema>>({
+  name: 'crm_update_column',
+  searchHint: 'crm column update rename reorder',
+  description: `Atualiza uma coluna (renomear, mudar posição, marcar como terminal/won/lost).
+Cliente pode mudar nome de coluna a qualquer momento — use isso. Só os campos passados são alterados.`,
+  inputSchema: UpdateColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const patch: any = {};
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.position !== undefined) patch.position = input.position;
+    if (input.color !== undefined) patch.color = input.color;
+    if (input.isTerminal !== undefined) patch.isTerminal = input.isTerminal;
+    let updated: any = null;
+    if (Object.keys(patch).length > 0) {
+      updated = crm.updateColumn(t, input.columnId, patch);
+      if (!updated) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    }
+    if (input.stageType !== undefined) {
+      const db = getCrmDb();
+      const r = db.prepare(`UPDATE crm_columns SET stage_type = ? WHERE id = ? AND board_id IN (SELECT id FROM crm_boards WHERE tenant_id = ?)`)
+        .run(input.stageType, input.columnId, t);
+      if (r.changes === 0 && !updated) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    }
+    return { output: { column: updated ?? { id: input.columnId } }, outputText: `✓ Coluna atualizada.` };
+  },
+});
+
+// 20. crm_delete_column
+const DeleteColumnSchema = z.object({
+  columnId: z.string(),
+  force: z.boolean().optional().default(false).describe('Se true, apaga mesmo com cards dentro (cascade)'),
+});
+export const CrmDeleteColumnTool = buildTool<z.infer<typeof DeleteColumnSchema>>({
+  name: 'crm_delete_column',
+  searchHint: 'crm column delete remove',
+  description: `Remove uma coluna do board. Por padrão FALHA se a coluna tem cards (segurança).
+Pra apagar mesmo assim, passe force=true (cards serão deletados em cascade pela FK).`,
+  inputSchema: DeleteColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    if (!input.force) {
+      const cnt = db.prepare(`SELECT COUNT(*) as n FROM crm_cards WHERE column_id = ? AND tenant_id = ?`).get(input.columnId, t) as { n: number };
+      if (cnt.n > 0) return { output: { error: 'has_cards', cardCount: cnt.n }, outputText: `❌ Coluna tem ${cnt.n} card(s). Use force=true pra apagar com os cards, ou mova os cards primeiro.`, isError: true };
+    }
+    const ok = crm.deleteColumn(t, input.columnId);
+    if (!ok) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    return { output: { deleted: true }, outputText: `✓ Coluna removida.` };
+  },
+});
+
+// 21. crm_configure_column_agent — A grande tool
+const ChaseStepsSchema = z.array(z.number().int().positive()).describe('Lista de minutos pra cobranças escalonadas (ex: [30, 120, 360])');
+const FollowupStepsSchema = z.array(z.number().int().positive()).describe('Lista de horas pra mensagens de followup (ex: [24, 48, 72])');
+const ConfigureColumnAgentSchema = z.object({
+  columnId: z.string(),
+  agentEnabled: z.boolean().optional(),
+  agentName: z.string().optional().describe('Nome do agente exibido (ex: "Sofia")'),
+  agentRole: z.string().optional().describe('Role do agente (ex: "qualificador", "cotador", "vendedor", "coletor", "followupper", ou nome livre)'),
+  agentRoleType: z.string().optional().describe('Tipo do role (igual ao agentRole na maioria dos casos)'),
+  agentSystemPrompt: z.string().optional().describe('Prompt-mãe do agente nesta coluna. Define personalidade, missão, regras de comportamento, quando promover/escalar.'),
+  agentPromoteToColumnId: z.string().optional().describe('Id da coluna pra promover automaticamente quando agente decidir'),
+  agentEntryDelayMinutes: z.number().int().min(0).optional().describe('Min antes do agente agir após card chegar na coluna (ex: 5 = espera 5min antes de mandar 1ª msg)'),
+  agentNoResponseChaseSteps: ChaseStepsSchema.optional(),
+  agentFollowupStepsHours: FollowupStepsSchema.optional(),
+  agentInactivityTimeoutMinutes: z.number().int().positive().optional().describe('Min sem resposta antes de escalar/marcar inativo'),
+  agentMaxTurns: z.number().int().positive().optional().describe('Max trocas de mensagem antes de forçar promoção/escalar'),
+  agentActiveHoursStart: z.string().optional().describe('Início horário comercial (HH:MM)'),
+  agentActiveHoursEnd: z.string().optional().describe('Fim horário comercial (HH:MM)'),
+  agentPromotionCriteria: z.string().optional().describe('Texto descrevendo quando promover (alimenta decisão do agente)'),
+});
+export const CrmConfigureColumnAgentTool = buildTool<z.infer<typeof ConfigureColumnAgentSchema>>({
+  name: 'crm_configure_column_agent',
+  searchHint: 'crm column agent configure prompt entry chase followup automation',
+  description: `Configura o agente IA de uma coluna. PATCH: só altera os campos passados, preserva o resto.
+Use isso pra: definir prompt do agente, ajustar entry_delay, configurar cobranças (chase), configurar
+followup, mudar pra qual coluna promove, alterar horário ativo. Disponível pra qualquer nicho —
+o agente IA da coluna executa o agentSystemPrompt no contexto do CRM.`,
+  inputSchema: ConfigureColumnAgentSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    // Valida que a coluna pertence ao tenant
+    const col = db.prepare(`SELECT c.id FROM crm_columns c JOIN crm_boards b ON b.id = c.board_id WHERE c.id = ? AND b.tenant_id = ?`).get(input.columnId, t) as { id: string } | undefined;
+    if (!col) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada pra este tenant.`, isError: true };
+    // Map input → coluna SQL
+    const fields: string[] = [];
+    const values: any[] = [];
+    const map: Array<[string, string, any]> = [
+      ['agentEnabled', 'agent_enabled', input.agentEnabled === undefined ? undefined : (input.agentEnabled ? 1 : 0)],
+      ['agentName', 'agent_name', input.agentName],
+      ['agentRole', 'agent_role', input.agentRole],
+      ['agentRoleType', 'agent_role_type', input.agentRoleType ?? input.agentRole], // se não passar role_type, usa role
+      ['agentSystemPrompt', 'agent_system_prompt', input.agentSystemPrompt],
+      ['agentPromoteToColumnId', 'agent_promote_to_column_id', input.agentPromoteToColumnId],
+      ['agentEntryDelayMinutes', 'agent_entry_delay_minutes', input.agentEntryDelayMinutes],
+      ['agentNoResponseChaseSteps', 'agent_no_response_chase_steps_json', input.agentNoResponseChaseSteps ? JSON.stringify(input.agentNoResponseChaseSteps) : undefined],
+      ['agentFollowupStepsHours', 'agent_followup_steps_hours_json', input.agentFollowupStepsHours ? JSON.stringify(input.agentFollowupStepsHours) : undefined],
+      ['agentInactivityTimeoutMinutes', 'agent_inactivity_timeout_minutes', input.agentInactivityTimeoutMinutes],
+      ['agentMaxTurns', 'agent_max_turns', input.agentMaxTurns],
+      ['agentActiveHoursStart', 'agent_active_hours_start', input.agentActiveHoursStart],
+      ['agentActiveHoursEnd', 'agent_active_hours_end', input.agentActiveHoursEnd],
+      ['agentPromotionCriteria', 'agent_promotion_criteria', input.agentPromotionCriteria],
+    ];
+    for (const [key, sqlCol, val] of map) {
+      if (key === 'agentRoleType' && input.agentRoleType === undefined && input.agentRole === undefined) continue;
+      if (val === undefined) continue;
+      fields.push(`${sqlCol} = ?`);
+      values.push(val);
+    }
+    if (fields.length === 0) return { output: { unchanged: true }, outputText: `Nenhum campo passado. Nada alterado.` };
+    values.push(input.columnId);
+    db.prepare(`UPDATE crm_columns SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return { output: { configured: true, fieldsUpdated: fields.length }, outputText: `✓ Agente da coluna configurado (${fields.length} campo(s) atualizado(s)).` };
+  },
+});
+
+// 22. crm_disable_column_agent
+const DisableColumnAgentSchema = z.object({ columnId: z.string() });
+export const CrmDisableColumnAgentTool = buildTool<z.infer<typeof DisableColumnAgentSchema>>({
+  name: 'crm_disable_column_agent',
+  searchHint: 'crm column agent disable off',
+  description: `Atalho: desativa o agente IA de uma coluna (agent_enabled=0). Mantém toda a config
+salva — pra reativar, chame crm_configure_column_agent com agentEnabled=true.
+Útil quando o cliente quer que uma coluna seja só handoff humano.`,
+  inputSchema: DisableColumnAgentSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    const r = db.prepare(`UPDATE crm_columns SET agent_enabled = 0 WHERE id = ? AND board_id IN (SELECT id FROM crm_boards WHERE tenant_id = ?)`).run(input.columnId, t);
+    if (r.changes === 0) return { output: { error: 'not_found' }, outputText: `❌ Coluna não encontrada.`, isError: true };
+    return { output: { disabled: true }, outputText: `✓ Agente da coluna desativado (config preservada).` };
+  },
+});
+
+// 23. crm_update_card — renomeia card, muda value, dueDate, etc
+const UpdateCardSchema = z.object({
+  cardId: z.string(),
+  title: z.string().optional().describe('Novo título (renomeia card)'),
+  description: z.string().optional(),
+  valueCents: z.number().int().min(0).optional().describe('Valor em centavos'),
+  probability: z.number().int().min(0).max(100).optional().describe('Probabilidade 0-100'),
+  dueDate: z.number().int().optional().describe('Timestamp ms'),
+  ownerAgentId: z.string().optional().describe('Id do agente humano dono do card'),
+});
+export const CrmUpdateCardTool = buildTool<z.infer<typeof UpdateCardSchema>>({
+  name: 'crm_update_card',
+  searchHint: 'crm card update rename value owner',
+  description: `Atualiza um card existente: renomear (title), mudar valor, probabilidade, due date,
+ou trocar o dono. PATCH — só os campos passados são alterados. Cliente pode mudar nome do card
+a qualquer momento — use isso.`,
+  inputSchema: UpdateCardSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const patch: any = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.valueCents !== undefined) patch.valueCents = input.valueCents;
+    if (input.probability !== undefined) patch.probability = input.probability;
+    if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
+    if (input.ownerAgentId !== undefined) patch.ownerAgentId = input.ownerAgentId;
+    if (Object.keys(patch).length === 0) return { output: { unchanged: true }, outputText: 'Nenhum campo passado.' };
+    const upd = crm.updateCard(t, input.cardId, patch);
+    if (!upd) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} não encontrado.`, isError: true };
+    return { output: { card: upd }, outputText: `✓ Card atualizado: "${upd.title}"${input.valueCents !== undefined ? ` (${fmtMoney(upd.valueCents)})` : ''}` };
+  },
+});
+
 // ─── Registry: array exposto pra tools.ts ───────────────────────────────
 export const CrmTools = [
   CrmFindOrCreateContactTool,
@@ -704,4 +969,14 @@ export const CrmTools = [
   CrmMarkSubscriptionPaidTool,
   CrmCreateTaskTool,
   CrmCreateAppointmentTool,
+  // CRM config tools (agente conversacional monta funnel pro cliente)
+  CrmListBoardsTool,
+  CrmCreateBoardTool,
+  CrmListColumnsTool,
+  CrmCreateColumnTool,
+  CrmUpdateColumnTool,
+  CrmDeleteColumnTool,
+  CrmConfigureColumnAgentTool,
+  CrmDisableColumnAgentTool,
+  CrmUpdateCardTool,
 ];

@@ -1,7 +1,7 @@
 {
   "name": "system-clow",
   "version": "1.0.0",
-  "description": "System Clow - AI-powered coding agent powered by Anthropic Claude Sonnet 4.6",
+  "description": "System Clow — agente principal do System Cloud (GLM 5.1) com agentes de coluna do CRM (DeepSeek Chat 3.2)",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
