@@ -127,7 +127,10 @@ app.post('/signup', async (c) => {
   }
 
   const password_hash = await bcrypt.hash(password, 10);
-  const validTiers = ['starter', 'profissional', 'empresarial', 'business', 'one'];
+  // So aceita os 3 tiers publicos do /pricing. Tiers legacy (one/smart/business)
+  // existem em tiers.ts pra back-compat de tenants antigos, mas signup novo cai
+  // em starter por default.
+  const validTiers = ['starter', 'profissional', 'empresarial'];
   const tier = validTiers.includes(plan_tier) ? plan_tier : 'starter';
 
   // Create tenant with all user fields embedded

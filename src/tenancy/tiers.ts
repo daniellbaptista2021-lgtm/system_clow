@@ -1,15 +1,20 @@
 /**
  * tiers.ts — Tier definitions with quotas and features
  *
- * Hardcoded in code — no DB lookup needed for tier rules.
- * Margin analysis:
- *   ONE:          R$129.90 - estimated Claude usage margin
- *   SMART:        R$297   - ~R$100 avg      = ~R$197 margin (66%)
- *   PROFISSIONAL: R$497   - ~R$200 avg      = ~R$297 margin (60%)
- *   BUSINESS:     R$897   - ~R$400 avg      = ~R$497 margin (55%)
+ * Planos publicos vendidos (https://system-clow.pvcorretor01.com.br/pricing):
+ *   STARTER:      R$347/mes
+ *   PROFISSIONAL: R$697/mes  (mais escolhido)
+ *   EMPRESARIAL:  R$1.297/mes
+ *
+ * Tiers legacy (`one`, `smart`, `business`) ficam definidos abaixo so pra
+ * suportar tenants criados antes da padronizacao dos planos publicos. NAO
+ * sao oferecidos no signup nem na pricing page. Nao crie tenant novo neles.
  */
 
-export type TierName = 'one' | 'smart' | 'profissional' | 'business' | 'starter' | 'empresarial';
+export type TierName = 'starter' | 'profissional' | 'empresarial' | 'one' | 'smart' | 'business';
+
+/** Tiers que aparecem no /pricing publico — unicos aceitos pelo /auth/signup. */
+export const PUBLIC_TIERS: TierName[] = ['starter', 'profissional', 'empresarial'];
 
 export interface TierConfig {
   price_brl: number;
