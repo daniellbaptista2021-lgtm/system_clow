@@ -243,10 +243,19 @@ export function formatSulamericaQuotation(input: FormatQuotationInput): string {
   lines.push(`  🛏️ Diária de internação hospitalar`);
   lines.push(`  _...e muito mais!_`);
   lines.push('');
+  // PR 6.1: CTA forte com alternativa positiva (Sandler/SPIN). Cliente
+  // escolhe COMO paga em vez de SE compra — fecha mais rapido.
   const greeting = customerName ? customerName.split(/\s+/)[0] : '';
   lines.push(greeting
-    ? `Me diz o que achou da cobertura, _${greeting}_! Estou aguardando seu retorno 😊`
-    : `Me diz o que achou da cobertura! Estou aguardando seu retorno 😊`);
+    ? `Aí, _${greeting}_! 🎯 Pra eu já deixar sua família protegida, qual forma de pagamento prefere?`
+    : `Aí! 🎯 Pra eu já deixar sua família protegida, qual forma de pagamento prefere?`);
+  lines.push('');
+  lines.push(`💳 *Cartão de crédito* (mensalidade automática, sem se preocupar)`);
+  lines.push(`📄 *Boleto mensal* (chega no WhatsApp todo mês)`);
+  lines.push(`💰 *PIX mensal*`);
+  lines.push(`💳 *Débito automático* (na conta)`);
+  lines.push('');
+  lines.push(`Me fala qual encaixa melhor que eu já te mando pro corretor finalizar! 😊`);
 
   return lines.join('\n');
 }

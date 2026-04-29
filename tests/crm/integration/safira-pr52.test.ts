@@ -87,11 +87,12 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     expect(p).toContain('Qual dos dois faz mais sentido');
   });
 
-  // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
+  // ─── 3. Qualificador NAO cita valor em R$ (PR 6.1: regra mais rigida) ───
 
-  it('3. Qualificador prompt instrui NAO falar valor errado', () => {
+  it('3. Qualificador prompt instrui NUNCA citar valor em R$', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+fale\s+valor\s+errado/i);
+    // PR 6.1: Qualificador NAO sabe valor — regra mais rigida que PR 5.2
+    expect(p).toMatch(/NUNCA\s+cite\s+valor\s+em\s+R\$/i);
   });
 
   // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
@@ -141,12 +142,13 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
   });
 
-  // ─── 9. Vendedor Funeral trata objecao "tá caro" ───────────────────
+  // ─── 9. Vendedor Funeral trata objecao "tá caro" (PR 6.1: alternativa positiva) ───
 
   it('9. Vendedor Funeral prompt tem template pra objecao "tá caro"', () => {
     const p = prompts.PROMPT_VENDEDOR_FUNERAL;
     expect(p).toMatch(/T[áa] caro/);
-    expect(p).toMatch(/menos de R\$\s*1 por dia/i);
+    // PR 6.1: divisao por dia agora R$ 1,67 (49,90/30) — alternativa "Familiar ou Casal"
+    expect(p).toMatch(/menos de R\$\s*1[,.]67\s+por\s+dia/i);
   });
 
   // ─── 10. Coletor de Dados menciona Daniel especificamente ──────────
@@ -292,5 +294,90 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     expect(p).toContain('PASSO 3B');
     expect(p).toMatch(/escalar_humano.*urgencia.*alta/);
+  });
+
+  // ─── PR 6.1 — bug do 3o teste: Qualificador cotou sozinho, pulou Vendedor Funeral ───
+
+  it('PR 6.1 (1): Qualificador prompt NAO contem valor em R$ (R$ seguido de digito)', () => {
+    const p = prompts.PROMPT_QUALIFICADOR;
+    // Causa raiz do bug: ter tabela de precos no prompt fez o LLM cotar sozinho
+    // sem promover. Qualificador NAO sabe valor — quem sabe eh o Vendedor Funeral.
+    expect(p).not.toMatch(/\bR\$\s*\d/);
+  });
+
+  it('PR 6.1 (2): Qualificador prompt NAO contem precos especificos da tabela', () => {
+    const p = prompts.PROMPT_QUALIFICADOR;
+    // 4 modalidades originais nunca podem aparecer no prompt do Qualificador
+    expect(p).not.toContain('29,90');
+    expect(p).not.toContain('39,90');
+    expect(p).not.toContain('49,90');
+    expect(p).not.toContain('89,90');
+  });
+
+  it('PR 6.1 (3): Vendedor Funeral prompt PROIBE pergunta "quer fechar?" / "posso prosseguir?"', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    // Tecnica Sandler/SPIN: nunca pergunta SE fecha, sempre COMO fecha.
+    // Cliente brasileiro recusa fechamento se vendedor pergunta sim/nao.
+    expect(p).toMatch(/NUNCA\s+pergunte\s+["']?quer\s+fechar/i);
+    expect(p).toMatch(/NUNCA\s+PERGUNTAS\s+SIM\/N[ÃA]O/i);
+    // Lista de perguntas RUINS proibidas
+    expect(p).toMatch(/Quer\s+seguir\s+com\s+a\s+contrata[çc][ãa]o\?/i);
+    expect(p).toMatch(/Posso\s+prosseguir\?/i);
+  });
+
+  it('PR 6.1 (4): Vendedor Funeral prompt tem exemplo de alternativa positiva (boleto OU cartao)', () => {
+    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
+    // Exemplo canonico de alternativa: boleto mensal vs cartao (recorrente)
+    expect(p).toMatch(/boleto\s+mensal.*cart[ãa]o\s+recorrente|cart[ãa]o\s+recorrente.*boleto\s+mensal/i);
+    // E principio explicito: NUNCA SE fecha, sempre COMO fecha
+    expect(p).toMatch(/NUNCA\s+pergunta\s+SE\s+fecha.*COMO\s+fecha/i);
+  });
+
+  it('PR 6.1 (5): gerar_cotacao_sulamerica retorna CTA com 4 opcoes de pagamento', () => {
+    // Importa engine direto pra testar a mensagem renderizada (sem precisar de tool ctx).
+    // Seed minimo: tenant com plano Individual.
+    const tenantId = 'pr61-cta-' + randomBytes(3).toString('hex');
+    const board = store.seedDefaultBoards(tenantId);
+    void board;
+    // Plans: usa o seed default do schema migration ou criamos manualmente?
+    // Como esse arquivo de test nao tem helper de seed, usamos os planos do tenant default.
+    // Workaround: cria plano via store de planos.
+    // Nota: nao usa await import pra evitar TLA — modulos ja importados em beforeAll.
+    return import('../../../src/crm/store/tenantPlansStore.js').then(async (plansStore: any) => {
+      plansStore.createPlan({
+        tenantId, name: 'SulAmérica AP Flex Individual',
+        productType: 'acidentes_pessoais', basePriceCents: 2990,
+        coverageSummary: 'Funeral nacional.', minAge: 1, maxAge: 74,
+        surchargeOutsideRioCents: 0, priority: 10,
+      });
+      const engine = await import('../../../src/crm/agents/quotation/quotationEngine.js');
+      const r = engine.buildQuotation({
+        tenantId, qualification: { idadeTitular: 35 }, customerName: 'Lucas',
+      });
+      expect(r.ok).toBe(true);
+      const msg = r.message as string;
+      // CTA forte com alternativa positiva — 4 formas de pagamento
+      expect(msg).toMatch(/forma\s+de\s+pagamento\s+prefere/i);
+      expect(msg).toMatch(/Cart[ãa]o\s+de\s+cr[eé]dito/);
+      expect(msg).toMatch(/Boleto\s+mensal/);
+      expect(msg).toMatch(/PIX\s+mensal/);
+      expect(msg).toMatch(/D[eé]bito\s+autom[áa]tico/);
+      // Substituiu o CTA fraco "Me diz o que achou da cobertura"
+      expect(msg).not.toMatch(/Me\s+diz\s+o\s+que\s+achou\s+da\s+cobertura/i);
+      expect(msg).not.toMatch(/Estou\s+aguardando\s+seu\s+retorno/i);
+      // Saudacao com nome
+      expect(msg).toMatch(/Lucas/);
+    });
+  });
+
+  it('PR 6.1 (6): Qualificador prompt instrui chamar AMBAS tools (salvar + promover) e NAO escrever cotacao', () => {
+    const p = prompts.PROMPT_QUALIFICADOR;
+    // PASSO 5: as 2 tools tem que ser chamadas em sequencia
+    expect(p).toContain('salvar_dados_qualificacao');
+    expect(p).toContain('promover_para_vendedor_funeral');
+    // PROIBE LLM de tomar atalho e cotar sozinho
+    expect(p).toMatch(/N[ÃA]O\s+escreva\s+mensagem\s+pr[óo]pria\s+com\s+cota[çc][ãa]o/i);
+    expect(p).toMatch(/N[ÃA]O\s+mostre\s+valor/i);
+    expect(p).toMatch(/N[ÃA]O\s+pe[çc]a\s+fechamento/i);
   });
 });
