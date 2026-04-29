@@ -17,6 +17,7 @@ import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { saveMedia } from './media.js';
 import * as automations from './automations.js';
+import { applyTagSystem, cardHasTag } from './agents/tools/tags.js';
 import type { Channel2, Activity, MediaType } from './types.js';
 
 export interface InboundResult {
@@ -121,6 +122,21 @@ export async function ingestInbound(channel: Channel2, msg: {
       ...(savedFilename ? { savedFilename } : {}),
     },
   });
+
+  // 6.1. Classifica primeira inbound do card como lead_pago ou lead_aleatorio.
+  //      Lead pago vem do Click-to-Chat com texto "✅ Plano Familia/Individual - Clique Aqui".
+  //      Set-once por card: nao reclassifica se ja tem qualquer das duas tags.
+  if (
+    card &&
+    !isOutbound &&
+    msg.type === 'text' &&
+    (msg.text || '').trim() &&
+    !cardHasTag(card.id, 'lead_pago') &&
+    !cardHasTag(card.id, 'lead_aleatorio')
+  ) {
+    const isLeadPago = /plano\s+(famil[íi]a|individual).*clique\s+aqui/i.test(msg.text!);
+    applyTagSystem(card.id, isLeadPago ? 'lead_pago' : 'lead_aleatorio');
+  }
 
   // 7. Update channel last inbound (non-critical) — só pra direction=in
   if (!isOutbound) {

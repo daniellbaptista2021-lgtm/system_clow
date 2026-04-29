@@ -313,6 +313,81 @@ const lerDadosCard: ToolDef = {
   },
 };
 
+// ─── handoff_para_corretor ───────────────────────────────────────────────
+
+const handoffParaCorretor: ToolDef = {
+  name: 'handoff_para_corretor',
+  description: 'Encerra o atendimento automatico e direciona o cliente DIRETO pro corretor humano (Daniel). Move o card pra coluna "Lancar venda" e dispara alerta WhatsApp pro Daniel AGORA. Use quando: (a) cliente foi vago apos sua saudacao inicial e nao deu contexto sobre o que quer (lead aleatorio), (b) voce identificou que o caso precisa do humano direto.',
+  roles: ['*'],
+  parameters: {
+    type: 'object',
+    properties: {
+      motivo: { type: 'string', description: 'Razao objetiva em 1 frase (ex: "lead aleatorio sem contexto", "cliente pediu pra falar com humano direto").' },
+    },
+    required: ['motivo'],
+  },
+  async execute(args, ctx) {
+    const motivo = String(args.motivo || '').trim() || 'sem_motivo';
+
+    const cols = store.listColumns(ctx.tenantId, ctx.card.boardId!);
+    const target = cols.find((c) => /^lan[çc]ar\s*venda$/i.test(c.name));
+    let movedTo: string | null = null;
+    if (target && target.id !== ctx.card.columnId) {
+      try {
+        store.moveCard(ctx.tenantId, ctx.card.id, target.id);
+        movedTo = target.id;
+      } catch (err: any) {
+        logger.warn('[tool.handoff_para_corretor] moveCard falhou:', err?.message);
+      }
+    }
+
+    try {
+      const { applyTagSystem } = await import('./tags.js');
+      applyTagSystem(ctx.card.id, 'handoff_corretor');
+    } catch { /* nao bloqueia */ }
+
+    setCardAgentStatus(ctx.card.id, 'escalated');
+
+    let contactName: string | undefined;
+    try {
+      const c = ctx.card.contactId ? store.getContact?.(ctx.tenantId, ctx.card.contactId) : null;
+      contactName = c?.name;
+    } catch { /* noop */ }
+
+    try {
+      await outbound.emit(ctx.tenantId, 'agent.escalated', {
+        cardId: ctx.card.id,
+        cardTitle: ctx.card.title,
+        contactName,
+        contactPhone: ctx.customerPhone,
+        columnId: target?.id ?? ctx.column.id,
+        columnName: target?.name ?? ctx.column.name,
+        role: ctx.role,
+        urgencia: 'alta',
+        reason: `handoff: ${motivo}`,
+        turnsInColumn: ctx.state.turnsCount,
+      });
+    } catch (err: any) {
+      logger.warn('[tool.handoff_para_corretor] outbound emit falhou:', err?.message);
+    }
+
+    if (process.env.URGENT_ALERT_PHONE) {
+      void sendUrgentWhatsAppAlert(ctx, `HANDOFF: ${motivo}`, contactName).catch((err: any) => {
+        logger.warn('[tool.handoff_para_corretor] urgent alert falhou:', err?.message);
+      });
+    }
+
+    recordAgentMetric({
+      tenantId: ctx.tenantId, columnId: ctx.column.id, cardId: ctx.card.id,
+      event: 'escalated', reason: `handoff_corretor: ${motivo}`,
+      turnsInColumn: ctx.state.turnsCount,
+    });
+
+    logger.info(`[tool.handoff_para_corretor] card=${ctx.card.id} motivo="${motivo}" movedTo=${target?.name ?? '(sem coluna)'}`);
+    return { ok: true, result: { handoff: true, movedTo } };
+  },
+};
+
 export const COMMON_TOOLS: ToolDef[] = [
   escalarHumano,
   marcarPerdido,
@@ -320,6 +395,7 @@ export const COMMON_TOOLS: ToolDef[] = [
   agendarFollowup,
   consultarHistorico,
   lerDadosCard,
+  handoffParaCorretor,
 ];
 
 /** Helper compartilhado pra promote_*: valida coluna destino e mantem

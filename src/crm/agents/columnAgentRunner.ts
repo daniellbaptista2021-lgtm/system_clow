@@ -39,6 +39,7 @@ import {
   recordAgentMetric,
 } from '../store/cardAgentStateStore.js';
 import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.js';
+import { cardHasTag } from './tools/tags.js';
 import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
 import type { Channel2, Card, BoardColumn, ColumnAgentRole } from '../types.js';
@@ -79,7 +80,7 @@ export interface RunColumnAgentInput {
 
 export type RunResult =
   | { status: 'executed'; reply: string }
-  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' }
+  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' | 'meta_commentary' }
   | { status: 'locked_out' }
   | { status: 'error'; message: string };
 
@@ -223,7 +224,37 @@ ${column.agentPromotionCriteria || '(criterios nao definidos pelo admin — prom
 - NAO chame a mesma tool de promocao 2x na mesma resposta — se chamar 2x, o sistema retorna 'already_promoted' e voce pode parar.
 - Se cliente pede humano, xinga, ou voce ficou sem saber prosseguir → escalar_humano(motivo).
 `;
-  const finalSystemPrompt = systemPrompt + contextRules;
+
+  // Regras especiais pra lead aleatorio (sem origem upstream paga).
+  // Aplica em qualquer coluna se o card foi marcado como tal por inbox.ts.
+  const isLeadAleatorio = cardHasTag(card.id, 'lead_aleatorio');
+  const leadAleatorioRules = isLeadAleatorio ? `
+
+# CASO ESPECIAL — LEAD ALEATORIO (sem campanha upstream)
+Esse cliente NAO veio de link de campanha (extrato pago). Mandou mensagem
+aleatoria no WhatsApp da empresa. Trate em DOIS passos:
+
+PASSO 1 — PRIMEIRA INTERACAO: manda APENAS uma saudacao curta apropriada a hora
+do dia ("Oi, bom dia! 😊", "Oi, boa tarde 😊", "Oi, boa noite 😊"). NAO se
+apresenta como vendedora, NAO faz perguntas, NAO oferece nada. PARA. Espera
+o cliente falar o que quer.
+
+PASSO 2 — SEGUNDA INTERACAO em diante (cliente respondeu): avalia o contexto
+do que ele falou:
+  (a) Cliente DEU contexto — mencionou plano, seguro, cotacao, saude, funeral,
+      preco, faixa etaria, dependentes ou similar → segue fluxo normal de
+      qualificacao (sua missao default).
+  (b) Cliente foi VAGO — so respondeu saudacao, perguntou algo generico ("vi
+      seu numero", "queria saber sobre voces", "voces vendem o que?", "tudo bem
+      por ai?", repetiu "oi") → chama handoff_para_corretor(motivo: "lead
+      aleatorio sem contexto") e manda EXATAMENTE este texto pro cliente:
+      "Beleza! Vou te encaminhar pro *Daniel*, nosso corretor — ele te chama AQUI mesmo em alguns minutos. 😊"
+
+NAO insiste em qualificar lead aleatorio que nao deu contexto — direciona pro
+Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
+` : '';
+
+  const finalSystemPrompt = systemPrompt + contextRules + leadAleatorioRules;
 
   // 7) History
   const { contactId, messages: history } = loadRecentHistory(
@@ -347,6 +378,17 @@ ${column.agentPromotionCriteria || '(criterios nao definidos pelo admin — prom
       });
       return { status: 'blocked', reason: 'anti_loop' };
     }
+  }
+
+  // 9.5) Anti-meta-commentary: se o LLM retornou texto que parece ser
+  //      relato interno em vez de mensagem pro cliente, descarta e nao envia.
+  if (looksLikeMetaCommentary(finalText)) {
+    logger.warn(`[col-agent.runner] meta_commentary bloqueou envio para ${customerPhone}: "${finalText.slice(0, 100)}"`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'meta_commentary',
+    });
+    return { status: 'blocked', reason: 'meta_commentary' };
   }
 
   // 10) Envia (sendOutbound loga message_out + bumpa card pro topo)
@@ -491,6 +533,18 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     return { status: 'error', message: 'tool_loop_max_iterations' };
   }
 
+  // Anti-meta-commentary (defesa em profundidade): se o LLM retornou
+  // texto narrando suas proprias acoes em vez de mensagem pro cliente,
+  // suprime — nao envia.
+  if (finalText && looksLikeMetaCommentary(finalText)) {
+    logger.warn(`[col-agent.runFromFire] meta_commentary bloqueou envio para ${customerPhone}: "${finalText.slice(0, 100)}"`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'meta_commentary_inactivity',
+    });
+    finalText = '';
+  }
+
   // Envia texto final (se houver). Se LLM so chamou tools (ex: marcar_morno
   // sem mensagem), nao mandamos nada — comportamento valido.
   if (finalText) {
@@ -525,6 +579,16 @@ de inatividade. Use as tools disponiveis pra agir — voce pode:
 - Marcar perdido se ja tentou cobrar antes sem sucesso
 
 NAO mande mais de 1 mensagem por disparo. NAO se reapresente.
+
+# REGRA CRITICA — TEXTO VAI LITERALMENTE PRO CLIENTE
+Qualquer texto que voce emitir FORA de tool_calls eh enviado palavra-por-palavra
+pro cliente via WhatsApp. NUNCA escreva meta-comentario (relato do que voce fez,
+do que vai fazer, ou do estado do cliente). NUNCA fale do cliente em 3a pessoa.
+Frases PROIBIDAS: "Feito!", "Marquei como morno", "Agendei follow-up", "Vou
+aguardar a resposta do cliente", "Acabei de mandar a primeira mensagem", "ainda
+eh cedo", "o cliente parece", "o cliente continua". Esse texto eh pro operador
+interno e NAO PODE chegar no cliente. Se voce so vai chamar tools e nao tem
+mensagem real pra enviar, retorne string vazia ("").
 `;
 
 function buildInactivityInstruction(fireCount: number, elapsedMin: number, role: ColumnAgentRole): string {
@@ -538,6 +602,33 @@ function buildInactivityInstruction(fireCount: number, elapsedMin: number, role:
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** Detecta texto que o LLM produziu como meta-comentario interno (falando
+ *  SOBRE o cliente / SOBRE suas acoes em vez de falando COM o cliente). Esse
+ *  texto NUNCA pode ser enviado pelo WhatsApp. Bug recorrente quando o LLM
+ *  recebe instrucao [SYSTEM:inactivity_fire] e responde como observador.
+ *  Heuristica conservadora: padroes fortes que praticamente nao aparecem em
+ *  mensagem real pro cliente (referencia ao cliente em 3a pessoa, frases de log
+ *  sobre tools, "ainda eh cedo", "vou aguardar", etc). */
+export function looksLikeMetaCommentary(text: string): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  const patterns: RegExp[] = [
+    /\bo cliente\b/,
+    /\bcliente parece\b/,
+    /\bcliente continua\b/,
+    /\bvou aguardar (a |o |sua |uma )?(resposta|cliente|mensagem)/,
+    /\bacabei de (mandar|enviar) (a |uma |minha )?(primeira )?(mensagem|msg)/,
+    /\bmarc(ar|ado|amos|quei) (como |o cliente como )?(morno|perdido|frio|quente)/,
+    /\b(j[áa] )?agendei (o |um |a |meu )?follow[\s\-]?up/,
+    /\bainda [eé] cedo (pra|para)/,
+    /\bpromov(i|ido) (o |a |para)/,
+    /\b(j[áa] )?escalei (o |a )?(cliente|atendimento|caso)/,
+    /\bsem responder (o )?cliente/,
+    /\bvou (esperar|aguardar) (ele|ela) responder/,
+  ];
+  return patterns.some((p) => p.test(t));
+}
 
 /** Substitui {{key}} no template pelo valor do dict. Sem template engine. */
 function renderPrompt(template: string, vars: Record<string, string>): string {
