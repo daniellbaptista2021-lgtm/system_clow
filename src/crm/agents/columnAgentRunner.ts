@@ -614,18 +614,39 @@ export function looksLikeMetaCommentary(text: string): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
   const patterns: RegExp[] = [
+    // Referencia ao cliente em 3a pessoa
     /\bo cliente\b/,
+    /\beste lead\b/,
+    /\besse lead\b/,
     /\bcliente parece\b/,
     /\bcliente continua\b/,
-    /\bvou aguardar (a |o |sua |uma )?(resposta|cliente|mensagem)/,
-    /\bacabei de (mandar|enviar) (a |uma |minha )?(primeira )?(mensagem|msg)/,
-    /\bmarc(ar|ado|amos|quei) (como |o cliente como )?(morno|perdido|frio|quente)/,
-    /\b(j[áa] )?agendei (o |um |a |meu )?follow[\s\-]?up/,
-    /\bainda [eé] cedo (pra|para)/,
-    /\bpromov(i|ido) (o |a |para)/,
-    /\b(j[áa] )?escalei (o |a )?(cliente|atendimento|caso)/,
     /\bsem responder (o )?cliente/,
+    // Aguardar / esperar resposta
+    /\bvou aguardar (a |o |sua |uma )?(resposta|cliente|mensagem)/,
     /\bvou (esperar|aguardar) (ele|ela) responder/,
+    /\baguardando (corretor|atendimento|humano|retorno do cliente)/,
+    // Relato de acoes proprias (mensagens, tools)
+    /\bacabei de (mandar|enviar) (a |uma |minha )?(primeira )?(mensagem|msg)/,
+    /\b(marc|anot|registr|classific|sinaliz|defin)(ar|ado|amos|quei|ei|ou) (como |o cliente como |este lead como |esse lead como )?(morno|perdido|frio|quente|qualificado|desqualificado|interessado)/,
+    /\b(j[áa] )?agendei (o |um |a |meu )?follow[\s\-]?up/,
+    /\bagendei .{0,30}(retorno|contato|liga[cç][aã]o)/,
+    /\bpromov(i|ido) (o |a |para|o card)/,
+    /\b(j[áa] )?escalei (o |a )?(cliente|atendimento|caso|lead)/,
+    /\bencaminh(ei|ado) (o |para o |pro )?(corretor|daniel|humano|atendimento)/,
+    /\bpassei (o |para o |pro )?(corretor|daniel|humano|atendimento)/,
+    // Status / lead-tagging
+    /\blead (qualificado|desqualificado|frio|morno|quente|aleat[oó]rio)\b/,
+    /\bstatus[:\s]+(morno|frio|quente|qualificado|aguardando|perdido)/,
+    // Meta de fluxo (nunca aparece em mensagem real ao cliente)
+    /\bainda [eé] cedo (pra|para)/,
+    /\bcomposi[cç][aã]o familiar (completa|coletada|registrada)/,
+    /\b(necess[aá]rio|preciso) (montar|gerar|criar) (a |uma )?(proposta|cota[cç][aã]o) personalizada/,
+    /\bcorretor (humano )?(precisa|deve|vai) (assumir|atender|ligar|continuar)/,
+    /\bproposta personalizada\b/,
+    /\bpr[oó]ximo passo[:\s]/,
+    // Bullet/checklist meta
+    /^[\s]*[-•*]\s*(status|tag|lead|cliente)/im,
+    /^[\s]*✅\s*(marcado|aplicado|feito|conclu[ií]do)/im,
   ];
   return patterns.some((p) => p.test(t));
 }
