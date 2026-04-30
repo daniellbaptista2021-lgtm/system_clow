@@ -614,39 +614,72 @@ export function looksLikeMetaCommentary(text: string): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
   const patterns: RegExp[] = [
-    // Referencia ao cliente em 3a pessoa
+    // ─── Referencia ao cliente em 3a pessoa ─────────────────────────────
     /\bo cliente\b/,
+    /\bo lead\b/,
     /\beste lead\b/,
     /\besse lead\b/,
     /\bcliente parece\b/,
     /\bcliente continua\b/,
     /\bsem responder (o )?cliente/,
-    // Aguardar / esperar resposta
+    /\b(a |o )?cliente \(.*\) (pediu|perguntou|comentou|sinalizou|demonstrou)/,
+    /\bela (n[aã]o respondeu|ainda n[aã]o respondeu|demonstrou interesse)/,
+    /\bele (n[aã]o respondeu|ainda n[aã]o respondeu|demonstrou interesse)/,
+    // ─── Aguardar / esperar resposta ────────────────────────────────────
     /\bvou aguardar (a |o |sua |uma )?(resposta|cliente|mensagem)/,
     /\bvou (esperar|aguardar) (ele|ela) responder/,
     /\baguardando (corretor|atendimento|humano|retorno do cliente)/,
-    // Relato de acoes proprias (mensagens, tools)
+    // ─── Relato de acoes proprias ──────────────────────────────────────
     /\bacabei de (mandar|enviar) (a |uma |minha )?(primeira )?(mensagem|msg)/,
-    /\b(marc|anot|registr|classific|sinaliz|defin)(ar|ado|amos|quei|ei|ou) (como |o cliente como |este lead como |esse lead como )?(morno|perdido|frio|quente|qualificado|desqualificado|interessado)/,
+    // FIX 2026-04-30: bug ortografico — "marquei"/"classifiquei" usam
+    // "marqu"/"classifiqu" (ortografia portuguesa), nao "marc"+"quei". Antes
+    // o regex tinha (marc|...)(quei) que NUNCA casava com "marquei". Vazou
+    // "Marquei como morno..." pro cliente. Aceita as duas raizes + "i" e
+    // "amos" (defini, definimos), e tolera ate 30 chars entre verbo e label
+    // (ex: "marquei como morno com follow-up").
+    /\b(marc|marqu|anot|registr|classific|classifiqu|sinaliz|defin)(ar|ada|adas|ado|ados|amos|am|aram|ou|ei|emos|e|i|iu|imos|iram)\b.{0,30}\b(como )?(morno|perdid[oa]|fri[oa]|quent[ea]|qualificad[oa]|desqualificad[oa]|interessad[oa])\b/,
     /\b(j[áa] )?agendei (o |um |a |meu )?follow[\s\-]?up/,
     /\bagendei .{0,30}(retorno|contato|liga[cç][aã]o)/,
     /\bpromov(i|ido) (o |a |para|o card)/,
     /\b(j[áa] )?escalei (o |a )?(cliente|atendimento|caso|lead)/,
     /\bencaminh(ei|ado) (o |para o |pro )?(corretor|daniel|humano|atendimento)/,
     /\bpassei (o |para o |pro )?(corretor|daniel|humano|atendimento)/,
-    // Status / lead-tagging
+    /\bvou (mandar|enviar) (uma |um )?(cobran[cç]a|mensagem|msg) (gentil|leve|amig[aá]vel|firme|educada|simples)/,
+    // ─── Status / lead-tagging ──────────────────────────────────────────
     /\blead (qualificado|desqualificado|frio|morno|quente|aleat[oó]rio)\b/,
     /\bstatus[:\s]+(morno|frio|quente|qualificado|aguardando|perdido)/,
-    // Meta de fluxo (nunca aparece em mensagem real ao cliente)
+    // ─── Meta de fluxo / sistema interno ────────────────────────────────
     /\bainda [eé] cedo (pra|para)/,
     /\bcomposi[cç][aã]o familiar (completa|coletada|registrada)/,
     /\b(necess[aá]rio|preciso) (montar|gerar|criar) (a |uma )?(proposta|cota[cç][aã]o) personalizada/,
     /\bcorretor (humano )?(precisa|deve|vai) (assumir|atender|ligar|continuar)/,
     /\bproposta personalizada\b/,
     /\bpr[oó]ximo passo[:\s]/,
-    // Bullet/checklist meta
+    // FIX 2026-04-30: vazamentos novos vistos em prod (cliente Tania).
+    // Agente narrava o pr[oó]prio raciocinio dentro de mensagem ao cliente.
+    /\bdeixa eu (avaliar|analisar|pensar|revisar|checar|olhar|considerar)/,
+    /\b(última|ultima|primeira|sua) (pergunta|mensagem|msg|d[uú]vida) (ficou|est[aá]|esta) no ar/,
+    /\bficou no ar\b/,
+    /\bvolt(o|arei|amos) a (atender|responder|falar)/,
+    /\b(o )?sistema (dispara|envia|manda|aciona|aplica|vai disparar|vai enviar) (o |a |uma |um )?(follow[\s\-]?up|cobran[cç]a|alerta|mensagem|msg)/,
+    /\bfollow[\s\-]?up autom[aá]tico\b/,
+    /\bse (ela|ele|o cliente|a cliente) (responder|escrever|falar|retornar) at[eé]/,
+    /\bcaso contr[aá]rio[,\s]+(o |a )?(sistema|bot|agente|automation|automa[cç][aã]o)/,
+    /\bdemonstrou interesse real\b/,
+    /\bn[aã]o perder o fio da meada\b/,
+    /\bvou acionar (o |a )?(corretor|sistema|alerta|bot)/,
+    /\bj[aá] vou acionar\b/,
+    /\binativ[oa] \(\d+ (minutos?|min|horas?|h|dias?|d)\)/,
+    /\b\(0 minutos?\)/,
+    // ─── Bullet/checklist meta ──────────────────────────────────────────
     /^[\s]*[-•*]\s*(status|tag|lead|cliente)/im,
     /^[\s]*✅\s*(marcado|aplicado|feito|conclu[ií]do)/im,
+    // FIX 2026-04-30: blocos de an[aá]lise estruturada com bullets — o LLM
+    // as vezes responde com "- A cliente (Tania) pediu..." como se
+    // estivesse num scratchpad. Cliente nunca v[ê] msg formatada assim.
+    /^[\s]*-\s+[aA]\s+cliente\s+\(/im,
+    /^[\s]*-\s+[eE]u\s+(perguntei|disse|mandei|enviei|escrevi|comentei)/im,
+    /^[\s]*-\s+[aA]cabou\s+de\s+ficar\s+(inativ[oa]|sem)/im,
   ];
   return patterns.some((p) => p.test(t));
 }
