@@ -13,7 +13,7 @@
 
 import { getCrmDb } from './schema.js';
 
-const DEFAULT_TIER = 'free';
+const DEFAULT_TIER = "unlimited";
 const TIER_DEFAULTS: Record<string, { perMin: number; perHour: number }> = {
   free:      { perMin: 60,   perHour: 1000 },
   pro:       { perMin: 300,  perHour: 10000 },
