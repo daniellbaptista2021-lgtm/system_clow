@@ -42,7 +42,25 @@ import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.j
 import { cardHasTag } from './tools/tags.js';
 import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
+import { getCrmDb } from '../schema.js';
 import type { Channel2, Card, BoardColumn, ColumnAgentRole } from '../types.js';
+
+// ─── Kill switch absoluto ─────────────────────────────────────────────────
+// Lê crm_columns.agent_enabled DIRETO do DB, ignorando o objeto column
+// passado por parametro (pode estar stale se o admin acabou de desligar).
+// Daniel 2026-04-30: "se ta desligado na chave nao deve funcionar nem
+// mandar msg pro cliente de maneira nenhuma".
+function isAgentEnabledFresh(columnId: string): boolean {
+  try {
+    const r = getCrmDb()
+      .prepare('SELECT agent_enabled FROM crm_columns WHERE id = ?')
+      .get(columnId) as { agent_enabled?: number } | undefined;
+    return !!(r && r.agent_enabled === 1);
+  } catch {
+    // Em caso de erro de DB, falha CLOSED (kill switch e prioridade).
+    return false;
+  }
+}
 
 // ─── Defaults ────────────────────────────────────────────────────────────
 
@@ -80,7 +98,7 @@ export interface RunColumnAgentInput {
 
 export type RunResult =
   | { status: 'executed'; reply: string }
-  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' | 'meta_commentary' }
+  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' | 'meta_commentary' | 'agent_disabled' }
   | { status: 'locked_out' }
   | { status: 'error'; message: string };
 
@@ -90,6 +108,17 @@ export async function runColumnAgent(input: RunColumnAgentInput): Promise<RunRes
   const { channel, card, column, customerPhone } = input;
   const tenantId = channel.tenantId;
   const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
+
+  // 0) KILL SWITCH — checa crm_columns.agent_enabled DIRETO do DB.
+  //    Se admin desligou, NAO executa nada — nem lock, nem mensagem.
+  if (!isAgentEnabledFresh(column.id)) {
+    logger.info(`[col-agent.runner] aborted card=${card.id} column=${column.id} reason=agent_disabled`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'agent_disabled',
+    });
+    return { status: 'blocked', reason: 'agent_disabled' };
+  }
 
   // 1) Cluster lock
   const lockKey = buildLockKey(input);
@@ -443,6 +472,18 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
   const { channel, card, column, fireCount, elapsedMin } = input;
   const tenantId = channel.tenantId;
   const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
+
+  // 0) KILL SWITCH — mesmo guard do runColumnAgent.
+  //    Bot desligado nao dispara via timer/inactivity tampouco.
+  if (!isAgentEnabledFresh(column.id)) {
+    logger.info(`[col-agent.runFromFire] aborted card=${card.id} column=${column.id} reason=agent_disabled fireCount=${fireCount}`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'agent_disabled_inactivity',
+    });
+    return { status: 'blocked', reason: 'agent_disabled' };
+  }
+
   // Tenta resolver phone do contato pra context
   const contact = card.contactId ? store.getContact?.(tenantId, card.contactId) : null;
   const customerPhone = contact?.phone || '';
