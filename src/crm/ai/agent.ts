@@ -19,7 +19,7 @@ import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
 import type { Channel2 } from '../types.js';
 import { pickAgent, type AgentPick } from '../agents/columnAgentSelector.js';
-import { runColumnAgent } from '../agents/columnAgentRunner.js';
+import { runColumnAgent, looksLikeMetaCommentary } from '../agents/columnAgentRunner.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -441,6 +441,15 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
         }
       }
     } catch { /* nao bloqueia se anti-loop falhar */ }
+  }
+
+  // 5.5 Anti-meta-commentary: se o LLM gerou texto que parece relato
+  //     interno em vez de mensagem pro cliente, NAO envia. Mesma defesa
+  //     que columnAgentRunner — agente de canal estava sem ela e podia
+  //     vazar "marquei como morno" / "sou a qualificadora" etc.
+  if (looksLikeMetaCommentary(reply)) {
+    logger.warn(`[ai/agent] meta_commentary bloqueou envio para ${customerPhone}: "${reply.slice(0, 100)}"`);
+    return;
   }
 
   // 6. Envia via canal (E grava message_out + card_id via sendOutbound)
