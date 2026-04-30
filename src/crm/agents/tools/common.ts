@@ -5,6 +5,7 @@
 import { logger } from '../../../utils/logger.js';
 import * as store from '../../store.js';
 import * as outbound from '../../outboundWebhooks.js';
+import { getCrmDb } from '../../schema.js';
 import {
   recordAgentMetric,
   setCardAgentStatus,
@@ -83,8 +84,52 @@ const escalarHumano: ToolDef = {
       });
     }
 
-    logger.info(`[tool.escalar_humano] card=${ctx.card.id} urgencia=${urgencia} reason="${motivo}"`);
-    return { ok: true, result: { escalated: true, urgencia }, userVisible:
+    // FIX 2026-04-30 (Daniel): mover card pra coluna "Atendimento Humano"
+    // do mesmo board, se existir. Sem isso, agente avisa o Daniel mas o
+    // card fica parado em Lead novo — Daniel precisa arrastar manual.
+    let movedTo: { id: string; name: string } | null = null;
+    try {
+      if (ctx.card.boardId) {
+        const cols = store.listColumns(ctx.tenantId, ctx.card.boardId);
+        // Match tolerante: lowercase + remove diacriticos via NFD/replace de
+        // combining marks (range u0300-u036f). Aceita "Atendimento Humano",
+        // "atendimento humano", "Humano" etc.
+        const norm = (s: string) =>
+          s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim();
+        const target = cols.find((c) => {
+          const n = norm(c.name);
+          return n === 'atendimento humano' || n === 'humano' || n === 'atendimento';
+        });
+        if (target && target.id !== ctx.column.id) {
+          const db = getCrmDb();
+          db.prepare('UPDATE crm_cards SET column_changed_at = ? WHERE id = ?').run(Date.now(), ctx.card.id);
+          store.moveCard(ctx.tenantId, ctx.card.id, target.id);
+          // Reseta state do agente pra coluna nova (NAO inicia bot la — bot
+          // de Atendimento Humano fica OFF, humano assume)
+          upsertCardAgentState({
+            cardId: ctx.card.id,
+            columnId: target.id,
+            currentAgentRole: 'custom',
+            tenantId: ctx.tenantId,
+            turnsCount: 0,
+            inactivityTimerAt: null,
+            inactivityFireCount: 0,
+            status: 'escalated',
+          });
+          movedTo = { id: target.id, name: target.name };
+          recordAgentMetric({
+            tenantId: ctx.tenantId, columnId: target.id, cardId: ctx.card.id,
+            event: 'promoted', reason: `escalado_humano: ${motivo}`,
+          });
+          logger.info(`[tool.escalar_humano] card=${ctx.card.id} movido ${ctx.column.name} → ${target.name}`);
+        }
+      }
+    } catch (err: any) {
+      logger.warn('[tool.escalar_humano] move pra Atendimento Humano falhou:', err?.message);
+    }
+
+    logger.info(`[tool.escalar_humano] card=${ctx.card.id} urgencia=${urgencia} reason="${motivo}"${movedTo ? ` movedTo=${movedTo.name}` : ''}`);
+    return { ok: true, result: { escalated: true, urgencia, movedTo }, userVisible:
       'Vou te transferir pra um especialista. Já já alguém da equipe entra em contato! 🙏' };
   },
 };
