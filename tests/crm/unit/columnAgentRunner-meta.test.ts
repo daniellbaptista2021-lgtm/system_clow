@@ -90,3 +90,42 @@ describe('looksLikeMetaCommentary — bug ortografico do regex pt-BR (regressao)
     expect(looksLikeMetaCommentary('Anotei o cliente como interessado no plano premium')).toBe(true);
   });
 });
+
+describe('looksLikeMetaCommentary — vazamento de identidade de role (Maria Cecilia 2026-04-30)', () => {
+  // Caso real: cliente Maria Cecilia Goncalves recebeu "Oi! Boa noite 😉
+  // Prazer, sou a qualificadora, da PV Corretora!" — agente vazou o role
+  // (qualificador) como se fosse profissao. Cliente NUNCA pode ouvir o
+  // termo tecnico interno.
+  const vazamentosIdentidade = [
+    'Oi! Boa noite 😉 Prazer, sou a qualificadora, da PV Corretora!',
+    'Sou a qualificadora da PV Corretora.',
+    'Prazer, sou o qualificador!',
+    'Oi, sou a cotadora.',
+    'Sou o cotador SulAmerica.',
+    'Oi, sou a vendedora bot.',
+    'Aqui é a coletora de dados.',
+    'Sou o followupper.',
+    'Eu sou o closer da equipe.',
+    'Oi, me chamo qualificadora!',
+    'Aqui é a educadora.',
+    'Sou a finalizadora!',
+    // Auto-identificacao como bot/IA
+    'Oi, sou o bot da PV.',
+    'Sou a IA que cuida dos atendimentos.',
+    'Sou um assistente virtual.',
+    'Sou o agente automatico.',
+    'Sou a inteligencia artificial.',
+  ];
+
+  it.each(vazamentosIdentidade)('bloqueia: %s', (msg) => {
+    expect(looksLikeMetaCommentary(msg)).toBe(true);
+  });
+
+  it('NAO bloqueia mensagens reais com nome de pessoa', () => {
+    // Frases que mencionam um nome real NAO devem cair no bloqueio.
+    expect(looksLikeMetaCommentary('Oi! Sou a Safira da PV Corretora')).toBe(false);
+    expect(looksLikeMetaCommentary('Prazer, sou a Ana da PV Corretora')).toBe(false);
+    expect(looksLikeMetaCommentary('Aqui e o Lucas, da SulAmerica')).toBe(false);
+    expect(looksLikeMetaCommentary('Me chamo Marina, sou da PV Corretora')).toBe(false);
+  });
+});

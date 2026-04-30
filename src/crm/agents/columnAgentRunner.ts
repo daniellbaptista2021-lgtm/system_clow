@@ -689,6 +689,14 @@ export function looksLikeMetaCommentary(text: string): boolean {
     // ─── Status / lead-tagging ──────────────────────────────────────────
     /\blead (qualificado|desqualificado|frio|morno|quente|aleat[oó]rio)\b/,
     /\bstatus[:\s]+(morno|frio|quente|qualificado|aguardando|perdido)/,
+    // FIX 2026-04-30: agente vazou identidade de role pro cliente (caso
+    // Maria Cecilia Goncalves: "sou a qualificadora, da PV Corretora").
+    // Cliente NUNCA pode ouvir o role tecnico do agente — qualificador,
+    // cotador, vendedor, coletor, followupper, closer. Bloqueia tanto
+    // formas masculinas quanto femininas + frases de auto-identificacao.
+    /\b(sou|me chamo|aqui [eé]) (a |o )?(qualificador[ae]?|cotador[ae]?|vendedor[ae]?|coletor[ae]?|followupper|closer|educador[ae]?|finalizador[ae]?)\b/,
+    /\b(sou|me chamo) (o |a |um |uma )?(bot|ia|assistente|agente|atendente virtual|inteligencia artificial|intelig[eê]ncia artificial)\b/,
+    /\b(eu sou|sou) (o |a )?role[:\s]/,
     // ─── Meta de fluxo / sistema interno ────────────────────────────────
     /\bainda [eé] cedo (pra|para)/,
     /\bcomposi[cç][aã]o familiar (completa|coletada|registrada)/,

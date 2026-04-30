@@ -565,6 +565,22 @@ export function registerBoardsRoutes(app: Hono): void {
     if (body.agent_enabled === true && !String(body.agent_system_prompt ?? '').trim()) {
       return badRequest(c, 'agent_system_prompt obrigatorio quando agent_enabled=true');
     }
+
+    // FIX 2026-04-30: rejeita agent_name igual a um role name (ou variante
+    // feminina). Bug em prod: alguem salvou agent_name="qualificador" e o
+    // LLM se identificou como "sou a qualificadora" pro cliente.
+    const FORBIDDEN_NAME_PATTERNS = [
+      /^qualificador[ae]?$/i, /^cotador[ae]?$/i, /^vendedor[ae]?$/i,
+      /^coletor[ae]?$/i, /^followupper$/i, /^custom$/i, /^educador[ae]?$/i,
+      /^finalizador[ae]?$/i, /^closer$/i, /^vendedor_funeral$/i,
+      /^coletor_dados$/i, /^bot$/i, /^ia$/i, /^assistente$/i, /^agente$/i,
+    ];
+    if (body.agent_name !== undefined && body.agent_name !== null && body.agent_name !== '') {
+      const trimmed = String(body.agent_name).trim();
+      if (FORBIDDEN_NAME_PATTERNS.some((p) => p.test(trimmed))) {
+        return badRequest(c, 'agent_name nao pode ser igual a um role/funcao do sistema. Use um nome de pessoa (ex: Safira, Ana, Lucas).', { rejected: trimmed });
+      }
+    }
     const validateStepsJson = (s: unknown, label: string): { ok: true } | { ok: false; err: string } => {
       if (s === null || s === undefined || s === '') return { ok: true };
       try {
