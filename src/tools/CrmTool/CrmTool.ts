@@ -26,8 +26,6 @@ import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tas
 import { createAppointment as calCreate } from '../../crm/calendar.js';
 import { logger } from '../../utils/logger.js';
 import {
-  applyTagSystem,
-  removeTagSystem,
   listCardTags,
   listCardIdsByTag,
 } from '../../crm/agents/tools/tags.js';
@@ -985,18 +983,23 @@ a qualquer momento — use isso.`,
 const ListCardsSchema = z.object({
   boardName: z.string().optional().describe('Nome do board (default: principal)'),
   columnName: z.string().optional().describe('Filtra por coluna (ex: "Lead novo"). Se omitido, lista de todas as colunas do board.'),
-  tag: z.string().optional().describe('Filtra cards que tem esta tag (ex: "aguardando_cotacao", "qualificado_funeral")'),
-  label: z.string().optional().describe('Filtra por label do card (ex: "urgente", "vip")'),
+  tag: z.string().optional().describe('Filtra por TAG INTERNA de funil (ex: "entry_dispatched", "final_delete_scheduled"). Sistema. Use raramente.'),
+  label: z.string().optional().describe('Filtra por ETIQUETA visivel do card (ex: "Premium", "lead_quente"). E o que o usuario ve na UI.'),
   limit: z.number().optional().describe('Max resultados (default 100)'),
 });
 
 export const CrmListCardsTool = buildTool<z.infer<typeof ListCardsSchema>>({
   name: 'crm_list_cards',
   searchHint: 'crm cards lista list filter tag column board',
-  description: `Lista cards detalhados (id, titulo, contato, telefone, coluna, tags, valor) com filtros
-opcionais por coluna, tag ou label. USE ISSO quando o usuario pedir "cards com tag X",
+  description: `Lista cards detalhados (id, titulo, contato, coluna, etiquetas, valor) com filtros
+opcionais por coluna, tag ou label. USE ISSO quando o usuario pedir "cards com etiqueta X",
 "cards do Lead novo", "cards do funil", etc. Retorna array de cards pronto pra iterar
-(mover, mandar mensagem, atualizar).`,
+(mover, mandar mensagem, atualizar).
+
+OUTPUT: cada card tem dois campos separados:
+  - "labels" → ETIQUETAS visiveis pro usuario (mexa com crm_apply_tag / crm_remove_tag).
+  - "tags" → tags internas de funil (entry_dispatched, etc). Somente leitura.
+Quando o usuario fala "tag" ou "etiqueta" sem especificar, ele quase sempre quer dizer "labels".`,
   inputSchema: ListCardsSchema,
   userFacingName: (i) => {
     const parts = [i?.columnName, i?.tag ? `tag=${i.tag}` : null].filter(Boolean);
@@ -1082,17 +1085,25 @@ opcionais por coluna, tag ou label. USE ISSO quando o usuario pedir "cards com t
 });
 
 // ════════════════════════════════════════════════════════════════════════
-// crm_apply_tag — adiciona tag em um card
+// crm_apply_tag — adiciona ETIQUETA (label) em um card.
 // ════════════════════════════════════════════════════════════════════════
+// IMPORTANTE: existem 2 sistemas de classificacao no CRM:
+//   - card.labels (labels_json) — VISIVEL ao usuario no menu "Etiquetas..."
+//     do kanban. E o que o cliente espera quando pede "muda a etiqueta".
+//   - crm_card_tags (tabela) — INTERNO, controle de fluxo de funil
+//     (entry_dispatched, final_delete_scheduled, etc). Gerenciado
+//     automaticamente pelo columnTimerScheduler/inbox/followup.
+//     NAO e visivel na UI e o agente NAO deve mexer aqui.
+// Esta tool atua em card.labels — o que o usuario ve.
 const ApplyTagSchema = z.object({
   cardId: z.string().describe('ID do card (use crm_list_cards pra achar)'),
-  tag: z.string().describe('Tag em snake_case (ex: "aguardando_cotacao", "vip")'),
+  tag: z.string().describe('Etiqueta exibida pro usuario (ex: "Premium", "lead_quente", "Atrasado"). Mantem maiusculas/espacos.'),
 });
 
 export const CrmApplyTagTool = buildTool<z.infer<typeof ApplyTagSchema>>({
   name: 'crm_apply_tag',
-  searchHint: 'crm card tag apply add label classify',
-  description: 'Aplica uma tag em um card. Idempotente (re-aplicar nao faz nada). Tags sao usadas pra classificar/segmentar leads.',
+  searchHint: 'crm card tag apply add label classify etiqueta rotulo',
+  description: 'Aplica uma ETIQUETA (label) visivel no card — a mesma que o usuario ve no menu "Etiquetas..." da UI do kanban. Idempotente (case-insensitive). NAO mexe em tags internas de funil.',
   inputSchema: ApplyTagSchema,
   userFacingName: (i) => i ? `crm_apply_tag(${i.tag})` : 'crm_apply_tag',
   isReadOnly: () => false,
@@ -1100,30 +1111,37 @@ export const CrmApplyTagTool = buildTool<z.infer<typeof ApplyTagSchema>>({
   isDestructive: () => false,
   interruptBehavior: () => 'cancel' as const,
   toAutoClassifierInput: (i) => i.tag,
-  renderToolUseMessage: (i) => `Aplicar tag "${i.tag}"`,
+  renderToolUseMessage: (i) => `Aplicar etiqueta "${i.tag}"`,
   checkPermissions: async () => ({ behavior: 'allow' as const }),
   async call(input, ctx): Promise<ToolResult> {
     const t = tid(ctx);
     const card = crm.getCard?.(t, input.cardId);
     if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
-    const tag = input.tag.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 50);
-    const inserted = applyTagSystem(input.cardId, tag);
-    return { output: { tag, inserted }, outputText: inserted ? `✓ Tag "${tag}" aplicada.` : `(ja tinha) Tag "${tag}".` };
+    const tag = input.tag.trim().slice(0, 50);
+    if (!tag) return { output: { error: 'empty' }, outputText: '❌ Etiqueta vazia.', isError: true };
+    const labels = Array.isArray(card.labels) ? card.labels : [];
+    const already = labels.some(l => String(l).toLowerCase() === tag.toLowerCase());
+    if (already) return { output: { tag, inserted: false }, outputText: `(ja tinha) Etiqueta "${tag}".` };
+    const newLabels = [...labels, tag];
+    const upd = crm.updateCard(t, input.cardId, { labels: newLabels });
+    if (!upd) return { output: { error: 'update_failed' }, outputText: `❌ Falha ao aplicar etiqueta no card.`, isError: true };
+    return { output: { tag, inserted: true, labels: newLabels }, outputText: `✓ Etiqueta "${tag}" aplicada (visivel no card).` };
   },
 });
 
 // ════════════════════════════════════════════════════════════════════════
-// crm_remove_tag — remove tag de um card
+// crm_remove_tag — remove ETIQUETA (label) visivel de um card.
+// Mesma observacao do crm_apply_tag: atua em card.labels, nao em tags internas.
 // ════════════════════════════════════════════════════════════════════════
 const RemoveTagSchema = z.object({
   cardId: z.string().describe('ID do card'),
-  tag: z.string().describe('Tag a remover'),
+  tag: z.string().describe('Etiqueta a remover (case-insensitive)'),
 });
 
 export const CrmRemoveTagTool = buildTool<z.infer<typeof RemoveTagSchema>>({
   name: 'crm_remove_tag',
-  searchHint: 'crm card tag remove delete unclassify',
-  description: 'Remove uma tag de um card. Idempotente — se nao tinha, no-op.',
+  searchHint: 'crm card tag remove delete unclassify etiqueta rotulo',
+  description: 'Remove ETIQUETA (label) visivel do card. Idempotente — se nao tinha, no-op. Compara case-insensitive. NAO mexe em tags internas de funil.',
   inputSchema: RemoveTagSchema,
   userFacingName: (i) => i ? `crm_remove_tag(${i.tag})` : 'crm_remove_tag',
   isReadOnly: () => false,
@@ -1131,14 +1149,21 @@ export const CrmRemoveTagTool = buildTool<z.infer<typeof RemoveTagSchema>>({
   isDestructive: () => false,
   interruptBehavior: () => 'cancel' as const,
   toAutoClassifierInput: (i) => i.tag,
-  renderToolUseMessage: (i) => `Remover tag "${i.tag}"`,
+  renderToolUseMessage: (i) => `Remover etiqueta "${i.tag}"`,
   checkPermissions: async () => ({ behavior: 'allow' as const }),
   async call(input, ctx): Promise<ToolResult> {
     const t = tid(ctx);
     const card = crm.getCard?.(t, input.cardId);
     if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
-    const removed = removeTagSystem(input.cardId, input.tag.trim().toLowerCase());
-    return { output: { tag: input.tag, removed }, outputText: removed ? `✓ Tag "${input.tag}" removida.` : `(nao tinha) Tag "${input.tag}".` };
+    const target = input.tag.trim().toLowerCase();
+    const labels = Array.isArray(card.labels) ? card.labels : [];
+    const filtered = labels.filter(l => String(l).toLowerCase() !== target);
+    if (filtered.length === labels.length) {
+      return { output: { tag: input.tag, removed: false }, outputText: `(nao tinha) Etiqueta "${input.tag}".` };
+    }
+    const upd = crm.updateCard(t, input.cardId, { labels: filtered });
+    if (!upd) return { output: { error: 'update_failed' }, outputText: `❌ Falha ao remover etiqueta do card.`, isError: true };
+    return { output: { tag: input.tag, removed: true, labels: filtered }, outputText: `✓ Etiqueta "${input.tag}" removida (atualizada na UI).` };
   },
 });
 
