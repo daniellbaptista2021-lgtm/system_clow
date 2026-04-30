@@ -346,6 +346,12 @@ export function registerCardsRoutes(app: Hono): void {
       return badRequest(c, 'boardId, columnId, title required');
     }
     const card = store.createCard(tid, body);
+    if (card) {
+      void automations.emit({
+        trigger: 'card_created', tenantId: tid,
+        cardId: card.id, contactId: card.contactId, toColumnId: card.columnId,
+      });
+    }
     return card ? ok(c, { card }, 201) : notFound(c, 'board or column');
   });
   app.get('/cards/:id', (c) => {
@@ -393,11 +399,22 @@ export function registerCardsRoutes(app: Hono): void {
     return ok(c, { ok: ok2 });
   });
   app.post('/cards/:id/move', async (c) => {
+    const tid = tenantOf(c);
+    const cardId = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
     if (!body.toColumnId) return badRequest(c, 'toColumnId required');
-    const wip = store.checkWipLimit(tenantOf(c), body.toColumnId);
+    const wip = store.checkWipLimit(tid, body.toColumnId);
     if (!wip.allowed) return c.json({ error: 'wip_limit_reached', message: 'Coluna cheia (' + wip.current + '/' + wip.limit + '). Aumente o WIP ou mova outro card antes.', current: wip.current, limit: wip.limit }, 409);
-    const moved = store.moveCard(tenantOf(c), c.req.param('id'), body.toColumnId, body.position);
+    const before = store.getCard(tid, cardId);
+    const fromColumnId = before?.columnId;
+    const moved = store.moveCard(tid, cardId, body.toColumnId, body.position);
+    if (moved && fromColumnId !== moved.columnId) {
+      void automations.emit({
+        trigger: 'card_moved', tenantId: tid,
+        cardId: moved.id, contactId: moved.contactId,
+        fromColumnId, toColumnId: moved.columnId,
+      });
+    }
     return moved ? ok(c, { card: moved }) : notFound(c, 'card');
   });
   app.post('/cards/:id/reorder', async (c) => {
@@ -433,7 +450,18 @@ export function registerCardsRoutes(app: Hono): void {
     if (!card) return notFound(c, 'card');
     db.prepare('UPDATE crm_cards SET lost_reason = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
       .run(reason, Date.now(), id, tid);
-    if (toColumnId) store.moveCard(tid, id, toColumnId);
+    if (toColumnId) {
+      const before = store.getCard(tid, id);
+      const fromColumnId = before?.columnId;
+      const moved = store.moveCard(tid, id, toColumnId);
+      if (moved && fromColumnId !== moved.columnId) {
+        void automations.emit({
+          trigger: 'card_moved', tenantId: tid,
+          cardId: moved.id, contactId: moved.contactId,
+          fromColumnId, toColumnId: moved.columnId,
+        });
+      }
+    }
     return ok(c, { ok: true, cardId: id, reason });
   });
   app.post('/cards/:id/win', async (c) => {
@@ -447,7 +475,18 @@ export function registerCardsRoutes(app: Hono): void {
     if (!card) return notFound(c, 'card');
     db.prepare('UPDATE crm_cards SET won_reason = ?, updated_at = ? WHERE id = ? AND tenant_id = ?')
       .run(reason, Date.now(), id, tid);
-    if (toColumnId) store.moveCard(tid, id, toColumnId);
+    if (toColumnId) {
+      const before = store.getCard(tid, id);
+      const fromColumnId = before?.columnId;
+      const moved = store.moveCard(tid, id, toColumnId);
+      if (moved && fromColumnId !== moved.columnId) {
+        void automations.emit({
+          trigger: 'card_moved', tenantId: tid,
+          cardId: moved.id, contactId: moved.contactId,
+          fromColumnId, toColumnId: moved.columnId,
+        });
+      }
+    }
     return ok(c, { ok: true, cardId: id, reason });
   });
   app.delete('/cards/:id', (c) => {

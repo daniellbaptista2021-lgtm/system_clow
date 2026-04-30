@@ -38,6 +38,7 @@ import * as bulkOps from '.././bulkOps.js';
 import { fieldSelectionMiddleware } from '.././fieldSelector.js';
 import { encodeCursor, decodeCursor } from '.././cursor.js';
 import * as mobile from '.././mobile.js';
+import { getCluster } from '../../utils/clusterStore.js';
 import { subscribe, formatSseFrame } from '.././events.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../../tenancy/tenantStore.js';
 import { readMedia } from '.././media.js';
@@ -351,6 +352,19 @@ export function registerAutomationsRoutes(app: Hono): void {
     return ok(c, { url, secret });
   });
   app.post('/automations/webhook/:secret', async (c) => {
+    // Rate-limit por IP — 30 req/min/IP. Defesa contra brute-force do secret
+    // (mesmo aumentado pra 256 bits, sem rate-limit um atacante mediria
+    // hits/misses por timing). Sem auth do tenant aqui — o IP é o melhor
+    // sinal disponível.
+    const xff = c.req.header('x-forwarded-for') || '';
+    const ip = (xff.split(',')[0] || c.req.header('x-real-ip') || 'unknown').trim();
+    try {
+      const cluster = await getCluster();
+      const count = await cluster.incr(`rl:autwh:${ip}`, 60);
+      if (count > 30) {
+        return c.json({ error: 'rate_limit_exceeded', limit: 30, window_seconds: 60 }, 429, { 'Retry-After': '60' });
+      }
+    } catch { /* clusterStore failure não bloqueia o webhook */ }
     const auto = store.findAutomationByWebhook(c.req.param('secret'));
     if (!auto) return notFound(c, 'automation');
     const payload = await c.req.json().catch(() => ({}));

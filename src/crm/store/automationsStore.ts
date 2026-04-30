@@ -1,7 +1,7 @@
 // CRM automationsStore module — split out from the legacy monolithic file in a refactor.
 // Edit this file directly; scripts/split-store.cjs is retained only as a record
 // of how the original was decomposed (it ran once against the .ts.bak snapshot).
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import type Database from 'better-sqlite3';
 import { getCrmDb } from '.././schema.js';
 import type {
@@ -53,7 +53,10 @@ export function listAutomationLogs(tenantId: string, automationId: string, limit
 }
 
 export function setAutomationWebhook(tenantId: string, id: string): string {
-  const secret = nid('auto_wh').replace(/-/g, '');
+  // 256 bits de entropia (64 chars hex). Antes era nid('auto_wh') = 12 hex
+  // ≈ 48 bits, brute-forçável em ~1.3M reqs. Secrets antigos no DB
+  // continuam válidos até serem rotacionados via novo POST /webhook.
+  const secret = randomBytes(32).toString('hex');
   getCrmDb().prepare('UPDATE crm_automations SET webhook_secret=? WHERE id=? AND tenant_id=?').run(secret, id, tenantId);
   return secret;
 }

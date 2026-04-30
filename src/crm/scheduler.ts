@@ -119,6 +119,25 @@ async function inactivityTick(): Promise<void> {
 
 
 
+/** Retenção de logs internos (audit + automation runs) — mantém últimos N dias. */
+const AUTOMATION_LOGS_RETENTION_DAYS = Number(process.env.CLOW_AUTOMATION_LOGS_RETENTION_DAYS ?? 90);
+let _lastLogsCleanupDay = -1;
+function maybeCleanupAutomationLogs() {
+  try {
+    const now = new Date();
+    const dayKey = now.getUTCFullYear() * 1000 + (now.getUTCMonth() + 1) * 32 + now.getUTCDate();
+    if (_lastLogsCleanupDay === dayKey) return;
+    _lastLogsCleanupDay = dayKey;
+    const cutoff = Date.now() - AUTOMATION_LOGS_RETENTION_DAYS * 86400_000;
+    const r = getCrmDb().prepare('DELETE FROM crm_automation_logs WHERE fired_at < ?').run(cutoff);
+    if (r.changes > 0) {
+      logger.info(`[scheduler] cleaned ${r.changes} crm_automation_logs older than ${AUTOMATION_LOGS_RETENTION_DAYS}d`);
+    }
+  } catch (err: any) {
+    logger.warn('[scheduler logs cleanup] err:', err.message);
+  }
+}
+
 /** Track last rotation day to avoid running twice per day. */
 let _lastRotationDay = -1;
 function maybeRotateMonthly() {
@@ -178,6 +197,7 @@ async function tick(): Promise<void> {
       })(),
     ]);
     maybeRotateMonthly();
+    maybeCleanupAutomationLogs();
   } catch (e: any) {
     logger.warn('[CRM scheduler] tick error:', e.message);
   } finally {

@@ -159,7 +159,10 @@ async function checkOne(event: AutomationEvent, cond: any, card: Card | null, co
       return target?.name.toLowerCase() === String(p.columnName).toLowerCase();
     }
     case 'column_is_not': {
-      if (!card) return true;
+      // Sem card no evento, "não está em X" é vacuamente verdadeiro mas
+      // perigoso: dispara automação em triggers que não carregam card
+      // (ex.: webhook genérico). Falha conservadoramente, igual column_is.
+      if (!card) return false;
       const cols = store.listColumns(event.tenantId, card.boardId);
       const target = cols.find(c => c.id === card.columnId);
       return target?.name.toLowerCase() !== String(p.columnName).toLowerCase();
