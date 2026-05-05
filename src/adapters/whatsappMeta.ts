@@ -17,6 +17,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { isAdminPhone as isAdminPhoneFromConfig } from '../admin/adminConfig.js';
 import { logger } from '../utils/logger.js';
+import { maskPhone } from '../utils/redact.js';
 
 
 /**
@@ -142,10 +143,10 @@ async function sendMetaMessage(phone: string, message: string): Promise<void> {
 
       if (!res.ok) {
         const err = await res.text();
-        logger.error(`[meta-wa] Send failed to ${phone}: ${res.status} ${err}`);
+        logger.error(`[meta-wa] Send failed to ${maskPhone(phone)}: ${res.status} ${err}`);
       }
     } catch (err: any) {
-      logger.error(`[meta-wa] Send failed to ${phone}: ${err.message}`);
+      logger.error(`[meta-wa] Send failed to ${maskPhone(phone)}: ${err.message}`);
     }
 
     // Small delay between chunks to preserve order
@@ -511,6 +512,13 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
       if (reply) return { phone, messageId, text: reply, name, type: 'interactive' };
     }
 
+    // Template Quick Reply button click — Meta envia type='button' com msg.button.{text,payload}
+    // (formato distinto do 'interactive' acima, que e pros botoes de mensagem interativa).
+    if (msg.type === 'button') {
+      const btnText = msg.button?.text;
+      if (btnText) return { phone, messageId, text: btnText, name, type: 'button' };
+    }
+
     // Reaction — ignore
     if (msg.type === 'reaction') return null;
 
@@ -665,7 +673,7 @@ async function processInBackground(
     pool.trackMessage(sessionId);
 
   } catch (err: any) {
-    logger.error(`[meta-wa] Error processing message for ${phone}: ${err.message}`);
+    logger.error(`[meta-wa] Error processing message for ${maskPhone(phone)}: ${err.message}`);
     await sendMetaMessage(phone, `⚠️ Erro ao processar: ${err.message.slice(0, 200)}`);
   }
 }
@@ -730,7 +738,7 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     // FAIL-CLOSED: sem tenant resolvido nao processa — antes caia em 'default'
     // (tenant admin/dev) e respondia o cliente com dados de outro CRM.
     if (!tenantId) {
-      logger.warn(`[meta-wa] tenant nao resolvido (phone_number_id=${phoneNumberId ?? '?'}, from=${phone}) — msg ignorada`);
+      logger.warn(`[meta-wa] tenant nao resolvido (phone_number_id=${phoneNumberId ?? '?'}, from=${maskPhone(phone)}) — msg ignorada`);
       return c.json({ ok: true });
     }
 
@@ -764,14 +772,56 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
       }
     }
 
+    // Tenants reais (CRM SaaS, e.g. nio_fibra): persiste inbound no CRM e
+    // dispatcha o agente de coluna. O caminho admin abaixo (isPhoneAuthorized
+    // + processInBackground) e exclusivo do tenantId='default' — assistente
+    // Claude Code do owner — nao se aplica a tenants comerciais que recebem
+    // mensagens de clientes finais.
+    if (tenantId !== 'default') {
+      try {
+        const { findChannelByPhoneId } = await import('../crm/store.js');
+        const channel = phoneNumberId ? findChannelByPhoneId(phoneNumberId) : null;
+        if (!channel) {
+          logger.warn(`[meta-wa] [tenant=${tenantId.slice(0,8)}] sem canal pra phone_number_id=${phoneNumberId} — ignorando`);
+          return c.json({ ok: true });
+        }
+        const ingestType = (type === 'text' || type === 'interactive' || type === 'button')
+          ? 'text' : (type as any);
+        const { ingestInbound } = await import('../crm/inbox.js');
+        const r = await ingestInbound(channel, {
+          fromPhone: phone,
+          fromName: name,
+          messageId,
+          type: ingestType,
+          text,
+          timestamp: Date.now(),
+        });
+        logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] CRM ingestInbound: card=${r.cardId ?? 'n/a'} act=${r.activityId ?? 'n/a'} from=${maskPhone(phone)}`);
+        if (r.ok && r.cardId) {
+          const aiAgent = await import('../crm/ai/agent.js');
+          aiAgent.handleInboundForAI({
+            channel,
+            customerPhone: phone,
+            text,
+            senderName: name,
+            messageId,
+          });
+        }
+      } catch (err: any) {
+        logger.error(`[meta-wa] [tenant=${tenantId.slice(0,8)}] CRM dispatch falhou:`, err?.message);
+      }
+      return c.json({ ok: true });
+    }
+
+    // ── Caminho admin/'default' (assistente Claude Code do owner) ────────
     // Gate: only owner-authorized phones may invoke the agent (prevents random
     // people from triggering the AI on someone else's account).
     if (!(await isPhoneAuthorized(tenantId, phone))) {
-      logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] BLOCKED unauthorized phone ${phone}: ${text.slice(0,40)}`);
+      logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] BLOCKED unauthorized phone ${maskPhone(phone)}: ${text.slice(0,40)}`);
       return c.json({ ok: true, ignored: 'phone_not_authorized' });
     }
 
-    logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] ${phone}${name ? ` (${name})` : ''}: ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
+    logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] ${maskPhone(phone)}${name ? ` (***)` : ''}: ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
 
     // Session ID: 1 phone = 1 persistent session
     const sessionId = `meta_${phone.replace(/\D/g, '')}`;

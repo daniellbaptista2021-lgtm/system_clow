@@ -19,6 +19,7 @@ import type { SessionPool } from '../server/sessionPool.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { logger } from '../utils/logger.js';
+import { maskPhone } from '../utils/redact.js';
 
 // ─── Z-API Config ───────────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<void
         await sleep(500);
       }
     } catch (err: any) {
-      logger.error(`[zapi] Send failed to ${phone}: ${err.message}`);
+      logger.error(`[zapi] Send failed to ${maskPhone(phone)}: ${err.message}`);
     }
   }
 }
@@ -271,7 +272,7 @@ async function processInBackground(
     pool.trackMessage(sessionId);
 
   } catch (err: any) {
-    logger.error(`[wpp] Error processing message for ${phone}: ${err.message}`);
+    logger.error(`[wpp] Error processing message for ${maskPhone(phone)}: ${err.message}`);
     await sendWhatsAppMessage(phone, `⚠️ Sorry, an error occurred: ${err.message.slice(0, 200)}`);
   }
 }
@@ -330,7 +331,7 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
       return c.json({ ok: true }); // Nothing to process
     }
 
-    logger.info(`[wpp] ${phone}: ${userMessage.slice(0, 80)}${userMessage.length > 80 ? '...' : ''}`);
+    logger.info(`[wpp] ${maskPhone(phone)}: ${userMessage.slice(0, 80)}${userMessage.length > 80 ? '...' : ''}`);
 
     // Session ID: 1 phone = 1 persistent session
     const sessionId = `wpp_${phone.replace(/\D/g, '')}`;

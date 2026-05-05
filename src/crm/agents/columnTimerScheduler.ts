@@ -342,8 +342,12 @@ async function executeFinalDeletes(nowMs = Date.now()): Promise<void> {
     for (const r of rows) {
       try {
         applyTagSystem(r.card_id, 'final_delete_done');
-        db.prepare(`DELETE FROM crm_cards WHERE id = ?`).run(r.card_id);
-        logger.info(`[col-timer final-delete] card=${r.card_id} deletado`);
+        // Soft delete: hard DELETE cascateia FK pra crm_activities (perde
+        // histórico inteiro da conversa). Card some das listagens via
+        // filtro deleted_at IS NULL — preserva audit trail.
+        const t = Date.now();
+        db.prepare(`UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(t, t, r.card_id);
+        logger.info(`[col-timer final-delete] card=${r.card_id} soft-deleted`);
       } catch (err: any) {
         logger.warn(`[col-timer final-delete] err: ${err?.message}`);
       }

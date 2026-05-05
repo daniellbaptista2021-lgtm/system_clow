@@ -20,7 +20,7 @@ export interface Tenant {
   email: string;
   name: string;
   tier: TierName;
-  status: 'active' | 'suspended' | 'cancelled' | 'trial' | 'over_quota_disk';
+  status: 'active' | 'suspended' | 'cancelled' | 'trial' | 'over_quota_disk' | 'past_due';
   created_at: string;
   trial_ends_at?: string;
 
@@ -50,6 +50,27 @@ export interface Tenant {
   authorized_phones?: string[];
   temp_password_for_email?: string;
   cancelled_at?: string;
+
+  // Email verification (PR 2026-05-01)
+  email_verified_at?: string;                       // ISO date — null/undefined = nao verificado
+  email_verification_token?: string;                // single-use, hex 32 chars
+  email_verification_token_expires_at?: string;     // ISO date
+
+  // Multi-user logins partilhando o MESMO tenant (mesmo CRM, sessões separadas).
+  // Cada entrada é um login independente; agent_id liga ao registro em
+  // crm_agents (identidade no CRM). Backwards-compatible: undefined/empty =
+  // tenant single-owner, comportamento antigo preservado.
+  additional_logins?: AdditionalLogin[];
+}
+
+export interface AdditionalLogin {
+  email: string;
+  password_hash: string;
+  full_name: string;
+  role: 'owner' | 'admin' | 'agent';
+  agent_id: string;          // FK pra crm_agents.id
+  created_at: string;
+  last_login_at?: string;
 }
 
 export interface ApiKey {
@@ -248,6 +269,66 @@ export function findTenantByEmail(email: string): Tenant | null {
   return store.tenants.find((t) => t.email === email) || null;
 }
 
+/**
+ * Resolve um email de login pra { tenant, login }, casando ou no email
+ * principal do tenant (login=null → owner) ou em algum additional_logins[].
+ * Usado pelo /auth/login pra suportar múltiplos usuários por tenant
+ * compartilhando o MESMO CRM. Match é case-insensitive.
+ */
+export function findTenantByAnyLogin(
+  email: string,
+): { tenant: Tenant; login: AdditionalLogin | null } | null {
+  const e = email.toLowerCase();
+  const store = readStore();
+  for (const t of store.tenants) {
+    if (t.email.toLowerCase() === e) return { tenant: t, login: null };
+    const extra = t.additional_logins?.find((l) => l.email.toLowerCase() === e);
+    if (extra) return { tenant: t, login: extra };
+  }
+  return null;
+}
+
+/**
+ * Anexa um login adicional ao tenant. Falha se o email já estiver em uso
+ * em qualquer tenant (como owner ou como additional). Atomic via mutateStore.
+ */
+export function addAdditionalLogin(
+  tenantId: string,
+  login: Omit<AdditionalLogin, 'created_at'>,
+): AdditionalLogin {
+  return mutateStore((store) => {
+    const e = login.email.toLowerCase();
+    for (const t of store.tenants) {
+      if (t.email.toLowerCase() === e) {
+        throw new Error(`Email ${e} já é o owner do tenant ${t.id}`);
+      }
+      if (t.additional_logins?.some((l) => l.email.toLowerCase() === e)) {
+        throw new Error(`Email ${e} já é login adicional no tenant ${t.id}`);
+      }
+    }
+    const tenant = store.tenants.find((t) => t.id === tenantId);
+    if (!tenant) throw new Error(`Tenant ${tenantId} não encontrado`);
+    const entry: AdditionalLogin = {
+      ...login,
+      email: e,
+      created_at: new Date().toISOString(),
+    };
+    tenant.additional_logins = tenant.additional_logins ?? [];
+    tenant.additional_logins.push(entry);
+    return entry;
+  });
+}
+
+/** Atualiza last_login_at de um additional_login (no-op se não existir). */
+export function touchAdditionalLogin(tenantId: string, email: string): void {
+  mutateStore((store) => {
+    const t = store.tenants.find((x) => x.id === tenantId);
+    const e = email.toLowerCase();
+    const l = t?.additional_logins?.find((x) => x.email.toLowerCase() === e);
+    if (l) l.last_login_at = new Date().toISOString();
+  });
+}
+
 export function findTenantByApiKeyHash(keyHash: string): Tenant | null {
   const store = readStore();
   const key = store.api_keys.find(
@@ -327,6 +408,31 @@ export function revokeOldCrmShellKeys(tenantId: string): number {
     const now = new Date().toISOString();
     for (const k of store.api_keys) {
       if (k.tenant_id === tenantId && !k.revoked_at && k.name && k.name.startsWith('crm-shell-')) {
+        k.revoked_at = now;
+        count++;
+      }
+    }
+    return count;
+  });
+}
+
+/**
+ * Revoga apenas crm-shell keys pertencentes a um usuário específico
+ * (identificado por userKey = agent_id ou tenant_id pro owner). Sem isso,
+ * dois usuários do MESMO tenant logando em paralelo se cancelavam — toda
+ * vez que B logava, a key de A era revogada e dava 'invalid_api_key'.
+ *
+ * Match no prefixo `crm-shell-${userKey}-`. Keys antigas no formato legado
+ * `crm-shell-${ts}` (sem userKey) ficam intocadas — fluxo de exchange cria
+ * a nova já no formato novo, então elas saem de circulação naturalmente.
+ */
+export function revokeOldCrmShellKeysForUser(tenantId: string, userKey: string): number {
+  const prefix = `crm-shell-${userKey}-`;
+  return mutateStore((store) => {
+    let count = 0;
+    const now = new Date().toISOString();
+    for (const k of store.api_keys) {
+      if (k.tenant_id === tenantId && !k.revoked_at && k.name && k.name.startsWith(prefix)) {
         k.revoked_at = now;
         count++;
       }

@@ -1523,8 +1523,8 @@ async function toggleRecording() {
       const blob = new Blob(recordedChunks, { type: finalMime });
       const ext = finalMime.includes('ogg') ? 'ogg' : finalMime.includes('mp4') ? 'm4a' : 'webm';
       const file = new File([blob], 'audio-' + Date.now() + '.' + ext, { type: finalMime });
-      await uploadAndSendFile(file);
-      toast('Áudio enviado', 'success');
+      // Mostra preview antes de enviar — usuário decide se manda ou descarta.
+      openAudioPreview(file);
     } catch (e) {
       toast('Erro ao processar áudio: ' + (e.message || ''), 'error');
     }
@@ -1539,6 +1539,153 @@ async function toggleRecording() {
     if (recordedStream) recordedStream.getTracks().forEach(t => t.stop());
   }
 }
+
+// ─── Audio preview (antes de enviar) ────────────────────────────────
+// Substitui o "envio direto após gravar" — usuário ouve o áudio e
+// decide enviar ou descartar. Inline no composer (style WhatsApp).
+let __pendingAudioUrl = null;
+function openAudioPreview(file) {
+  const box = document.getElementById('audioPreview');
+  const composerRow = document.querySelector('.composer-row');
+  if (!box || !composerRow) {
+    // fallback — sem UI de preview, envia direto
+    return uploadAndSendFile(file);
+  }
+  // Cleanup de URL antiga, se ainda existir
+  if (__pendingAudioUrl) {
+    try { URL.revokeObjectURL(__pendingAudioUrl); } catch (e) {}
+    __pendingAudioUrl = null;
+  }
+  __pendingAudioUrl = URL.createObjectURL(file);
+  box.innerHTML = '';
+  const discard = document.createElement('button');
+  discard.type = 'button';
+  discard.className = 'audio-discard';
+  discard.title = 'Descartar';
+  discard.textContent = '🗑';
+  const audioEl = document.createElement('audio');
+  audioEl.controls = true;
+  audioEl.src = __pendingAudioUrl;
+  const send = document.createElement('button');
+  send.type = 'button';
+  send.className = 'audio-send';
+  send.title = 'Enviar';
+  send.textContent = '➤';
+  box.append(discard, audioEl, send);
+  // Esconde o composer-row enquanto o preview tá aberto
+  composerRow.style.display = 'none';
+  box.hidden = false;
+
+  const close = () => {
+    box.hidden = true;
+    box.innerHTML = '';
+    composerRow.style.display = '';
+    if (__pendingAudioUrl) {
+      try { URL.revokeObjectURL(__pendingAudioUrl); } catch (e) {}
+      __pendingAudioUrl = null;
+    }
+  };
+  discard.addEventListener('click', () => {
+    close();
+    toast('Áudio descartado', '');
+  });
+  send.addEventListener('click', async () => {
+    send.disabled = true;
+    discard.disabled = true;
+    try {
+      await uploadAndSendFile(file);
+      toast('Áudio enviado', 'success');
+      close();
+    } catch (e) {
+      send.disabled = false;
+      discard.disabled = false;
+      toast('Erro: ' + (e.message || e.name || ''), 'error');
+    }
+  });
+}
+
+// ─── Emoji picker (estilo WhatsApp) ─────────────────────────────────
+// Lista curada de emojis comuns separados em 6 categorias. Insere no
+// #composerText na posição do cursor. Sem dependência externa.
+const EMOJI_CATEGORIES = [
+  { id: 'smileys', icon: '😀', name: 'Smileys',
+    emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { id: 'people', icon: '👋', name: 'Pessoas',
+    emojis: ['👋','🤚','✋','🖐️','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄','💋','🩸'] },
+  { id: 'hearts', icon: '❤️', name: 'Coração',
+    emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤','🌟','✨','⭐','🌠','☀️','🌈','🔥','💧','🌊'] },
+  { id: 'animals', icon: '🐶', name: 'Animais',
+    emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐽','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢'] },
+  { id: 'food', icon: '🍎', name: 'Comida',
+    emojis: ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🥪','🥙','🧆','🌮','🌯','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','☕','🫖','🍵','🧃','🥤','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊'] },
+  { id: 'objects', icon: '⚽', name: 'Objetos',
+    emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥊','🥋','🥅','🎯','⛳','🎮','🎲','🧩','🎰','🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🚚','🚛','🚜','🛴','🚲','🛵','🏍️','🛺','🚨','🚍','🚔','🚖','🚘','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⌚','📱','💻','⌨️','🖥️','🖨️','🖱️','💾','💿','📀','📸','📷','🎥','📹','📺','📻','🎙️','🎚️','🎛️','📞','☎️','📟','📠','🔋','🔌','💡','🔦','🕯️','🛒','🎁','🎈','🎉','🎊','🎏','🎀','🎗️','🛍️','💰','💳','💎','📚','📖','📝','✏️','✒️','📅','📆','📈','📉','📊','📋','📌','📍','🔖','🔗','🔒','🔑','🛠️','⚙️','🔧','🔨','⛏️','🔩','⚖️','🔬','🔭','📡','💉','💊','🚪','🛏️','🛋️','🚽','🚿','🛁','🧴','🧷','🧹','🧺','🧻','🧼','🧽'] },
+];
+function buildEmojiPicker() {
+  const box = document.getElementById('emojiPicker');
+  if (!box || box.dataset.built === '1') return;
+  box.dataset.built = '1';
+
+  const tabs = document.createElement('div');
+  tabs.className = 'emoji-tabs';
+  const grid = document.createElement('div');
+  grid.className = 'emoji-grid';
+
+  const renderGrid = (cat) => {
+    grid.innerHTML = '';
+    for (const e of cat.emojis) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = e;
+      b.title = e;
+      b.addEventListener('click', () => insertEmojiAtCursor(e));
+      grid.append(b);
+    }
+  };
+
+  EMOJI_CATEGORIES.forEach((cat, i) => {
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'emoji-tab' + (i === 0 ? ' active' : '');
+    t.textContent = cat.icon;
+    t.title = cat.name;
+    t.addEventListener('click', () => {
+      tabs.querySelectorAll('.emoji-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      renderGrid(cat);
+    });
+    tabs.append(t);
+  });
+  box.append(tabs, grid);
+  renderGrid(EMOJI_CATEGORIES[0]);
+}
+function insertEmojiAtCursor(emoji) {
+  const ta = document.getElementById('composerText');
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? ta.value.length;
+  const before = ta.value.slice(0, start);
+  const after = ta.value.slice(end);
+  ta.value = before + emoji + after;
+  const pos = start + emoji.length;
+  ta.focus();
+  try { ta.setSelectionRange(pos, pos); } catch (e) {}
+}
+function toggleEmojiPicker() {
+  const box = document.getElementById('emojiPicker');
+  if (!box) return;
+  buildEmojiPicker();
+  box.hidden = !box.hidden;
+}
+// Fecha o picker ao clicar fora (sem fechar quando clica no próprio picker
+// ou no botão emoji que controla ele).
+document.addEventListener('click', (ev) => {
+  const box = document.getElementById('emojiPicker');
+  if (!box || box.hidden) return;
+  const btn = document.getElementById('emojiBtn');
+  if (box.contains(ev.target) || (btn && btn.contains(ev.target))) return;
+  box.hidden = true;
+});
 
 // ─── New card modal ────────────────────────────────────────────────────
 // Modal pra criar nova coluna no board atual.
@@ -3802,6 +3949,7 @@ function wireEvents() {
     if (e.target) e.target.value = '';
   });
   wire('#recordBtn', 'click', toggleRecording);
+  wire('#emojiBtn', 'click', toggleEmojiPicker);
 
   // Contact search
   wire('#contactSearchInput', 'input', async (e) => {
@@ -5425,7 +5573,7 @@ async function openChannelInboxConfig(channel) {
         autoCreateCheckbox,
         el('div', {},
           el('div', { style: 'font-weight:600' }, '🤖 Criar card automaticamente para novo lead'),
-          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'Toda mensagem nova de contato sem card aberto vira um card na coluna "Lead novo"'),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'Toda mensagem nova de contato sem card aberto vira um card na coluna "Lead"'),
         ),
       ),
     ));

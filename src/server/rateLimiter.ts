@@ -71,6 +71,21 @@ class TenantRateLimiter {
     return tickAndCheck(`rl:sessionCreate:${tenantId}`, SESSION_CREATE_LIMIT);
   }
 
+  /** Per-IP signup limit — 5/min/IP, 30/h/IP. Antes do tenant existir. */
+  async checkSignup(ip: string): Promise<RateLimitResult> {
+    if (!ip) return { allowed: true, remaining: 5, limit: 5 };
+    // Janela curta (1min/5)
+    const minuteRes = await tickAndCheck(`rl:signup:min:${ip}`, 5);
+    if (!minuteRes.allowed) return minuteRes;
+    // Janela longa (1h/30) usando ttl maior
+    const store = await getCluster();
+    const count = await store.incr(`rl:signup:hour:${ip}`, 3600);
+    if (count > 30) {
+      return { allowed: false, remaining: 0, limit: 30, retryAfterMs: 3600 * 1000 };
+    }
+    return { allowed: true, remaining: Math.min(5 - (5 - minuteRes.remaining), 30 - count), limit: 5 };
+  }
+
   /** Read-only stats — does NOT increment. */
   async getStats(tenantId: string, tier: string = 'one'): Promise<{ requestsInWindow: number; limit: number }> {
     // Best-effort: we don't have a count read primitive on clusterStore

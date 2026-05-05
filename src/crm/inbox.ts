@@ -28,6 +28,17 @@ export interface InboundResult {
   error?: string;
 }
 
+/** URLs do WhatsApp (pps.whatsapp.net) tem oe=<hex> no query — timestamp UNIX
+ *  hex de quando a URL expira. Sem refresh, foto some do CRM em ~7 dias.
+ *  Retorna true se URL nao tem oe (formato desconhecido) ou ja venceu. */
+function isAvatarExpired(url: string): boolean {
+  const m = url.match(/[?&]oe=([A-F0-9]+)/i);
+  if (!m) return false; // formato desconhecido — nao mexe
+  const expiresMs = parseInt(m[1]!, 16) * 1000;
+  if (!Number.isFinite(expiresMs)) return false;
+  return expiresMs < Date.now();
+}
+
 /**
  * Process a single inbound message from any channel.
  * Idempotent on providerMessageId — if same message arrives twice, we skip.
@@ -62,13 +73,18 @@ export async function ingestInbound(channel: Channel2, msg: {
 
   // 2.1. Onda 55: se nao tem avatar e o canal eh Z-API, busca foto de perfil em background
   // (Meta nao expõe foto de contatos arbitrarios via API publica)
-  if (!contact.avatarUrl && channel.type === 'zapi') {
-    void zapi.fetchProfilePicture(channel, msg.fromPhone).then((url) => {
-      if (url) {
-        try { store.updateContact(tenantId, contact.id, { avatarUrl: url }); }
-        catch { /* silent */ }
-      }
-    });
+  // 2026-05-05: tambem refaz se a URL atual ja expirou (oe=hex no query string).
+  // URLs do WhatsApp expiram em ~7 dias — sem refresh, fotos somem do CRM.
+  if (channel.type === 'zapi') {
+    const needsRefresh = !contact.avatarUrl || isAvatarExpired(contact.avatarUrl);
+    if (needsRefresh) {
+      void zapi.fetchProfilePicture(channel, msg.fromPhone).then((url) => {
+        if (url) {
+          try { store.updateContact(tenantId, contact.id, { avatarUrl: url }); }
+          catch { /* silent */ }
+        }
+      });
+    }
   }
 
   // 3. Find or create card on the default sales board
@@ -218,8 +234,8 @@ async function findOrCreateOpenCardForContact(tenantId: string, contactId: strin
     if (!board) board = store.seedDefaultBoards(tenantId);
     boardId = board.id;
     const cols = store.listColumns(tenantId, board.id);
-    // Preferir coluna chamada "Lead novo" ou "Novo" ou primeira nao-terminal
-    const leadCol = cols.find(c => /^lead\s*novo/i.test(c.name) || /^novo/i.test(c.name)) || cols.find(c => !c.isTerminal) || cols[0];
+    // Preferir coluna chamada "Lead", "Lead novo", "Novo" ou primeira nao-terminal
+    const leadCol = cols.find(c => /^lead(\s|$)/i.test(c.name) || /^novo/i.test(c.name)) || cols.find(c => !c.isTerminal) || cols[0];
     if (!leadCol) return null;
     columnId = leadCol.id;
   }

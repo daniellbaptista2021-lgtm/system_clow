@@ -328,7 +328,11 @@ async function main(): Promise<void> {
   // Ordem importa no Hono: handler direto ganha do app.route('/auth', authRoutes).
   // Aceita admin (username+password) OU tenant (email+password, ou username contendo '@').
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
-  const ADMIN_PASS = process.env.CLOW_ADMIN_PASS;
+  // Aceita CLOW_ADMIN_PASS_HASH (bcrypt, recomendado) OU CLOW_ADMIN_PASS (plaintext, deprecated).
+  // Se ambos setados, prefere _HASH. Se so _PASS setado, loga warning na primeira tentativa.
+  const ADMIN_PASS_HASH = process.env.CLOW_ADMIN_PASS_HASH;
+  const ADMIN_PASS_PLAIN = process.env.CLOW_ADMIN_PASS;
+  let _adminPassPlainWarned = false;
 
   app.post('/auth/login', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
@@ -337,29 +341,54 @@ async function main(): Promise<void> {
       return c.json({ ok: false, error: 'missing_credentials' }, 400);
     }
 
-    // 1) Admin login (username match)
-    if (username && ADMIN_USER && ADMIN_PASS && username === ADMIN_USER && password === ADMIN_PASS) {
-      const token = createAdminSessionToken(username);
-      return c.json({ ok: true, token });
+    // 1) Admin login (username match) — bcrypt hash com fallback a plaintext.
+    if (username && ADMIN_USER && username === ADMIN_USER) {
+      let adminOk = false;
+      if (ADMIN_PASS_HASH) {
+        const bcrypt = (await import('bcryptjs')).default;
+        adminOk = await bcrypt.compare(password, ADMIN_PASS_HASH);
+      } else if (ADMIN_PASS_PLAIN) {
+        if (!_adminPassPlainWarned) {
+          logger.warn('[auth] CLOW_ADMIN_PASS em texto puro — migrar pra CLOW_ADMIN_PASS_HASH (bcrypt) ASAP');
+          _adminPassPlainWarned = true;
+        }
+        adminOk = password === ADMIN_PASS_PLAIN;
+      }
+      if (adminOk) {
+        const token = createAdminSessionToken(username);
+        return c.json({ ok: true, token });
+      }
     }
 
     // 2) Tenant login (email). Form antigo manda 'username' que pode ser o email.
+    // Aceita tanto o owner quanto additional_logins (multi-user no mesmo tenant).
     const emailStr = String(email || username || '').toLowerCase().trim();
     if (emailStr && emailStr.includes('@')) {
       try {
-        const { findTenantByEmail, updateTenant } = await import('../tenancy/tenantStore.js');
+        const { findTenantByAnyLogin, updateTenant, touchAdditionalLogin } = await import('../tenancy/tenantStore.js');
         const { signUserToken } = await import('../auth/authRoutes.js');
         const bcrypt = (await import('bcryptjs')).default;
-        const tenant = findTenantByEmail(emailStr);
-        if (tenant && (tenant as any).password_hash) {
-          if (tenant.status === 'cancelled' || tenant.status === 'suspended') {
-            return c.json({ ok: false, error: 'account_blocked' }, 403);
-          }
-          const ok = await bcrypt.compare(password, (tenant as any).password_hash);
-          if (ok) {
-            updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
-            const token = signUserToken({ tid: tenant.id, uid: tenant.id, email: tenant.email, role: 'owner' });
-            return c.json({ ok: true, token, user: { id: tenant.id, email: tenant.email, tier: tenant.tier, role: 'owner' } });
+        const match = findTenantByAnyLogin(emailStr);
+        if (match) {
+          const { tenant, login } = match;
+          const passwordHash = login ? login.password_hash : (tenant as any).password_hash;
+          if (passwordHash) {
+            if (tenant.status === 'cancelled' || tenant.status === 'suspended') {
+              return c.json({ ok: false, error: 'account_blocked' }, 403);
+            }
+            const ok = await bcrypt.compare(password, passwordHash);
+            if (ok) {
+              if (login) {
+                touchAdditionalLogin(tenant.id, login.email);
+              } else {
+                updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
+              }
+              const tokenEmail = login ? login.email : tenant.email;
+              const tokenRole: 'owner' | 'admin' | 'agent' = login ? login.role : 'owner';
+              const tokenUid = login ? login.agent_id : tenant.id;
+              const token = signUserToken({ tid: tenant.id, uid: tokenUid, email: tokenEmail, role: tokenRole });
+              return c.json({ ok: true, token, user: { id: tokenUid, email: tokenEmail, tier: tenant.tier, role: tokenRole } });
+            }
           }
         }
       } catch (err: any) {
@@ -385,8 +414,9 @@ async function main(): Promise<void> {
       return c.json({ ok: false }, 401);
     }
 
-    // 2) Admin session (legacy, env-based)
-    if (!ADMIN_USER || !ADMIN_PASS) return c.json({ ok: false }, 503);
+    // 2) Admin session (legacy, env-based) — token assinado com SESSION_SECRET,
+    // entao basta ter o user e algum mecanismo de password (hash ou plain).
+    if (!ADMIN_USER || (!ADMIN_PASS_HASH && !ADMIN_PASS_PLAIN)) return c.json({ ok: false }, 503);
     const verified = verifyAdminSessionToken(token);
     if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true, kind: 'admin' });
     return c.json({ ok: false }, 401);

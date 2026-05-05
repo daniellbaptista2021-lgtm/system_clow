@@ -130,6 +130,22 @@ app.get('/api/billing/config', (c) => {
 // client_secret pra Stripe.js renderizar inline; hosted retorna URL.
 // User pediu: card embutido na propria tela, tipo ChatGPT/Claude.
 app.post('/api/billing/checkout', async (c) => {
+  // Rate-limit IP — protege endpoint que cria sessao Stripe (e poderia ser
+  // abusado pra criar centenas de sessions e burnar Stripe quota).
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0].trim()
+    || c.req.header('x-real-ip')
+    || 'unknown';
+  try {
+    const { rateLimiter } = await import('../server/rateLimiter.js');
+    const rl = await rateLimiter.checkSignup(ip);
+    if (!rl.allowed) {
+      logger.warn(`[stripe checkout] rate_limit ip=${ip}`);
+      return c.json({ ok: false, error: 'rate_limit', message: 'Muitas tentativas, aguarde alguns minutos.' }, 429);
+    }
+  } catch (err: any) {
+    logger.warn('[stripe checkout] rate-limit check falhou (allow):', err?.message);
+  }
+
   const body = await c.req.json().catch(() => ({})) as any;
   const { plan, email, full_name, cpf, phone, ui_mode } = body;
   if (!plan || !priceIds()[plan]) {
@@ -172,6 +188,11 @@ app.post('/api/billing/checkout', async (c) => {
       },
       subscription_data: {
         metadata: { plan, email, full_name, cpf: cpfDigits, phone: phoneDigits },
+        // Trial automatico — cliente comeca a usar antes da 1a cobranca.
+        // Configuravel via env CLOW_TRIAL_DAYS. Default 7 dias. Setar 0 desliga.
+        ...(Number(process.env.CLOW_TRIAL_DAYS ?? 7) > 0
+          ? { trial_period_days: Number(process.env.CLOW_TRIAL_DAYS ?? 7) }
+          : {}),
       },
     };
     if (isEmbedded) {
@@ -306,7 +327,53 @@ app.post('/webhooks/stripe', async (c) => {
         const inv = event.data.object;
         const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
         const t = tenants.find((tt: any) => tt.stripe_customer_id === inv.customer);
-        if (t) updateTenant(t.id, { status: 'past_due' } as any);
+        if (t) {
+          updateTenant(t.id, { status: 'past_due' } as any);
+          logger.warn(`[stripe webhook] tenant=${t.id.slice(0, 8)} cobranca FALHOU (attempt=${inv.attempt_count}) — Stripe Smart Retries vai retentar`);
+          // Notifica corretor (URGENT_ALERT_PHONE) — cobranca falhou eh
+          // evento crítico que merece atencao manual mesmo com retry automatico.
+          if (process.env.URGENT_ALERT_PHONE) {
+            try {
+              const { sendMail } = await import('../utils/mailer.js');
+              await sendMail({
+                to: t.email,
+                subject: 'Falha na cobrança — System Clow',
+                text: `Olá ${t.full_name || t.name},\n\nA cobrança automática da sua assinatura falhou (tentativa ${inv.attempt_count || 1}). O Stripe vai retentar nos próximos dias.\n\nSe quiser atualizar o cartão, acesse o Portal de Cobrança no painel.\n\n— System Clow`,
+              });
+            } catch { /* email opcional */ }
+          }
+        }
+        break;
+      }
+      case 'invoice.paid': {
+        // Cobranca bem-sucedida (apos trial OU apos retry de past_due).
+        // Reativa tenant que tava past_due.
+        const inv = event.data.object;
+        const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
+        const t = tenants.find((tt: any) => tt.stripe_customer_id === inv.customer);
+        if (t && (t.status === 'past_due' || t.status === 'suspended')) {
+          updateTenant(t.id, { status: 'active', last_payment_at: new Date().toISOString() } as any);
+          logger.info(`[stripe webhook] tenant=${t.id.slice(0, 8)} REATIVADO apos pagamento bem-sucedido`);
+        } else if (t) {
+          updateTenant(t.id, { last_payment_at: new Date().toISOString() } as any);
+        }
+        break;
+      }
+      case 'customer.subscription.trial_will_end': {
+        // 3 dias antes do trial acabar — manda email pro user
+        const sub = event.data.object;
+        const tenants = (await import('../tenancy/tenantStore.js')).listTenants();
+        const t = tenants.find((tt: any) => tt.stripe_subscription_id === sub.id);
+        if (t) {
+          try {
+            const { sendMail } = await import('../utils/mailer.js');
+            await sendMail({
+              to: t.email,
+              subject: 'Seu trial termina em 3 dias — System Clow',
+              text: `Olá ${t.full_name || t.name},\n\nSeu período de avaliação termina em 3 dias. A primeira cobrança será feita automaticamente no cartão cadastrado.\n\nQuer atualizar o cartão ou cancelar? Acesse o Portal de Cobrança no painel.\n\n— System Clow`,
+            });
+          } catch { /* email opcional */ }
+        }
         break;
       }
     }

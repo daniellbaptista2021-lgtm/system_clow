@@ -23,8 +23,14 @@ import * as ai from './ai.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
 import { logger } from '../utils/logger.js';
+import { getCluster } from '../utils/clusterStore.js';
 
 const TICK_INTERVAL_MS = 60_000;
+// Lock TTL: ligeiramente menor que o intervalo do tick, pra que se o
+// worker travar mid-tick o proximo intervalo possa adquirir. Cada
+// tick concorre pelo lock antes de rodar; serializa multi-worker se
+// (futuramente) o gate isSchedulerWorker() for relaxado.
+const TICK_LOCK_TTL_S = 55;
 const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
 const COLUMN_TIMER_TICK_INTERVAL_MS = 60_000; // PR 7.0
 const STALE_DAYS = 7;
@@ -93,6 +99,14 @@ export function stopScheduler(): void {
 
 async function columnTimerTick(): Promise<void> {
   if (_runningColumnTimerTick) return;
+  // Lock distribuido (60s TTL = mesmo do intervalo)
+  const lockKey = `crm:scheduler:tick:column-timer:${Math.floor(Date.now() / 60_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', 55).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[column-timer-tick] lock contention — skipping');
+    return;
+  }
   _runningColumnTimerTick = true;
   try {
     const { tickColumnTimers } = await import('./agents/columnTimerScheduler.js');
@@ -106,6 +120,14 @@ async function columnTimerTick(): Promise<void> {
 
 async function inactivityTick(): Promise<void> {
   if (_runningInactivityTick) return; // skip se anterior ainda nao acabou
+  // Lock distribuido por janela de 30s (mesmo do intervalo)
+  const lockKey = `crm:scheduler:tick:inactivity:${Math.floor(Date.now() / 30_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', 25).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[inactivity-tick] lock contention — skipping');
+    return;
+  }
   _runningInactivityTick = true;
   try {
     const { tickInactivity } = await import('./agents/inactivityScheduler.js');
@@ -157,6 +179,15 @@ function maybeRotateMonthly() {
 
 async function tick(): Promise<void> {
   if (_runningTick) return;
+  // Lock distribuido — caso 2 workers rodem schedulers (reload mal sincronizado,
+  // CLOW_FORCE_SCHEDULER setado em multiplos), apenas um adquire por minuto.
+  const lockKey = `crm:scheduler:tick:main:${Math.floor(Date.now() / 60_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', TICK_LOCK_TTL_S).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[scheduler.tick] lock contention — skipping (other worker is ticking)');
+    return;
+  }
   _runningTick = true;
   try {
     await Promise.allSettled([

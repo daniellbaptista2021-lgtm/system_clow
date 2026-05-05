@@ -91,6 +91,42 @@ describe('looksLikeMetaCommentary — bug ortografico do regex pt-BR (regressao)
   });
 });
 
+describe('looksLikeMetaCommentary — vazamento Safira/PV chase 2026-05-01', () => {
+  // Caso real: agente "Safira" mandou pra cliente o raciocinio interno
+  // "Cliente nao respondeu nada ainda — so a saudacao inicial que eu
+  // mandei. Vou fazer a 1a cobranca gentil." Tres elementos meta:
+  // (a) estado do cliente em 3a pessoa, (b) narrativa da propria msg, e
+  // (c) anuncio do que vai fazer. Cada um deve cair em pelo menos um regex.
+  const vazamentoSafira = [
+    'Cliente não respondeu nada ainda — só a saudação inicial que eu mandei. Vou fazer a 1ª cobrança gentil.',
+    'Cliente ainda não respondeu, vou aguardar.',
+    'Cliente nao escreveu nada, vou tentar de novo.',
+    'Só a saudação inicial que eu mandei até agora.',
+    'Vou fazer a 1ª cobrança gentil agora.',
+    'Vou disparar a 2ª tentativa.',
+    'Vou tentar uma 3ª abordagem.',
+    'Minha última mensagem ficou sem resposta.',
+    'Primeira cobrança enviada, esperando resposta.',
+    'Última tentativa antes de marcar perdido.',
+  ];
+
+  it.each(vazamentoSafira)('bloqueia: %s', (msg) => {
+    expect(looksLikeMetaCommentary(msg)).toBe(true);
+  });
+
+  it('NAO bloqueia mensagens reais proximas dos novos patterns', () => {
+    // Falsos positivos catastrofes — agente nao consegue mais saudar
+    // ou enviar cotacao se essas baterem.
+    expect(looksLikeMetaCommentary('Bom dia! Tudo bem? Sou a Safira da PV Corretora.')).toBe(false);
+    expect(looksLikeMetaCommentary('Me conta seu nome pra eu te ajudar direitinho?')).toBe(false);
+    expect(looksLikeMetaCommentary('Pra eu te passar o valor exato, preciso de alguns detalhes.')).toBe(false);
+    expect(looksLikeMetaCommentary('Quem vai fazer parte do plano com você?')).toBe(false);
+    expect(looksLikeMetaCommentary('A cobrança é mensal, no boleto ou cartão.')).toBe(false);
+    expect(looksLikeMetaCommentary('Você pode escolher entre cobrança mensal ou anual.')).toBe(false);
+    expect(looksLikeMetaCommentary('A primeira parcela vence em 30 dias.')).toBe(false);
+  });
+});
+
 describe('looksLikeMetaCommentary — vazamento de identidade de role (Maria Cecilia 2026-04-30)', () => {
   // Caso real: cliente Maria Cecilia Goncalves recebeu "Oi! Boa noite 😉
   // Prazer, sou a qualificadora, da PV Corretora!" — agente vazou o role

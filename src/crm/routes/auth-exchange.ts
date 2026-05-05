@@ -356,9 +356,11 @@ export function registerAuthExchangeRoutes(app: Hono): void {
       const ts = await import('../../tenancy/tenantStore.js');
       const t = ts.getTenant(userTok.tid);
       if (!t) return c.json({ error: 'tenant_not_found' }, 404);
-      // Revoke old crm-shell keys before creating a fresh one
-      ts.revokeOldCrmShellKeys(t.id);
-      const apiKey = ts.createApiKeyForTenant(t.id, 'crm-shell-' + Date.now());
+      // Revoga apenas as keys do MESMO usuário (token.uid). Multi-user no
+      // mesmo tenant não pode invalidar a sessão dos outros.
+      const userKey = userTok.uid;
+      ts.revokeOldCrmShellKeysForUser(t.id, userKey);
+      const apiKey = ts.createApiKeyForTenant(t.id, `crm-shell-${userKey}-${Date.now()}`);
       return c.json({
         api_key: apiKey,
         tenant_id: t.id,
@@ -376,9 +378,10 @@ export function registerAuthExchangeRoutes(app: Hono): void {
       const tenants = ts.listTenants();
       const tenant = tenants.find(t => t.email === 'admin@clow.dev') || tenants[0];
       if (!tenant) return c.json({ error: 'no_tenant' }, 404);
-      // Revoke old crm-shell keys before creating a fresh one
-      ts.revokeOldCrmShellKeys(tenant.id);
-      const apiKey = ts.createApiKeyForTenant(tenant.id, 'crm-shell-' + Date.now());
+      // Admin tem userKey = 'admin' (sessão única por usuário admin nomeado).
+      const userKey = `admin-${adm.username || 'root'}`;
+      ts.revokeOldCrmShellKeysForUser(tenant.id, userKey);
+      const apiKey = ts.createApiKeyForTenant(tenant.id, `crm-shell-${userKey}-${Date.now()}`);
       return c.json({
         api_key: apiKey,
         tenant_id: tenant.id,

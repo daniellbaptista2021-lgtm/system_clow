@@ -24,7 +24,8 @@ export type WebhookEvent =
   | 'task.created' | 'task.completed'
   | 'campaign.sent'
   | 'form.submitted'
-  | 'agent.escalated';      // Onda 62 (PR 3): agente IA escalou pra humano
+  | 'agent.escalated'       // Onda 62 (PR 3): agente IA escalou pra humano
+  | 'agent.lancar_venda';   // PR 7.3 (2026-05-01): coletor promoveu pra Lancar Venda — humano finaliza com seguradora
 
 export interface OutboundWebhook {
   id: string;

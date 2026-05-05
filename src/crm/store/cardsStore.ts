@@ -78,14 +78,14 @@ function getTopCardPosition(db: Database.Database, columnId: string): number {
 
 export function getCard(tenantId: string, cardId: string): Card | null {
   const db = getCrmDb();
-  const r = db.prepare('SELECT * FROM crm_cards WHERE id = ? AND tenant_id = ?').get(cardId, tenantId) as any;
+  const r = db.prepare('SELECT * FROM crm_cards WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL').get(cardId, tenantId) as any;
   return r ? rowToCard(r) : null;
 }
 
 export function listCardsByColumn(tenantId: string, columnId: string): Card[] {
   const db = getCrmDb();
   const rows = db.prepare(`
-    SELECT * FROM crm_cards WHERE tenant_id = ? AND column_id = ? ORDER BY position ASC, created_at ASC
+    SELECT * FROM crm_cards WHERE tenant_id = ? AND column_id = ? AND deleted_at IS NULL ORDER BY position ASC, created_at ASC
   `).all(tenantId, columnId) as any[];
   return rows.map(rowToCard);
 }
@@ -93,7 +93,7 @@ export function listCardsByColumn(tenantId: string, columnId: string): Card[] {
 export function listCardsByBoard(tenantId: string, boardId: string): Card[] {
   const db = getCrmDb();
   const rows = db.prepare(`
-    SELECT * FROM crm_cards WHERE tenant_id = ? AND board_id = ? ORDER BY column_id, position ASC
+    SELECT * FROM crm_cards WHERE tenant_id = ? AND board_id = ? AND deleted_at IS NULL ORDER BY column_id, position ASC
   `).all(tenantId, boardId) as any[];
   return rows.map(rowToCard);
 }
@@ -101,7 +101,7 @@ export function listCardsByBoard(tenantId: string, boardId: string): Card[] {
 export function listCardsByContact(tenantId: string, contactId: string): Card[] {
   const db = getCrmDb();
   const rows = db.prepare(`
-    SELECT * FROM crm_cards WHERE tenant_id = ? AND contact_id = ? ORDER BY updated_at DESC
+    SELECT * FROM crm_cards WHERE tenant_id = ? AND contact_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC
   `).all(tenantId, contactId) as any[];
   return rows.map(rowToCard);
 }
@@ -211,8 +211,12 @@ export function reorderCard(
 }
 
 export function deleteCard(tenantId: string, cardId: string): boolean {
+  // Soft delete: preserva crm_activities (FK card_id tem ON DELETE CASCADE,
+  // hard delete apaga todo o histórico de conversa do cliente). Card some
+  // das listagens via filtro deleted_at IS NULL nas queries.
   const db = getCrmDb();
-  const r = db.prepare('DELETE FROM crm_cards WHERE id = ? AND tenant_id = ?').run(cardId, tenantId);
+  const r = db.prepare('UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL')
+    .run(now(), now(), cardId, tenantId);
   return r.changes > 0;
 }
 

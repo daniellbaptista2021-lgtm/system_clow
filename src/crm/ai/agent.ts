@@ -134,10 +134,37 @@ export interface DeepSeekToolMessage {
   name?: string;
 }
 
+// DeepSeek-chat pricing (Maio/2026, valores conservadores). USD por token.
+// Input cache-miss: $0.27/1M, output: $1.10/1M. Mantemos margem.
+const DEEPSEEK_INPUT_USD_PER_TOKEN = 0.30 / 1_000_000;
+const DEEPSEEK_OUTPUT_USD_PER_TOKEN = 1.20 / 1_000_000;
+
+/** Calcula custo USD a partir do `usage` da resposta OpenAI-compatible. */
+function calcCost(usage: { prompt_tokens?: number; completion_tokens?: number } | undefined): number {
+  if (!usage) return 0;
+  const pt = usage.prompt_tokens || 0;
+  const ct = usage.completion_tokens || 0;
+  return pt * DEEPSEEK_INPUT_USD_PER_TOKEN + ct * DEEPSEEK_OUTPUT_USD_PER_TOKEN;
+}
+
+/** Grava usage no tenant (incrementUsage). Best-effort — falha nao throw. */
+async function recordTenantUsage(tenantId: string | undefined, usage: any): Promise<void> {
+  if (!tenantId || tenantId === 'default') return;
+  try {
+    const cost = calcCost(usage);
+    if (cost <= 0) return;
+    const { incrementUsage } = await import('../../tenancy/tenantStore.js');
+    incrementUsage(tenantId, { cost_usd: cost });
+  } catch (err: any) {
+    logger.warn('[ai/agent] recordTenantUsage falhou:', err?.message);
+  }
+}
+
 export async function callDeepSeekWithTools(
   messages: DeepSeekToolMessage[],
   tools: unknown[],
   model = 'deepseek-chat',
+  tenantId?: string,
 ): Promise<DeepSeekToolMessage> {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) throw new Error('DEEPSEEK_API_KEY not configured');
@@ -160,6 +187,8 @@ export async function callDeepSeekWithTools(
   const d: any = await r.json();
   const msg = d?.choices?.[0]?.message;
   if (!msg) throw new Error('deepseek: empty message in response');
+  // Tracking de custo real por tenant — alimenta quotaGuard / billing
+  void recordTenantUsage(tenantId, d?.usage);
   return msg as DeepSeekToolMessage;
 }
 
@@ -169,6 +198,7 @@ export async function callDeepSeek(
   history: ChatMessage[],
   userMessage: string,
   model: string,
+  tenantId?: string,
 ): Promise<string> {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) throw new Error('DEEPSEEK_API_KEY not configured');
@@ -194,6 +224,7 @@ export async function callDeepSeek(
   const d: any = await r.json();
   const content = d?.choices?.[0]?.message?.content;
   if (!content) throw new Error('deepseek: empty content in response');
+  void recordTenantUsage(tenantId, d?.usage);
   return String(content).trim();
 }
 
@@ -249,6 +280,20 @@ export async function sendReply(
   text: string,
   contactId: string | null,
 ): Promise<void> {
+  // Rate-limit por destinatario: protege o numero do tenant de banimento
+  // por Z-API/Meta quando o agente entra em loop ou um bot envia burst.
+  // Default 60 msgs/min/numero (configuravel via CLOW_WPP_OUTBOUND_RATE_PER_MIN).
+  const { tryConsume } = await import('../outboundRateLimit.js');
+  const { maskPhone } = await import('../../utils/redact.js');
+  const rl = tryConsume(customerPhone);
+  if (!rl.ok) {
+    logger.warn(
+      `[sendReply] outbound_rate_limit dropped to=${maskPhone(customerPhone)} ` +
+        `tenant=${channel.tenantId.slice(0, 8)} current=${rl.current}/${rl.limit} retryAfterMs=${rl.retryAfterMs}`,
+    );
+    throw new Error(`outbound_rate_limit: ${rl.current}/${rl.limit} per minute to ${maskPhone(customerPhone)}`);
+  }
+
   let cardId: string | undefined;
   if (contactId) {
     const cards = store.listCardsByContact(channel.tenantId, contactId);

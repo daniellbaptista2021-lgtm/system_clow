@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/logo-new.png">
-<link rel="stylesheet" href="/crm/crm.css?v=76">
+<link rel="stylesheet" href="/crm/crm.css?v=78">
 </head>
 <body>
 
@@ -363,11 +363,14 @@
             <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Agente:</label><select id="ownerAgentSelect" title="Agente responsavel pelo atendimento"></select></div>
           </div>
           <div class="composer-row">
+            <button class="icon-btn emoji" id="emojiBtn" title="Emoji" type="button">😀</button>
             <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo">📎</button>
             <button class="icon-btn rec" id="recordBtn" title="Gravar áudio">🎤</button>
             <textarea id="composerText" placeholder="Digite uma mensagem..." rows="1"></textarea>
             <button class="icon-btn send" id="sendMsgBtn" title="Enviar">➤</button>
           </div>
+          <div id="emojiPicker" class="emoji-picker" hidden></div>
+          <div id="audioPreview" class="audio-preview" hidden></div>
           <input type="file" id="attachFile" hidden accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
         </div>
       </section>
@@ -385,7 +388,7 @@
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/crm/clow-dialog.js?v=58"></script>
-<script type="module" src="/crm/crm.js?v=77"></script>
+<script type="module" src="/crm/crm.js?v=79"></script>
 <script src="/crm/crm-extras.js?v=58"></script>
 <script src="/crm/crm-settings-ext.js?v=68"></script>
 <script src="/crm/agent-config-modal.js?v=3"></script>
