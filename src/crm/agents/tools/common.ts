@@ -445,6 +445,62 @@ export const COMMON_TOOLS: ToolDef[] = [
   handoffParaCorretor,
 ];
 
+/** PV Corretora — unico tenant onde auto-promote deterministico opera.
+ *  Daniel 2026-05-05: scope global causou vazamento cross-tenant. */
+const PV_TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
+
+/**
+ * Auto-promote deterministico (PV Corretora apenas).
+ *
+ * Daniel 2026-05-05: o LLM as vezes coleta os dados via salvar_dados_qualificacao
+ * mas esquece de chamar promover_para_vendedor_funeral, deixando o card preso no
+ * Lead apos cliente ja ter dado todos os dados pra cotacao. O fluxo Daniel quer
+ * (Lead → Atendimento Humano) tem que ser garantido independente do LLM.
+ *
+ * Chamado apos cada turno bem-sucedido do agente. Se o state tem qualification
+ * completa (4 campos minimos), move o card pra coluna alvo automaticamente.
+ * Idempotente — validatePromotionTarget retorna alreadyPromoted se ja moveu.
+ */
+export function maybeAutoPromote(ctx: ToolContext): { promoted: boolean; reason?: string } {
+  // GUARD 1: scope PV apenas. Outros tenants ficam de fora.
+  if (ctx.tenantId !== PV_TENANT_ID) return { promoted: false, reason: 'not_pv' };
+  // GUARD 2: coluna precisa ter destino configurado.
+  if (!ctx.column.agentPromoteToColumnId) return { promoted: false, reason: 'no_promote_target' };
+
+  // Re-resolve state — pode ter mudado durante o tool loop (LLM ja promoveu).
+  const fresh = getCardAgentState(ctx.card.id);
+  if (!fresh) return { promoted: false, reason: 'no_state' };
+  if (fresh.columnId !== ctx.column.id) return { promoted: false, reason: 'already_moved' };
+
+  // GUARD 3: dados minimos coletados. Se LLM nao chamou salvar_dados_qualificacao
+  // ou so chamou parcialmente, nao promove — bot continua coletando.
+  const q = (fresh.collectedData as Record<string, unknown> | undefined)?.qualification as
+    | Record<string, unknown> | undefined;
+  if (!q) return { promoted: false, reason: 'no_qualification' };
+  const hasNome = typeof q.nome === 'string' && q.nome.trim().length > 0;
+  const hasIdade = typeof q.idade === 'number' && q.idade > 0 && q.idade <= 74;
+  const hasTipo = typeof q.tipo_plano === 'string' && q.tipo_plano.trim().length > 0;
+  const hasComp = typeof q.composicao_familiar === 'string' && q.composicao_familiar.trim().length > 0;
+  if (!hasNome || !hasIdade || !hasTipo || !hasComp) {
+    return { promoted: false, reason: `missing:${[!hasNome && 'nome', !hasIdade && 'idade', !hasTipo && 'tipo', !hasComp && 'composicao'].filter(Boolean).join(',')}` };
+  }
+
+  // GUARD 4: pelo menos 2 turnos do cliente — evita promover na primeira msg
+  // se o LLM por algum motivo salvar tudo de cara (edge case suspeito).
+  if (fresh.turnsCount < 2) return { promoted: false, reason: `turns_too_low=${fresh.turnsCount}` };
+
+  // Valida destino e move
+  const v = validatePromotionTarget(ctx);
+  if (v.alreadyPromoted) return { promoted: false, reason: 'already_promoted' };
+  if (!v.ok || !v.target) return { promoted: false, reason: v.error || 'invalid_target' };
+
+  logger.info(
+    `[auto-promote] PV card=${ctx.card.id} qualification complete (nome=${q.nome}, idade=${q.idade}, tipo=${q.tipo_plano}) — moving to "${v.target.name}"`,
+  );
+  const result = executePromotion(ctx, v.target, 'auto-promote: dados completos sem chamada LLM', 'vendedor_funeral');
+  return { promoted: result.ok, reason: result.ok ? 'moved' : (result.error || 'execute_failed') };
+}
+
 /** Helper compartilhado pra promote_*: valida coluna destino e mantem
  *  idempotencia. Devolve { ok, error?, target? }. */
 export interface ValidatedPromotion {

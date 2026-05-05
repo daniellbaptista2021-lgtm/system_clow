@@ -40,6 +40,7 @@ import {
 } from '../store/cardAgentStateStore.js';
 import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.js';
 import { cardHasTag } from './tools/tags.js';
+import { maybeAutoPromote } from './tools/common.js';
 import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
 import { getCrmDb } from '../schema.js';
@@ -441,6 +442,23 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     `[col-agent.runner] ✓ executed card=${card.id} role=${role} ` +
       `column="${column.name}" turns=${finalState.turnsCount} iter=${iteration}`,
   );
+
+  // Auto-promote deterministico (PV Corretora apenas). Se LLM coletou os
+  // dados via salvar_dados_qualificacao mas esqueceu de chamar a tool de
+  // promocao, move o card pra Atendimento Humano. Helper checa scope/guards.
+  try {
+    const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
+    const refreshedColumn = store.listColumns(tenantId, card.boardId!)
+      .find((c) => c.id === refreshedCard.columnId) ?? column;
+    const autoCtx: ToolContext = {
+      tenantId, channel, card: refreshedCard, column: refreshedColumn,
+      state: finalState, customerPhone, role,
+    };
+    maybeAutoPromote(autoCtx);
+  } catch (err: any) {
+    logger.warn(`[col-agent.runner] auto-promote falhou card=${card.id}: ${err?.message}`);
+  }
+
   void lastReplyForAntiLoop; // kept for future debugging
   return { status: 'executed', reply: finalText };
 }
