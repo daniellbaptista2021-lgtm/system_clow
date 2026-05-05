@@ -40,7 +40,9 @@
 import * as store from './store.js';
 import { sendOutbound } from './inbox.js';
 import { getCrmDb } from './schema.js';
+import { getCluster } from '../utils/clusterStore.js';
 import type { Card, Contact, Activity, Automation } from './types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Event types ────────────────────────────────────────────────────────
 export type TriggerType =
@@ -62,12 +64,17 @@ export interface AutomationEvent {
 }
 
 // ─── Engine: emit + run ─────────────────────────────────────────────────
-const _runningEvents = new Set<string>(); // dedup re-entrant runs
+// Cluster-safe re-entrant dedup: a tuple (tenant, trigger, card, activity)
+// shouldn't fire twice in a 5-second window. clusterStore.setNxEx returns
+// false on the second arrival, so the duplicate emit short-circuits whether
+// the duplicate hits the same worker or a sibling worker via Redis.
+const DEDUPE_TTL_SEC = 5;
 
 export async function emit(event: AutomationEvent): Promise<void> {
-  const dedupeKey = `${event.tenantId}:${event.trigger}:${event.cardId || event.contactId || ''}:${event.activityId || ''}`;
-  if (_runningEvents.has(dedupeKey)) return;
-  _runningEvents.add(dedupeKey);
+  const dedupeKey = `aut:dedupe:${event.tenantId}:${event.trigger}:${event.cardId || event.contactId || ''}:${event.activityId || ''}`;
+  const cluster = await getCluster();
+  const isFirst = await cluster.setNxEx(dedupeKey, '1', DEDUPE_TTL_SEC);
+  if (!isFirst) return;
   try {
     const db = getCrmDb();
     const rules = db.prepare(`
@@ -87,7 +94,16 @@ export async function emit(event: AutomationEvent): Promise<void> {
         for (const action of actions) {
           try { await runAction(event, action); }
           catch (err: any) {
-            console.warn(`[crm-automation] action ${action.type} failed: ${err.message}`);
+            logger.warn(`[crm-automation] action ${action.type} failed: ${err.message}`);
+            // Sentry: surface action-level failures so we can fix flaky
+            // integrations (Z-API down, customer URL invalid, etc).
+            const { captureException } = await import('../utils/sentry.js');
+            captureException(err, {
+              source: 'automation_action',
+              action_type: action.type,
+              trigger: event.trigger,
+              tenant_id: event.tenantId,
+            });
           }
         }
 
@@ -96,11 +112,14 @@ export async function emit(event: AutomationEvent): Promise<void> {
           UPDATE crm_automations SET last_run_at = ?, runs_count = runs_count + 1 WHERE id = ?
         `).run(Date.now(), r.id);
       } catch (err: any) {
-        console.warn(`[crm-automation] rule ${r.id} eval failed: ${err.message}`);
+        logger.warn(`[crm-automation] rule ${r.id} eval failed: ${err.message}`);
       }
     }
   } finally {
-    _runningEvents.delete(dedupeKey);
+    // Dedup token expires automatically after DEDUPE_TTL_SEC; we don't
+    // explicitly delete it. If the same event genuinely fires again
+    // after 5s (e.g. user re-sends the same WhatsApp), it counts as a
+    // separate trigger and that's correct.
   }
 }
 
@@ -140,7 +159,10 @@ async function checkOne(event: AutomationEvent, cond: any, card: Card | null, co
       return target?.name.toLowerCase() === String(p.columnName).toLowerCase();
     }
     case 'column_is_not': {
-      if (!card) return true;
+      // Sem card no evento, "não está em X" é vacuamente verdadeiro mas
+      // perigoso: dispara automação em triggers que não carregam card
+      // (ex.: webhook genérico). Falha conservadoramente, igual column_is.
+      if (!card) return false;
       const cols = store.listColumns(event.tenantId, card.boardId);
       const target = cols.find(c => c.id === card.columnId);
       return target?.name.toLowerCase() !== String(p.columnName).toLowerCase();

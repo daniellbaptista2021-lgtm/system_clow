@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 /**
  * whatsapper.ts — Transactional WhatsApp sender (Meta Cloud API).
  *
@@ -172,7 +173,7 @@ export async function sendWelcomeWhatsApp(
 ): Promise<{ ok: boolean; via?: 'template' | 'freeform'; error?: string }> {
   const cfg = metaConfig();
   if (!cfg) {
-    console.warn('[wa-welcome] Meta não configurado — pulando WhatsApp');
+    logger.warn('[wa-welcome] Meta não configurado — pulando WhatsApp');
     return { ok: false, error: 'meta_not_configured' };
   }
 
@@ -194,11 +195,11 @@ export async function sendWelcomeWhatsApp(
     withOtpButton: true,
   });
   if (tmpl.ok) {
-    console.log(`[wa-welcome] template "${templateName}" enviado pra ${toPhone} (id=${tmpl.messageId})`);
+    logger.info(`[wa-welcome] template "${templateName}" enviado pra ${toPhone} (id=${tmpl.messageId})`);
     return { ok: true, via: 'template' };
   }
 
-  console.warn(`[wa-welcome] template "${templateName}" falhou: ${tmpl.error} — tentando freeform`);
+  logger.warn(`[wa-welcome] template "${templateName}" falhou: ${tmpl.error} — tentando freeform`);
 
   // 2. Fallback freeform (só funciona dentro da janela 24h)
   const body = [
@@ -213,10 +214,10 @@ export async function sendWelcomeWhatsApp(
   ].join('\n');
   const fb = await sendFreeform(toPhone, body);
   if (fb.ok) {
-    console.log(`[wa-welcome] freeform enviado pra ${toPhone} (janela 24h aberta)`);
+    logger.info(`[wa-welcome] freeform enviado pra ${toPhone} (janela 24h aberta)`);
     return { ok: true, via: 'freeform' };
   }
 
-  console.warn(`[wa-welcome] freeform tb falhou: ${fb.error} — email continua como canal primário`);
+  logger.warn(`[wa-welcome] freeform tb falhou: ${fb.error} — email continua como canal primário`);
   return { ok: false, error: fb.error };
 }

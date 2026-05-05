@@ -1,4 +1,5 @@
 import type { OutboundMessage, InboundMessage } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,7 +70,7 @@ export class MessageProtocol {
         await handler(message);
       } catch (err) {
         this.stats.errorCount++;
-        console.error(
+        logger.error(
           '[MessageProtocol] Handler error for type ' + message.type + ':',
           err instanceof Error ? err.message : String(err),
         );

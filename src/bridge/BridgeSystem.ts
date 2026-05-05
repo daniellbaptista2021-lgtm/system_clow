@@ -24,6 +24,7 @@ import { ReplBridge } from './replBridge.js';
 import { RemoteBridgeCore } from './remoteBridgeCore.js';
 import { BridgeCrashRecovery } from './recovery/CrashRecovery.js';
 import { BridgeUI } from './ui/bridgeUI.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // BridgeSystem
@@ -97,7 +98,7 @@ export class BridgeSystem {
           onInboundMessage: options.onInboundMessage,
         });
         const { pairingInfo } = await this.replBridge.start();
-        console.log(pairingInfo);
+        logger.info(pairingInfo);
         break;
 
       case 'env-less':

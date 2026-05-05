@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { runMigrations } from './MemorySchema.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Singleton Cache
@@ -58,7 +59,7 @@ export function closeAllMemoryDbs(): void {
     try {
       db.close();
     } catch (err) {
-      console.warn(`[Memory] Failed to close DB for tenant ${tenantId}: ${(err as Error).message}`);
+      logger.warn(`[Memory] Failed to close DB for tenant ${tenantId}: ${(err as Error).message}`);
     }
   }
   dbCache.clear();

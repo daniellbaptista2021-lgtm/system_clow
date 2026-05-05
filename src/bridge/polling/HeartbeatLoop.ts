@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger.js';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -69,12 +70,12 @@ export class HeartbeatLoop {
       this.lastHeartbeatAt = Date.now();
     } catch (err) {
       this.consecutiveFailures++;
-      console.error(
+      logger.error(
         '[HeartbeatLoop] Failed (' + this.consecutiveFailures + '):',
         err instanceof Error ? err.message : String(err),
       );
       if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        console.error('[HeartbeatLoop] Too many failures, stopping');
+        logger.error('[HeartbeatLoop] Too many failures, stopping');
         this.stop();
       }
     }

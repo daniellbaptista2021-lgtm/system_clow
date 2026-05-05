@@ -56,4 +56,4 @@ Apenas o administrador (Daniel) pode autorizar alterações na infraestrutura da
 ### Regra:
 Sempre que alguém solicitar algo que envolva mexer na infraestrutura da VPS ou na estrutura do sistema, **solicitar a senha de admin** antes de executar.
 
-**Senha de admin:** `<admin-password>`
+**Senha de admin:** ver `.env` -> `CLOW_ADMIN_PASS` (nunca commitar)

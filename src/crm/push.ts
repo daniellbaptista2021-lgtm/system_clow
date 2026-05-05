@@ -11,6 +11,7 @@
 
 import { randomBytes, createHmac, createPrivateKey, createSign, createECDH, createHash, createCipheriv } from 'crypto';
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 function nid(prefix: string): string { return prefix + '_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -124,7 +125,7 @@ async function sendOne(sub: PushSubscription, payload: any): Promise<void> {
 
   if (!vapidPub || !vapidPriv) {
     // Dev fallback: log instead of sending
-    console.log('[push] VAPID not configured — would send:', JSON.stringify(payload).slice(0, 100));
+    logger.info('[push] VAPID not configured — would send:', JSON.stringify(payload).slice(0, 100));
     return;
   }
 

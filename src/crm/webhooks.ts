@@ -14,6 +14,7 @@ import { decryptJson } from './crypto.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { ingestInbound } from './inbox.js';
+import { logger } from '../utils/logger.js';
 
 
 // Internal forward: also deliver the raw webhook to the System Clow agent
@@ -29,7 +30,7 @@ async function forwardToAgent(path: string, payload: unknown, sigHeader?: string
       body: JSON.stringify(payload),
     });
   } catch (err: any) {
-    console.warn('[crm-webhook forward] agent unreachable:', err?.message || err);
+    logger.warn('[crm-webhook forward] agent unreachable:', err?.message || err);
   }
 }
 
@@ -61,6 +62,9 @@ app.get('/meta/:secret', async (c) => {
 
 // ─── META: POST (incoming messages) ─────────────────────────────────────
 app.post('/meta/:secret', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('meta');
+
   const secret = c.req.param('secret');
   const channel = findChannelByWebhookSecret(secret);
   if (!channel || channel.type !== 'meta') return c.text('not_found', 404);
@@ -98,13 +102,13 @@ app.post('/meta/:secret', async (c) => {
     const { isAdminPhone } = await import('../admin/adminConfig.js');
     const senderPhones = parsed.messages.map((m: any) => String(m.fromPhone || m.phone || '')).filter(Boolean);
     const hasAdminSender = senderPhones.some((p) => isAdminPhone(p));
-    console.log('[crm-webhook] senders=' + senderPhones.join(',') + ' adminMatch=' + hasAdminSender);
+    logger.info('[crm-webhook] senders=' + senderPhones.join(',') + ' adminMatch=' + hasAdminSender);
     if (hasAdminSender) {
       forwardTenantId = undefined; // admin path
-      console.log('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
+      logger.info('[crm-webhook] admin sender detected -> routing to admin context (not tenant ' + channel.tenantId.slice(0,8) + ')');
     }
   } catch (err: any) {
-    console.warn('[crm-webhook] adminConfig check failed:', err?.message);
+    logger.warn('[crm-webhook] adminConfig check failed:', err?.message);
   }
 
   // ALSO forward the original payload to the System Clow AI agent so it can reply
@@ -115,6 +119,9 @@ app.post('/meta/:secret', async (c) => {
 
 // ─── Z-API: POST (incoming messages) ────────────────────────────────────
 app.post('/zapi/:secret', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('zapi');
+
   const secret = c.req.param('secret');
   const channel = findChannelByWebhookSecret(secret);
   if (!channel || channel.type !== 'zapi') return c.text('not_found', 404);
@@ -130,17 +137,74 @@ app.post('/zapi/:secret', async (c) => {
       const t = it?.type || 'unknown';
       const known = ['ReceivedCallback', 'MessageStatusCallback', 'PresenceChatCallback', 'DeliveryCallback'];
       if (!known.includes(t)) {
-        console.log('[zapi-webhook] unknown type=' + t + ' keys=' + Object.keys(it || {}).join(','));
+        logger.info('[zapi-webhook] unknown type=' + t + ' keys=' + Object.keys(it || {}).join(','));
       }
     }
   } catch {}
 
-  const parsed = zapi.parseWebhook(payload);
+  // Onda 60: filtra ecos do proprio numero conectado (Z-API as vezes
+  // ecoa outbound de volta como inbound). fetchConnectedPhone tem
+  // cache de 24h em memoria, so faz request real na 1a chamada.
+  const connectedPhone = await zapi.fetchConnectedPhone(channel);
+
+  // Onda 61: resolve LIDs (WhatsApp internal IDs) em telefones reais antes
+  // de parsear. Quando o corretor responde direto pelo celular pra alguem
+  // cujo numero esta protegido por LID, Z-API manda phone=NNN@lid. Sem
+  // resolver, o parser descarta (filtro @lid) e a msg fica invisivel.
+  try {
+    const items = Array.isArray(payload) ? payload : [payload];
+    for (const it of items) {
+      if (it && typeof it.phone === 'string' && it.phone.endsWith('@lid')) {
+        const real = await zapi.fetchPhoneFromLid(channel, it.phone);
+        if (real) {
+          it.chatLid = it.chatLid || it.phone;
+          it.phone = real;
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn('[crm-webhook] LID resolve failed:', err?.message);
+  }
+
+  const parsed = zapi.parseWebhook(payload, connectedPhone || undefined);
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }
   // Forward to agent (Z-API webhook endpoint exists in whatsappAgent adapter)
   void forwardToAgent('/webhooks/zapi', payload, undefined, channel.tenantId);
+
+  // Dispara agente AI em background (debounce 8s no proprio handler).
+  // Se canal nao tem ai_enabled=1 + ai_system_prompt, retorna no-op.
+  // Nao bloqueia o 200 OK volta pra Z-API.
+  try {
+    const items = Array.isArray(payload) ? payload : [payload];
+    const connectedNorm = connectedPhone ? String(connectedPhone).replace(/\D/g, '') : '';
+    for (const it of items) {
+      if (it?.fromMe === true) continue; // so processa msg do cliente
+      if (it?.type && it.type !== 'ReceivedCallback') continue;
+      const phone = it?.phone || it?.from;
+      if (!phone) continue;
+      // Filtra eco do proprio numero conectado (mesma logica do parser)
+      if (connectedNorm && String(phone).replace(/\D/g, '') === connectedNorm) continue;
+      const text = it?.text?.message || it?.message;
+      const audioUrl = it?.audio?.audioUrl;
+      const imageUrl = it?.image?.imageUrl;
+      const senderName = it?.senderName || it?.chatName;
+      const aiAgent = await import('./ai/agent.js');
+      aiAgent.handleInboundForAI({
+        channel,
+        customerPhone: String(phone),
+        text,
+        audioUrl,
+        imageUrl,
+        senderName,
+        // Onda 62 (PR 2): propaga messageId pro cluster lock do column agent
+        messageId: it?.messageId || it?.id,
+      });
+    }
+  } catch (err: any) {
+    logger.warn('[zapi-webhook] AI agent dispatch failed:', err?.message);
+  }
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 

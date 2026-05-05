@@ -10,6 +10,7 @@
 
 import { execSync } from 'child_process';
 import * as fs from 'fs';
+import { logger } from '../../utils/logger.js';
 
 export type SandboxBackend = 'none' | 'bwrap' | 'firejail' | 'seatbelt';
 
@@ -73,7 +74,7 @@ export class SandboxRunner {
     if (backend === 'none') return cmd;
 
     if (!opts.workspaceRoot || !fs.existsSync(opts.workspaceRoot)) {
-      console.warn('[SandboxRunner] Workspace root does not exist, skipping sandbox');
+      logger.warn('[SandboxRunner] Workspace root does not exist, skipping sandbox');
       return cmd;
     }
 

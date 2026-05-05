@@ -31,6 +31,7 @@ import {
 import type { ClovMessage } from '../api/anthropic.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import * as fs from 'fs';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,20 @@ function getSessionModeFromEntries(entries: any[], fallback: 'server' | 'coordin
     }
   }
   return fallback;
+}
+
+/** Recupera o tenantId persistido em session_start. Necessario pra rehydrate
+ *  preservar ownership quando outro worker do PM2 cluster atende a msg de uma
+ *  sessao criada noutro worker (pool em memoria nao e compartilhado). */
+function getSessionTenantIdFromEntries(entries: any[]): string | undefined {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry?.type === 'session_start' && entry.value && typeof entry.value === 'object') {
+      const tid = (entry.value as Record<string, unknown>).tenantId;
+      if (typeof tid === 'string' && tid) return tid;
+    }
+  }
+  return undefined;
 }
 
 function transcriptEntriesToApiMessages(entries: any[]): ClovMessage[] {
@@ -125,6 +140,11 @@ export class SessionPool {
     const tenantId = options.tenantId;
     const tenantTier = options.tenantTier;
     const mode = options.mode || 'server';
+    // Garante que o workspace do tenant existe (mkdirp). Sem isso, bash cwd
+    // pode falhar ao spawn em workspace recem-criado de tenant novo.
+    if (tenantId && workspaceRoot && workspaceRoot.startsWith('/opt/clow-workspaces/')) {
+      try { fs.mkdirSync(workspaceRoot, { recursive: true }); } catch { /* noop */ }
+    }
     const baseToolPool = tenantTier
       ? filterToolsForTier(getTools(undefined, this.mcpManager || undefined), tenantTier)
       : getTools(undefined, this.mcpManager || undefined);
@@ -196,8 +216,10 @@ export class SessionPool {
     for (const pluginHook of pluginSystem.getHooks()) {
       hookEngine.addHook(pluginHook);
     }
-    // Initialize persistent memory hooks (SQLite-backed)
-    await initMemorySystem(hookEngine, tenantId || 'default');
+    // Initialize persistent memory hooks (SQLite-backed).
+    // Fallback explicito pra '__admin__' quando nao ha tenant — antes caia
+    // em 'default' que e tenant de dados real, vazando memoria entre tenants.
+    await initMemorySystem(hookEngine, tenantId || '__admin__');
     const hookDispatcher = new HookEventDispatcher(hookEngine, {
       sessionId,
       transcriptPath: getSessionFilePath(sessionId),
@@ -236,6 +258,9 @@ export class SessionPool {
       sessionId,
       cwd,
       permissionMode: 'default',
+      tenantId,
+      workspaceRoot,
+      tier: tenantTier,
     }));
 
     const engine = new QueryEngine({
@@ -273,6 +298,7 @@ export class SessionPool {
       await saveSessionMetadataForSession(sessionId, 'session_start', {
         cwd,
         mode: options.mode || 'server',
+        tenantId,
         createdAt: Date.now(),
       });
     }
@@ -289,7 +315,11 @@ export class SessionPool {
     });
 
     if (tenantId) {
-      registerSession(tenantId, sessionId);
+      // Fire-and-forget: registerSession is async (cluster-shared via
+      // Redis). The session is usable before the SADD round-trip
+      // completes; correctness only matters for countActiveSessions
+      // which we await separately on the quota gate.
+      void registerSession(tenantId, sessionId);
     }
 
     return engine;
@@ -297,15 +327,16 @@ export class SessionPool {
 
   // ─── Get (with disk rehydration) ────────────────────────────────────
 
-  async get(sessionId: string): Promise<QueryEngine | null> {
+  async get(sessionId: string, opts?: { tenantIdHint?: string; isAdmin?: boolean }): Promise<QueryEngine | null> {
     const entry = this.engines.get(sessionId);
     if (entry) {
       entry.lastAccess = Date.now();
       return entry.engine;
     }
 
-    // Try rehydrate from disk
-    return this.tryRehydrate(sessionId);
+    // Try rehydrate from disk — passa tenantIdHint pra preservar ownership
+    // em cluster mode (pool em memoria nao compartilhado entre workers).
+    return this.tryRehydrate(sessionId, opts);
   }
 
   // ─── Get or Create ──────────────────────────────────────────────────
@@ -327,7 +358,7 @@ export class SessionPool {
       void entry.engine.gracefulShutdown('session_deleted');
     }
     if (entry?.tenantId) {
-      unregisterSession(entry.tenantId, sessionId);
+      void unregisterSession(entry.tenantId, sessionId);
     }
     return this.engines.delete(sessionId);
   }
@@ -394,19 +425,28 @@ export class SessionPool {
 
   // ─── Disk Rehydration ───────────────────────────────────────────────
 
-  private async tryRehydrate(sessionId: string): Promise<QueryEngine | null> {
+  private async tryRehydrate(sessionId: string, opts?: { tenantIdHint?: string; isAdmin?: boolean }): Promise<QueryEngine | null> {
     try {
       const entries = await loadTranscriptFile(sessionId);
       if (entries.length === 0) return null;
 
       const cwd = getSessionCwdFromEntries(entries, process.cwd());
       const mode = getSessionModeFromEntries(entries, 'server');
+      // BUG 2026-04-29: rehydrate criava engine sem tenantId, fazendo tools
+      // de CRM caírem em fail-closed (ou no fallback 'default' antigo, que
+      // vazava dados entre tenants). Agora le tenantId do session_start
+      // persistido. Hint do request e fallback adicional caso o disco seja
+      // de uma sessao antiga sem tenantId persistido.
+      const persistedTenantId = getSessionTenantIdFromEntries(entries);
+      const tenantIdResolved = persistedTenantId || opts?.tenantIdHint;
       const engine = await this.create(sessionId, {
         cwd,
         workspaceRoot: cwd,
+        tenantId: tenantIdResolved,
         tenantTier: undefined,
         mode,
         persistSessionStart: false,
+        isAdmin: opts?.isAdmin,
       });
 
       const historyMessages = transcriptEntriesToApiMessages(entries);
@@ -423,7 +463,7 @@ export class SessionPool {
         entry.messageCount = engine.getMessageCount();
       }
 
-      console.error(`  [pool] Rehydrated session ${sessionId.slice(0, 8)} from disk (${historyMessages.length} messages)`);
+      logger.error(`  [pool] Rehydrated session ${sessionId.slice(0, 8)} from disk (${historyMessages.length} messages)`);
       return engine;
     } catch {
       return null;
@@ -446,9 +486,9 @@ export class SessionPool {
       for (const id of expired) {
         const entry = this.engines.get(id);
         if (entry?.tenantId) {
-          unregisterSession(entry.tenantId, id);
+          void unregisterSession(entry.tenantId, id);
         }
-        console.error(`  [pool] TTL expired: session ${id.slice(0, 8)} (idle ${Math.floor((now - this.engines.get(id)!.lastAccess) / 60_000)}min)`);
+        logger.error(`  [pool] TTL expired: session ${id.slice(0, 8)} (idle ${Math.floor((now - this.engines.get(id)!.lastAccess) / 60_000)}min)`);
         this.engines.delete(id);
       }
     }, CLEANUP_INTERVAL_MS);
@@ -463,7 +503,7 @@ export class SessionPool {
     }
     for (const [sessionId, entry] of this.engines.entries()) {
       if (entry.tenantId) {
-        unregisterSession(entry.tenantId, sessionId);
+        void unregisterSession(entry.tenantId, sessionId);
       }
     }
     this.engines.clear();

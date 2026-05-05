@@ -11,6 +11,7 @@ import type { HookInput, HookOutput } from '../../hooks/types.js';
 import { MemoryStore } from '../MemoryStore.js';
 import { generateMemoryContext } from '../MemoryContextInjector.js';
 import { RAGEngine } from '../ragEngine.js';
+import { logger } from '../../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Store Cache (per tenant)
@@ -37,7 +38,7 @@ function getStore(tenantId: string = 'default'): MemoryStore {
  */
 export async function handleSessionStart(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
 
     // Record this session
@@ -55,7 +56,7 @@ export async function handleSessionStart(input: HookInput): Promise<HookOutput |
 
     return null;
   } catch (err) {
-    console.warn(`[Memory] SessionStart hook error: ${(err as Error).message}`);
+    logger.warn(`[Memory] SessionStart hook error: ${(err as Error).message}`);
     return null; // Never block the session
   }
 }
@@ -71,7 +72,7 @@ export async function handleSessionStart(input: HookInput): Promise<HookOutput |
  */
 export async function handlePostToolUse(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
     const toolName = input.tool_name || 'unknown';
 
@@ -107,7 +108,7 @@ export async function handlePostToolUse(input: HookInput): Promise<HookOutput | 
       } catch {}
     }
   } catch (err) {
-    console.warn(`[Memory] PostToolUse hook error: ${(err as Error).message}`);
+    logger.warn(`[Memory] PostToolUse hook error: ${(err as Error).message}`);
   }
 
   return null;
@@ -126,7 +127,7 @@ export async function handlePostToolUse(input: HookInput): Promise<HookOutput | 
  */
 export async function handleSessionEnd(input: HookInput): Promise<HookOutput | null> {
   try {
-    const tenantId = input.tenant_id || 'default';
+    const tenantId = input.tenant_id || '__admin__';
     const store = getStore(tenantId);
 
     const observations = store.getSessionObservations(input.session_id);
@@ -169,7 +170,7 @@ export async function handleSessionEnd(input: HookInput): Promise<HookOutput | n
 
     store.endSession(input.session_id, 'completed');
   } catch (err) {
-    console.warn(`[Memory] SessionEnd hook error: ${(err as Error).message}`);
+    logger.warn(`[Memory] SessionEnd hook error: ${(err as Error).message}`);
   }
 
   return null;

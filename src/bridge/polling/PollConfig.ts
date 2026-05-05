@@ -1,5 +1,6 @@
 import type { PollConfig } from '../types.js';
 import { DEFAULT_POLL_CONFIG } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // PollConfigManager
@@ -33,7 +34,7 @@ export class PollConfigManager {
       const data = (await response.json()) as Partial<PollConfig>;
       this.update(data);
     } catch (err) {
-      console.error(
+      logger.error(
         '[PollConfigManager] Failed to refresh from remote:',
         err instanceof Error ? err.message : String(err),
       );

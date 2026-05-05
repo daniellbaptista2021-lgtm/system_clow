@@ -8,6 +8,7 @@ import { SkillParser } from './SkillParser.js';
 import { SKILL_FILE_NAME } from './types.js';
 import type { ParsedSkill, SkillFrontmatter } from './types.js';
 import { getBuiltinSkills } from './builtInSkills.js';
+import { logger } from '../utils/logger.js';
 
 export class SkillDiscovery {
   constructor(private readonly parser: SkillParser, private readonly clowHome = path.join(os.homedir(), '.clow')) {}
@@ -179,14 +180,14 @@ export class SkillDiscovery {
             try {
               cb(eventType, filePath);
             } catch (err) {
-              console.warn(`[SkillDiscovery] Watch callback error: ${(err as Error).message}`);
+              logger.warn(`[SkillDiscovery] Watch callback error: ${(err as Error).message}`);
             }
           }
         });
 
         this.watchers.set(dir, watcher);
       } catch (err) {
-        console.warn(`[SkillDiscovery] Failed to watch ${dir}: ${(err as Error).message}`);
+        logger.warn(`[SkillDiscovery] Failed to watch ${dir}: ${(err as Error).message}`);
       }
     }
   }
@@ -312,7 +313,7 @@ export class SkillDiscovery {
       // Create SKILL.md using parser helper
       return await this.parser.createSkillFile(skillDir, skillName, description, body);
     } catch (err) {
-      console.warn(`[SkillDiscovery] Failed to create skill directory: ${(err as Error).message}`);
+      logger.warn(`[SkillDiscovery] Failed to create skill directory: ${(err as Error).message}`);
       return null;
     }
   }

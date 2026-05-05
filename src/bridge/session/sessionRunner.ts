@@ -12,6 +12,7 @@ import type {
   BridgeSessionStatus,
 } from '../types.js';
 import { SystemCommandType } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -386,6 +387,6 @@ export class SessionRunner {
 
   private logError(session: RunningSession, message: string, err: unknown): void {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error('[SessionRunner] [' + session.workId + '] ' + message + ': ' + errMsg);
+    logger.error('[SessionRunner] [' + session.workId + '] ' + message + ': ' + errMsg);
   }
 }

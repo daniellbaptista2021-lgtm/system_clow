@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/logo-new.png">
-<link rel="stylesheet" href="/crm/crm.css?v=52">
+<link rel="stylesheet" href="/crm/crm.css?v=78">
 </head>
 <body>
 
@@ -51,13 +51,9 @@
       <button class="nav-item" data-view="tasks"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="nav-label">Tarefas</span></button>
       <button class="nav-item" data-view="agenda"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><span class="nav-label">Agenda</span></button>
       <button class="nav-item" data-view="documents"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="nav-label">Documentos</span></button>
-      <button class="nav-item" data-view="forms"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span><span class="nav-label">Formulários</span></button>
-      <button class="nav-item" data-view="campaigns"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span class="nav-label">Campanhas</span></button>
-      <button class="nav-item" data-view="search"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span class="nav-label">Busca</span></button>
-      <button class="nav-item" data-view="insights"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg></span><span class="nav-label">Insights AI</span></button>
       <button class="nav-item" data-view="performance"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span><span class="nav-label">Performance</span></button>
-      <button class="nav-item" data-view="security"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span class="nav-label">Segurança</span></button>
-      <button class="nav-item" data-view="privacy"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 8l6-1z"/></svg></span><span class="nav-label">Privacidade</span></button>
+      <!-- REMOVIDOS DA SIDEBAR (panels e backend preservados, sem dia-a-dia):
+           forms, campaigns, search, insights, security, privacy -->
     </nav>
     <div class="sidebar-foot">
       <button class="nav-item" data-view="trash" style="opacity:.6;font-size:12px"><span class="nav-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></span><span class="nav-label">Lixeira</span></button>
@@ -82,7 +78,8 @@
           </select>
           <button class="secondary" id="refreshBtn" title="Atualizar">↻</button>
         </div>
-        <div>
+        <div style="display:flex;gap:8px">
+          <button class="secondary" id="newColumnBtn">+ Coluna</button>
           <button id="newCardBtn">+ Novo Card</button>
         </div>
       </header>
@@ -96,7 +93,10 @@
           <h2>Contatos</h2>
           <input type="text" id="contactSearchInput" placeholder="Buscar por nome, telefone, email..." style="width:280px">
         </div>
-        <div>
+        <div style="display:flex;gap:8px;flex-wrap:nowrap;align-items:center">
+          <button id="importContactsBtn" title="Importar contatos de planilha CSV ou Excel">⬆ Importar</button>
+          <button id="exportContactsBtn" title="Exportar contatos">⬇ Exportar</button>
+          <button id="refreshPhotosBtn" title="Buscar foto de perfil de todos os contatos sem foto via Z-API">📷 Fotos WA</button>
           <button id="newContactBtn">+ Novo Contato</button>
         </div>
       </header>
@@ -108,7 +108,7 @@
       <header class="top-bar">
         <div class="top-bar-left"><h2>Canais WhatsApp</h2></div>
         <div>
-          <button id="newChannelBtn">+ Novo Canal</button>
+          <button id="newChannelBtn" class="primary" style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(155,89,252,.3)">+ Novo Canal</button>
         </div>
       </header>
       <div class="list" id="channelsList"></div>
@@ -154,7 +154,7 @@
           <button id="reportsSchedulesBtn">Agendar envio</button>
         </div>
       </header>
-      <div id="statsGrid" style="padding:14px 20px 6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
+      <div id="statsGrid" class="kpi-row" style="padding:14px 20px 6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
       <div style="padding:12px 20px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;">
         <div class="rpt-card" data-kind="sales">
           <div class="rpt-head"><span class="rpt-title">Vendas por período</span>
@@ -202,10 +202,9 @@
             <option value="med">Média</option>
             <option value="low">Baixa</option>
           </select>
-          <button id="newTaskBtn">+ Nova Tarefa</button>
         </div>
       </header>
-      <div id="tasksStats" style="padding:14px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px"></div>
+      <div id="tasksStats" class="kpi-row" style="padding:14px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px"></div>
       <div class="list" id="tasksList" style="padding:0 20px 20px"></div>
     </div>
 
@@ -351,36 +350,34 @@
     <div class="panel-tabs">
       <button class="panel-tab active" data-tab="conversation">Conversa</button>
       <button class="panel-tab" data-tab="info">Info</button>
-      <button class="panel-tab" data-tab="ai">🧠 AI</button>
       <button class="panel-tab" data-tab="links">📎 Vínculos</button>
       <button class="panel-tab" data-tab="comments">💬 Comentários</button>
-      <button class="panel-tab" data-tab="edit">Editar</button>
     </div>
     <div class="panel-body">
       <!-- CONVERSATION -->
       <section class="tab-section conversation active" data-tab="conversation">
         <div class="messages" id="messagesList"></div>
         <div class="composer">
-          <div class="channel-selector">
-            <label>Enviar por:</label>
-            <select id="sendChannelSelect"></select>
+          <div class="channel-selector" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Enviar por:</label><select id="sendChannelSelect"></select></div>
+            <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Agente:</label><select id="ownerAgentSelect" title="Agente responsavel pelo atendimento"></select></div>
           </div>
           <div class="composer-row">
+            <button class="icon-btn emoji" id="emojiBtn" title="Emoji" type="button">😀</button>
             <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo">📎</button>
             <button class="icon-btn rec" id="recordBtn" title="Gravar áudio">🎤</button>
             <textarea id="composerText" placeholder="Digite uma mensagem..." rows="1"></textarea>
             <button class="icon-btn send" id="sendMsgBtn" title="Enviar">➤</button>
           </div>
+          <div id="emojiPicker" class="emoji-picker" hidden></div>
+          <div id="audioPreview" class="audio-preview" hidden></div>
           <input type="file" id="attachFile" hidden accept="image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
         </div>
       </section>
       <!-- INFO (read) -->
       <section class="tab-section" data-tab="info" id="infoSection"></section>
-      <!-- EDIT -->
-      <section class="tab-section" data-tab="ai" id="aiSection"></section>
       <section class="tab-section" data-tab="links" id="linksSection"></section>
       <section class="tab-section" data-tab="comments" id="commentsSection"></section>
-      <section class="tab-section" data-tab="edit" id="editSection"></section>
     </div>
   </aside>
 </div>
@@ -390,10 +387,11 @@
 
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/crm/clow-dialog.js?v=52"></script>
-<script type="module" src="/crm/crm.js?v=52"></script>
-<script src="/crm/crm-extras.js?v=52"></script>
-<script src="/crm/crm-settings-ext.js"></script>
+<script src="/crm/clow-dialog.js?v=58"></script>
+<script type="module" src="/crm/crm.js?v=79"></script>
+<script src="/crm/crm-extras.js?v=58"></script>
+<script src="/crm/crm-settings-ext.js?v=68"></script>
+<script src="/crm/agent-config-modal.js?v=3"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

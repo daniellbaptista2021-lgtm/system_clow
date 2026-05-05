@@ -23,6 +23,7 @@ import { PermissionMatcher } from './PermissionMatcher.js';
 import { PermissionClassifier } from './PermissionClassifier.js';
 import { PermissionModes } from './PermissionModes.js';
 import { PermissionPrompt } from './PermissionPrompt.js';
+import { logger } from '../logger.js';
 
 export class PermissionPipeline {
   private storage: PermissionStorage;
@@ -124,9 +125,15 @@ export class PermissionPipeline {
   ): Promise<PermissionResult | null> {
     if (!tool.validateInput) return null;
 
+    // BUG 2026-04-29: ctx aqui nao incluia tenantId nem workspaceRoot —
+    // BashTool e CrmTool dependem de ambos pra distinguir tenant SaaS de
+    // admin. Sem isso, _ctx.tenantId vinha undefined e o BashTool caia no
+    // path admin pedindo senha mesmo pro user logado da PV/Marcio/Bruno.
     const ctx = {
       cwd: context.workspaceRoot,
       sessionId: context.sessionId,
+      tenantId: context.tenantId,
+      workspaceRoot: context.workspaceRoot,
       permissionMode: context.getMode(),
       options: { tools: [] },
     };
@@ -221,7 +228,7 @@ export class PermissionPipeline {
         context.addSessionRule(rule);
       }
     } catch (err) {
-      console.error(`[permissions] Failed to persist rule: ${(err as Error).message}`);
+      logger.error(`[permissions] Failed to persist rule: ${(err as Error).message}`);
     }
   }
 

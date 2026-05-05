@@ -22,27 +22,143 @@ import * as push from './push.js';
 import * as ai from './ai.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
+import { logger } from '../utils/logger.js';
+import { getCluster } from '../utils/clusterStore.js';
 
 const TICK_INTERVAL_MS = 60_000;
+// Lock TTL: ligeiramente menor que o intervalo do tick, pra que se o
+// worker travar mid-tick o proximo intervalo possa adquirir. Cada
+// tick concorre pelo lock antes de rodar; serializa multi-worker se
+// (futuramente) o gate isSchedulerWorker() for relaxado.
+const TICK_LOCK_TTL_S = 55;
+const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
+const COLUMN_TIMER_TICK_INTERVAL_MS = 60_000; // PR 7.0
 const STALE_DAYS = 7;
 const DUE_APPROACHING_HOURS = 24;
 
 let _timer: NodeJS.Timeout | null = null;
+let _inactivityTimer: NodeJS.Timeout | null = null;
+let _columnTimerTimer: NodeJS.Timeout | null = null;
+let _runningInactivityTick = false;
+let _runningColumnTimerTick = false;
 let _runningTick = false;
+
+/**
+ * Returns true on the worker that should run cluster-wide cron jobs
+ * (reminders, stale detection, billing tick, monthly quota rotation,
+ * etc.). Without this gate, every PM2 cluster worker would tick the
+ * scheduler in parallel — reminders would fire N×, quotas would rotate
+ * N×, etc.
+ *
+ * Conventions:
+ *   - PM2 cluster mode sets NODE_APP_INSTANCE = '0' on the first worker
+ *     and '1', '2', … on subsequent ones. Worker 0 owns scheduling.
+ *   - In fork mode (or in tests / dev where NODE_APP_INSTANCE is
+ *     unset), the variable is undefined and we treat that as "primary"
+ *     so cron still runs.
+ *   - Set CLOW_FORCE_SCHEDULER=1 to override (useful for testing
+ *     scheduler logic on non-zero workers).
+ */
+export function isSchedulerWorker(): boolean {
+  if (process.env.CLOW_FORCE_SCHEDULER === '1') return true;
+  const instance = process.env.NODE_APP_INSTANCE;
+  return instance === undefined || instance === '0';
+}
 
 export function startScheduler(): void {
   if (_timer) return;
+  if (!isSchedulerWorker()) {
+    logger.info(`[CRM] Scheduler skipped on worker ${process.env.NODE_APP_INSTANCE} (cluster mode — only worker 0 schedules)`);
+    return;
+  }
   _timer = setInterval(() => { void tick(); }, TICK_INTERVAL_MS);
   // Run once shortly after boot (10s) to process any due items
   setTimeout(() => { void tick(); }, 10_000);
-  console.log(`[CRM] Scheduler started (tick every ${TICK_INTERVAL_MS / 1000}s)`);
+
+  // Onda 62 PR 4: sub-tick de inatividade (30s) — varre cards com timer
+  // vencido e dispara agente de coluna pra agir (cobrar/morno/frio/perdido).
+  _inactivityTimer = setInterval(() => { void inactivityTick(); }, INACTIVITY_TICK_INTERVAL_MS);
+  setTimeout(() => { void inactivityTick(); }, 15_000);
+
+  // PR 7.0: column timer scheduler (entry_delay / chase / followup)
+  _columnTimerTimer = setInterval(() => { void columnTimerTick(); }, COLUMN_TIMER_TICK_INTERVAL_MS);
+  setTimeout(() => { void columnTimerTick(); }, 20_000);
+
+  logger.info(
+    `[CRM] Scheduler started (main tick ${TICK_INTERVAL_MS / 1000}s, inactivity tick ${INACTIVITY_TICK_INTERVAL_MS / 1000}s, ` +
+    `column-timer tick ${COLUMN_TIMER_TICK_INTERVAL_MS / 1000}s, ` +
+    `worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`,
+  );
 }
 
 export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
+  if (_inactivityTimer) { clearInterval(_inactivityTimer); _inactivityTimer = null; }
+  if (_columnTimerTimer) { clearInterval(_columnTimerTimer); _columnTimerTimer = null; }
+}
+
+async function columnTimerTick(): Promise<void> {
+  if (_runningColumnTimerTick) return;
+  // Lock distribuido (60s TTL = mesmo do intervalo)
+  const lockKey = `crm:scheduler:tick:column-timer:${Math.floor(Date.now() / 60_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', 55).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[column-timer-tick] lock contention — skipping');
+    return;
+  }
+  _runningColumnTimerTick = true;
+  try {
+    const { tickColumnTimers } = await import('./agents/columnTimerScheduler.js');
+    await tickColumnTimers();
+  } catch (err: any) {
+    logger.warn('[column-timer-tick] err:', err?.message);
+  } finally {
+    _runningColumnTimerTick = false;
+  }
+}
+
+async function inactivityTick(): Promise<void> {
+  if (_runningInactivityTick) return; // skip se anterior ainda nao acabou
+  // Lock distribuido por janela de 30s (mesmo do intervalo)
+  const lockKey = `crm:scheduler:tick:inactivity:${Math.floor(Date.now() / 30_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', 25).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[inactivity-tick] lock contention — skipping');
+    return;
+  }
+  _runningInactivityTick = true;
+  try {
+    const { tickInactivity } = await import('./agents/inactivityScheduler.js');
+    await tickInactivity();
+  } catch (err: any) {
+    logger.warn('[inactivity-tick] err:', err?.message);
+  } finally {
+    _runningInactivityTick = false;
+  }
 }
 
 
+
+/** Retenção de logs internos (audit + automation runs) — mantém últimos N dias. */
+const AUTOMATION_LOGS_RETENTION_DAYS = Number(process.env.CLOW_AUTOMATION_LOGS_RETENTION_DAYS ?? 90);
+let _lastLogsCleanupDay = -1;
+function maybeCleanupAutomationLogs() {
+  try {
+    const now = new Date();
+    const dayKey = now.getUTCFullYear() * 1000 + (now.getUTCMonth() + 1) * 32 + now.getUTCDate();
+    if (_lastLogsCleanupDay === dayKey) return;
+    _lastLogsCleanupDay = dayKey;
+    const cutoff = Date.now() - AUTOMATION_LOGS_RETENTION_DAYS * 86400_000;
+    const r = getCrmDb().prepare('DELETE FROM crm_automation_logs WHERE fired_at < ?').run(cutoff);
+    if (r.changes > 0) {
+      logger.info(`[scheduler] cleaned ${r.changes} crm_automation_logs older than ${AUTOMATION_LOGS_RETENTION_DAYS}d`);
+    }
+  } catch (err: any) {
+    logger.warn('[scheduler logs cleanup] err:', err.message);
+  }
+}
 
 /** Track last rotation day to avoid running twice per day. */
 let _lastRotationDay = -1;
@@ -57,12 +173,21 @@ function maybeRotateMonthly() {
     _lastRotationDay = key;
     rotateMonthlyAllTenants();
   } catch (err: any) {
-    console.warn('[scheduler monthly rotate] err:', err.message);
+    logger.warn('[scheduler monthly rotate] err:', err.message);
   }
 }
 
 async function tick(): Promise<void> {
   if (_runningTick) return;
+  // Lock distribuido — caso 2 workers rodem schedulers (reload mal sincronizado,
+  // CLOW_FORCE_SCHEDULER setado em multiplos), apenas um adquire por minuto.
+  const lockKey = `crm:scheduler:tick:main:${Math.floor(Date.now() / 60_000)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', TICK_LOCK_TTL_S).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[scheduler.tick] lock contention — skipping (other worker is ticking)');
+    return;
+  }
   _runningTick = true;
   try {
     await Promise.allSettled([
@@ -99,12 +224,13 @@ async function tick(): Promise<void> {
             lgpd.processRetentionPolicies();
             lgpd.processScheduledDeletions();
           } catch { /* non-blocking */ }
-        } catch (err: any) { console.warn('[email-marketing tick]', err?.message); }
+        } catch (err: any) { logger.warn('[email-marketing tick]', err?.message); }
       })(),
     ]);
     maybeRotateMonthly();
+    maybeCleanupAutomationLogs();
   } catch (e: any) {
-    console.warn('[CRM scheduler] tick error:', e.message);
+    logger.warn('[CRM scheduler] tick error:', e.message);
   } finally {
     _runningTick = false;
   }
@@ -135,7 +261,7 @@ async function processReminders(): Promise<void> {
         }
       }
     } catch (err: any) {
-      console.warn(`[CRM reminder] ${r.id} failed: ${err.message}`);
+      logger.warn(`[CRM reminder] ${r.id} failed: ${err.message}`);
     }
   }
 }

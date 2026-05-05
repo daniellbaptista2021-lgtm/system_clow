@@ -8,6 +8,7 @@
 
 import { decryptJson } from '../crypto.js';
 import type { Channel2, MediaType } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 export interface MetaCreds {
   accessToken: string;
@@ -104,9 +105,9 @@ async function uploadMediaToMeta(
           mime = 'audio/ogg';
           try { fsMod.unlinkSync(inPath); } catch {}
           try { fsMod.unlinkSync(outPath); } catch {}
-          console.log('[meta-upload] audio webm -> ogg opus (', bytes.length, 'bytes)');
+          logger.info('[meta-upload] audio webm -> ogg opus (', bytes.length, 'bytes)');
         } catch (err: any) {
-          console.error('[meta-upload] ffmpeg transcode failed:', err?.message);
+          logger.error('[meta-upload] ffmpeg transcode failed:', err?.message);
           return { ok: false, error: 'audio_transcode_failed: ' + (err?.message || 'ffmpeg error') };
         }
       }
@@ -126,7 +127,7 @@ async function uploadMediaToMeta(
     form.append('type', mime);
     // Nome do arquivo no blob — Meta detecta formato pelo mime primarily
     const blobName = filename || `upload.${mime.split('/')[1]?.split(';')[0] || 'bin'}`;
-    form.append('file', new Blob([bytes], { type: mime }), blobName);
+    form.append('file', new Blob([new Uint8Array(bytes)], { type: mime }), blobName);
 
     const res = await fetch(url, {
       method: 'POST',

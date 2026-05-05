@@ -23,10 +23,12 @@ import { checkQuota } from '../tenancy/quotaGuard.js';
 import { incrementUsage } from '../tenancy/tenantStore.js';
 import { apiQueue } from './requestQueue.js';
 import { rateLimiter } from './rateLimiter.js';
+import { incAiMessage } from './metrics.js';
 import { audit } from '../tenancy/auditLog.js';
 import { recordClowUsage } from './middleware/clowSonnetGuard.js';
 import { getTenantWorkspaceDir } from '../tenancy/bashSandbox.js';
 import { detectGreeting, handleSlashCommand } from './slashCommands.js';
+import { isCoordinatorAllowedForTier } from '../coordinator/modeDetection.js';
 import { getMissionRunner } from './missions.js';
 import {
   flushSession,
@@ -38,6 +40,7 @@ import {
   getTotalOutputTokens,
   runWithExecutionContext,
 } from '../bootstrap/state.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Build Routes ───────────────────────────────────────────────────────────
 
@@ -71,11 +74,25 @@ export function buildRoutes(pool: SessionPool): Hono {
   });
 
   // ── Helper: Check session ownership ──────────────────────────────
+  // FAIL-CLOSED: bloqueia QUALQUER mismatch ou tenantId ausente.
+  // Bug anterior: `meta.tenantId && requestTenantId && ...` permitia
+  // tenant SaaS acessar sessão criada por admin (meta.tenantId=undefined)
+  // porque o && curto-circuitava. Resultado: PV Corretora via dados do
+  // CRM admin via tools (crm_dashboard etc) — vazamento entre tenants.
   function checkSessionOwnership(sessionId: string, requestTenantId: string | undefined, isAdmin: boolean): string | null {
-    if (isAdmin) return null; // Admin can access everything
+    if (isAdmin) return null; // Admin sempre acessa tudo
     const meta = pool.getMetadata(sessionId);
     if (!meta) return null; // Session not found — will 404 later
-    if (meta.tenantId && requestTenantId && meta.tenantId !== requestTenantId) {
+    // Token user_session sem tenantId no request: bloqueado (invariante)
+    if (!requestTenantId) {
+      return 'Acesso negado: token sem tenant_id valido';
+    }
+    // Sessão criada por admin (sem tenantId) — usuário SaaS NÃO pode reusar
+    if (!meta.tenantId) {
+      return 'Acesso negado: sessao pertence a outro contexto (admin)';
+    }
+    // Tenants diferentes — bloqueio normal
+    if (meta.tenantId !== requestTenantId) {
       return 'Acesso negado: esta sessao pertence a outro usuario';
     }
     return null;
@@ -89,17 +106,16 @@ export function buildRoutes(pool: SessionPool): Hono {
     const isAdmin = (c as any).get("authMode") === "admin_session";
     const clientIp = c.req.header('x-real-ip') || c.req.header('x-forwarded-for') || '';
 
-    // Rate limiting (skip for admin)
+    // Rate limiting (skip for admin) — atomic check+increment via clusterStore.
     if (!isAdmin && tenantId) {
-      const rl = rateLimiter.checkSessionCreate(tenantId);
+      const rl = await rateLimiter.checkSessionCreate(tenantId);
       if (!rl.allowed) {
         audit('rate_limit_exceeded', tenantId || 'unknown', { endpoint: 'session_create', retryAfterMs: rl.retryAfterMs }, undefined, clientIp);
         return c.json({ error: 'rate_limit', message: 'Limite de criacao de sessoes excedido. Tente novamente em breve.' }, 429);
       }
-      rateLimiter.recordSessionCreate(tenantId);
     }
 
-    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? await checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', tenantId || 'unknown', { code: quotaError.code }, undefined, clientIp);
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
@@ -119,7 +135,14 @@ export function buildRoutes(pool: SessionPool): Hono {
       requestedCwd = workspaceRoot;
     }
 
-    const sessionMode = body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server';
+    const wantsCoordinator = body.mode === 'coordinator' || body.coordinator === true;
+    if (wantsCoordinator && !isAdmin && !isCoordinatorAllowedForTier(tenantTier || 'starter')) {
+      return c.json({
+        error: 'tier_required',
+        message: 'Coordinator mode é exclusivo dos planos Profissional e Empresarial.',
+      }, 403);
+    }
+    const sessionMode = wantsCoordinator ? 'coordinator' : 'server';
 
     const options: CreateSessionOptions = {
       cwd: requestedCwd,
@@ -167,7 +190,7 @@ export function buildRoutes(pool: SessionPool): Hono {
         const { tryUnlockFromMessage } = await import('../auth/adminUnlock.js');
         const res = tryUnlockFromMessage(sessionId, message, true);
         if (res.matched) message = res.stripped;
-      } catch (err: any) { console.error('[adminUnlock web]', err?.message); }
+      } catch (err: any) { logger.error('[adminUnlock web]', err?.message); }
     }
 
     // Session ownership check
@@ -177,39 +200,54 @@ export function buildRoutes(pool: SessionPool): Hono {
       return c.json({ error: 'access_denied', message: ownershipError }, 403);
     }
 
-    // Rate limiting
+    // Rate limiting — atomic check+increment via clusterStore.
     if (!isAdmin && requestTenantId) {
-      const rl = rateLimiter.checkRequest(requestTenantId, tenantTier || 'one');
+      const rl = await rateLimiter.checkRequest(requestTenantId, tenantTier || 'one');
       if (!rl.allowed) {
         audit('rate_limit_exceeded', requestTenantId, { endpoint: 'messages' });
         return c.json({ error: 'rate_limit', message: 'Limite de requisicoes excedido. Tente novamente em breve.', retry_after_ms: rl.retryAfterMs }, 429);
       }
-      rateLimiter.recordRequest(requestTenantId);
     }
 
-    const quotaError = (tenant && !isAdmin) ? checkQuota(tenant as any) : null;
+    const quotaError = (tenant && !isAdmin) ? await checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', requestTenantId || 'unknown', { code: quotaError.code });
       return c.json({ error: quotaError.code, message: quotaError.message }, quotaError.httpStatus as any);
     }
 
-    let engine = await pool.get(sessionId);
+    let engine = await pool.get(sessionId, { tenantIdHint: requestTenantId, isAdmin });
     if (!engine) {
-      // Auto-create session if it doesn't exist
-      const requestedCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
-      const tenantWorkspaceRoot =
-        typeof tenant?.workspaceRoot === 'string'
-          ? tenant.workspaceRoot
-          : typeof tenant?.workspace_root === 'string'
-            ? tenant.workspace_root
-            : undefined;
+      // Auto-create session if it doesn't exist.
+      // Pra user SaaS: workspace SEMPRE forcado em getTenantWorkspaceDir(tenantId)
+      // (igual ao POST /v1/sessions explicito linhas 122-135). Sem isso o
+      // bash do tenant cai em /opt/system-clow (codigo do sistema) e o
+      // sandbox bloqueia tudo.
+      let autoCwd: string;
+      let autoWorkspace: string;
+      if (isAdmin) {
+        autoCwd = typeof body.cwd === 'string' ? body.cwd : process.cwd();
+        const tenantWorkspaceRoot =
+          typeof tenant?.workspaceRoot === 'string' ? tenant.workspaceRoot
+            : typeof tenant?.workspace_root === 'string' ? (tenant.workspace_root as string) : undefined;
+        autoWorkspace = typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || autoCwd;
+      } else {
+        autoWorkspace = requestTenantId ? getTenantWorkspaceDir(requestTenantId) : process.cwd();
+        autoCwd = autoWorkspace;
+      }
+      const wantsCoord = body.mode === 'coordinator' || body.coordinator === true;
+      if (wantsCoord && !isAdmin && !isCoordinatorAllowedForTier(tenantTier || 'starter')) {
+        return c.json({
+          error: 'tier_required',
+          message: 'Coordinator mode é exclusivo dos planos Profissional e Empresarial.',
+        }, 403);
+      }
       engine = await pool.create(sessionId, {
-        cwd: requestedCwd,
-        workspaceRoot: typeof body.workspace_root === 'string' ? body.workspace_root : tenantWorkspaceRoot || requestedCwd,
+        cwd: autoCwd,
+        workspaceRoot: autoWorkspace,
         tenantId: requestTenantId,
         tenantTier,
-        mode: body.mode === 'coordinator' || body.coordinator === true ? 'coordinator' : 'server',
-        isAdmin: (c as any).get("authMode") === "admin_session",
+        mode: wantsCoord ? 'coordinator' : 'server',
+        isAdmin,
       });
     }
 
@@ -231,8 +269,10 @@ export function buildRoutes(pool: SessionPool): Hono {
     }
 
     // ─── Intercept slash commands ────────────────────────────────────
+    // Slash commands rodam isolados por session quando admin não tem tenant.
+    // Antes caia em 'default' que e tenant real → vazamento entre sessions.
     const cmdResult = await handleSlashCommand(message, {
-      tenantId: tenantId || 'default',
+      tenantId: tenantId || `__admin_${sessionId}__`,
       sessionId,
       isAdmin,
       missionRunner: getMissionRunner(),
@@ -329,6 +369,9 @@ export function buildRoutes(pool: SessionPool): Hono {
               messages: 1,
               cost_usd: Math.max(0, engine!.getInstanceCostUsd() - costBefore),
             });
+            // Prometheus counter — labels are tenant-id + plan tier so we
+            // can grain throughput per customer in Grafana.
+            incAiMessage(tenantId, tenantTier ?? 'unknown');
           }
 
           // If this is a Clow-Sonnet bridge session, debit Clow user credit
@@ -344,7 +387,7 @@ export function buildRoutes(pool: SessionPool): Hono {
               inputTokens,
               outputTokens,
               cacheHitTokens: 0,
-            }).catch((err) => console.error('[recordClowUsage] failed:', err));
+            }).catch((err) => logger.error('[recordClowUsage] failed:', err));
           }
 
           await flushSession();
@@ -397,7 +440,7 @@ export function buildRoutes(pool: SessionPool): Hono {
     const ownershipError = checkSessionOwnership(sessionId, reqTenantId, isAdmin);
     if (ownershipError) return c.json({ error: 'access_denied', message: ownershipError }, 403);
 
-    const engine = await pool.get(sessionId);
+    const engine = await pool.get(sessionId, { tenantIdHint: reqTenantId, isAdmin });
     if (!engine) return c.json({ error: 'session_not_found' }, 404);
 
     const messages = engine.getMessages();
@@ -444,7 +487,9 @@ export function buildRoutes(pool: SessionPool): Hono {
   // ── Session Cache Metrics ───────────────────────────────────────────
   app.get('/v1/sessions/:id/metrics', async (c) => {
     const sessionId = c.req.param('id');
-    const engine = await pool.get(sessionId);
+    const { tenantId: reqTenantId } = getTenantContext(c);
+    const isAdmin = (c as any).get('authMode') === 'admin_session';
+    const engine = await pool.get(sessionId, { tenantIdHint: reqTenantId, isAdmin });
     if (!engine) {
       return c.json({ error: 'session_not_found' }, 404);
     }

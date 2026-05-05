@@ -31,6 +31,7 @@ import { SynthesisHelpers } from './synthesisHelpers.js';
 import { ScratchpadManager } from './scratchpadManager.js';
 import { CoordinatorContext } from './coordinatorContext.js';
 import { isCoordinatorModeEnabled } from './modeDetection.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ export class CoordinatorMode {
     // Validate config
     const validation = WorkerToolFiltering.validateConfig(this.config);
     if (!validation.valid) {
-      console.warn(`[CoordinatorMode] Config warnings: ${validation.errors.join(', ')}`);
+      logger.warn(`[CoordinatorMode] Config warnings: ${validation.errors.join(', ')}`);
     }
 
     this.initialized = true;

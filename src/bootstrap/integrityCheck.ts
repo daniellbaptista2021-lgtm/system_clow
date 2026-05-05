@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
+import { logger } from '../utils/logger.js';
 
 export class IntegrityChecker {
   private expectedHash: string | null = null;
@@ -33,7 +34,7 @@ export class IntegrityChecker {
 
     const currentHash = hash.digest("hex");
     if (currentHash !== this.expectedHash) {
-      console.error("INTEGRITY CHECK FAILED — System files have been modified");
+      logger.error("INTEGRITY CHECK FAILED — System files have been modified");
       return false;
     }
     return true;

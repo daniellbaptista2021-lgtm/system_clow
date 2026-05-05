@@ -188,9 +188,15 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 
 .crm-modal-infinite{height:32px;width:auto;display:block;filter:drop-shadow(0 2px 8px rgba(155,89,252,.4))}
 </style>
+<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-<div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/logo-official-full.png" alt="System Clow"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Acesso administrativo ao ambiente do System Clow com chat, skills, agentes e tarefas em tempo real.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div></div></div></div>
+<div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/logo-official-full.png" alt="System Clow"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Acesso administrativo ao ambiente do System Clow com chat, skills, agentes e tarefas em tempo real.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>
+<div style="margin-top:24px;padding-top:22px;border-top:1px solid rgba(255,255,255,.06);text-align:center">
+  <div style="color:var(--muted);font-size:13px;margin-bottom:10px">Ainda não tem conta?</div>
+  <a href="/pricing#planos" style="display:block;width:100%;height:48px;line-height:48px;border:1px solid rgba(155,89,252,.4);border-radius:14px;background:rgba(155,89,252,.08);color:#E8E8F0;font-weight:600;cursor:pointer;font-size:14.5px;transition:all .15s ease;text-decoration:none;box-sizing:border-box">Cadastre-se agora →</a>
+</div>
+</div></div></div>
 <div class="overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <button class="sidebar-peek-toggle" onclick="openSidebar()" aria-label="Abrir menu lateral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
 <div id="app" style="display:none;height:100%"><div class="app-shell">
@@ -209,7 +215,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
       <div class="crm-arrow">→</div>
     </button>
   </div>
-  <div class="sidebar-footer"><div style="display:flex;align-items:center;gap:12px"><div class="avatar">C</div><div><div class="account-name">Clow Admin</div><div class="account-plan">Plano Max</div></div></div><button class="chrome-btn" onclick="logout()" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button></div>
+  <div class="sidebar-footer"><div style="display:flex;align-items:center;gap:12px"><div class="avatar" id="acctAvatar">C</div><div><div class="account-name" id="acctName">—</div><div class="account-plan" id="acctTier">—</div></div></div><button class="chrome-btn" onclick="logout()" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button></div>
 </aside>
 <main class="main">
   <div class="topbar">
@@ -223,8 +229,9 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 <script>
 const U=location.origin;
 const SESSION_TTL=3*24*60*60*1000;
-const SESSIONS_KEY='clow_web_sessions_v2';
-const ACTIVE_SESSION_KEY='clow_web_active_session_v2';
+let _tenantId=null;
+function SESSIONS_KEY(){return _tenantId?`clow_web_sessions_v3_${_tenantId}`:'clow_web_sessions_v3_default'}
+function ACTIVE_SESSION_KEY(){return _tenantId?`clow_web_active_session_v3_${_tenantId}`:'clow_web_active_session_v3_default'}
 const TOKEN_KEY='clow_token';
 (function(){try{const params=new URLSearchParams(location.search);const ct=params.get('clow_token');if(ct&&ct.indexOf('clow_sonnet_')===0){localStorage.setItem(TOKEN_KEY,ct);localStorage.setItem('clow_bridge_mode','1');history.replaceState({},'',location.pathname);}if(localStorage.getItem('clow_bridge_mode')==='1'){document.documentElement.classList.add('clow-bridge-mode');}}catch(e){}})();
 let authToken=localStorage.getItem(TOKEN_KEY),isProcessing=false,abortCtrl=null,currentSessionId=null;
@@ -311,11 +318,11 @@ function md(t){
 }
 function scr(){document.getElementById('chat').scrollTop=1e6}
 function uid(){return`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`}
-function readSessions(){try{return JSON.parse(localStorage.getItem(SESSIONS_KEY)||'[]')||[]}catch{return[]}}
-function writeSessions(list){localStorage.setItem(SESSIONS_KEY,JSON.stringify(list))}
+function readSessions(){try{return JSON.parse(localStorage.getItem(SESSIONS_KEY())||'[]')||[]}catch{return[]}}
+function writeSessions(list){localStorage.setItem(SESSIONS_KEY(),JSON.stringify(list))}
 function clearLegacyClientCache(){['clow_web_sessions_v1','clow_web_active_session_v1','clow_recent_prompts'].forEach(key=>localStorage.removeItem(key))}
 function clearBrowserCaches(){if(!('caches' in window))return;caches.keys().then(keys=>Promise.all(keys.filter(key=>key.toLowerCase().includes('clow')||key.toLowerCase().includes('workbox')).map(key=>caches.delete(key)))).catch(()=>{})}
-function cleanupSessions(){const now=Date.now();const cleaned=readSessions().filter(session=>session&&session.id&&session.createdAt&&(now-session.createdAt)<SESSION_TTL).map(session=>({...session,messages:Array.isArray(session.messages)?session.messages:[]})).sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));writeSessions(cleaned);if(currentSessionId&&!cleaned.some(session=>session.id===currentSessionId)){currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY)}return cleaned}
+function cleanupSessions(){const now=Date.now();const cleaned=readSessions().filter(session=>session&&session.id&&session.createdAt&&(now-session.createdAt)<SESSION_TTL).map(session=>({...session,messages:Array.isArray(session.messages)?session.messages:[]})).sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));writeSessions(cleaned);if(currentSessionId&&!cleaned.some(session=>session.id===currentSessionId)){currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY())}return cleaned}
 function getSessions(){return cleanupSessions()}
 function getSession(id=currentSessionId){return getSessions().find(session=>session.id===id)||null}
 function getLatestEmptySession(){return getSessions().find(session=>(session.messages?.length||0)===0)||null}
@@ -323,7 +330,7 @@ function messageCountLabel(count){return count===1?'1 mensagem':`${count} mensag
 function deriveTitle(text){const clean=String(text||'').trim().replace(/\s+/g,' ');return(clean||'Nova conversa').slice(0,72)}
 function relativeTime(ts){const diff=Date.now()-ts;const mins=Math.floor(diff/60000);if(mins<1)return'Agora mesmo';if(mins<60)return`Há ${mins} min`;const hrs=Math.floor(mins/60);if(hrs<24)return`Há ${hrs} h`;return`Há ${Math.floor(hrs/24)} d`}
 function saveSessionPatch(id,patcher){const sessions=getSessions();const index=sessions.findIndex(session=>session.id===id);if(index<0)return null;const updated=patcher({...sessions[index],messages:[...sessions[index].messages]});sessions[index]=updated;sessions.sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));writeSessions(sessions);return updated}
-function createLocalSession(serverSessionId=''){const now=Date.now();const session={id:uid(),serverSessionId,title:'Nova conversa',createdAt:now,updatedAt:now,messages:[]};const sessions=getSessions();sessions.unshift(session);writeSessions(sessions);currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId);renderRecent();return session}
+function createLocalSession(serverSessionId=''){const now=Date.now();const session={id:uid(),serverSessionId,title:'Nova conversa',createdAt:now,updatedAt:now,messages:[]};const sessions=getSessions();sessions.unshift(session);writeSessions(sessions);currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);renderRecent();return session}
 function createUserMessage(text){return{id:uid(),role:'user',text,createdAt:Date.now()}}
 function createAssistantMessage(text=''){return{id:uid(),role:'assistant',text,createdAt:Date.now()}}
 function createToolMessage(toolName,toolInput){return{id:uid(),role:'tool',toolName,toolInput,createdAt:Date.now()}}
@@ -331,7 +338,7 @@ function createErrorMessage(text){return{id:uid(),role:'error',text,createdAt:Da
 function appendMessage(message){const session=saveSessionPatch(currentSessionId,current=>{const messages=[...current.messages,message];const firstUser=messages.find(item=>item.role==='user'&&item.text);return{...current,messages,updatedAt:Date.now(),title:firstUser?deriveTitle(firstUser.text):current.title}});renderRecent();return session}
 function updateAssistantMessage(messageId,text){saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.map(message=>message.id===messageId?{...message,text}:message)}))}
 function setServerSessionId(id,serverSessionId){saveSessionPatch(id,current=>({...current,serverSessionId,updatedAt:current.updatedAt||Date.now()}))}
-function deleteSession(id){const sessions=getSessions().filter(session=>session.id!==id);writeSessions(sessions);if(currentSessionId===id){currentSessionId=sessions[0]?.id||null;if(currentSessionId)localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId);else localStorage.removeItem(ACTIVE_SESSION_KEY)}renderRecent();renderConversation(getSession())}
+function deleteSession(id){const sessions=getSessions().filter(session=>session.id!==id);writeSessions(sessions);if(currentSessionId===id){currentSessionId=sessions[0]?.id||null;if(currentSessionId)localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);else localStorage.removeItem(ACTIVE_SESSION_KEY())}renderRecent();renderConversation(getSession())}
 function clearFeed(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W)}
 
 
@@ -504,7 +511,7 @@ function renderConversation(session){
 }
 
 function renderRecent(){const sessions=getSessions();recentList.innerHTML='';if(!sessions.length){recentList.innerHTML='<div class="recent-item empty"><div class="recent-main"><div class="recent-name">Nenhuma conversa ainda</div><div class="recent-meta"><span>As conversas da web expiram automaticamente após 3 dias.</span></div></div></div>';return}sessions.forEach(session=>{const btn=document.createElement('button');btn.type='button';btn.className=`recent-item${session.id===currentSessionId?' active':''}`;btn.innerHTML=`<div class="recent-shell"><div class="recent-main"><div class="recent-name">${esc(session.title||'Nova conversa')}</div><div class="recent-meta"><span>${relativeTime(session.updatedAt||session.createdAt)}</span><span class="recent-count">${messageCountLabel(session.messages.length)}</span></div></div><span class="recent-delete" role="button" aria-label="Apagar conversa" title="Apagar conversa"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></div>`;btn.onclick=()=>openSession(session.id);const del=btn.querySelector('.recent-delete');del.onclick=(event)=>{event.preventDefault();event.stopPropagation();deleteSession(session.id)};recentList.appendChild(btn)})}
-function openSession(id){const session=getSession(id);if(!session)return;currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId);renderRecent();renderConversation(session);closeSidebar();focusComposer()}
+function openSession(id){const session=getSession(id);if(!session)return;currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);renderRecent();renderConversation(session);closeSidebar();focusComposer()}
 function addProcessing(){const d=document.createElement("div");d.className="think";d.id="proc";d.innerHTML='<div class="think-logo"></div><span class="think-t">Working&hellip; (<span class="proc-s">0</span>s)</span>';F.appendChild(d);scr();const start=Date.now();window._procTimer=setInterval(function(){const el=document.querySelector(".proc-s");if(!el){clearInterval(window._procTimer);return}const s=Math.floor((Date.now()-start)/1000);el.textContent=s<60?s:Math.floor(s/60)+"m "+(s%60)+"s";},1000);}
 function setBtn(mode){const send=document.getElementById('ico-send'),stop=document.getElementById('ico-stop');if(mode==='stop'){send.style.display='none';stop.style.display='block';B.classList.add('stop');B.disabled=false}else{send.style.display='block';stop.style.display='none';B.classList.remove('stop');B.disabled=false}}
 function handleBtn(){if(isProcessing){abortCtrl?.abort();return}go()}
@@ -512,8 +519,9 @@ async function createServerSession(){const r=await fetch(`${U}/v1/sessions`,{met
 async function ensureCurrentSession(forceNew=false){let session=forceNew?null:getSession();if(!session){session=createLocalSession('')}if(session.serverSessionId&&!forceNew)return session;const serverSessionId=await createServerSession();if(!serverSessionId)return session;setServerSessionId(session.id,serverSessionId);session=getSession(session.id);return session}
 async function doLogin(){const u=LU.value.trim(),p=LP.value.trim();if(!u||!p){LE.textContent='Preencha todos os campos';return}document.getElementById('loginBtn').disabled=true;LE.textContent='';try{const r=await fetch(`${U}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(d.ok){authToken=d.token;localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem("clow_login_user",u);await showApp()}else LE.textContent=d.error||'Credenciais inválidas'}catch{LE.textContent='Erro de conexão'}document.getElementById('loginBtn').disabled=false}
 async function verifySavedLogin(){try{const r=await fetch(`${U}/auth/verify`,{headers:{Authorization:`Bearer ${authToken}`}});if(r.ok)await showApp();else logout()}catch{logout()}}
-async function showApp(){try{localStorage.removeItem('clow_sessions')}catch{}try{localStorage.removeItem('clow_active_session')}catch{}LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},250);AP.style.display='block';syncSidebarState();clearLegacyClientCache();clearBrowserCaches();cleanupSessions();currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY);const emptySession=getLatestEmptySession();if(emptySession){currentSessionId=emptySession.id;localStorage.setItem(ACTIVE_SESSION_KEY,currentSessionId)}else{await ensureCurrentSession(true)}renderRecent();renderConversation(getSession());setTimeout(()=>focusComposer(),80)}
-function logout(){localStorage.removeItem(TOKEN_KEY);if(CLOW_BRIDGE_MODE){localStorage.removeItem('clow_bridge_mode');const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#08081a;color:#e8e4f0;font-family:system-ui;text-align:center;padding:40px;z-index:9999';d.textContent='Sessao expirada. Feche esta janela e clique novamente em SYSTEM CLOW SONNET 4 no Clow.';document.body.appendChild(d);return;}location.reload();}
+async function showApp(){try{localStorage.removeItem('clow_sessions')}catch{}try{localStorage.removeItem('clow_active_session')}catch{}LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},250);AP.style.display='block';await applyTenantContext();syncSidebarState();clearLegacyClientCache();clearBrowserCaches();cleanupSessions();currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY());const emptySession=getLatestEmptySession();if(emptySession){currentSessionId=emptySession.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId)}else{await ensureCurrentSession(true)}renderRecent();renderConversation(getSession());setTimeout(()=>focusComposer(),80)}
+async function applyTenantContext(){try{const r=await fetch(`${U}/auth/me`,{headers:authHeaders()});if(!r.ok)return;const d=await r.json();const u=d?.user;if(!u)return;const nameEl=document.getElementById('acctName');const tierEl=document.getElementById('acctTier');const avEl=document.getElementById('acctAvatar');if(nameEl)nameEl.textContent=u.name||u.email||(u.is_admin?'Clow Admin':'—');if(tierEl){const tierLabels={starter:'Starter',profissional:'Profissional',empresarial:'Empresarial',business:'Business',smart:'Smart',one:'One',admin:'Admin'};tierEl.textContent=u.is_admin?'Admin':('Plano '+(tierLabels[u.tier]||u.tier||'—'))}if(avEl)avEl.textContent=((u.name||u.email||'U')[0]||'U').toUpperCase();_tenantId=u.id||'default';try{localStorage.removeItem('clow_web_sessions_v2')}catch{}try{localStorage.removeItem('clow_web_active_session_v2')}catch{}}catch(e){}}
+function logout(){try{if(_tenantId){localStorage.removeItem(`clow_web_sessions_v3_${_tenantId}`);localStorage.removeItem(`clow_web_active_session_v3_${_tenantId}`)}localStorage.removeItem('clow_web_sessions_v3_default');localStorage.removeItem('clow_web_active_session_v3_default');localStorage.removeItem('clow_web_sessions_v2');localStorage.removeItem('clow_web_active_session_v2');}catch{}_tenantId=null;localStorage.removeItem(TOKEN_KEY);if(CLOW_BRIDGE_MODE){localStorage.removeItem('clow_bridge_mode');const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#08081a;color:#e8e4f0;font-family:system-ui;text-align:center;padding:40px;z-index:9999';d.textContent='Sessao expirada. Feche esta janela e clique novamente em SYSTEM CLOW SONNET 4 no Clow.';document.body.appendChild(d);return;}location.reload();}
 async function reset(){clearFeed();await ensureCurrentSession(true);renderRecent();renderConversation(getSession());closeSidebar();focusComposer()}
 async function go(){
   const t=(I.value||'').trim();
@@ -848,15 +856,89 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 
   function showCrmError(loading, msg, showRelogin) {
     if (!loading) return;
-    const reloginBtn = showRelogin
-      ? '<button id="crmReloginBtn" style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;margin-right:8px">Relogar</button>'
-      : '';
-    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br>' + reloginBtn + '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
+    if (showRelogin) { showCrmInlineLogin(loading, msg); return; }
+    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br><button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
     setTimeout(()=>{
-      const rb = document.getElementById('crmReloginBtn');
-      if (rb) rb.onclick = function(){ clearCrmCaches(); localStorage.removeItem('clow_token'); location.reload(); };
       const cb = document.getElementById('crmCloseBtn');
       if (cb) cb.onclick = function(){ closeCRM(); };
+    }, 0);
+  }
+
+  // Inline login — substitui o antigo "Relogar" que mandava reload
+  // e deixava o usuario preso na tela de login do shell. Agora autentica
+  // direto e ja abre o CRM, sem refresh, sem friccao.
+  function showCrmInlineLogin(loading, msg) {
+    if (!loading) return;
+    var savedEmail = '';
+    try { savedEmail = localStorage.getItem('clow_last_email') || ''; } catch (e) {}
+    loading.innerHTML =
+      '<div class="crm-modal-error" style="text-align:center;max-width:360px;margin:0 auto;color:#E8E8F0">' +
+        '<div style="margin-bottom:14px;color:var(--danger);font-size:13px">' + msg + '</div>' +
+        '<form id="crmReloginForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;text-align:left">' +
+          '<input id="crmReloginEmail" type="email" placeholder="Seu email" autocomplete="username" required value="' + savedEmail.replace(/"/g, '&quot;') + '" ' +
+            'style="background:#14142A;border:1px solid rgba(155,89,252,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
+          '<input id="crmReloginPass" type="password" placeholder="Sua senha" autocomplete="current-password" required ' +
+            'style="background:#14142A;border:1px solid rgba(155,89,252,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
+          '<button id="crmReloginSubmit" type="submit" ' +
+            'style="background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:12px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;margin-top:4px">' +
+            'Entrar e abrir CRM</button>' +
+        '</form>' +
+        '<div id="crmReloginErr" style="color:#F87171;font-size:12px;min-height:14px;margin:6px 0 12px;text-align:center"></div>' +
+        '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px">Fechar</button>' +
+      '</div>';
+    setTimeout(function(){
+      var form = document.getElementById('crmReloginForm');
+      var emailEl = document.getElementById('crmReloginEmail');
+      var passEl = document.getElementById('crmReloginPass');
+      var submitBtn = document.getElementById('crmReloginSubmit');
+      var errEl = document.getElementById('crmReloginErr');
+      var closeBtn = document.getElementById('crmCloseBtn');
+
+      if (emailEl && !emailEl.value) emailEl.focus(); else if (passEl) passEl.focus();
+
+      if (form) form.onsubmit = async function(e){
+        e.preventDefault();
+        if (errEl) errEl.textContent = '';
+        var email = (emailEl.value || '').trim().toLowerCase();
+        var password = passEl.value || '';
+        if (!email || !password) { if (errEl) errEl.textContent = 'Preencha email e senha.'; return; }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Entrando...';
+        try {
+          var r = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password }),
+          });
+          var d = await r.json().catch(function(){ return {}; });
+          if (!r.ok || !d.ok || !d.token) {
+            var em = d.error === 'invalid_credentials' ? 'Email ou senha incorretos.'
+                   : d.error === 'account_blocked' ? 'Conta suspensa. Contate o suporte.'
+                   : d.error === 'missing_credentials' ? 'Preencha email e senha.'
+                   : 'Erro ao entrar' + (d.error ? ' (' + d.error + ')' : '') + '.';
+            if (errEl) errEl.textContent = em;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Entrar e abrir CRM';
+            return;
+          }
+          // Sucesso: salva token + email pra prefill futuro, limpa caches CRM
+          // antigos (apiKey antiga revogada do lado do servidor) e reabre o CRM.
+          try { localStorage.setItem('clow_token', d.token); } catch (e) {}
+          try { localStorage.setItem('clow_last_email', email); } catch (e) {}
+          if (typeof window.authToken !== 'undefined') { try { window.authToken = d.token; } catch (e) {} }
+          clearCrmCaches();
+          loading.innerHTML = '<div class="crm-spin"></div><div>Abrindo seu CRM...</div>';
+          loading.classList.remove('hide');
+          // Re-tenta o fluxo completo de abertura do CRM com o token novo
+          await window.openCRM();
+        } catch (err) {
+          if (errEl) errEl.textContent = 'Erro de conexao: ' + ((err && err.message) || 'tente novamente');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Entrar e abrir CRM';
+        }
+      };
+
+      if (closeBtn) closeBtn.onclick = function(){ closeCRM(); };
     }, 0);
   }
 

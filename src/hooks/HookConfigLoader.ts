@@ -34,6 +34,7 @@ import * as crypto from 'crypto';
 import { HooksFileSchema } from './HookSchemas.js';
 import { ALL_HOOK_EVENTS } from './types.js';
 import type { ConfiguredHook, HookConfig, HookEventName } from './types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -248,7 +249,7 @@ export class HookConfigLoader {
     this.lastLoadResult = { hooks: merged, errors, warnings, sources };
 
     if (errors.length > 0) {
-      console.warn(`[HookConfigLoader] ${errors.length} errors loading hooks`);
+      logger.warn(`[HookConfigLoader] ${errors.length} errors loading hooks`);
     }
 
     return merged;

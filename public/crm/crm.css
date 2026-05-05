@@ -458,6 +458,66 @@ body {
   font-family: inherit;
 }
 
+/* ─── Emoji picker ──────────────────────────────────────────────────── */
+.emoji-picker {
+  align-self: flex-start;
+  width: 320px; max-width: 100%;
+  max-height: 300px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  display: flex; flex-direction: column; overflow: hidden;
+  margin-top: 4px;
+}
+.emoji-picker[hidden] { display: none !important; }
+.emoji-tabs {
+  display: flex; gap: 2px; padding: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.emoji-tab {
+  flex: 1; background: transparent; border: none;
+  font-size: 18px; cursor: pointer; padding: 4px;
+  border-radius: 6px; color: var(--text);
+}
+.emoji-tab:hover { background: var(--bg-2); }
+.emoji-tab.active { background: var(--bg-2); box-shadow: inset 0 -2px 0 var(--purple); }
+.emoji-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr);
+  gap: 2px; padding: 8px; overflow-y: auto; flex: 1;
+}
+.emoji-grid button {
+  background: transparent; border: none; font-size: 20px;
+  cursor: pointer; padding: 4px; border-radius: 6px; color: var(--text);
+  line-height: 1;
+}
+.emoji-grid button:hover { background: var(--bg-3); }
+
+/* ─── Audio preview (antes de enviar) ───────────────────────────────── */
+.audio-preview {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-3); border: 1px solid var(--border);
+  border-radius: 18px;
+}
+.audio-preview[hidden] { display: none !important; }
+.audio-preview audio {
+  flex: 1; min-width: 0; height: 38px;
+}
+.audio-preview .audio-discard,
+.audio-preview .audio-send {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--border); cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.audio-preview .audio-discard {
+  background: var(--bg-2); color: var(--text-dim);
+}
+.audio-preview .audio-discard:hover { color: var(--red); border-color: var(--red); }
+.audio-preview .audio-send {
+  background: var(--grad); color: white; border: none;
+}
+
 /* ─── Info tab (edit card) ──────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .field label { font-size: 11px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
@@ -485,13 +545,32 @@ body {
 }
 /* Top bar dentro de view nao encolhe */
 .view > .top-bar { flex-shrink: 0; }
-/* Conteudo abaixo do top-bar pode rolar verticalmente */
-.view > *:not(.top-bar):not(#kanban) {
+/* Conteudo abaixo do top-bar pode rolar verticalmente.
+   Exclui .kpi-row (linha de cards numericos) — sem isso o flex
+   esticava os cards verticalmente, gerando sobra enorme abaixo
+   do numero. */
+.view > *:not(.top-bar):not(#kanban):not(.kpi-row) {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
   padding: 20px;
 }
+/* Linha de KPIs no topo das views (Relatorios, Tarefas, etc.):
+   altura intrinseca, nao estica. */
+.view > .kpi-row {
+  flex: 0 0 auto;
+}
+/* Forca tema dark no UI nativo dos browsers (popup do <select>,
+   datepicker do input[type=date], scrollbars). Sem isso, dropdown
+   "Prioridade" e similares abriam fundo branco vs tema escuro. */
+html, body { color-scheme: dark; }
+select, input[type="date"], input[type="time"], input[type="datetime-local"],
+input[type="month"], input[type="week"], input[type="color"], textarea, input {
+  color-scheme: dark;
+}
+/* Options do <select> em alguns browsers ainda quebram — forca
+   explicito background+color escuro nas options renderizadas. */
+select option { background: #14142A; color: #E8E8F0; }
 /* Kanban tem regras proprias (overflow-x na kanban-board) */
 #kanban {
   flex: 1;
@@ -911,3 +990,37 @@ body {
 
 /* Espaco entre media e caption */
 .msg .msg-media + .msg-text { margin-top: 6px; }
+
+/* Onda 54: WA badge inline (no card-title-row, ao lado do botão ⋯) */
+.card-wa-badge--inline {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 3px 7px !important;
+  font-size: 10.5px !important;
+  pointer-events: auto !important;
+}
+.card-wa-badge--inline .wa-icon svg { width: 12px !important; height: 12px !important; }
+
+/* Onda 55: avatar img (foto WhatsApp) */
+img.card-avatar, img.contact-avatar {
+  border-radius: 50% !important;
+  object-fit: cover;
+  display: inline-block;
+}
+
+/* Onda 59: drop indicator entre cards (reorder via drag-drop) */
+.kanban-col .card.drop-before {
+  box-shadow: inset 0 3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  transition: box-shadow .12s;
+}
+.kanban-col .card.drop-after {
+  box-shadow: inset 0 -3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  transition: box-shadow .12s;
+}
+.kanban-col .card.dragging {
+  opacity: .35;
+  transform: rotate(.6deg) scale(.98);
+}

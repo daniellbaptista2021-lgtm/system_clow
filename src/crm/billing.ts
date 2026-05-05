@@ -16,6 +16,7 @@ import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import { sendOutbound } from './inbox.js';
 import type { Subscription, BillingCycle } from './types.js';
+import { logger } from '../utils/logger.js';
 
 const REMINDER_DAYS = [3, 1, 0]; // T-3d, T-1d, on the day
 
@@ -57,7 +58,7 @@ async function sendUpcomingReminders(): Promise<void> {
     `).all(windowStart, windowEnd, REMINDER_DAYS.length - REMINDER_DAYS.indexOf(days)) as any[];
     for (const r of rows) {
       try { await sendBillingReminder(rowToSub(r), days); }
-      catch (e: any) { console.warn('[billing reminder] failed', e.message); }
+      catch (e: any) { logger.warn('[billing reminder] failed', e.message); }
     }
   }
 }
@@ -112,7 +113,7 @@ async function chargeDue(): Promise<void> {
         });
       }
     } catch (e: any) {
-      console.warn('[billing charge] failed', e.message);
+      logger.warn('[billing charge] failed', e.message);
     }
   }
 }
@@ -134,10 +135,16 @@ function rowToSub(r: any): Subscription {
     nextChargeAt: r.next_charge_at, status: r.status,
     remindersSent: r.reminders_sent, createdAt: r.created_at,
     cancelledAt: r.cancelled_at ?? undefined,
+    lastPaidAt: r.last_paid_at ?? undefined,
   };
 }
 
-/** Manual: mark a subscription as paid (called via API/button) */
+/** Manual: mark a subscription as paid (called via API/button).
+ *  - Avanca next_charge_at pro proximo ciclo (monthly/weekly/etc).
+ *  - Reseta reminders, mantem status active.
+ *  - one_time: marca como cancelled (pago e fim).
+ *  Sem isso, nextChargeAt ficava na mesma data passada e o botao
+ *  "Marcar como pago" aparecia eternamente no card. */
 export function markPaid(tenantId: string, subId: string): Subscription | null {
   const db = getCrmDb();
   const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ?').get(subId, tenantId) as any;
@@ -146,11 +153,26 @@ export function markPaid(tenantId: string, subId: string): Subscription | null {
   store.logActivity(tenantId, {
     cardId: sub.cardId, contactId: sub.contactId,
     type: 'billing', channel: 'manual',
-    content: `✅ Pagamento confirmado: ${sub.planName} ${fmtMoney(sub.amountCents)}`,
+    content: `✅ Pagamento confirmado: ${sub.planName} ${fmtMoney(sub.amountCents)} (prox: ${new Date(advanceDate(sub.nextChargeAt, sub.cycle)).toLocaleDateString('pt-BR')})`,
   });
-  // Reset reminders + (re)activate
+  const paidAt = Date.now();
+  if (sub.cycle === 'one_time') {
+    return store.updateSubscription(tenantId, subId, {
+      remindersSent: 0,
+      status: 'cancelled',
+      cancelledAt: paidAt,
+      lastPaidAt: paidAt,
+    });
+  }
+  // Avanca a partir de NOW (nao da data antiga) pra evitar acumulo de
+  // ciclos vencidos quando a sub estava muito atrasada. Caso o user
+  // marque pago antes do vencimento, avanca a partir do nextChargeAt
+  // original pra preservar o calendario.
+  const baseMs = sub.nextChargeAt < Date.now() ? Date.now() : sub.nextChargeAt;
   return store.updateSubscription(tenantId, subId, {
     remindersSent: 0,
     status: 'active',
+    nextChargeAt: advanceDate(baseMs, sub.cycle),
+    lastPaidAt: paidAt,
   });
 }

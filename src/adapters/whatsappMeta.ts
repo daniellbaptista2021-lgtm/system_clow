@@ -16,6 +16,8 @@ import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { isAdminPhone as isAdminPhoneFromConfig } from '../admin/adminConfig.js';
+import { logger } from '../utils/logger.js';
+import { maskPhone } from '../utils/redact.js';
 
 
 /**
@@ -45,13 +47,28 @@ async function isPhoneAuthorized(tenantId: string, phone: string): Promise<boole
     const normalized = phone.replace(/\D/g, '');
     return whitelist.some((p) => p.replace(/\D/g, '') === normalized);
   } catch (err: any) {
-    console.error('[isPhoneAuthorized]', err?.message);
+    logger.error('[isPhoneAuthorized]', err?.message);
     return false; // fail-closed em erro
   }
 }
 
 
-async function resolveTenantForMeta(req: { header: (k: string) => string | undefined }, phoneNumberId?: string): Promise<string> {
+/**
+ * Resolve o tenant que deve receber esta mensagem inbound.
+ *
+ * Ordem de resolucao:
+ *  1. Header `x-clow-tenant-id` (set quando CRM forwarda inbound a outro service)
+ *  2. Lookup de canal por phone_number_id no CRM
+ *  3. Fallback admin SOMENTE se phoneNumberId == META_WA_PHONE_NUMBER_ID do .env
+ *     (numero oficial do admin/dev)
+ *  4. Caso contrario retorna null — caller precisa rejeitar a msg em vez de
+ *     atender com tenant errado.
+ *
+ * Bug 2026-04-29: o fallback antigo retornava 'default' incondicionalmente,
+ * fazendo qualquer numero nao mapeado cair no tenant 'default' (admin/dev) —
+ * agente respondia o cliente com dados/CRM de outro tenant.
+ */
+async function resolveTenantForMeta(req: { header: (k: string) => string | undefined }, phoneNumberId?: string): Promise<string | null> {
   const headerTid = req.header('x-clow-tenant-id');
   if (headerTid) return headerTid;
   if (phoneNumberId) {
@@ -60,8 +77,11 @@ async function resolveTenantForMeta(req: { header: (k: string) => string | undef
       const channel = findChannelByPhoneId(phoneNumberId);
       if (channel) return channel.tenantId;
     } catch { /* CRM module unavailable, fall through */ }
+    // Fallback admin: so se for o numero oficial do admin (configurado via .env)
+    if (phoneNumberId === process.env.META_WA_PHONE_NUMBER_ID) return 'default';
+    return null;
   }
-  return 'default';
+  return null;
 }
 
 
@@ -97,7 +117,7 @@ function getMetaConfig(): MetaWhatsAppConfig | null {
 async function sendMetaMessage(phone: string, message: string): Promise<void> {
   const config = getMetaConfig();
   if (!config) {
-    console.error('[meta-wa] No Meta config — cannot send message');
+    logger.error('[meta-wa] No Meta config — cannot send message');
     return;
   }
 
@@ -123,10 +143,10 @@ async function sendMetaMessage(phone: string, message: string): Promise<void> {
 
       if (!res.ok) {
         const err = await res.text();
-        console.error(`[meta-wa] Send failed to ${phone}: ${res.status} ${err}`);
+        logger.error(`[meta-wa] Send failed to ${maskPhone(phone)}: ${res.status} ${err}`);
       }
     } catch (err: any) {
-      console.error(`[meta-wa] Send failed to ${phone}: ${err.message}`);
+      logger.error(`[meta-wa] Send failed to ${maskPhone(phone)}: ${err.message}`);
     }
 
     // Small delay between chunks to preserve order
@@ -213,7 +233,7 @@ async function transcribeAudio(audioId: string): Promise<string> {
       const txt = await openaiTranscribe(buf, `audio-${audioId}.${ext}`, 'pt');
       if (txt && !txt.startsWith('[Erro')) return txt;
     } catch (err: any) {
-      console.error('[whisper openai]', err?.message);
+      logger.error('[whisper openai]', err?.message);
     }
   }
 
@@ -239,7 +259,7 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
 
   const googleApiKey = process.env.GOOGLE_API_KEY;
   if (!googleApiKey) {
-    console.warn('[meta-wa] GOOGLE_API_KEY not set — audio transcription unavailable');
+    logger.warn('[meta-wa] GOOGLE_API_KEY not set — audio transcription unavailable');
     return '[Audio recebido — transcrição indisponivel. Configure GOOGLE_API_KEY.]';
   }
 
@@ -251,7 +271,7 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
     });
 
     if (!downloadRes.ok) {
-      console.error(`[meta-wa] Failed to download audio: ${downloadRes.status}`);
+      logger.error(`[meta-wa] Failed to download audio: ${downloadRes.status}`);
       return '[Audio recebido — erro ao baixar arquivo]';
     }
 
@@ -263,14 +283,14 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
       // Meta returns JSON with url field
       const json = await downloadRes.json() as any;
       if (!json.url) {
-        console.error('[meta-wa] No audio URL in Meta response');
+        logger.error('[meta-wa] No audio URL in Meta response');
         return '[Audio recebido — erro ao obter URL do audio]';
       }
       const audioRes = await fetch(json.url, {
         headers: { 'Authorization': `Bearer ${config.accessToken}` },
       });
       if (!audioRes.ok) {
-        console.error(`[meta-wa] Failed to download audio from URL: ${audioRes.status}`);
+        logger.error(`[meta-wa] Failed to download audio from URL: ${audioRes.status}`);
         return '[Audio recebido — erro ao baixar audio]';
       }
       const ab = await audioRes.arrayBuffer();
@@ -295,7 +315,7 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
         timeout: 30000,
       });
     } catch (ffmpegErr: any) {
-      console.error(`[meta-wa] ffmpeg conversion failed: ${ffmpegErr.message}`);
+      logger.error(`[meta-wa] ffmpeg conversion failed: ${ffmpegErr.message}`);
       return '[Audio recebido — erro ao converter audio]';
     }
 
@@ -329,7 +349,7 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
 
     if (!googleRes.ok) {
       const errText = await googleRes.text();
-      console.error(`[meta-wa] Google Speech API error: ${googleRes.status} ${errText}`);
+      logger.error(`[meta-wa] Google Speech API error: ${googleRes.status} ${errText}`);
       return '[Audio recebido — erro na transcrição]';
     }
 
@@ -337,14 +357,14 @@ async function transcribeAudioGoogle(audioMediaId: string): Promise<string> {
     const transcript = result?.results?.[0]?.alternatives?.[0]?.transcript;
 
     if (transcript) {
-      console.log(`[meta-wa] Audio transcribed: "${transcript.slice(0, 100)}"`);
+      logger.info(`[meta-wa] Audio transcribed: "${transcript.slice(0, 100)}"`);
       return transcript;
     }
 
     return '[Audio recebido — não foi possivel transcrever. Tente novamente.]';
 
   } catch (err: any) {
-    console.error(`[meta-wa] Audio transcription failed: ${err.message}`);
+    logger.error(`[meta-wa] Audio transcription failed: ${err.message}`);
     return '[Audio recebido — falha na transcrição. Envie como texto por favor.]';
   }
 }
@@ -409,7 +429,7 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
             }
           }
         } catch (err: any) {
-          console.error('[image describe]', err?.message);
+          logger.error('[image describe]', err?.message);
           description = `[Erro processando imagem: ${err?.message || 'desconhecido'}]`;
         }
       }
@@ -460,7 +480,7 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
             }
           }
         } catch (err: any) {
-          console.error('[document extract]', err?.message);
+          logger.error('[document extract]', err?.message);
           extracted = `[Erro processando documento: ${err?.message || 'desconhecido'}]`;
         }
       }
@@ -490,6 +510,13 @@ async function extractMessage(payload: any): Promise<ExtractedMessage | null> {
         || msg.interactive?.list_reply?.description
         || '';
       if (reply) return { phone, messageId, text: reply, name, type: 'interactive' };
+    }
+
+    // Template Quick Reply button click — Meta envia type='button' com msg.button.{text,payload}
+    // (formato distinto do 'interactive' acima, que e pros botoes de mensagem interativa).
+    if (msg.type === 'button') {
+      const btnText = msg.button?.text;
+      if (btnText) return { phone, messageId, text: btnText, name, type: 'button' };
     }
 
     // Reaction — ignore
@@ -598,7 +625,7 @@ async function processInBackground(
         const res = tryUnlockFromMessage(sessionId, userMessage, true);
         if (res.matched) effectiveUserMessage = res.stripped;
       }
-    } catch (err: any) { console.error('[adminUnlock wa]', err?.message); }
+    } catch (err: any) { logger.error('[adminUnlock wa]', err?.message); }
 
     // Prepend user name context on first message
     const contextMessage = userName
@@ -646,7 +673,7 @@ async function processInBackground(
     pool.trackMessage(sessionId);
 
   } catch (err: any) {
-    console.error(`[meta-wa] Error processing message for ${phone}: ${err.message}`);
+    logger.error(`[meta-wa] Error processing message for ${maskPhone(phone)}: ${err.message}`);
     await sendMetaMessage(phone, `⚠️ Erro ao processar: ${err.message.slice(0, 200)}`);
   }
 }
@@ -668,22 +695,23 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     const challenge = c.req.query('hub.challenge');
 
     if (mode === 'subscribe' && token === config.verifyToken) {
-      console.log('[meta-wa] Webhook verified successfully');
+      logger.info('[meta-wa] Webhook verified successfully');
       return c.text(challenge || '', 200);
     }
 
-    console.error(`[meta-wa] Webhook verification failed: mode=${mode} token=${token}`);
+    logger.error(`[meta-wa] Webhook verification failed: mode=${mode} token=${token}`);
     return c.text('Forbidden', 403);
   });
 
   // ── Webhook Receiver (POST) — Incoming messages ────────────────────────
   app.post('/webhooks/meta', async (c) => {
-    // Resolve tenant: header from CRM forward, OR lookup by phone_number_id
-    let tenantId = 'default';
+    // Resolve tenant: header from CRM forward, OR lookup by phone_number_id.
+    // Inicia null — sem tenant resolvido nao processa (fail-closed).
+    let tenantId: string | null = null;
 
     const config = getMetaConfig();
     if (!config) {
-      console.error('[meta-wa] Webhook hit but no Meta config — ignoring');
+      logger.error('[meta-wa] Webhook hit but no Meta config — ignoring');
       return c.json({ ok: true });
     }
 
@@ -707,6 +735,13 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
     const phoneNumberId = payload?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
     tenantId = await resolveTenantForMeta(c.req, phoneNumberId);
 
+    // FAIL-CLOSED: sem tenant resolvido nao processa — antes caia em 'default'
+    // (tenant admin/dev) e respondia o cliente com dados de outro CRM.
+    if (!tenantId) {
+      logger.warn(`[meta-wa] tenant nao resolvido (phone_number_id=${phoneNumberId ?? '?'}, from=${maskPhone(phone)}) — msg ignorada`);
+      return c.json({ ok: true });
+    }
+
     // Admin path (tenantId='default'): sem quota - admin tem acesso pleno
     if (tenantId !== 'default') {
       // Quota gate: check monthly message limit per plan (so pra tenants reais)
@@ -715,7 +750,7 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
         const q = checkAndIncrementMessageQuota(tenantId);
         if (!q.allowed) {
           const reason = q.reason === 'over_hard_limit' ? 'Limite mensal atingido (2× plano). Upgrade em /signup ou aguarde virar do mês.' : 'Conta suspensa. Contate suporte.';
-          console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] QUOTA BLOCK: ${q.reason} (${q.current}/${q.limit})`);
+          logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] QUOTA BLOCK: ${q.reason} (${q.current}/${q.limit})`);
           // Notify user once via WA so they know
           try {
             const config2 = getMetaConfig();
@@ -730,21 +765,63 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
           return c.json({ ok: true, blocked: 'quota' });
         }
         if (q.overage_msgs > 0 && q.overage_msgs === 1) {
-          console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] entered OVERAGE zone (custo extra R$ ${(q.overage_cost_cents/100).toFixed(2)}/msg)`);
+          logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] entered OVERAGE zone (custo extra R$ ${(q.overage_cost_cents/100).toFixed(2)}/msg)`);
         }
       } catch (err: any) {
-        console.warn('[quota check] failed, allowing msg:', err.message);
+        logger.warn('[quota check] failed, allowing msg:', err.message);
       }
     }
 
+    // Tenants reais (CRM SaaS, e.g. nio_fibra): persiste inbound no CRM e
+    // dispatcha o agente de coluna. O caminho admin abaixo (isPhoneAuthorized
+    // + processInBackground) e exclusivo do tenantId='default' — assistente
+    // Claude Code do owner — nao se aplica a tenants comerciais que recebem
+    // mensagens de clientes finais.
+    if (tenantId !== 'default') {
+      try {
+        const { findChannelByPhoneId } = await import('../crm/store.js');
+        const channel = phoneNumberId ? findChannelByPhoneId(phoneNumberId) : null;
+        if (!channel) {
+          logger.warn(`[meta-wa] [tenant=${tenantId.slice(0,8)}] sem canal pra phone_number_id=${phoneNumberId} — ignorando`);
+          return c.json({ ok: true });
+        }
+        const ingestType = (type === 'text' || type === 'interactive' || type === 'button')
+          ? 'text' : (type as any);
+        const { ingestInbound } = await import('../crm/inbox.js');
+        const r = await ingestInbound(channel, {
+          fromPhone: phone,
+          fromName: name,
+          messageId,
+          type: ingestType,
+          text,
+          timestamp: Date.now(),
+        });
+        logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] CRM ingestInbound: card=${r.cardId ?? 'n/a'} act=${r.activityId ?? 'n/a'} from=${maskPhone(phone)}`);
+        if (r.ok && r.cardId) {
+          const aiAgent = await import('../crm/ai/agent.js');
+          aiAgent.handleInboundForAI({
+            channel,
+            customerPhone: phone,
+            text,
+            senderName: name,
+            messageId,
+          });
+        }
+      } catch (err: any) {
+        logger.error(`[meta-wa] [tenant=${tenantId.slice(0,8)}] CRM dispatch falhou:`, err?.message);
+      }
+      return c.json({ ok: true });
+    }
+
+    // ── Caminho admin/'default' (assistente Claude Code do owner) ────────
     // Gate: only owner-authorized phones may invoke the agent (prevents random
     // people from triggering the AI on someone else's account).
     if (!(await isPhoneAuthorized(tenantId, phone))) {
-      console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] BLOCKED unauthorized phone ${phone}: ${text.slice(0,40)}`);
+      logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] BLOCKED unauthorized phone ${maskPhone(phone)}: ${text.slice(0,40)}`);
       return c.json({ ok: true, ignored: 'phone_not_authorized' });
     }
 
-    console.log(`[meta-wa] [tenant=${tenantId.slice(0,8)}] ${phone}${name ? ` (${name})` : ''}: ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
+    logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] ${maskPhone(phone)}${name ? ` (***)` : ''}: ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
 
     // Session ID: 1 phone = 1 persistent session
     const sessionId = `meta_${phone.replace(/\D/g, '')}`;

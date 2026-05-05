@@ -53,7 +53,7 @@ import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
 import { buildDocsRoutes } from './openapi.js';
-import { getMetricsSummary } from '../utils/logger.js';
+import { getMetricsSummary, logger } from '../utils/logger.js';
 import { buildDashboardRoutes } from './adminDashboard.js';
 import { apiQueue } from './requestQueue.js';
 import { buildSSORoutes } from './ssoAuth.js';
@@ -113,19 +113,19 @@ function ensureSSLCertificates(): { key: string; cert: string } {
   }
 
   // Generate self-signed certificate
-  console.log('  Generating self-signed SSL certificate...');
+  logger.info('  Generating self-signed SSL certificate...');
   try {
     execSync(
       `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost"`,
       { stdio: 'pipe' }
     );
-    console.log('  ✓ SSL certificate generated');
+    logger.info('  ✓ SSL certificate generated');
     return {
       key: fs.readFileSync(keyPath, 'utf-8'),
       cert: fs.readFileSync(certPath, 'utf-8'),
     };
   } catch (err: any) {
-    console.error('  ✗ Failed to generate SSL certificate:', err.message);
+    logger.error('  ✗ Failed to generate SSL certificate:', err.message);
     throw err;
   }
 }
@@ -137,6 +137,11 @@ async function main(): Promise<void> {
   loadEnv({ path: path.resolve(process.cwd(), '.env') });
   loadEnv({ path: path.resolve(os.homedir(), '.clow', '.env') });
 
+  // Initialize Sentry as early as possible so anything thrown during
+  // bootstrap is captured. No-op when SENTRY_DSN is unset.
+  const { initSentry } = await import('../utils/sentry.js');
+  initSentry();
+
   const PORT = parseInt(process.env.PORT || '3001', 10);
   const allowedCorsOrigins = getAllowedCorsOrigins();
   const downloadRoots = resolveDownloadRootCandidates();
@@ -144,7 +149,7 @@ async function main(): Promise<void> {
   // Init API
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error('FATAL: Set ANTHROPIC_API_KEY in .env');
+    logger.error('FATAL: Set ANTHROPIC_API_KEY in .env');
     process.exit(1);
   }
 
@@ -164,10 +169,10 @@ async function main(): Promise<void> {
     await pluginSystem.initialize(process.cwd());
     const pluginStats = pluginSystem.getStats();
     if (pluginStats.pluginCount > 0) {
-      console.log(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`);
+      logger.info(`  ? Plugins: ${pluginStats.pluginCount} plugin(s), ${pluginStats.commandCount} command(s)`);
     }
   } catch (err: any) {
-    console.error(`  ? Plugins: ${err.message}`);
+    logger.error(`  ? Plugins: ${err.message}`);
   }
 
   // Init MCP
@@ -185,10 +190,10 @@ async function main(): Promise<void> {
     mcpManager.registerServers(pluginMcpConfigs);
     await mcpManager.connectAll();
     if (mcpManager.serverCount > 0) {
-      console.log(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
+      logger.info(`  ? MCP: ${mcpManager.serverCount} server(s), ${mcpManager.getAllTools().length} tool(s)`);
     }
   } catch (err: any) {
-    console.error(`  ? MCP: ${err.message}`);
+    logger.error(`  ? MCP: ${err.message}`);
   }
 
   // Populate git cache silently
@@ -203,6 +208,12 @@ async function main(): Promise<void> {
 
   // Build Hono app
   const app = new Hono();
+
+  // Wire Sentry's onError handler — captures every Hono-level error
+  // with the request context (tenant, user, route) and stripped headers.
+  // No-op when SENTRY_DSN is unset.
+  const { honoSentryErrorHandler } = await import('../utils/sentry.js');
+  app.onError(honoSentryErrorHandler);
 
   // CORS is opt-in via allowlist. Same-origin requests work without these headers.
   if (allowedCorsOrigins.length > 0) {
@@ -231,7 +242,21 @@ async function main(): Promise<void> {
   app.use('/v2/crm', tenantAuth);
   app.route('/v2/crm', v2Routes);
   app.use('/v1/crm', tenantAuth);
-  console.log('  ✓ Auth: Multi-tenant API key enabled');
+  logger.info('  ✓ Auth: Multi-tenant API key enabled');
+
+  // Public health/readiness endpoints (no auth, IP-rate-limited).
+  // Mounted before apiRoutes so /health/live, /health/ready, /health/version
+  // resolve here; bare /health falls through to the legacy handler in apiRoutes.
+  const { buildHealthRoutes } = await import('./health.js');
+  app.route('/health', buildHealthRoutes());
+
+  // Prometheus middleware (counts + times every request) + /metrics endpoint
+  // (token-protected via METRICS_TOKEN). The middleware MUST be registered
+  // before route handlers so the timer wraps them; the /metrics endpoint
+  // mounts on its own path so it's part of the request graph too.
+  const { prometheusMiddleware, buildMetricsRoutes } = await import('./metrics.js');
+  app.use('*', prometheusMiddleware());
+  app.route('/metrics', buildMetricsRoutes());
 
   // Mount routes
   const apiRoutes = buildRoutes(pool);
@@ -256,7 +281,7 @@ async function main(): Promise<void> {
   // Mount Meta WhatsApp Official API adapter
   const metaWhatsAppRoutes = buildMetaWhatsAppRoutes(pool);
   app.route('/', metaWhatsAppRoutes);
-  console.log('  ✓ WhatsApp Meta: /webhooks/meta');
+  logger.info('  ✓ WhatsApp Meta: /webhooks/meta');
 
   // Mount MCP Remote Server (for Claude Desktop integration)
   const mcpRemoteRoutes = buildMCPRemoteRoutes(pool, mcpManager);
@@ -265,34 +290,34 @@ async function main(): Promise<void> {
   // Mount persistent memory API routes
   const memoryRoutes = buildMemoryRoutes();
   app.route('/v1/memory', memoryRoutes);
-  console.log('  ✓ Persistent Memory: API routes mounted');
+  logger.info('  ✓ Persistent Memory: API routes mounted');
 
   // Mount OpenAPI docs (Swagger UI at /docs)
   const docsRoutes = buildDocsRoutes();
   app.route('/', docsRoutes);
-  console.log('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
+  logger.info('  ✓ API Docs: /docs (Swagger UI) + /openapi.json');
 
   // Metrics endpoint
   app.get('/v1/metrics', (c) => c.json({
     ...getMetricsSummary(),
     queue: apiQueue.getStats(),
   }));
-  console.log('  ✓ Metrics: /v1/metrics');
+  logger.info('  ✓ Metrics: /v1/metrics');
 
   // Admin dashboard
   const dashboardRoutes = buildDashboardRoutes(pool);
   app.route('/', dashboardRoutes);
-  console.log('  ✓ Dashboard: /admin/dashboard + /health/deep');
+  logger.info('  ✓ Dashboard: /admin/dashboard + /health/deep');
 
   // SSO authentication
   const ssoRoutes = buildSSORoutes();
   app.route('/', ssoRoutes);
-  console.log('  ✓ SSO: /auth/sso + /auth/sso/verify');
+  logger.info('  ✓ SSO: /auth/sso + /auth/sso/verify');
 
   // Plugin marketplace
   const marketplaceRoutes = buildMarketplaceRoutes();
   app.route('/v1/marketplace', marketplaceRoutes);
-  console.log('  ✓ Marketplace: /v1/marketplace/plugins');
+  logger.info('  ✓ Marketplace: /v1/marketplace/plugins');
 
   // Mission runner
   const missionRoutes = buildMissionRoutes();
@@ -303,7 +328,11 @@ async function main(): Promise<void> {
   // Ordem importa no Hono: handler direto ganha do app.route('/auth', authRoutes).
   // Aceita admin (username+password) OU tenant (email+password, ou username contendo '@').
   const ADMIN_USER = process.env.CLOW_ADMIN_USER;
-  const ADMIN_PASS = process.env.CLOW_ADMIN_PASS;
+  // Aceita CLOW_ADMIN_PASS_HASH (bcrypt, recomendado) OU CLOW_ADMIN_PASS (plaintext, deprecated).
+  // Se ambos setados, prefere _HASH. Se so _PASS setado, loga warning na primeira tentativa.
+  const ADMIN_PASS_HASH = process.env.CLOW_ADMIN_PASS_HASH;
+  const ADMIN_PASS_PLAIN = process.env.CLOW_ADMIN_PASS;
+  let _adminPassPlainWarned = false;
 
   app.post('/auth/login', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
@@ -312,46 +341,84 @@ async function main(): Promise<void> {
       return c.json({ ok: false, error: 'missing_credentials' }, 400);
     }
 
-    // 1) Admin login (username match)
-    if (username && ADMIN_USER && ADMIN_PASS && username === ADMIN_USER && password === ADMIN_PASS) {
-      const token = createAdminSessionToken(username);
-      return c.json({ ok: true, token });
+    // 1) Admin login (username match) — bcrypt hash com fallback a plaintext.
+    if (username && ADMIN_USER && username === ADMIN_USER) {
+      let adminOk = false;
+      if (ADMIN_PASS_HASH) {
+        const bcrypt = (await import('bcryptjs')).default;
+        adminOk = await bcrypt.compare(password, ADMIN_PASS_HASH);
+      } else if (ADMIN_PASS_PLAIN) {
+        if (!_adminPassPlainWarned) {
+          logger.warn('[auth] CLOW_ADMIN_PASS em texto puro — migrar pra CLOW_ADMIN_PASS_HASH (bcrypt) ASAP');
+          _adminPassPlainWarned = true;
+        }
+        adminOk = password === ADMIN_PASS_PLAIN;
+      }
+      if (adminOk) {
+        const token = createAdminSessionToken(username);
+        return c.json({ ok: true, token });
+      }
     }
 
     // 2) Tenant login (email). Form antigo manda 'username' que pode ser o email.
+    // Aceita tanto o owner quanto additional_logins (multi-user no mesmo tenant).
     const emailStr = String(email || username || '').toLowerCase().trim();
     if (emailStr && emailStr.includes('@')) {
       try {
-        const { findTenantByEmail, updateTenant } = await import('../tenancy/tenantStore.js');
+        const { findTenantByAnyLogin, updateTenant, touchAdditionalLogin } = await import('../tenancy/tenantStore.js');
         const { signUserToken } = await import('../auth/authRoutes.js');
         const bcrypt = (await import('bcryptjs')).default;
-        const tenant = findTenantByEmail(emailStr);
-        if (tenant && (tenant as any).password_hash) {
-          if (tenant.status === 'cancelled' || tenant.status === 'suspended') {
-            return c.json({ ok: false, error: 'account_blocked' }, 403);
-          }
-          const ok = await bcrypt.compare(password, (tenant as any).password_hash);
-          if (ok) {
-            updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
-            const token = signUserToken({ tid: tenant.id, uid: tenant.id, email: tenant.email, role: 'owner' });
-            return c.json({ ok: true, token, user: { id: tenant.id, email: tenant.email, tier: tenant.tier, role: 'owner' } });
+        const match = findTenantByAnyLogin(emailStr);
+        if (match) {
+          const { tenant, login } = match;
+          const passwordHash = login ? login.password_hash : (tenant as any).password_hash;
+          if (passwordHash) {
+            if (tenant.status === 'cancelled' || tenant.status === 'suspended') {
+              return c.json({ ok: false, error: 'account_blocked' }, 403);
+            }
+            const ok = await bcrypt.compare(password, passwordHash);
+            if (ok) {
+              if (login) {
+                touchAdditionalLogin(tenant.id, login.email);
+              } else {
+                updateTenant(tenant.id, { last_login_at: new Date().toISOString() } as any);
+              }
+              const tokenEmail = login ? login.email : tenant.email;
+              const tokenRole: 'owner' | 'admin' | 'agent' = login ? login.role : 'owner';
+              const tokenUid = login ? login.agent_id : tenant.id;
+              const token = signUserToken({ tid: tenant.id, uid: tokenUid, email: tokenEmail, role: tokenRole });
+              return c.json({ ok: true, token, user: { id: tokenUid, email: tokenEmail, tier: tenant.tier, role: tokenRole } });
+            }
           }
         }
       } catch (err: any) {
-        console.error('[auth tenant fallback]', err?.message);
+        logger.error('[auth tenant fallback]', err?.message);
       }
     }
 
     return c.json({ ok: false, error: 'invalid_credentials' }, 401);
   });
 
-  app.get('/auth/verify', (c) => {
-    if (!ADMIN_USER || !ADMIN_PASS) return c.json({ ok: false }, 503);
+  app.get('/auth/verify', async (c) => {
     const token = c.req.header('X-Auth-Token')
       || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
     if (!token) return c.json({ ok: false }, 401);
+
+    // 1) Tenant user_session token (formato usr.payload.sig) — caso comum SaaS.
+    //    Sem isso, todo reload de pagina chamava logout() e matava o token,
+    //    deixando o usuario preso na tela de login (incidente 2026-04-26).
+    if (token.startsWith('usr.')) {
+      const { verifyUserToken } = await import('../auth/authRoutes.js');
+      const payload = verifyUserToken(token);
+      if (payload) return c.json({ ok: true, kind: 'user', tid: payload.tid });
+      return c.json({ ok: false }, 401);
+    }
+
+    // 2) Admin session (legacy, env-based) — token assinado com SESSION_SECRET,
+    // entao basta ter o user e algum mecanismo de password (hash ou plain).
+    if (!ADMIN_USER || (!ADMIN_PASS_HASH && !ADMIN_PASS_PLAIN)) return c.json({ ok: false }, 503);
     const verified = verifyAdminSessionToken(token);
-    if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true });
+    if (verified.ok && verified.username === ADMIN_USER) return c.json({ ok: true, kind: 'admin' });
     return c.json({ ok: false }, 401);
   });
 
@@ -360,7 +427,7 @@ async function main(): Promise<void> {
   app.route('/', stripeRoutes);
   app.route('/v1/n8n', n8nRoutes);
   app.route('/v1/branding', n8nRoutes);
-  console.log('  ✓ Missions: /v1/missions/:id');
+  logger.info('  ✓ Missions: /v1/missions/:id');
 
   // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
   app.get('/downloads/*', (c) => {
@@ -522,7 +589,7 @@ async function main(): Promise<void> {
 
   // Graceful shutdown
   const cleanup = async () => {
-    console.log('\n  Shutting down...');
+    logger.info('\n  Shutting down...');
     pool.shutdown();
     await mcpManager.disconnectAll();
     process.exit(0);
@@ -531,9 +598,9 @@ async function main(): Promise<void> {
   process.on('SIGTERM', cleanup);
 
   // Start
-  console.log(`\n  ╔═══════════════════════════════════════╗`);
-  console.log(`  ║   System Clow API — port ${PORT}         ║`);
-  console.log(`  ╚═══════════════════════════════════════╝\n`);
+  logger.info(`\n  ╔═══════════════════════════════════════╗`);
+  logger.info(`  ║   System Clow API — port ${PORT}         ║`);
+  logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate
   const useHttps = process.env.CLOW_USE_HTTPS !== 'false';
@@ -542,21 +609,21 @@ async function main(): Promise<void> {
     const { key, cert } = ensureSSLCertificates();
     const httpsServer = https.createServer({ key, cert }, app.fetch as any);
     httpsServer.listen(PORT, () => {
-      console.log(`  Listening on https://localhost:${PORT}`);
-      console.log(`  Health: https://localhost:${PORT}/health`);
-      console.log(`  MCP: https://localhost:${PORT}/mcp`);
-      console.log(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
+      logger.info(`  Listening on https://localhost:${PORT}`);
+      logger.info(`  Health: https://localhost:${PORT}/health`);
+      logger.info(`  MCP: https://localhost:${PORT}/mcp`);
+      logger.info(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
     });
   } else {
     serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
-      console.log(`  Listening on http://localhost:${info.port}`);
-      console.log(`  Health: http://localhost:${info.port}/health`);
-      console.log(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
+      logger.info(`  Listening on http://localhost:${info.port}`);
+      logger.info(`  Health: http://localhost:${info.port}/health`);
+      logger.info(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
     });
   }
 }
 
 main().catch((err) => {
-  console.error(`FATAL: ${err.message}`);
+  logger.error(`FATAL: ${err.message}`);
   process.exit(1);
 });

@@ -15,6 +15,7 @@
 
 import * as crypto from 'crypto';
 import { Hono } from 'hono';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -144,7 +145,7 @@ export function buildSSORoutes(): Hono {
 function getSecret(): string {
   const secret = process.env.CLOW_SSO_SECRET || process.env.JWT_SECRET || 'default-sso-secret-change-me';
   if (secret === 'default-sso-secret-change-me') {
-    console.warn('[SSO] Using default secret — set CLOW_SSO_SECRET in production');
+    logger.warn('[SSO] Using default secret — set CLOW_SSO_SECRET in production');
   }
   return secret;
 }

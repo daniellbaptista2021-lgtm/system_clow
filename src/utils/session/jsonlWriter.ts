@@ -26,6 +26,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { JSONLEntry } from './types.js';
 import { WRITE_COALESCE_MS, MAX_WRITE_QUEUE } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -397,7 +398,7 @@ export class JSONLWriter {
       } catch (err) {
         // Skip entries that can't be serialized
         this._errorCount++;
-        console.warn(`[JSONLWriter] Failed to serialize entry: ${(err as Error).message}`);
+        logger.warn(`[JSONLWriter] Failed to serialize entry: ${(err as Error).message}`);
       }
     }
 
