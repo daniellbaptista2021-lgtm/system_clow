@@ -63,6 +63,27 @@ function isAgentEnabledFresh(columnId: string): boolean {
   }
 }
 
+/** Refaz query DB pra resolver a coluna ATUAL do card e ver se ela tem
+ *  agente ativo. Daniel 2026-05-05: cliente em Atendimento Humano nunca
+ *  pode receber msg automatica — se card foi movido durante o turno do
+ *  agente (ex: promover_para_vendedor_funeral disparou e moveu), o envio
+ *  da mensagem final tem que ser suprimido. Falha CLOSED em erro de DB. */
+function isCardStillOnAgentColumn(tenantId: string, cardId: string): boolean {
+  try {
+    const row = getCrmDb()
+      .prepare(`
+        SELECT col.agent_enabled AS enabled
+        FROM crm_cards c
+        JOIN crm_columns col ON col.id = c.column_id
+        WHERE c.id = ? AND c.tenant_id = ?
+      `)
+      .get(cardId, tenantId) as { enabled?: number } | undefined;
+    return !!(row && row.enabled === 1);
+  } catch {
+    return false; // fail closed
+  }
+}
+
 // ─── Defaults ────────────────────────────────────────────────────────────
 
 const DEFAULT_PERSONA_NAME = 'Safira';
@@ -421,6 +442,20 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     return { status: 'blocked', reason: 'meta_commentary' };
   }
 
+  // 9.6) KILL SWITCH: card foi movido pra coluna SEM agente durante o turno?
+  //      Daniel 2026-05-05: "cliente na tabela de atendimento humano nao deve
+  //      receber msg de bot nenhum". Se promover_* moveu o card durante o
+  //      tool loop, a coluna atual pode ser Atendimento Humano (agent_enabled=0)
+  //      e enviar agora vazaria msg pro cliente. Refaz query do DB e aborta.
+  if (!isCardStillOnAgentColumn(tenantId, card.id)) {
+    logger.warn(`[col-agent.runner] card=${card.id} foi movido pra coluna sem agente durante o turno — abort send para ${customerPhone}`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'card_moved_to_human_column',
+    });
+    return { status: 'blocked', reason: 'agent_disabled' };
+  }
+
   // 10) Envia (sendOutbound loga message_out + bumpa card pro topo)
   try {
     await sendReply(channel, customerPhone, finalText, contactId);
@@ -604,6 +639,18 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     finalText = '';
   }
 
+  // KILL SWITCH: card movido pra coluna sem agente durante o tool loop.
+  // Mesmo guard do runColumnAgent — cliente em Atendimento Humano = zero
+  // msg automatica. Se card moveu, suprime o envio.
+  if (finalText && !isCardStillOnAgentColumn(tenantId, card.id)) {
+    logger.warn(`[col-agent.runFromFire] card=${card.id} movido pra coluna sem agente — abort send para ${customerPhone}`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'card_moved_to_human_column_inactivity',
+    });
+    finalText = '';
+  }
+
   // Envia texto final (se houver). Se LLM so chamou tools (ex: marcar_morno
   // sem mensagem), nao mandamos nada — comportamento valido.
   if (finalText) {
@@ -769,6 +816,32 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /^[\s]*-\s+[aA]\s+cliente\s+\(/im,
     /^[\s]*-\s+[eE]u\s+(perguntei|disse|mandei|enviei|escrevi|comentei)/im,
     /^[\s]*-\s+[aA]cabou\s+de\s+ficar\s+(inativ[oa]|sem)/im,
+    // FIX 2026-05-05 — vazamento real card 0ef81eb48d37: bot mandou
+    // "Dados salvos com sucesso! Como o card já está com o corretor Daniel,
+    // meu trabalho aqui está feito. Vou só aguardar a resposta do cliente."
+    // Esse texto eh narrativa interna pos-promocao, NUNCA pode chegar no cliente.
+    /\bdados\s+(foram\s+)?(salvos|gravados|registrados)\s+(com\s+sucesso|corretamente|certinho|ok)/i,
+    /\bsalvei\s+(os\s+)?(dados|seus\s+dados|tudo|as\s+informa[cç][oõ]es)/i,
+    /\bmeu\s+trabalho\s+(aqui\s+)?(est[aá]\s+feito|est[aá]\s+conclu[ií]do|terminou|acabou|finalizou)/i,
+    /\bminha\s+(tarefa|miss[aã]o|fun[cç][aã]o)\s+(aqui\s+)?(est[aá]\s+feita|est[aá]\s+conclu[ií]da|terminou|acabou)/i,
+    /\bvou\s+(s[oó]\s+|apenas\s+|somente\s+|ficar\s+|aguardar\s+|estar\s+)?(aguard|esper)/i,
+    /\b(como\s+|j[aá]\s+que\s+)?o\s+card\s+(j[aá]\s+)?(est[aá]|foi|virou|passou)/i,
+    /\bcard\s+(foi\s+)?(movido|promovido|transferido|encaminhado)/i,
+    /\b(j[aá]\s+)?est[aá]\s+com\s+(o\s+)?corretor\b/i,
+    /\b(o\s+|a\s+)?corretor\s+(daniel\s+)?(j[aá]\s+)?(enviou|mandou|recebeu|assumiu|continua|vai\s+continuar)/i,
+    /\bnaturalmente\s*\.?\s*[😊😀🙂]?\s*$/i, // termina com "naturalmente 😊" (sinal de fechamento meta)
+    // FIX 2026-05-05 — vazamento real cliente Norma: bot mandou
+    // "A cliente Norma já preencheu os dados no formulário de entrada.
+    // Vou analisar: Nome:... Idade:... Composição familiar:..."
+    // Bot estava narrando os dados em 3a pessoa pro cliente, com headers em
+    // **bold** e bullets — formato scratchpad interno.
+    /^\s*a\s+cliente\s+[\wÀ-ú]+\s+(j[aá]\s+)?(preencheu|mandou|enviou|forneceu|deu|disse|escreveu|passou|trouxe|completou)/im,
+    /\bvou\s+(analisar|verificar|conferir|revisar|olhar|examinar|considerar|avaliar)[:\s]/i,
+    /\bpreencheu\s+(os\s+)?dados\s+(no|do|de|na)\s+formul[aá]rio/i,
+    // Headers de scratchpad ("**Nome:** Foo\n**Idade:** Bar\n**Composição:**")
+    // Quando aparecem 2+ headers em bold seguidos de dados estruturados, e
+    // texto de operador interno — cliente normal nao recebe formulario.
+    /\*\*\s*(nome|idade|tipo|composi[cç][aã]o|titular|dependentes?|composi[cç][aã]o\s+familiar)\s*[:：]\s*\*\*/i,
   ];
   return patterns.some((p) => p.test(t));
 }
