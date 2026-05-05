@@ -433,8 +433,15 @@ export async function tickColumnTimers(): Promise<void> {
     const entry = findEntryDelayCards();
     for (const r of entry) { await dispatchEntry(r); entryCount++; }
 
-    const unresp = findUnrespondedInboundCards();
-    for (const f of unresp) { await dispatchUnresponded(f); unrespCount++; }
+    // DISABLED 2026-05-05 — safety net disparou bot em cards velhos onde LLM
+    // gerou meta-commentary que passou pelo filtro looksLikeMetaCommentary,
+    // vazando relato interno pro cliente (3 vendas perdidas reportado pelo
+    // Daniel). Reabilitar SO depois de endurecer o filtro de meta_commentary
+    // E garantir guard adicional aqui (ex: nao disparar se card ja teve
+    // qualquer activity nas ultimas N horas sem bot resposta — provavel sinal
+    // de prompt bug nao de crash de worker).
+    // const unresp = findUnrespondedInboundCards();
+    // for (const f of unresp) { await dispatchUnresponded(f); unrespCount++; }
 
     const chase = findChaseCards();
     for (const f of chase) { await dispatchChase(f); chaseCount++; }
