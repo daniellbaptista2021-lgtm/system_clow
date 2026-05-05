@@ -314,7 +314,7 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     iteration++;
     let llmMsg: DeepSeekToolMessage;
     try {
-      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat');
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat', tenantId);
     } catch (err: any) {
       logger.error('[col-agent.runner] DeepSeek falhou:', err?.message);
       recordAgentMetric({
@@ -533,7 +533,7 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     iter++;
     let llmMsg: DeepSeekToolMessage;
     try {
-      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat');
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat', tenantId);
     } catch (err: any) {
       logger.error('[col-agent.runFromFire] DeepSeek falhou:', err?.message);
       return { status: 'error', message: err?.message || 'llm_error' };
@@ -633,6 +633,16 @@ mensagem real pra enviar, retorne string vazia ("").
 `;
 
 function buildInactivityInstruction(fireCount: number, elapsedMin: number, role: ColumnAgentRole): string {
+  // fireCount === 0 e o entry_delay (card acabou de chegar na coluna).
+  // NAO e "cliente sem responder" — e "execute sua missao default agora".
+  // Sem esse branch, o LLM recebia "Cliente continua sem responder (0a
+  // tentativa)" e marcava morno/perdido em vez de mandar a cotacao.
+  if (fireCount === 0) {
+    return `[SYSTEM:entry] O card acabou de chegar nesta coluna (role=${role}). ` +
+      `Execute AGORA a missao default descrita no seu system prompt — nao espere mensagem do cliente, nao se reapresente. ` +
+      `Le os dados ja coletados (ler_dados_card), executa a tool principal do role (ex: gerar_cotacao_sulamerica pra cotador), envia o texto pro cliente palavra-por-palavra, aplica a tag de marco e promove pra proxima coluna na MESMA virada. ` +
+      `Se faltar dado obrigatorio, escala_humano(motivo: "dado faltante: <campo>"). NAO escreva meta-comentario.`;
+  }
   const headline = fireCount === 1
     ? `Cliente nao respondeu ha ${elapsedMin} minutos.`
     : `Cliente continua sem responder (${fireCount}a tentativa, ${elapsedMin}min desde ultimo timer).`;
@@ -672,6 +682,18 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /\baguardando (corretor|atendimento|humano|retorno do cliente)/,
     // ─── Relato de acoes proprias ──────────────────────────────────────
     /\bacabei de (mandar|enviar) (a |uma |minha )?(primeira )?(mensagem|msg)/,
+    // FIX 2026-05-01: vazamento real visto em prod — agente mandou pro cliente
+    // "Cliente não respondeu nada ainda — só a saudação inicial que eu mandei.
+    // Vou fazer a 1ª cobrança gentil." Os patterns abaixo cobrem cada um dos
+    // 3 elementos meta dessa frase: estado do cliente em 3a pessoa, narrativa
+    // de mensagem propria ja enviada, e narrativa do que vai fazer agora.
+    /\bcliente (ainda )?n[aã]o (respondeu|escreveu|retornou|falou|deu sinal|deu retorno|reagiu|interagiu)\b/,
+    /\bque eu (mandei|enviei|disse|escrevi|j[aá] mandei|j[aá] enviei)\b/,
+    /\bminha (última|ultima|primeira|primeir[oa]) (mensagem|msg|cobran[cç]a|tentativa|abordagem|saudac[aã]o|saudação)/,
+    /\bsauda[cç][aã]o inicial\b/,
+    /\bvou (fazer|tentar|aplicar|disparar|mandar|enviar|iniciar) (a |uma |minha |o |um |meu )?(\d+[aªo°]?\s*)?(cobran[cç]a|tentativa|abordagem|chase|reabertura|cutucada|saudac[aã]o|saudação|follow[\s\-]?up|reengajamento)/,
+    /\b\d+[aªo°]\s*(cobran[cç]a|tentativa|abordagem|chase|saudac[aã]o|saudação|reengajamento)\b/,
+    /\b(primeira|segunda|terceira|[uú]ltima)\s+(cobran[cç]a|tentativa|abordagem|chase|saudac[aã]o|saudação)\b/,
     // FIX 2026-04-30: bug ortografico — "marquei"/"classifiquei" usam
     // "marqu"/"classifiqu" (ortografia portuguesa), nao "marc"+"quei". Antes
     // o regex tinha (marc|...)(quei) que NUNCA casava com "marquei". Vazou

@@ -136,8 +136,10 @@ const escalarHumano: ToolDef = {
 
 /** Envia alerta urgente via WhatsApp do channel atual pro Daniel pessoal.
  *  URGENT_ALERT_PHONE no .env eh o numero do corretor (ex: 5521990423520).
- *  Usa o canal Z-API/Meta do tenant pra enviar — meio simples mas funcional. */
-async function sendUrgentWhatsAppAlert(
+ *  Usa o canal Z-API/Meta do tenant pra enviar — meio simples mas funcional.
+ *  Exportado pra ser reutilizado em promocao.ts (PR 7.3 — alerta em
+ *  "Lancar Venda" tambem precisa avisar o humano via WhatsApp). */
+export async function sendUrgentWhatsAppAlert(
   ctx: ToolContext,
   motivo: string,
   contactName?: string,
@@ -484,6 +486,20 @@ export function executePromotion(
     store.moveCard(ctx.tenantId, ctx.card.id, target.id);
   } catch (err: any) {
     return { ok: false, error: `move_card_failed: ${err?.message || 'unknown'}` };
+  }
+  // Reset last_bot_message_at na transicao de coluna. last_bot_message_at e
+  // per-coluna na semantica do funil (entry_delay/chase ancoram nele); se o
+  // role anterior emitiu uma despedida apos chamar promover_*, sendOutbound
+  // bumpa esse timestamp pra DEPOIS de column_changed_at e
+  // findEntryDelayCards filtra fora o card pra sempre. Zerar aqui garante
+  // que o entry_delay do role novo dispara, e o chase volta a contar a
+  // partir da primeira msg que o novo role emitir.
+  try {
+    getCrmDb()
+      .prepare('UPDATE crm_cards SET last_bot_message_at = NULL WHERE id = ? AND tenant_id = ?')
+      .run(ctx.card.id, ctx.tenantId);
+  } catch (err: any) {
+    logger.warn(`[executePromotion] reset last_bot_message_at falhou card=${ctx.card.id}: ${err?.message}`);
   }
   const fresh = getCardAgentState(ctx.card.id) ?? ctx.state;
   const log = Array.isArray(fresh.promotionLog) ? [...fresh.promotionLog] : [];
