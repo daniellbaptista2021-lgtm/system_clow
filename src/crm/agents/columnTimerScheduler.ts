@@ -134,6 +134,73 @@ export function findEntryDelayCards(nowMs = Date.now()): CardColumnRow[] {
   `).all(nowMs, MAX_PER_CATEGORY) as CardColumnRow[];
 }
 
+// ─── A.2) UNRESPONDED INBOUND (safety net) ────────────────────────────────
+//
+// Daniel 2026-05-05: cliente mandou msg, bot deveria responder via fluxo
+// inbound (handleInboundForAI), mas algo crashou (worker reload, LLM timeout,
+// etc). Sem essa rede, o card fica orfao: chase nao pega (last_bot IS NULL),
+// entry_delay nao pega (Lead tem delay=0).
+//
+// Critério: agente ativo + cliente mandou msg ha >= UNRESPONDED_GRACE_MIN
+// minutos e o bot ainda nao respondeu (last_bot < last_in OR IS NULL).
+// Lock por (cardId + last_inbound_at) — TTL 24h evita flood; novo inbound
+// gera nova chave automaticamente.
+
+const UNRESPONDED_GRACE_MIN = 3; // tempo de tolerancia pro fluxo normal completar (debounce 8s + LLM ate 30s)
+const UNRESPONDED_LOCK_TTL_S = 24 * 60 * 60;
+
+export interface UnrespondedFire {
+  row: CardColumnRow;
+  lastInboundAt: number;
+}
+
+export function findUnrespondedInboundCards(nowMs = Date.now()): UnrespondedFire[] {
+  const db = getCrmDb();
+  const cutoff = nowMs - UNRESPONDED_GRACE_MIN * 60_000;
+  const rows = db.prepare(`
+    SELECT
+      c.id AS card_id, c.title AS card_title, c.board_id AS card_board_id,
+      c.contact_id, c.column_id,
+      c.last_bot_message_at, c.last_client_message_at,
+      c.column_changed_at, c.followup_origin_column_id,
+      c.last_inbound_at AS last_inbound_at,
+      col.name AS column_name,
+      col.agent_role, col.agent_role_type,
+      col.agent_entry_delay_minutes,
+      col.agent_no_response_chase_steps_json,
+      col.agent_followup_steps_hours_json
+    FROM crm_cards c
+    JOIN crm_columns col ON col.id = c.column_id
+    WHERE col.agent_enabled = 1
+      AND col.agent_role IS NOT NULL
+      AND c.last_inbound_at IS NOT NULL
+      AND c.last_inbound_at <= ?
+      AND (c.last_bot_message_at IS NULL OR c.last_bot_message_at < c.last_inbound_at)
+      AND c.deleted_at IS NULL
+    LIMIT ?
+  `).all(cutoff, MAX_PER_CATEGORY) as Array<CardColumnRow & { last_inbound_at: number }>;
+  return rows.map((r) => ({ row: r, lastInboundAt: r.last_inbound_at }));
+}
+
+async function dispatchUnresponded(fire: UnrespondedFire): Promise<void> {
+  const cluster = await getCluster();
+  const lockKey = `col-timer:${fire.row.card_id}:unresponded:${fire.lastInboundAt}`;
+  const ok = await cluster.setNxEx(lockKey, '1', UNRESPONDED_LOCK_TTL_S);
+  if (!ok) return;
+
+  const loaded = loadFullCard(fire.row);
+  if (!loaded) return;
+  const channel = pickChannel(loaded.card.tenantId);
+  if (!channel) return;
+
+  logger.info(`[col-timer unresponded] safety net firing card=${fire.row.card_id} column="${fire.row.column_name}" lastIn=${new Date(fire.lastInboundAt).toISOString()}`);
+
+  void runFromInactivityFire({
+    channel, card: loaded.card, column: loaded.column,
+    fireCount: 0, elapsedMin: Math.floor((Date.now() - fire.lastInboundAt) / 60000),
+  }).catch((err: any) => logger.warn(`[col-timer unresponded] err: ${err?.message}`));
+}
+
 // ─── B) NO_RESPONSE_CHASE ──────────────────────────────────────────────────
 
 export interface ChaseFire {
@@ -361,10 +428,13 @@ async function executeFinalDeletes(nowMs = Date.now()): Promise<void> {
 
 export async function tickColumnTimers(): Promise<void> {
   const t0 = Date.now();
-  let entryCount = 0, chaseCount = 0, fuCount = 0;
+  let entryCount = 0, chaseCount = 0, fuCount = 0, unrespCount = 0;
   try {
     const entry = findEntryDelayCards();
     for (const r of entry) { await dispatchEntry(r); entryCount++; }
+
+    const unresp = findUnrespondedInboundCards();
+    for (const f of unresp) { await dispatchUnresponded(f); unrespCount++; }
 
     const chase = findChaseCards();
     for (const f of chase) { await dispatchChase(f); chaseCount++; }
@@ -376,7 +446,7 @@ export async function tickColumnTimers(): Promise<void> {
   } catch (err: any) {
     logger.warn(`[columnTimerScheduler.tick] err: ${err?.message}`);
   }
-  if (entryCount + chaseCount + fuCount > 0) {
-    logger.info(`[col-timer] tick took ${Date.now() - t0}ms — entry=${entryCount} chase=${chaseCount} fu=${fuCount}`);
+  if (entryCount + chaseCount + fuCount + unrespCount > 0) {
+    logger.info(`[col-timer] tick took ${Date.now() - t0}ms — entry=${entryCount} unresp=${unrespCount} chase=${chaseCount} fu=${fuCount}`);
   }
 }

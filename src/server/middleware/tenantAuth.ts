@@ -107,7 +107,6 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   if (!bearerToken) {
     return c.json({ error: 'missing_api_key', message: 'Authorization: Bearer <api_key> required' }, 401);
   }
-    logger.info("[tenantAuth-debug] path=" + c.req.path + " len=" + (bearerToken || "").length + " prefix=" + (bearerToken || "").slice(0,30) + " startsClow=" + (bearerToken || "").startsWith("clow_"));
   const adminSession = verifyAdminSessionToken(bearerToken);
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);
@@ -193,7 +192,6 @@ export async function adminAuth(c: Context, next: Next): Promise<Response | void
 
   const auth = c.req.header('Authorization');
   const bearerToken = extractBearerToken(auth);
-    logger.info("[tenantAuth-debug] path=" + c.req.path + " len=" + (bearerToken || "").length + " prefix=" + (bearerToken || "").slice(0,30) + " startsClow=" + (bearerToken || "").startsWith("clow_"));
   const adminSession = verifyAdminSessionToken(bearerToken);
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);
