@@ -124,3 +124,164 @@ describe('validateOutput — anti-currency hallucination', () => {
     });
   });
 });
+
+describe('validateOutput — termos técnicos proibidos', () => {
+  it('bloqueia "API" (caso Neide 2026-05-06)', () => {
+    const v = validateOutput('Vou cotar aqui com a API oficial da SulAmérica', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('forbidden_term');
+    expect(v.detectedMatches).toEqual(['API']);
+  });
+
+  it('bloqueia "cotador"', () => {
+    const v = validateOutput('Já fechei no cotador, vai sair...', []);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('forbidden_term');
+  });
+
+  it('bloqueia "sistema oficial"', () => {
+    const v = validateOutput('Acabei de fechar no sistema oficial', []);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('forbidden_term');
+  });
+
+  it('bloqueia "cotação oficial" (caso Claudio)', () => {
+    const v = validateOutput('A cotação oficial veio com o valor correto', []);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('forbidden_term');
+  });
+
+  it('bloqueia "vou consultar o sistema"', () => {
+    const v = validateOutput('Beleza, vou consultar o sistema rapidinho', []);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('forbidden_term');
+  });
+
+  it('passa frase comum sem termos proibidos', () => {
+    const v = validateOutput('Vou montar sua cotação agora 😊', []);
+    expect(v.ok).toBe(true);
+  });
+
+  it('feedback orienta substituição natural', () => {
+    const v = validateOutput('Calculei via API', []);
+    expect(v.feedback).toMatch(/API/);
+    expect(v.feedback).toMatch(/montar|deixa eu/i);
+  });
+});
+
+describe('validateOutput — piso de mensalidade (R$ 29,90 absoluto)', () => {
+  it('bloqueia R$ 9,98/mês mesmo com tool ok (caso Claudio 2026-05-06)', () => {
+    const v = validateOutput('Tudo isso por R$ 9,98/mês', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_below_floor');
+    expect(v.detectedMatches).toEqual(['R$ 9,98']);
+  });
+
+  it('bloqueia R$ 10/mês cada (caso Marlene 2026-05-06)', () => {
+    const v = validateOutput('Filhos > 21 entram a R$ 10/mês cada um', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_below_floor');
+  });
+
+  it('bloqueia R$ 25,90', () => {
+    const v = validateOutput('Sai por R$ 25,90 mensais', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_below_floor');
+  });
+
+  it('passa R$ 29,90 (no piso)', () => {
+    const v = validateOutput('Sai por R$ 29,90/mês', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(true);
+  });
+
+  it('passa R$ 39,90 familiar', () => {
+    const v = validateOutput('Plano familiar fica R$ 39,90/mês', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(true);
+  });
+
+  it('NÃO confunde capital R$ 50.000 com mensalidade abaixo do piso', () => {
+    const v = validateOutput('Indenização de R$ 50.000 por acidente', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(true); // capital, não mensal
+  });
+
+  it('NÃO confunde "R$ 50 mil" com mensalidade', () => {
+    const v = validateOutput('R$ 50 mil de capital', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(v.ok).toBe(true);
+  });
+});
+
+describe('validateOutput — divergência da última cotação salva', () => {
+  it('bloqueia LLM citando R$ 9,98 quando última cotação foi R$ 29,90', () => {
+    const v = validateOutput(
+      'Vou manter o valor de R$ 9,98 da cotação anterior',
+      [{ name: 'ler_dados_card', ok: true }],
+      { lastQuotationCents: 2990 },
+    );
+    expect(v.ok).toBe(false);
+    // pode bater como below_floor primeiro (9,98 < 29,90), tudo bem
+    expect(['price_below_floor', 'price_diverged_from_quote']).toContain(v.reason);
+  });
+
+  it('bloqueia LLM citando R$ 35,00 (diverge >15%) quando cotação foi R$ 76,62', () => {
+    const v = validateOutput(
+      'Sai por R$ 35,00 mensais',
+      [{ name: 'ler_dados_card', ok: true }],
+      { lastQuotationCents: 7662 },
+    );
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_diverged_from_quote');
+  });
+
+  it('passa LLM citando R$ 76,62 quando cotação foi R$ 76,62', () => {
+    const v = validateOutput(
+      'Plano fica R$ 76,62/mês',
+      [{ name: 'cotar_sulamerica_api', ok: true }],
+      { lastQuotationCents: 7662 },
+    );
+    expect(v.ok).toBe(true);
+  });
+
+  it('passa LLM citando R$ 80,00 quando cotação foi R$ 76,62 (dentro 15%)', () => {
+    const v = validateOutput(
+      'Plano fica R$ 80,00/mês',
+      [{ name: 'cotar_sulamerica_api', ok: true }],
+      { lastQuotationCents: 7662 },
+    );
+    expect(v.ok).toBe(true);
+  });
+
+  it('passa quando contexto não tem lastQuotationCents (regra desliga)', () => {
+    const v = validateOutput(
+      'Plano fica R$ 100,00/mês',
+      [{ name: 'cotar_sulamerica_api', ok: true }],
+      {},
+    );
+    expect(v.ok).toBe(true);
+  });
+
+  it('lastQuotationCents permite citar valor mesmo sem chamar tool no turno', () => {
+    // cliente perguntou de novo após cotação salva — bot pode ecoar o valor
+    const v = validateOutput(
+      'Como te disse, fica R$ 76,62/mês',
+      [{ name: 'ler_dados_card', ok: true }],
+      { lastQuotationCents: 7662 },
+    );
+    expect(v.ok).toBe(true);
+  });
+});

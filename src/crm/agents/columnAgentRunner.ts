@@ -85,6 +85,25 @@ function isCardStillOnAgentColumn(tenantId: string, cardId: string): boolean {
   }
 }
 
+/** Lê o total_cents da última cotação salva no card (se houver). Usado pelo
+ *  outputValidator pra detectar divergência entre valor citado pelo LLM e o
+ *  valor que a tool retornou. Falha silenciosa retorna undefined — validator
+ *  só pula a checagem de divergência, mas piso e termos seguem ativos. */
+function readLastQuotationCents(cardId: string): number | undefined {
+  try {
+    const row = getCrmDb()
+      .prepare('SELECT collected_data FROM crm_card_agent_state WHERE card_id = ?')
+      .get(cardId) as { collected_data?: string } | undefined;
+    const raw = row?.collected_data;
+    if (!raw) return undefined;
+    const data = JSON.parse(raw) as { last_quotation?: { total_cents?: number }; cotacao_api?: { total_cents?: number } };
+    const cents = data.last_quotation?.total_cents ?? data.cotacao_api?.total_cents;
+    return typeof cents === 'number' && cents > 0 ? cents : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Defaults ────────────────────────────────────────────────────────────
 
 const DEFAULT_PERSONA_NAME = 'Safira';
@@ -357,9 +376,11 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
       // Sem tool_calls — texto final candidato
       const candidate = String(llmMsg.content || '').trim();
 
-      // VALIDAÇÃO PROGRAMÁTICA: se cita valor monetário sem cotação no turno,
-      // injeta feedback como tool-like response e deixa LLM regenerar UMA vez.
-      const v = validateOutput(candidate, toolCallsThisTurn);
+      // VALIDAÇÃO PROGRAMÁTICA: regras anti-currency, anti-termo-técnico,
+      // anti-piso-violado e anti-divergência da última cotação salva.
+      // Injeta feedback como user message e deixa LLM regenerar UMA vez.
+      const lastQuotationCents = readLastQuotationCents(card.id);
+      const v = validateOutput(candidate, toolCallsThisTurn, { lastQuotationCents });
       if (!v.ok && !validationRetried) {
         logger.warn(`[col-agent.runner] output_validator BLOQUEOU card=${card.id} reason=${v.reason} matches=[${v.detectedMatches?.join(',')}] — retry`);
         recordAgentMetric({
@@ -705,7 +726,8 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
     const toolCalls = llmMsg.tool_calls ?? [];
     if (toolCalls.length === 0) {
       const candidate = String(llmMsg.content || '').trim();
-      const v = validateOutput(candidate, toolCallsThisFire);
+      const lastQuotationCents = readLastQuotationCents(card.id);
+      const v = validateOutput(candidate, toolCallsThisFire, { lastQuotationCents });
       if (!v.ok && !validationRetried) {
         logger.warn(`[col-agent.runFromFire] output_validator BLOQUEOU card=${card.id} reason=${v.reason} matches=[${v.detectedMatches?.join(',')}] — retry`);
         recordAgentMetric({
