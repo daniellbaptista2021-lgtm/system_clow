@@ -215,8 +215,8 @@ const cotarSulamericaApi: ToolDef = {
       capital_morte_acidente: { type: 'number', description: 'Capital morte por acidente em REAIS (50000, 100000, 200000, 500000). Default 50000.' },
       capital_invalidez: { type: 'number', description: 'Capital invalidez. Default = capital_morte_acidente.' },
       funeral_nivel: { type: 'string', enum: ['nenhum', 'individual', 'casal_filhos', 'casal_filhos_pais_sogros'], description: 'Qual nivel de Funeral incluir. Default "individual".' },
-      filhos_maior_21: { type: 'number', description: 'Quantos filhos > 21 entram pagos (R$ 10/mes cada). So conta se funeral != nenhum.' },
-      outros_familiares: { type: 'number', description: 'Outros familiares pagos (R$ 12/mes cada). So conta se funeral != nenhum.' },
+      filhos_maior_21: { type: 'number', description: 'IGNORADO. Filhos > 21 NAO entram na apolice principal — viram planos separados R$29,90 cada (regra Daniel). Sempre passe 0.' },
+      outros_familiares: { type: 'number', description: 'IGNORADO. Outros parentes (irmao, tio, sobrinho, primo, cunhado) NAO entram na apolice principal — viram planos separados R$29,90 cada. Sempre passe 0.' },
       incluir_despesas_medicas: { type: 'boolean' },
       incluir_acessibilidade: { type: 'boolean' },
       incluir_diaria_internacao: { type: 'boolean' },
@@ -247,8 +247,12 @@ const cotarSulamericaApi: ToolDef = {
     const capMA = Math.max(10000, Math.min(1_000_000, a.capital_morte_acidente ?? 50000));
     const capInv = Math.max(10000, Math.min(1_000_000, a.capital_invalidez ?? capMA));
     const funeralNivel = (a.funeral_nivel as string) || 'individual';
-    const filhos21 = Math.max(0, Math.min(20, a.filhos_maior_21 ?? 0));
-    const outros = Math.max(0, Math.min(20, a.outros_familiares ?? 0));
+    // Daniel 2026-05-06: filhos>21 e outros parentes NAO entram na apolice
+    // principal — sao planos separados R$29,90 cada. Forcado a 0 aqui pra
+    // proteger contra regressao via prompt antigo. Bot oferta planos
+    // separados pelo prompt, NAO via parametro de cotacao.
+    const filhos21 = 0;
+    const outros = 0;
 
     // 3) Chama API
     const customerName = ctx.card.title || (qual.nome as string | undefined) || 'Cliente';
@@ -382,13 +386,44 @@ const cotarSulamericaApi: ToolDef = {
       beneficios.push(`✅ ${outros} familiar(es) extra(s) na assistência funeral`);
     }
 
+    // Quem está coberto pela apólice única (regras Daniel 2026-05-06).
+    const coberturaParentesco: string[] = [];
+    if (funeralNivel === 'individual') {
+      coberturaParentesco.push('• *Titular* (você)');
+    } else if (funeralNivel === 'casal_filhos') {
+      coberturaParentesco.push('• *Titular* (você)');
+      coberturaParentesco.push('• *Cônjuge* (esposa/marido)');
+      coberturaParentesco.push('• *Filhos até 21 anos* (sem custo extra)');
+    } else if (funeralNivel === 'casal_filhos_pais_sogros') {
+      coberturaParentesco.push('• *Titular* (você)');
+      coberturaParentesco.push('• *Cônjuge*');
+      coberturaParentesco.push('• *Filhos até 21 anos*');
+      coberturaParentesco.push('• *Pai e mãe* (sem limite de idade)');
+      coberturaParentesco.push('• *Sogro e sogra* (sem limite de idade)');
+    }
+
     const lines: string[] = [];
     lines.push('🛡️ *Plano Funeral SulAmérica — sua proteção completa*');
     lines.push('');
-    lines.push('Tudo isso incluso pra você:');
+    lines.push('*Tudo isso incluso pra você:*');
     lines.push('');
     for (const b of beneficios) lines.push(b);
     lines.push('');
+    lines.push('*Assistência Funeral em todo Brasil — cobertura completa:*');
+    lines.push('🚐 Translado nacional');
+    lines.push('🏛️ Capela e velório');
+    lines.push('🌸 Ornamentação completa');
+    lines.push('💐 Flores elegantes');
+    lines.push('⚱️ Urnas exclusivas cromadas com 12 anos de garantia');
+    lines.push('🔥 Cremação inclusa (cobertura nacional)');
+    lines.push('📜 Certidão de óbito');
+    lines.push('🏛️ Taxas cemiteriais e de exumação inclusas');
+    lines.push('');
+    if (coberturaParentesco.length > 0) {
+      lines.push('*Quem está coberto na apólice:*');
+      for (const c of coberturaParentesco) lines.push(c);
+      lines.push('');
+    }
     lines.push(`💰 *Tudo isso por apenas ${brl(totalCents / 100)}/mês*`);
     lines.push('');
     lines.push('*Carências oficiais SulAmérica:*');
