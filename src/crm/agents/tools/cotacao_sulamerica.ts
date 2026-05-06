@@ -1,23 +1,17 @@
 /**
- * cotar_sulamerica_api — chama a API REAL do cotador SulAmerica
- * (https://cotador.sulamerica.pvcorretor01.com.br/api/cotar) e devolve
- * a cotacao oficial com valores corretos.
+ * cotar_sulamerica_api — cotação OFFLINE com tabela hardcoded.
  *
- * Substitui o cálculo offline da `gerar_cotacao_sulamerica` (PR 5.1) que
- * usava regras inventadas (Real Pax) e gerava preços errados. Agora os
- * valores vêm direto da SulAmerica via PV Corretora.
+ * Daniel 2026-05-06 (refactor pós-incidente Follow Up): produto
+ * simplificado pro lançamento. Sem API externa, sem timeout, sem variação
+ * por capital. Tabela fixa por (composição × faixa de idade do titular)
+ * e adicionais determinísticos. Bot só passa idade + composição;
+ * tool retorna `userVisible` pronto.
  *
- * Estrutura da API:
- *   POST /api/cotar
- *   body: { nome, data_nascimento: "DD/MM/YYYY", sexo: "MASCULINO"|"FEMININO" }
- *   resp: { ok, produtos: [{ nome, codigo, coberturas: [...], servicos: [...], beneficios: [...] }] }
- *
- * Cada cobertura tem capital_atual + premio_mensal — premio escala linearmente
- * com capital escolhido pelo cliente (premio = base * capital_escolhido/capital_atual).
- *
- * Cache em memoria 5min por {idade,sexo} — preco nao varia por idade entre
- * 18-74 (validado), entao o cache eh muito eficaz.
+ * Mantém o nome `cotar_sulamerica_api` (mesma assinatura) pra não quebrar
+ * o outputValidator (whitelist) nem o prompt antigo. A implementação fica
+ * 100% offline — instantânea, determinística, zero alucinação.
  */
+
 import { logger } from '../../../utils/logger.js';
 import {
   getCardAgentState,
@@ -26,461 +20,214 @@ import {
 } from '../../store/cardAgentStateStore.js';
 import type { ToolDef } from './types.js';
 
-// ── Config ─────────────────────────────────────────────────────────────
-const API_URL = 'https://cotador.sulamerica.pvcorretor01.com.br/api/cotar';
-const TIMEOUT_MS = 90_000; // FIX 2026-05-06: era 60s, mas API SulAmerica timeoutava 4x/dia. 90s reduz timeouts sem prender o LLM.
-const RETRIES = 2; // total de tentativas = 1 + RETRIES = 3
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+// ─── Tabela de preços (Daniel 2026-05-06) ───────────────────────────────
+// Idade do titular: faixa "young" = 18..45, faixa "older" = 46..74.
+// Valores em CENTS pra evitar erro de ponto flutuante.
+const PRICE_TABLE_CENTS: Record<Composicao, [young: number, older: number]> = {
+  individual:    [2990,  3990],   // só titular
+  casal:         [3990,  4990],   // titular + cônjuge
+  casal_filhos:  [4990,  5990],   // titular + cônjuge + filhos<=21
+  completo:      [8990, 10990],   // + pai + mãe + sogro + sogra
+};
 
-// ── Tipos da API ───────────────────────────────────────────────────────
-interface ApiCobertura {
-  id?: string | number;
-  nome: string;
-  obrigatoria?: boolean;
-  capital_atual?: number;
-  capital_min?: number;
-  capital_max?: number;
-  premio_mensal?: number;
-  premio_mensal_desconto?: number;
-}
-interface ApiServico {
-  id?: string | number;
-  nome: string;
-  premio_mensal?: number;
-  premio_mensal_desconto?: number;
-  valor?: number;
-}
-interface ApiProduto {
-  nome: string;
-  codigo: string;
-  coberturas?: ApiCobertura[];
-  servicos?: ApiServico[];
-  beneficios?: Array<{ nome: string; descricao?: string }>;
-}
-interface ApiResponse {
-  ok: boolean;
-  erro?: string;
-  produtos?: ApiProduto[];
-  input?: Record<string, unknown>;
-}
+const ADICIONAL_FILHO_MAIOR_21_CENTS = 1200;       // R$ 12 cada
+const ADICIONAL_OUTRO_DEPENDENTE_CENTS = 1400;     // R$ 14 cada
+const MEDICO_NA_TELA_CENTS = 1400;                 // +R$ 14 sobre o principal
 
-// ── Cache em memoria ───────────────────────────────────────────────────
-interface CacheEntry { ts: number; data: ApiResponse }
-const cache = new Map<string, CacheEntry>();
+const IDADE_MIN_TITULAR = 18;
+const IDADE_MAX_TITULAR = 74;
+const FAIXA_JOVEM_LIMITE = 45; // <=45 entra na coluna jovem; 46+ na older
 
-function cacheKey(idade: number, sexo: string): string {
-  return `${idade}|${sexo}`;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-/** Constroi DD/MM/YYYY pra idade alvo — a API exige data, mas preco nao
- *  varia entre 18-74, entao usamos data sintetica consistente. */
-function dataNascimentoFromIdade(idade: number): string {
-  const ano = new Date().getFullYear() - idade;
-  return `15/06/${ano}`; // dia 15, mes 6 — nada de borda
-}
-
-/** Normaliza sexo pro formato da API. */
-function normalizarSexo(s: string | undefined): 'MASCULINO' | 'FEMININO' | null {
-  if (!s) return null;
-  const u = s.trim().toUpperCase();
-  if (u === 'M' || u === 'MASCULINO' || u === 'MASC' || u === 'HOMEM') return 'MASCULINO';
-  if (u === 'F' || u === 'FEMININO' || u === 'FEM' || u === 'MULHER') return 'FEMININO';
-  return null;
-}
-
-function brl(n: number): string {
-  return `R$ ${n.toFixed(2).replace('.', ',')}`;
-}
-
-async function postCotar(payload: Record<string, unknown>): Promise<ApiResponse> {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  // FIX 2026-05-06: log latência sempre (sucesso e falha). Daniel quer
-  // observar instabilidade da API SulAmérica — antes só timeout aparecia.
-  const startedAt = Date.now();
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    const latencyMs = Date.now() - startedAt;
-    const data = await res.json().catch(() => ({})) as ApiResponse;
-    if (!res.ok) {
-      logger.warn(`[cotar_sulamerica_api] HTTP ${res.status} latency=${latencyMs}ms`);
-      return { ok: false, erro: `HTTP ${res.status}: ${JSON.stringify(data)}` };
-    }
-    logger.info(`[cotar_sulamerica_api] OK latency=${latencyMs}ms produtos=${data.produtos?.length ?? 0}`);
-    return data;
-  } catch (err: any) {
-    const latencyMs = Date.now() - startedAt;
-    const isTimeout = err?.name === 'AbortError';
-    logger.warn(`[cotar_sulamerica_api] ${isTimeout ? 'TIMEOUT' : 'FETCH_FAIL'} latency=${latencyMs}ms err="${err?.message || 'unknown'}"`);
-    return { ok: false, erro: isTimeout ? `timeout_${TIMEOUT_MS}ms` : (err?.message || 'fetch_failed') };
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function fetchCotacaoComRetry(idade: number, sexo: 'MASCULINO' | 'FEMININO', nome: string): Promise<ApiResponse> {
-  // Cache hit?
-  const k = cacheKey(idade, sexo);
-  const hit = cache.get(k);
-  if (hit && Date.now() - hit.ts < CACHE_TTL_MS && hit.data.ok) {
-    return hit.data;
-  }
-
-  const payload = {
-    nome: (nome || 'Cliente').slice(0, 60),
-    data_nascimento: dataNascimentoFromIdade(idade),
-    sexo,
-  };
-
-  let lastErr: string | undefined;
-  for (let i = 0; i <= RETRIES; i++) {
-    if (i > 0) {
-      // backoff: 2s, 5s
-      const wait = i === 1 ? 2000 : 5000;
-      await new Promise((r) => setTimeout(r, wait));
-    }
-    const res = await postCotar(payload);
-    if (res.ok && res.produtos && res.produtos.length > 0) {
-      cache.set(k, { ts: Date.now(), data: res });
-      return res;
-    }
-    lastErr = res.erro || 'sem_produtos';
-    logger.warn(`[cotar_sulamerica_api] tentativa ${i + 1}/${RETRIES + 1} falhou: ${lastErr}`);
-  }
-  return { ok: false, erro: lastErr || 'falha_apos_retries' };
-}
-
-// ── Tool: cotar_sulamerica_api ─────────────────────────────────────────
+type Composicao = 'individual' | 'casal' | 'casal_filhos' | 'completo';
 
 interface CotarArgs {
   idade?: number;
-  sexo?: string;
-  capital_morte_acidente?: number;
-  capital_invalidez?: number;
-  funeral_nivel?: 'nenhum' | 'individual' | 'casal_filhos' | 'casal_filhos_pais_sogros';
+  composicao?: Composicao;
   filhos_maior_21?: number;
-  outros_familiares?: number;
-  incluir_despesas_medicas?: boolean;
-  incluir_acessibilidade?: boolean;
-  incluir_diaria_internacao?: boolean;
+  outros_dependentes?: number;
   incluir_medico_tela?: boolean;
-  incluir_rede_saude?: boolean;
 }
 
-const FUNERAL_NOME_RX: Record<string, RegExp> = {
-  individual: /^funeral\s+individual$/i,
-  casal_filhos: /^funeral\s+casal\s+e\s+filhos$/i,
-  casal_filhos_pais_sogros: /^funeral\s+casal,?\s+filhos,?\s+pais\s+e\s+sogros$/i,
-};
-
-const PRECO_FILHO_MAIOR_21 = 10; // R$/mes — confirmado no front cotador
-const PRECO_OUTRO_FAMILIAR = 12;
-
-// PISO DE PRECO (Daniel 2026-05-06): NUNCA vender abaixo desses valores.
-// Plano Individual: minimo R$ 29,90/mes. Plano Familiar (qualquer
-// composicao com cobertura > so titular): minimo R$ 39,90/mes.
-// Aplicado APOS calculo da API. Se calculo da scaled price der menos,
-// usa piso.
-const PISO_INDIVIDUAL_CENTS = 2990;
-const PISO_FAMILIAR_CENTS = 3990;
-
-interface BreakdownLine { rotulo: string; valor_cents: number }
-
-function findCobertura(coberturas: ApiCobertura[], regex: RegExp): ApiCobertura | undefined {
-  return coberturas.find((c) => regex.test(c.nome || ''));
+function brl(cents: number): string {
+  const reais = (cents / 100).toFixed(2).replace('.', ',');
+  return `R$ ${reais}`;
 }
 
-function findServico(servicos: ApiServico[], regex: RegExp): ApiServico | undefined {
-  return servicos.find((s) => regex.test(s.nome || ''));
+function isFaixaJovem(idade: number): boolean {
+  return idade <= FAIXA_JOVEM_LIMITE;
 }
 
-/** Escala premio linearmente pelo capital escolhido. */
-function scaledPremio(c: ApiCobertura, capitalChosen: number): number {
-  const base = c.capital_atual || 0;
-  const pre = c.premio_mensal_desconto || c.premio_mensal || 0;
-  if (base <= 0 || pre <= 0) return 0;
-  return pre * (capitalChosen / base);
+function descricaoComposicao(c: Composicao): string {
+  switch (c) {
+    case 'individual': return 'Individual (só você)';
+    case 'casal': return 'Casal (você + cônjuge)';
+    case 'casal_filhos': return 'Casal + Filhos até 21 anos';
+    case 'completo': return 'Completo (você + cônjuge + filhos até 21 + pais e sogros)';
+  }
 }
 
 const cotarSulamericaApi: ToolDef = {
   name: 'cotar_sulamerica_api',
   description: [
-    'Chama a API OFICIAL da SulAmerica (PV Corretora) e devolve a cotacao com valores corretos.',
-    'Use SEMPRE que precisar mostrar valor pro cliente — NUNCA invente preço.',
-    'Le idade/sexo da qualificacao salva (ler_dados_card antes se nao tiver certeza).',
-    'Parametros mais importantes:',
-    ' - capital_morte_acidente: capital escolhido em REAIS (ex 50000, 100000, 200000). Se nao passar, usa 50000.',
-    ' - capital_invalidez: idem (default = capital_morte_acidente).',
-    ' - funeral_nivel: "individual" (so titular) | "casal_filhos" | "casal_filhos_pais_sogros" | "nenhum".',
-    ' - filhos_maior_21 e outros_familiares: contagens (so contam se funeral != "nenhum").',
-    ' - incluir_despesas_medicas | incluir_acessibilidade | incluir_diaria_internacao | incluir_medico_tela | incluir_rede_saude: opcionais.',
-    'Retorna mensagem pronta no formato WhatsApp em userVisible — manda LITERAL pro cliente.',
+    'Calcula o valor mensal do Plano Funeral SulAmérica usando a tabela oficial PV Corretora.',
+    'NÃO chama API externa — cálculo instantâneo via tabela. Use SEMPRE que precisar mostrar valor pro cliente.',
+    'Parâmetros:',
+    '  - idade (number): idade do titular (18-74). Lê de qualification se não passar.',
+    '  - composicao (string): "individual" (só titular) | "casal" (titular + cônjuge) | "casal_filhos" (+ filhos<=21) | "completo" (+ pais e sogros).',
+    '  - filhos_maior_21 (number): quantos filhos > 21 anos (planos separados R$ 12 cada).',
+    '  - outros_dependentes (number): outros parentes não-elegíveis pra apólice principal (R$ 14 cada). Default 0.',
+    '  - incluir_medico_tela (boolean): adiciona R$ 14 ao valor mensal pelo benefício extra Médico na Tela 24h.',
+    'Retorna `userVisible` com a cotação completa formatada — manda LITERAL pro cliente.',
   ].join('\n'),
+  // Vou manter os roles existentes — a coluna unificada (etapa 3) vai
+  // usar role='vendedor' que já cobre. Sem precisar mexer no schema.
   roles: ['vendedor', 'vendedor_funeral', 'cotador'],
   parameters: {
     type: 'object',
     properties: {
-      idade: { type: 'number', description: 'Idade do titular. Default: usa idade da qualificacao.' },
-      sexo: { type: 'string', description: 'MASCULINO ou FEMININO. Default: usa qualificacao.' },
-      capital_morte_acidente: { type: 'number', description: 'Capital morte por acidente em REAIS (50000, 100000, 200000, 500000). Default 50000.' },
-      capital_invalidez: { type: 'number', description: 'Capital invalidez. Default = capital_morte_acidente.' },
-      funeral_nivel: { type: 'string', enum: ['nenhum', 'individual', 'casal_filhos', 'casal_filhos_pais_sogros'], description: 'Qual nivel de Funeral incluir. Default "individual".' },
-      filhos_maior_21: { type: 'number', description: 'IGNORADO. Filhos > 21 NAO entram na apolice principal — viram planos separados R$29,90 cada (regra Daniel). Sempre passe 0.' },
-      outros_familiares: { type: 'number', description: 'IGNORADO. Outros parentes (irmao, tio, sobrinho, primo, cunhado) NAO entram na apolice principal — viram planos separados R$29,90 cada. Sempre passe 0.' },
-      incluir_despesas_medicas: { type: 'boolean' },
-      incluir_acessibilidade: { type: 'boolean' },
-      incluir_diaria_internacao: { type: 'boolean' },
-      incluir_medico_tela: { type: 'boolean' },
-      incluir_rede_saude: { type: 'boolean' },
+      idade: { type: 'number', description: 'Idade do titular (18-74).' },
+      composicao: {
+        type: 'string',
+        enum: ['individual', 'casal', 'casal_filhos', 'completo'],
+        description: 'Composição da apólice principal.',
+      },
+      filhos_maior_21: { type: 'number', description: 'Quantos filhos > 21 anos (cobrança separada R$ 12 cada).' },
+      outros_dependentes: { type: 'number', description: 'Outros parentes que não cabem na apólice principal (R$ 14 cada).' },
+      incluir_medico_tela: { type: 'boolean', description: 'Adicionar Médico na Tela 24h por +R$ 14/mês.' },
     },
   },
   async execute(args: Record<string, unknown>, ctx) {
     const a = args as CotarArgs;
 
-    // 1) Resolve idade + sexo (args > qualification)
+    // ─── 1) Resolver idade + composição ────────────────────────────────
     const fresh = getCardAgentState(ctx.card.id) ?? ctx.state;
     const collected = (fresh.collectedData ?? {}) as Record<string, unknown>;
     const qual = (collected.qualification ?? {}) as Record<string, unknown>;
 
     const idade = typeof a.idade === 'number' ? a.idade : Number(qual.idade);
-    const sexoRaw = a.sexo ?? (qual.sexo as string | undefined);
-    const sexo = normalizarSexo(typeof sexoRaw === 'string' ? sexoRaw : undefined);
+    const composicao = (a.composicao || qual.composicao || 'individual') as Composicao;
 
-    if (!Number.isFinite(idade) || idade < 18 || idade > 74) {
-      return { ok: false, error: `idade_invalida: precisa ser 18-74 (recebido=${idade}). Cliente fora da faixa SulAmerica.` };
-    }
-    if (!sexo) {
-      return { ok: false, error: 'sexo_nao_definido: precisa ser MASCULINO ou FEMININO.' };
-    }
-
-    // 2) Defaults seguros
-    const capMA = Math.max(10000, Math.min(1_000_000, a.capital_morte_acidente ?? 50000));
-    const capInv = Math.max(10000, Math.min(1_000_000, a.capital_invalidez ?? capMA));
-    const funeralNivel = (a.funeral_nivel as string) || 'individual';
-    // Daniel 2026-05-06: filhos>21 e outros parentes NAO entram na apolice
-    // principal — sao planos separados R$29,90 cada. Forcado a 0 aqui pra
-    // proteger contra regressao via prompt antigo. Bot oferta planos
-    // separados pelo prompt, NAO via parametro de cotacao.
-    const filhos21 = 0;
-    const outros = 0;
-
-    // 3) Chama API
-    const customerName = ctx.card.title || (qual.nome as string | undefined) || 'Cliente';
-    const apiResp = await fetchCotacaoComRetry(idade, sexo, customerName);
-    if (!apiResp.ok || !apiResp.produtos || apiResp.produtos.length === 0) {
-      recordAgentMetric({
-        tenantId: ctx.tenantId, columnId: ctx.column.id, cardId: ctx.card.id,
-        event: 'tool_failed', reason: `cotar_api: ${apiResp.erro || 'sem_produtos'}`,
-      });
+    if (!Number.isFinite(idade) || idade < IDADE_MIN_TITULAR || idade > IDADE_MAX_TITULAR) {
       return {
         ok: false,
-        error: `api_indisponivel: ${apiResp.erro || 'sem_produtos'}. Tenta de novo em 30s ou escala humano se persistir.`,
+        error: `idade_invalida: precisa ser ${IDADE_MIN_TITULAR}-${IDADE_MAX_TITULAR} (recebido=${idade}). Cliente fora da faixa SulAmérica — use escalar_humano se titular > 74.`,
       };
     }
-    const prod = apiResp.produtos[0];
-    const coberturas = prod.coberturas || [];
-    const servicos = prod.servicos || [];
-
-    // 4) Aplica selecoes do cliente
-    const breakdown: BreakdownLine[] = [];
-
-    // Coberturas obrigatorias (sempre): Morte por Acidente + Invalidez
-    const cMorte = findCobertura(coberturas, /morte\s+por\s+acidente/i);
-    const cInval = findCobertura(coberturas, /^invalidez$/i);
-    if (!cMorte || !cInval) {
-      return { ok: false, error: 'api_retornou_sem_obrigatorias: morte_acidente e/ou invalidez ausentes.' };
-    }
-    const premioMorte = scaledPremio(cMorte, capMA);
-    const premioInval = scaledPremio(cInval, capInv);
-    breakdown.push({ rotulo: `Morte por Acidente (capital ${brl(capMA).replace(',00', '')})`, valor_cents: Math.round(premioMorte * 100) });
-    breakdown.push({ rotulo: `Invalidez (capital ${brl(capInv).replace(',00', '')})`, valor_cents: Math.round(premioInval * 100) });
-
-    // Coberturas opcionais
-    if (a.incluir_despesas_medicas) {
-      const c = findCobertura(coberturas, /despesas\s+m[eé]dicas/i);
-      if (c) {
-        const v = scaledPremio(c, capMA);
-        breakdown.push({ rotulo: 'Despesas Médicas/Hospitalares', valor_cents: Math.round(v * 100) });
-      }
-    }
-    if (a.incluir_acessibilidade) {
-      const c = findCobertura(coberturas, /acessibilidade/i);
-      if (c) {
-        const v = scaledPremio(c, capMA);
-        breakdown.push({ rotulo: 'Acessibilidade Física por Acidente', valor_cents: Math.round(v * 100) });
-      }
-    }
-    if (a.incluir_diaria_internacao) {
-      const c = findCobertura(coberturas, /di[aá]ria\s+por\s+interna/i);
-      if (c) {
-        const v = scaledPremio(c, capMA);
-        breakdown.push({ rotulo: 'Diária por Internação Hospitalar', valor_cents: Math.round(v * 100) });
-      }
+    if (!PRICE_TABLE_CENTS[composicao]) {
+      return {
+        ok: false,
+        error: `composicao_invalida: "${composicao}". Use "individual" | "casal" | "casal_filhos" | "completo".`,
+      };
     }
 
-    // Funeral (servico) — Daniel 2026-05-06: produto eh Plano FUNERAL.
-    // Funeral SEMPRE incluido. Se LLM passou 'nenhum', forca pro nivel
-    // compativel com a composicao familiar inferida (individual default).
-    let funeralEffectiveNivel = funeralNivel;
-    if (funeralNivel === 'nenhum') {
-      logger.warn(`[cotar_sulamerica_api] LLM pediu funeral=nenhum mas o produto eh Plano Funeral — forcando 'individual' como minimo.`);
-      funeralEffectiveNivel = 'individual';
-    }
-    let funeralIncluido = false;
-    const rx = FUNERAL_NOME_RX[funeralEffectiveNivel];
-    const sv = rx ? findServico(servicos, rx) : undefined;
-    if (sv) {
-      const v = sv.premio_mensal_desconto || sv.premio_mensal || 0;
-      breakdown.push({ rotulo: `Assistência Funeral (${funeralEffectiveNivel.replace(/_/g, ' ')})`, valor_cents: Math.round(v * 100) });
-      funeralIncluido = true;
-    } else {
-      logger.warn(`[cotar_sulamerica_api] funeral nivel "${funeralEffectiveNivel}" nao retornado pela API.`);
-    }
+    // ─── 2) Calcular preço base ────────────────────────────────────────
+    const [precoYoung, precoOlder] = PRICE_TABLE_CENTS[composicao];
+    const baseCents = isFaixaJovem(idade) ? precoYoung : precoOlder;
 
-    // Servicos opcionais (Medico na Tela / Rede de Saude)
-    if (a.incluir_medico_tela) {
-      const sv = findServico(servicos, /m[eé]dico\s+na\s+tela/i);
-      if (sv) {
-        const v = sv.premio_mensal_desconto || sv.premio_mensal || 0;
-        breakdown.push({ rotulo: 'Médico na Tela Familiar', valor_cents: Math.round(v * 100) });
-      }
-    }
-    if (a.incluir_rede_saude) {
-      const sv = findServico(servicos, /rede\s+de\s+sa[uú]de/i);
-      if (sv) {
-        const v = sv.premio_mensal_desconto || sv.premio_mensal || 0;
-        breakdown.push({ rotulo: 'Rede de Saúde Familiar', valor_cents: Math.round(v * 100) });
-      }
-    }
+    const filhos21 = Math.max(0, Math.floor(a.filhos_maior_21 || 0));
+    const outros = Math.max(0, Math.floor(a.outros_dependentes || 0));
+    const medicoTela = a.incluir_medico_tela === true;
 
-    // Adicionais (so com funeral selecionado)
-    if (funeralIncluido && filhos21 > 0) {
-      breakdown.push({ rotulo: `${filhos21} filho(s) > 21 anos`, valor_cents: filhos21 * PRECO_FILHO_MAIOR_21 * 100 });
-    }
-    if (funeralIncluido && outros > 0) {
-      breakdown.push({ rotulo: `${outros} outro(s) familiar(es)`, valor_cents: outros * PRECO_OUTRO_FAMILIAR * 100 });
-    }
+    // Adicionais
+    const adicFilhos = filhos21 * ADICIONAL_FILHO_MAIOR_21_CENTS;
+    const adicOutros = outros * ADICIONAL_OUTRO_DEPENDENTE_CENTS;
+    const adicMedicoTela = medicoTela ? MEDICO_NA_TELA_CENTS : 0;
 
-    const calculatedTotalCents = breakdown.reduce((s, b) => s + b.valor_cents, 0);
+    // Valor mensal único (apólice principal + médico na tela). Adicionais
+    // de filhos>21 e outros parentes são apólices SEPARADAS e ficam
+    // descritas à parte (cliente paga em boletos separados).
+    const principalCents = baseCents + adicMedicoTela;
+    const totalIncluindoSeparadosCents = principalCents + adicFilhos + adicOutros;
 
-    // PISO DURO Daniel 2026-05-06: NUNCA vender abaixo do minimo.
-    const isIndividual = funeralEffectiveNivel === 'individual';
-    const piso = isIndividual ? PISO_INDIVIDUAL_CENTS : PISO_FAMILIAR_CENTS;
-    const totalCents = Math.max(calculatedTotalCents, piso);
-    if (totalCents > calculatedTotalCents) {
-      logger.info(`[cotar_sulamerica_api] piso aplicado: calculado=${calculatedTotalCents} → piso=${piso} (nivel=${funeralEffectiveNivel})`);
-    }
+    // ─── 3) Montar userVisible ─────────────────────────────────────────
+    const customerName = ctx.card.title || (qual.nome as string | undefined) || '';
+    const greeting = customerName ? customerName.split(/\s+/)[0] : '';
 
-    // 5) Monta mensagem WhatsApp pronta — VALOR ÚNICO, coberturas como
-    //    "benefícios inclusos" (estrategia de venda Daniel 2026-05-06: foco
-    //    em valor agregado, nao em discriminar item por item).
+    const isIndividual = composicao === 'individual';
     const carenciaNatural = isIndividual ? '90 dias' : '120 dias';
-    const planoLabel = funeralEffectiveNivel === 'individual' ? 'Individual'
-                     : funeralEffectiveNivel === 'casal_filhos' ? 'Casal e Filhos'
-                     : funeralEffectiveNivel === 'casal_filhos_pais_sogros' ? 'Casal, Filhos, Pais e Sogros'
-                     : 'Personalizado';
-
-    // Lista de beneficios inclusos pra o cliente — sem valor individual.
-    const beneficios: string[] = [];
-    beneficios.push(`✅ *Indenização em dinheiro de ${brl(capMA).replace(',00','')}* em caso de morte ou invalidez por acidente`);
-    if (funeralIncluido) {
-      beneficios.push(`✅ *Assistência Funeral ${planoLabel}* completa em todo Brasil (translado, urna, ornamentação, sepultamento ou cremação à escolha)`);
-    }
-    if (a.incluir_despesas_medicas) {
-      beneficios.push(`✅ *Despesas Médicas e Hospitalares* em caso de acidente`);
-    }
-    if (a.incluir_diaria_internacao) {
-      beneficios.push(`✅ *Diária por Internação Hospitalar* em caso de acidente`);
-    }
-    if (a.incluir_acessibilidade) {
-      beneficios.push(`✅ *Acessibilidade Física por Acidente* (adaptações)`);
-    }
-    if (a.incluir_medico_tela) {
-      beneficios.push(`✅ *Médico na Tela ${isIndividual ? 'Individual' : 'Familiar'}* — telemedicina 24h`);
-    }
-    if (a.incluir_rede_saude) {
-      beneficios.push(`✅ *Rede de Saúde Familiar* — descontos em farmácias, exames e consultas`);
-    }
-    if (filhos21 > 0) {
-      beneficios.push(`✅ ${filhos21} filho(s) com mais de 21 anos no plano`);
-    }
-    if (outros > 0) {
-      beneficios.push(`✅ ${outros} familiar(es) extra(s) na assistência funeral`);
-    }
-
-    // Quem está coberto pela apólice única (regras Daniel 2026-05-06).
-    const coberturaParentesco: string[] = [];
-    if (funeralEffectiveNivel === 'individual') {
-      coberturaParentesco.push('• *Titular* (você)');
-    } else if (funeralEffectiveNivel === 'casal_filhos') {
-      coberturaParentesco.push('• *Titular* (você)');
-      coberturaParentesco.push('• *Cônjuge* (esposa/marido)');
-      coberturaParentesco.push('• *Filhos até 21 anos* (sem custo extra)');
-    } else if (funeralEffectiveNivel === 'casal_filhos_pais_sogros') {
-      coberturaParentesco.push('• *Titular* (você)');
-      coberturaParentesco.push('• *Cônjuge*');
-      coberturaParentesco.push('• *Filhos até 21 anos*');
-      coberturaParentesco.push('• *Pai e mãe* (sem limite de idade)');
-      coberturaParentesco.push('• *Sogro e sogra* (sem limite de idade)');
-    }
+    const compoLabel = descricaoComposicao(composicao);
 
     const lines: string[] = [];
     lines.push('🛡️ *Plano Funeral SulAmérica — sua proteção completa*');
     lines.push('');
+    lines.push(`*Plano ${compoLabel}*`);
+    lines.push('');
     lines.push('*Tudo isso incluso pra você:*');
-    lines.push('');
-    for (const b of beneficios) lines.push(b);
-    lines.push('');
-    lines.push('*Assistência Funeral em todo Brasil — cobertura completa:*');
-    lines.push('🚐 Translado nacional');
-    lines.push('🏛️ Capela e velório');
-    lines.push('🌸 Ornamentação completa');
-    lines.push('💐 Flores elegantes');
-    lines.push('⚱️ Urnas exclusivas cromadas com 12 anos de garantia');
-    lines.push('🔥 Cremação inclusa (cobertura nacional)');
-    lines.push('📜 Certidão de óbito');
-    lines.push('🏛️ Taxas cemiteriais e de exumação inclusas');
-    lines.push('');
-    if (coberturaParentesco.length > 0) {
-      lines.push('*Quem está coberto na apólice:*');
-      for (const c of coberturaParentesco) lines.push(c);
-      lines.push('');
+    lines.push('✅ *Indenização de R$ 50 mil* em caso de morte por acidente');
+    lines.push('✅ *Indenização de R$ 50 mil* em caso de invalidez por acidente');
+    lines.push('✅ *Diária de R$ 500 por dia* de internação por acidente');
+    lines.push('✅ *Descontos em farmácias e medicamentos*');
+    if (medicoTela) {
+      lines.push('✅ *Médico na Tela 24h* — telemedicina pra toda a família');
     }
-    lines.push(`💰 *Tudo isso por apenas ${brl(totalCents / 100)}/mês*`);
     lines.push('');
-    lines.push('*Carências oficiais SulAmérica:*');
+    lines.push('*Assistência Funeral completa em todo Brasil:*');
+    lines.push('🚐 Translado nacional');
+    lines.push('🌸 Ornamentação completa · 💐 8 flores');
+    lines.push('⚱️ Urnas exclusivas cromadas com divisores');
+    lines.push('🏛️ Aluguel de capela · velório completo');
+    lines.push('🧴 Tanatopraxia');
+    lines.push('🔥 Cremação inclusa (em todo o país)');
+    lines.push('📜 Certidão de óbito · taxas cemiteriais inclusas');
+    lines.push('');
+
+    // Quem entra
+    if (composicao === 'individual') {
+      lines.push('*Quem está coberto:* só você (titular).');
+    } else if (composicao === 'casal') {
+      lines.push('*Quem está coberto:* você + cônjuge.');
+    } else if (composicao === 'casal_filhos') {
+      lines.push('*Quem está coberto:* você + cônjuge + filhos até 21 anos.');
+    } else {
+      lines.push('*Quem está coberto:* você + cônjuge + filhos até 21 + pai e mãe + sogro e sogra.');
+    }
+    lines.push('');
+
+    // Valor da apólice principal
+    lines.push(`💰 *${brl(principalCents)}/mês* — apólice principal`);
+    if (medicoTela) {
+      lines.push(`   _(${brl(baseCents)} do plano + ${brl(MEDICO_NA_TELA_CENTS)} do Médico na Tela)_`);
+    }
+
+    // Adicionais separados (planos à parte)
+    if (filhos21 > 0 || outros > 0) {
+      lines.push('');
+      lines.push('*Planos separados (apólices à parte):*');
+      if (filhos21 > 0) {
+        lines.push(`• ${filhos21} filho(s) > 21 anos: ${brl(ADICIONAL_FILHO_MAIOR_21_CENTS)} cada = ${brl(adicFilhos)}/mês`);
+      }
+      if (outros > 0) {
+        lines.push(`• ${outros} dependente(s) extra(s): ${brl(ADICIONAL_OUTRO_DEPENDENTE_CENTS)} cada = ${brl(adicOutros)}/mês`);
+      }
+      lines.push(`💰 *Total geral: ${brl(totalIncluindoSeparadosCents)}/mês*`);
+    }
+    lines.push('');
+
+    lines.push('*Carências oficiais:*');
     lines.push('• Morte/invalidez por acidente: _zero_ (cobre já no 1º dia)');
     lines.push(`• Morte natural: ${carenciaNatural}`);
     lines.push('');
     lines.push('✅ *Sem declaração de saúde* · *sem taxa de adesão*');
     lines.push('💳 Pagamento por *cartão recorrente*, *boleto mensal* ou *Pix*');
     lines.push('');
-    const greeting = customerName ? customerName.split(/\s+/)[0] : '';
-    lines.push(greeting
-      ? `E aí, _${greeting}_? O que achou? 😊`
-      : 'E aí? O que achou? 😊');
+    lines.push(greeting ? `E aí, _${greeting}_? O que achou? 😊` : 'E aí? O que achou? 😊');
+
     const userVisible = lines.join('\n');
 
-    // 6) Salva snapshot completo em collected_data.cotacao_api
+    // ─── 4) Salvar snapshot ────────────────────────────────────────────
     const snapshot = {
       at: Date.now(),
       idade,
-      sexo,
-      capital_morte_acidente: capMA,
-      capital_invalidez: capInv,
-      funeral_nivel: funeralEffectiveNivel,
+      composicao,
       filhos_maior_21: filhos21,
-      outros_familiares: outros,
-      breakdown,
-      total_cents: totalCents,
-      api_produto: { nome: prod.nome, codigo: prod.codigo },
+      outros_dependentes: outros,
+      incluir_medico_tela: medicoTela,
+      base_cents: baseCents,
+      principal_cents: principalCents,
+      adic_filhos_cents: adicFilhos,
+      adic_outros_cents: adicOutros,
+      total_cents: principalCents, // valor único da apólice principal — o que entra no validator
+      total_incluindo_separados_cents: totalIncluindoSeparadosCents,
     };
     upsertCardAgentState({
       cardId: ctx.card.id,
@@ -492,16 +239,17 @@ const cotarSulamericaApi: ToolDef = {
     recordAgentMetric({
       tenantId: ctx.tenantId, columnId: ctx.column.id, cardId: ctx.card.id,
       event: 'tool_called',
-      reason: `cotar_api total_cents=${totalCents} funeral=${funeralNivel} capMA=${capMA}`,
+      reason: `cotar_offline composicao=${composicao} idade=${idade} principal_cents=${principalCents} filhos21=${filhos21} outros=${outros} medico=${medicoTela}`,
     });
+    logger.info(`[cotar_sulamerica_api] offline composicao=${composicao} idade=${idade} principal=${brl(principalCents)} card=${ctx.card.id}`);
 
     return {
       ok: true,
       result: {
-        total_cents: totalCents,
-        breakdown,
-        funeral_nivel: funeralEffectiveNivel,
-        capital_morte_acidente: capMA,
+        total_cents: principalCents,
+        total_incluindo_separados_cents: totalIncluindoSeparadosCents,
+        composicao,
+        idade,
       },
       userVisible,
     };

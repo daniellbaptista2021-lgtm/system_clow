@@ -377,7 +377,7 @@ describe('Column Agent Tools — integration', () => {
 
   // ── 9) ler_dados_card mascarado por default ─────────────────────────
 
-  it('9. ler_dados_card mascarado por default; unmask=true so pra finalizador', async () => {
+  it('9. ler_dados_card mascarado por default; unmask=true só decifra pra coletor; outros roles recebem mascarado com flag', async () => {
     const tenantId = makeTenant();
     const { board, cols } = setupBoardFunnel(tenantId);
     const { card } = setupCard(tenantId, board, cols[2].id, '+5511990000009');
@@ -388,22 +388,37 @@ describe('Column Agent Tools — integration', () => {
       finalCtx,
     );
 
-    // PR 5.2: Educador (substitui closer) com unmask=true → DEVE FALHAR
+    // HARDENING 4 (Daniel 2026-05-06): vendedor com unmask=true não falha
+    // mais com permission_denied (eliminava 65 falhas/sem em loop). Agora
+    // retorna ok=true com dados mascarados + flag unmask_ignored=true. PII
+    // continua protegida (vendedor só vê CPF mascarado mesmo).
     const educadorCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'vendedor_funeral');
     const educadorUnmask = await registry.executeToolCall(
       callTool('ler_dados_card', { unmask: true }),
       educadorCtx,
     );
-    expect(educadorUnmask.ok).toBe(false);
-    expect(educadorUnmask.error).toContain('unmask_only_for_coletor');
+    expect(educadorUnmask.ok).toBe(true);
+    expect((educadorUnmask.result as any).unmask_ignored).toBe(true);
+    expect((educadorUnmask.result as any).sensitive.cpf).toMatch(/\*\*\*\.\d{3}\.\d{3}-\*\*/);
 
-    // Educador sem unmask → ok, vem mascarado
+    // Educador sem unmask → ok, vem mascarado, sem flag
     const educadorMask = await registry.executeToolCall(
       callTool('ler_dados_card', {}),
       educadorCtx,
     );
     expect(educadorMask.ok).toBe(true);
+    expect((educadorMask.result as any).unmask_ignored).toBeUndefined();
     expect((educadorMask.result as any).sensitive.cpf).toMatch(/\*\*\*\.\d{3}\.\d{3}-\*\*/);
     expect((educadorMask.result as any).sensitive_fields_filled).toContain('cpf_enc');
+
+    // Coletor com unmask=true → decifra de verdade
+    const coletorCtx = buildCtx(tenantId, makeFakeChannel(tenantId), card, cols[2], 'coletor_dados');
+    const coletorUnmask = await registry.executeToolCall(
+      callTool('ler_dados_card', { unmask: true }),
+      coletorCtx,
+    );
+    expect(coletorUnmask.ok).toBe(true);
+    expect((coletorUnmask.result as any).unmask_ignored).toBeUndefined();
+    expect((coletorUnmask.result as any).sensitive.cpf).toBe('11144477735');
   });
 });
