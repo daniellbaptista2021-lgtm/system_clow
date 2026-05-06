@@ -10,6 +10,7 @@
  */
 import { logger } from '../../../utils/logger.js';
 import { getCrmDb } from '../../schema.js';
+import { getCardAgentState } from '../../store/cardAgentStateStore.js';
 import type { ToolDef } from './types.js';
 
 const aplicarTag: ToolDef = {
@@ -29,6 +30,23 @@ const aplicarTag: ToolDef = {
   execute(args, ctx) {
     const tag = String(args.tag || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 50);
     if (!tag) return { ok: false, error: 'tag_vazia' };
+
+    // GUARD Daniel 2026-05-06: bot estava aplicando tag 'cotacao_enviada'
+    // SEM ter chamado cotar_sulamerica_api antes — alucinando valores
+    // R$3,06/R$21,75 do historico/contexto. Tag so pode ser aplicada se
+    // realmente houve cotacao com total_cents >= 2990 (piso) salva.
+    if (tag === 'cotacao_enviada' || tag === 'cotacao_oficial' || tag === 'cotacao_passada') {
+      const fresh = getCardAgentState(ctx.card.id);
+      const cotacao = (fresh?.collectedData as any)?.cotacao_api;
+      const total = cotacao?.total_cents;
+      if (!cotacao || typeof total !== 'number' || total < 2990) {
+        logger.warn(`[tool.aplicar_tag] BLOQUEADO card=${ctx.card.id} tag=${tag} — sem cotacao_api valida (total=${total})`);
+        return {
+          ok: false,
+          error: `tag_bloqueada: voce NAO chamou cotar_sulamerica_api ainda OU a cotacao tem valor invalido (total_cents=${total ?? 'null'} < 2990). CHAME cotar_sulamerica_api PRIMEIRO com os parametros corretos, espere a tool retornar com userVisible, MANDE essa userVisible LITERAL pro cliente, e SO DEPOIS aplica essa tag.`,
+        };
+      }
+    }
 
     try {
       const db = getCrmDb();
