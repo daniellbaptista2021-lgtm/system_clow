@@ -344,28 +344,64 @@ const cotarSulamericaApi: ToolDef = {
 
     const totalCents = breakdown.reduce((s, b) => s + b.valor_cents, 0);
 
-    // 5) Monta mensagem WhatsApp pronta (palavra-por-palavra)
-    const lines: string[] = [];
-    lines.push('🛡️ *Plano Funeral SulAmérica — sua cotação*');
-    lines.push('');
-    lines.push('*Coberturas incluídas:*');
-    for (const b of breakdown) {
-      lines.push(`• ${b.rotulo}: ${brl(b.valor_cents / 100)}`);
+    // 5) Monta mensagem WhatsApp pronta — VALOR ÚNICO, coberturas como
+    //    "benefícios inclusos" (estrategia de venda Daniel 2026-05-06: foco
+    //    em valor agregado, nao em discriminar item por item).
+    const isIndividual = funeralNivel === 'individual';
+    const carenciaNatural = isIndividual ? '90 dias' : '120 dias';
+    const planoLabel = funeralNivel === 'individual' ? 'Individual'
+                     : funeralNivel === 'casal_filhos' ? 'Casal e Filhos'
+                     : funeralNivel === 'casal_filhos_pais_sogros' ? 'Casal, Filhos, Pais e Sogros'
+                     : 'Personalizado';
+
+    // Lista de beneficios inclusos pra o cliente — sem valor individual.
+    const beneficios: string[] = [];
+    beneficios.push(`✅ *Indenização em dinheiro de ${brl(capMA).replace(',00','')}* em caso de morte ou invalidez por acidente`);
+    if (funeralIncluido) {
+      beneficios.push(`✅ *Assistência Funeral ${planoLabel}* completa em todo Brasil (translado, urna, ornamentação, sepultamento ou cremação à escolha)`);
     }
+    if (a.incluir_despesas_medicas) {
+      beneficios.push(`✅ *Despesas Médicas e Hospitalares* em caso de acidente`);
+    }
+    if (a.incluir_diaria_internacao) {
+      beneficios.push(`✅ *Diária por Internação Hospitalar* em caso de acidente`);
+    }
+    if (a.incluir_acessibilidade) {
+      beneficios.push(`✅ *Acessibilidade Física por Acidente* (adaptações)`);
+    }
+    if (a.incluir_medico_tela) {
+      beneficios.push(`✅ *Médico na Tela ${isIndividual ? 'Individual' : 'Familiar'}* — telemedicina 24h`);
+    }
+    if (a.incluir_rede_saude) {
+      beneficios.push(`✅ *Rede de Saúde Familiar* — descontos em farmácias, exames e consultas`);
+    }
+    if (filhos21 > 0) {
+      beneficios.push(`✅ ${filhos21} filho(s) com mais de 21 anos no plano`);
+    }
+    if (outros > 0) {
+      beneficios.push(`✅ ${outros} familiar(es) extra(s) na assistência funeral`);
+    }
+
+    const lines: string[] = [];
+    lines.push('🛡️ *Plano Funeral SulAmérica — sua proteção completa*');
     lines.push('');
-    lines.push(`💰 *Total: ${brl(totalCents / 100)}/mês*`);
+    lines.push('Tudo isso incluso pra você:');
     lines.push('');
-    lines.push('✅ *Carências oficiais SulAmérica:*');
-    lines.push('• Morte por acidente: _zero_ (cobre desde o 1º dia)');
-    lines.push('• Morte natural: 120 dias');
+    for (const b of beneficios) lines.push(b);
+    lines.push('');
+    lines.push(`💰 *Tudo isso por apenas ${brl(totalCents / 100)}/mês*`);
+    lines.push('');
+    lines.push('*Carências oficiais SulAmérica:*');
+    lines.push('• Morte/invalidez por acidente: _zero_ (cobre já no 1º dia)');
+    lines.push(`• Morte natural: ${carenciaNatural}`);
     lines.push('');
     lines.push('✅ *Sem declaração de saúde* · *sem taxa de adesão*');
     lines.push('💳 Pagamento por *cartão recorrente*, *boleto mensal* ou *Pix*');
     lines.push('');
     const greeting = customerName ? customerName.split(/\s+/)[0] : '';
     lines.push(greeting
-      ? `O que achou, _${greeting}_? Bora deixar tudo certinho? 😊`
-      : 'O que achou? Bora deixar tudo certinho? 😊');
+      ? `E aí, _${greeting}_? O que achou? 😊`
+      : 'E aí? O que achou? 😊');
     const userVisible = lines.join('\n');
 
     // 6) Salva snapshot completo em collected_data.cotacao_api

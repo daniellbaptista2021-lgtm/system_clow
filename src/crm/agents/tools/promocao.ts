@@ -95,7 +95,8 @@ const promoverParaLancarVenda: ToolDef = {
     const cotacao = collected.cotacao_api as Record<string, unknown> | undefined;
     const sensitive = collected.sensitive as SensitiveBag | undefined;
     const filledSensitive = listSensitiveFields(sensitive);
-    const requiredSensitive = ['cpf', 'rg', 'email', 'celular', 'cep'];
+    // Daniel 2026-05-06: RG dispensado — nao eh mais obrigatorio.
+    const requiredSensitive = ['cpf', 'email', 'celular', 'cep'];
     const missingSensitive = requiredSensitive.filter((f) => !filledSensitive.includes(f));
     const hasCotacao = !!cotacao && typeof cotacao.total_cents === 'number' && cotacao.total_cents > 0;
 
