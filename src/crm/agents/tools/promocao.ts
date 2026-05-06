@@ -13,6 +13,8 @@
  */
 import { logger } from '../../../utils/logger.js';
 import { validatePromotionTarget, executePromotion, sendUrgentWhatsAppAlert } from './common.js';
+import { getCardAgentState } from '../../store/cardAgentStateStore.js';
+import { listSensitiveFields, type SensitiveBag } from '../piiCrypto.js';
 import * as store from '../../store.js';
 import * as outbound from '../../outboundWebhooks.js';
 import type { ToolDef } from './types.js';
@@ -82,6 +84,35 @@ const promoverParaLancarVenda: ToolDef = {
     const v = validatePromotionTarget(ctx);
     if (v.alreadyPromoted) return { ok: true, result: 'already_promoted' };
     if (!v.ok || !v.target) return { ok: false, error: v.error || 'invalid_target' };
+
+    // GUARD DURO (Daniel 2026-05-06): so promove pra "Lancar Venda" se a
+    // venda foi REALMENTE fechada — cotacao gerada + dados de contratacao
+    // coletados (cpf, rg, email, celular, cep, dependentes pagos). Sem
+    // isso, sem promocao. Bug anterior moveu 7 cards sem nenhum desses
+    // dados — venda inexistente passou pro Daniel emitir.
+    const fresh = getCardAgentState(ctx.card.id);
+    const collected = (fresh?.collectedData ?? {}) as Record<string, unknown>;
+    const cotacao = collected.cotacao_api as Record<string, unknown> | undefined;
+    const sensitive = collected.sensitive as SensitiveBag | undefined;
+    const filledSensitive = listSensitiveFields(sensitive);
+    const requiredSensitive = ['cpf', 'rg', 'email', 'celular', 'cep'];
+    const missingSensitive = requiredSensitive.filter((f) => !filledSensitive.includes(f));
+    const hasCotacao = !!cotacao && typeof cotacao.total_cents === 'number' && cotacao.total_cents > 0;
+
+    if (!hasCotacao) {
+      logger.warn(`[tool.promover_para_lancar_venda] BLOQUEADO card=${ctx.card.id} — sem cotacao_api gerada`);
+      return {
+        ok: false,
+        error: 'venda_nao_fechada: cotacao oficial via cotar_sulamerica_api ainda nao foi gerada. Gere a cotacao primeiro, espere cliente confirmar fechamento, COLETE os dados de contratacao via salvar_dados_proposta, e SO depois promova.',
+      };
+    }
+    if (missingSensitive.length > 0) {
+      logger.warn(`[tool.promover_para_lancar_venda] BLOQUEADO card=${ctx.card.id} — faltam dados: ${missingSensitive.join(',')}`);
+      return {
+        ok: false,
+        error: `dados_incompletos: faltam [${missingSensitive.join(', ')}]. Use salvar_dados_proposta pra coletar TODOS antes de promover. Cliente nao mandou ainda esses dados? Pergunte um por um. NUNCA promova sem ter tudo.`,
+      };
+    }
 
     // Resolve nome do contato pra inclusao na notificacao
     let contactName: string | undefined;

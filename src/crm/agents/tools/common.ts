@@ -466,6 +466,13 @@ export function maybeAutoPromote(ctx: ToolContext): { promoted: boolean; reason?
   if (ctx.tenantId !== PV_TENANT_ID) return { promoted: false, reason: 'not_pv' };
   // GUARD 2: coluna precisa ter destino configurado.
   if (!ctx.column.agentPromoteToColumnId) return { promoted: false, reason: 'no_promote_target' };
+  // GUARD 0 (Daniel 2026-05-06): auto-promote SO opera Lead→Atendimento Humano
+  // (role qualificador). Bug grave: o vendedor herdava `qualification` do Lead
+  // (nome/idade/tipo/composicao todos preenchidos) e era promovido auto pra
+  // "Lancar Venda" SEM ter fechado venda nem coletado CPF/RG/email/telefone.
+  // Ele moveu 7 cards (Luiz Carlos, Neni, Graca, Ingrid, Regiane, Edvaldo,
+  // help moraes) sem nenhum desses dados — venda inexistente.
+  if (ctx.role !== 'qualificador') return { promoted: false, reason: 'auto_promote_qualificador_only' };
 
   // Re-resolve state — pode ter mudado durante o tool loop (LLM ja promoveu).
   const fresh = getCardAgentState(ctx.card.id);
