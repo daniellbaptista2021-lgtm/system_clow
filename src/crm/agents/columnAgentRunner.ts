@@ -883,6 +883,26 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /[?!]\s*aceita\??\s*$/im,
     // 15) Bot anuncia "Vou cotar aqui" — desnecessario, soa robotico
     /\bvou\s+cotar\s+aqui\b/i,
+    // FIX 2026-05-06 (Daniel) — vazamentos pegos no monitoring continuo:
+    // 16) "Deixa eu ver seus dados aqui" / "Deixa eu puxar"
+    /\bdeixa\s+eu\s+(ver|puxar|consultar|olhar|conferir|carregar)\s+(seus?\s+)?(dados?|informa[cç][oõ]es?)/i,
+    // 17) "Vou mandar pra [Nome]" / "Vou enviar pra [Nome]" — falando do cliente em 3a pessoa
+    /^\s*Vou\s+(mandar|enviar)\s+pr[aá]?\s+[A-Z][\wÀ-ú]+(\s+[\wÀ-ú]+)*\s/im,
+    // 18) "Vou montar aqui pra você:" seguido de lista bullet com bold (scratchpad)
+    /\bvou\s+(montar|organizar|estruturar|preparar|listar)\s+(aqui\s+)?pra?\s+(voc[eê]|cliente)?:?\s*\n[\s•\-*]+\*\*/i,
+    // 19) "Vou dar (mais )?uma chance" / "Vou tentar de novo" — narrativa interna
+    /\bvou\s+(dar\s+(mais\s+)?(uma|outra)\s+chance|tentar\s+de\s+novo|tentar\s+novamente)/i,
+    // 20) "Vou mandar um atalho" / "Vou mandar resumido" — narrativa estrategia
+    /\bvou\s+mandar\s+(um\s+)?(atalho|resumido?|resumo|breve|rapidinho)/i,
+    // 21) "A cliente pediu" / "ela pediu" / "ele pediu" — terceira pessoa apos verbo
+    /\b(a\s+|o\s+)?cliente\s+(pediu|disse|mandou|escreveu|falou)\b/i,
+    /\b(ela|ele)\s+(pediu|disse|mandou|escreveu|falou|comentou)\s+(que|pra|para|antes|depois)/i,
+    // 22) "tô aguardando" / "to aguardando" — narrativa de espera
+    /\bt[oô]\s+(aguardando|esperando)\s+(ela|ele|o\s+cliente|a\s+cliente|resposta|retorno)\b/i,
+    // 23) "Já vi aqui" / "Vi aqui que" — narrativa de leitura interna
+    /\bj[aá]\s+vi\s+aqui\b|^\s*Vi\s+aqui\s+que/im,
+    // 24) Lista enumerada com bold de campos sao scratchpad ("- **Plano principal:** X")
+    /^[\s•\-*]+\*\*(plano\s+principal|n[ií]vel\s+funeral|indeniza[cç][aã]o|sem\s+extras|extras|capital|composi[cç][aã]o)\s*:\*\*/im,
   ];
   return patterns.some((p) => p.test(t));
 }
