@@ -159,7 +159,16 @@ const promoverParaColetorDados: ToolDef = {
   },
 };
 
+// Daniel 2026-05-06: gerarCotacaoSulamerica DESATIVADA. Calculava offline com
+// regras Real Pax (R$29,90/39,90/49,90/89,90 modalidades) que NAO existem
+// no produto real. Vazou cotacao errada pro cliente Paulo moura
+// (R$ 49,90 Familiar com urna/coroa/ornamentacao). Substituida por
+// cotar_sulamerica_api (cotacao_sulamerica.ts) que chama API oficial.
+// Mantida no source pra rastreabilidade — NAO exportada pra registry.
+const _DEPRECATED_gerarCotacaoSulamerica = gerarCotacaoSulamerica;
+void _DEPRECATED_gerarCotacaoSulamerica;
+
 export const VENDEDOR_FUNERAL_TOOLS: ToolDef[] = [
-  gerarCotacaoSulamerica,
+  // gerarCotacaoSulamerica REMOVIDA — usar cotar_sulamerica_api
   promoverParaColetorDados,
 ];
