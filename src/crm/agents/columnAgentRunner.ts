@@ -405,15 +405,21 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     return { status: 'error', message: 'tool_loop_max_iterations' };
   }
 
-  if (!finalText) {
-    // LLM nao mandou texto (so chamou tools sem responder cliente).
-    // Loga e nao envia nada — alguns flows sao validos (ex: marcar_perdido
-    // sem despedida; promote sem mensagem).
-    logger.info(`[col-agent.runner] no final text card=${card.id} (so tools)`);
-    recordAgentMetric({
-      tenantId, columnId: column.id, cardId: card.id,
-      event: 'executed', reason: 'tools_only_no_reply',
-    });
+  // FIX 2026-05-06 — barra "" / single-emoji / so pontuacao chegando ao cliente
+  if (isReplyEmptyish(finalText)) {
+    if (finalText) {
+      logger.warn(`[col-agent.runner] emptyish reply suprimido card=${card.id}: "${finalText.slice(0, 50)}"`);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'blocked', reason: 'emptyish_reply',
+      });
+    } else {
+      logger.info(`[col-agent.runner] no final text card=${card.id} (so tools)`);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'executed', reason: 'tools_only_no_reply',
+      });
+    }
     return { status: 'executed', reply: '' };
   }
 
@@ -537,6 +543,38 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     return { status: 'blocked', reason: 'agent_disabled' };
   }
 
+  // FIX 2026-05-06 (Daniel) — anti-rapid-fire: se bot acabou de mandar
+  // mensagem (<60s) ou se cliente respondeu DEPOIS do último bot msg,
+  // suprime esse fire. Evita "uma msg atrás da outra" (caso Sandra Maria) e
+  // evita disparar chase em cima de cliente engajado.
+  try {
+    const recent = getCrmDb()
+      .prepare(`SELECT last_bot_message_at, last_inbound_at, last_client_message_at FROM crm_cards WHERE id = ?`)
+      .get(card.id) as { last_bot_message_at?: number; last_inbound_at?: number; last_client_message_at?: number } | undefined;
+    const now = Date.now();
+    if (recent?.last_bot_message_at && (now - recent.last_bot_message_at) < 60_000) {
+      logger.info(`[col-agent.runFromFire] suprimido card=${card.id} bot_just_sent (${Math.round((now - recent.last_bot_message_at)/1000)}s atras)`);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'blocked', reason: 'rapid_fire_cooldown',
+      });
+      return { status: 'blocked', reason: 'agent_disabled' };
+    }
+    // Cliente respondeu DEPOIS do último bot msg → fluxo inbound vai responder, scheduler nao
+    const clientLast = recent?.last_inbound_at ?? recent?.last_client_message_at;
+    if (clientLast && recent?.last_bot_message_at && clientLast > recent.last_bot_message_at) {
+      logger.info(`[col-agent.runFromFire] suprimido card=${card.id} client_replied_after_bot — inbound flow vai responder`);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'blocked', reason: 'client_replied_inbound_will_handle',
+      });
+      return { status: 'blocked', reason: 'agent_disabled' };
+    }
+  } catch (err: any) {
+    // Se DB query falhar, prossegue (degrada open) — o resto dos guards pega.
+    logger.warn(`[col-agent.runFromFire] cooldown_check err: ${err?.message}`);
+  }
+
   // Tenta resolver phone do contato pra context
   const contact = card.contactId ? store.getContact?.(tenantId, card.contactId) : null;
   const customerPhone = contact?.phone || '';
@@ -562,6 +600,42 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     customer_phone: customerPhone,
   });
 
+  // FIX 2026-05-06 (Daniel): scheduler-fired runs DEVEM aplicar as MESMAS
+  // regras especiais que runColumnAgent (lead_aleatorio + contextRules).
+  // Sem isso, scheduler dispara mensagem que ignora "primeira interação =
+  // só saudação" e pergunta dados direto pro cliente (caso Sandra Maria
+  // 2026-05-05: "Oii boa tarde" → bot 1h depois "Legal! Qual seu nome e idade?"
+  // ignorando regra lead_aleatorio).
+  const isLeadAleatorio = cardHasTag(card.id, 'lead_aleatorio');
+  const leadAleatorioRules = isLeadAleatorio ? `
+
+# CASO ESPECIAL — LEAD ALEATORIO (sem campanha upstream)
+Esse cliente NAO veio de link de campanha (extrato pago). Mandou mensagem
+aleatoria no WhatsApp da empresa.
+
+Se essa eh a PRIMEIRA INTERACAO do bot (historico vazio ou so com msg do cliente
+sem resposta sua), manda APENAS uma saudacao curta ("Oi, bom dia! 😊", "Oi, boa
+tarde 😊", "Oi, boa noite 😊") e PARA. NAO se apresenta. NAO faz perguntas. NAO
+oferece nada.
+
+Se cliente JA respondeu sua saudacao com algo VAGO ("oi", "tudo bem", "queria
+saber sobre voces"), chama handoff_para_corretor(motivo: "lead aleatorio sem
+contexto") e manda EXATAMENTE:
+"Beleza! Vou te encaminhar pro *Daniel*, nosso corretor — ele te chama AQUI mesmo em alguns minutos. 😊"
+
+Se cliente DEU contexto (mencionou plano/seguro/cotacao/saude/funeral/preco/
+faixa etaria/dependentes), segue fluxo normal de qualificacao.
+` : '';
+
+  const contextRules = `
+
+# REGRAS DE CONTEXTO (CRITICAS — NAO IGNORAR)
+- Voce ESTA no meio de uma conversa em andamento. Leia atentamente as ultimas mensagens trocadas antes de responder.
+- NUNCA se reapresente se ja fez sua apresentacao nesta conversa (basta olhar o historico acima).
+- NUNCA pergunte algo que o cliente JA respondeu nas mensagens anteriores. Use a informacao que ele ja deu.
+- Continue de ONDE PAROU.
+`;
+
   // Instrucao especial — injetada como user-msg porque DeepSeek lida melhor
   // assim. Cliente NAO ve essa msg (so o LLM).
   const instruction = buildInactivityInstruction(fireCount, elapsedMin, role);
@@ -575,7 +649,7 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
   const tools = getToolsForRole(role);
   const llmTools = toLLMTools(tools);
   const messages: DeepSeekToolMessage[] = [
-    { role: 'system', content: systemPrompt + INACTIVITY_CONTEXT_BLURB },
+    { role: 'system', content: systemPrompt + contextRules + leadAleatorioRules + INACTIVITY_CONTEXT_BLURB },
     ...history.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
     { role: 'user', content: instruction },
   ];
@@ -635,6 +709,16 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     recordAgentMetric({
       tenantId, columnId: column.id, cardId: card.id,
       event: 'blocked', reason: 'meta_commentary_inactivity',
+    });
+    finalText = '';
+  }
+
+  // FIX 2026-05-06 — barra "" / so pontuacao / single-emoji do inactivity fire
+  if (finalText && isReplyEmptyish(finalText)) {
+    logger.warn(`[col-agent.runFromFire] emptyish reply suprimido card=${card.id}: "${finalText.slice(0, 50)}"`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'emptyish_reply_inactivity',
     });
     finalText = '';
   }
@@ -903,8 +987,55 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /\bj[aá]\s+vi\s+aqui\b|^\s*Vi\s+aqui\s+que/im,
     // 24) Lista enumerada com bold de campos sao scratchpad ("- **Plano principal:** X")
     /^[\s•\-*]+\*\*(plano\s+principal|n[ií]vel\s+funeral|indeniza[cç][aã]o|sem\s+extras|extras|capital|composi[cç][aã]o)\s*:\*\*/im,
+    // FIX 2026-05-06 — vazamentos pegos na auditoria de 63 cards "Atendimento Humano":
+    // 25) "Vejo que eu acabei pulando..." / "Vejo que ele/ela..." — abertura observador
+    /\bvejo\s+que\s+(eu|ele|ela|o\s+cliente|a\s+cliente|a\s+conversa|o\s+card)/i,
+    // 26) "Pelo que entendi, a/o <Nome> é/está/foi..." — meta-resumo em 3a pessoa
+    /\bpelo\s+que\s+(entendi|vi|li|consegui|j[aá]\s+vi)\s*[,.]?\s+(a|o)\s+[\wÀ-ú]+\s+(é|e|está|esta|foi|j[aá])/i,
+    // 27) "Agora é aguardar/esperar (o retorno|a resposta) (dela|dele|do cliente)"
+    /\bagora\s+[ée]\s+(aguardar|esperar)\s+(o\s+retorno|a\s+resposta|a\s+volta|ele|ela)/i,
+    /\bretorno\s+(dela|dele|do\s+cliente|da\s+cliente)\b/i,
+    // 28) "(Ela|Ele) tava (na dúvida|aguardando|querendo|...)"
+    /\b(ela|ele)\s+tava\s+(na\s+d[uú]vida|aguardando|esperando|pensando|avaliando|querendo|com\s+d[uú]vida|sem\s+responder|inativa?)/i,
+    // 29) "Vou retomar naturalmente o raciocínio" — narrativa de continuação interna
+    /\bvou\s+retomar\s+(naturalmente\s+)?(o\s+raciocinio|o\s+raciocínio|a\s+conversa|de\s+onde|naturalmente)/i,
+    /\bnaturalmente\s+o\s+racioc[ií]nio\b/i,
+    // 30) "A cliente fechou/encerrou/indicou/continua/sumiu/parou/deixou/preferiu"
+    /\b(a\s+|o\s+)?cliente\s+(fechou|encerrou|indicou|continua|sumiu|parou|deixou|preferiu|j[aá]\s+(fechou|encerrou|indicou|sumiu|parou))/i,
+    // 31) "Vou só deixar quieto" / "Vou ficar quieto" / "Vou só observar"
+    /\bvou\s+(s[oó]\s+|apenas\s+|somente\s+|ficar\s+)?(deixar\s+(quieto|de\s+lado|pra\s+l[aá])|ficar\s+(quieto|em\s+sil[eê]ncio|de\s+olho)|observar(\s+(em\s+sil[eê]ncio|de\s+longe))?)/i,
+    // 32) "Sem mensagem." / "Sem cobrar." — fechando narrativa interna
+    /\bsem\s+(mensagem|cobrar|cobran[cç]a|pressionar|press[aã]o|abordar)\s*\.?\s*$/im,
+    // 33) "Já tem(os) uma cotação salva aqui" / "Já temos os dados salvos"
+    /\bj[aá]\s+(tem|temos)\s+(uma\s+|os\s+|as\s+)?(cota[cç][aã]o|dados|informa[cç][oõ]es|valores)\s+(salva|salvos|salvas|aqui|prontas?|prontos?|guardad[oa]s?)/i,
+    // 34) "Já agendei pra retomar" / "Marquei pra retomar daqui uns dias"
+    /\b(j[aá]\s+)?(agendei|marquei|deixei\s+agendado|deixei\s+marcado)\s+.{0,50}(retomar|retornar|tentar\s+de\s+novo|cobrar\s+(de\s+)?novo)/i,
+    // 35) "Aqui foi anotado" / "Aqui foi registrado" — narrativa de campo
+    /\baqui\s+(foi|j[aá]\s+foi|est[aá])\s+(anotado|registrado|gravado|salvo|coletado|preenchido)/i,
+    // 36) "Não precisa cobrar" / "Não precisa mandar mensagem" — instrução interna
+    /\bn[aã]o\s+precisa\s+(cobrar|mandar\s+(mensagem|msg)|insistir|pressionar|abordar)/i,
+    // 37) "Pronto! Agora é..." / "Pronto. Agora vou..." — início de relato pos-acao
+    /^\s*pronto\s*[.!]\s+agora\s+(é|e|vou|posso|s[oó]\s+falta)/im,
+    // 38) "[NOME] (j[aá])? (preencheu|forneceu|deu|indicou) os? (dados|filhos|familiares|valores)" no inicio
+    //     (extensao do pattern que ja existe — agora aceita "indicou" e "j[aá]")
+    /^\s*[\wÀ-ú]+\s+(j[aá]\s+)?(preencheu|forneceu|deu|indicou|trouxe|passou|completou)\s+(os\s+|as\s+|um\s+|uma\s+|o\s+|a\s+)?(dados|filhos|familiares|idades|valores|nomes|cpf|cep|endere[cç]o)/im,
   ];
   return patterns.some((p) => p.test(t));
+}
+
+// FIX 2026-05-06 — bug "" (2 chars) chegando no cliente:
+// LLM as vezes gera literal `""` ou texto so com pontuacao/aspas/espaco.
+// O check existente `if (!finalText)` ignora string vazia mas nao `""`.
+// Strip + threshold de 2 chars uteis: passa "Oi" mas barra `""`, `😄` solto,
+// `...`, `.`. Reuse em runColumnAgent + runFromInactivityFire.
+export function isReplyEmptyish(text: string): boolean {
+  if (!text) return true;
+  // Remove aspas duplas/simples, espacos, pontuacao, quebras — sobra so palavra
+  const stripped = text.replace(/["'`\s.,!?;:\-—–​-‍﻿]/g, '');
+  // Strip emojis isolados (preserva texto com emoji)
+  const noEmoji = stripped.replace(/\p{Extended_Pictographic}/gu, '');
+  // Se sobrou < 2 caracteres uteis, considera vazio (barra "", "😄", ".")
+  return noEmoji.length < 2;
 }
 
 /** Substitui {{key}} no template pelo valor do dict. Sem template engine. */

@@ -368,6 +368,59 @@ async function dispatchChase(fire: ChaseFire): Promise<void> {
     channel, card: loaded.card, column: loaded.column,
     fireCount: fire.stepIdx + 1, elapsedMin: fire.stepMinutes,
   }).catch((err: any) => logger.warn(`[col-timer chase] err: ${err?.message}`));
+
+  // FIX 2026-05-06 (Daniel) — após último step do chase em colunas com agente
+  // qualificador (Lead) ou vendedor (Atendimento Humano), mover automaticamente
+  // pro Follow Up. Cliente sumiu por 48h+ → deixa o followupper recuperar.
+  // Agendado pra rodar APÓS o run da mensagem (1 tick adiante via setTimeout).
+  let stepsLen = 0;
+  try {
+    const allSteps = JSON.parse(fire.row.agent_no_response_chase_steps_json || '[]');
+    if (Array.isArray(allSteps)) stepsLen = allSteps.length;
+  } catch { /* noop */ }
+  const isLastStep = stepsLen > 0 && fire.stepIdx === stepsLen - 1;
+  const role = (fire.row.agent_role || '').toLowerCase();
+  if (isLastStep && (role === 'qualificador' || role === 'vendedor')) {
+    setTimeout(() => {
+      void promoteToFollowUp(loaded.card.tenantId, loaded.card.id, loaded.card.boardId, loaded.column.id)
+        .catch((err: any) => logger.warn(`[col-timer auto-promote-followup] err: ${err?.message}`));
+    }, 5000); // 5s grace pro envio da mensagem completar
+  }
+}
+
+/** Move card pra coluna "Follow Up" do mesmo board, automaticamente — usado
+ *  quando cliente passou do último chase step em Lead/Atendimento Humano. */
+async function promoteToFollowUp(
+  tenantId: string,
+  cardId: string,
+  boardId: string,
+  fromColumnId: string,
+): Promise<void> {
+  const db = getCrmDb();
+  // Acha Follow Up do mesmo board
+  const fu = db.prepare(
+    `SELECT id FROM crm_columns WHERE board_id = ? AND name = 'Follow Up' LIMIT 1`,
+  ).get(boardId) as { id: string } | undefined;
+  if (!fu) {
+    logger.warn(`[auto-promote-followup] Follow Up nao encontrado em board=${boardId}`);
+    return;
+  }
+  if (fu.id === fromColumnId) return; // ja esta em Follow Up
+
+  // Lock pra evitar promote duplicado
+  const cluster = await getCluster();
+  const lockKey = `col-timer:auto-followup:${cardId}`;
+  const ok = await cluster.setNxEx(lockKey, '1', 600);
+  if (!ok) return;
+
+  // Marca origem (pro followupper saber de onde veio) + persiste
+  db.prepare(
+    `UPDATE crm_cards SET followup_origin_column_id = ?, column_changed_at = ? WHERE id = ?`,
+  ).run(fromColumnId, Date.now(), cardId);
+
+  store.moveCard(tenantId, cardId, fu.id);
+  applyTagSystem(cardId, 'movido_para_followup');
+  logger.info(`[auto-promote-followup] card=${cardId} ${fromColumnId} → Follow Up (origem persistida)`);
 }
 
 async function dispatchFollowup(fire: FollowupFire): Promise<void> {
@@ -394,34 +447,100 @@ async function dispatchFollowup(fire: FollowupFire): Promise<void> {
   }).catch((err: any) => logger.warn(`[col-timer followup] err: ${err?.message}`));
 }
 
-/** D) FINAL DELETE EXECUTOR — apaga cards com tag final_delete_scheduled
- *  cujo deletar_card_final.delete_at ja passou. */
+/** D) FINAL FOLLOW-UP EXECUTOR — fim do ciclo do followupper.
+ *
+ *  Daniel 2026-05-06: ao invés de soft-delete (que sumia o card), mover pra
+ *  coluna "Resolvido" do board "Atendimento" (board de suporte do tenant).
+ *  Card sai do Pipeline de Vendas mas continua arquivado pro corretor
+ *  consultar histórico futuro.
+ *
+ *  Disparo via tag final_delete_scheduled (mantida pra compat com rows
+ *  já agendadas) + condição de tempo (cas.inactivity_timer_at venceu).
+ */
 async function executeFinalDeletes(nowMs = Date.now()): Promise<void> {
   try {
     const db = getCrmDb();
     const rows = db.prepare(`
-      SELECT cas.card_id FROM crm_card_agent_state cas
+      SELECT cas.card_id, cas.tenant_id, c.board_id, c.column_id
+      FROM crm_card_agent_state cas
       JOIN crm_card_tags t ON t.card_id = cas.card_id AND t.tag = 'final_delete_scheduled'
+      JOIN crm_cards c ON c.id = cas.card_id
       WHERE cas.inactivity_timer_at IS NOT NULL AND cas.inactivity_timer_at <= ?
+        AND c.deleted_at IS NULL
       LIMIT 50
-    `).all(nowMs) as Array<{ card_id: string }>;
+    `).all(nowMs) as Array<{ card_id: string; tenant_id: string; board_id: string; column_id: string }>;
 
     for (const r of rows) {
       try {
-        applyTagSystem(r.card_id, 'final_delete_done');
-        // Soft delete: hard DELETE cascateia FK pra crm_activities (perde
-        // histórico inteiro da conversa). Card some das listagens via
-        // filtro deleted_at IS NULL — preserva audit trail.
-        const t = Date.now();
-        db.prepare(`UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(t, t, r.card_id);
-        logger.info(`[col-timer final-delete] card=${r.card_id} soft-deleted`);
+        applyTagSystem(r.card_id, 'final_delete_done'); // tag mantida pra histórico
+        await moveToResolvido(r.tenant_id, r.card_id, r.column_id);
       } catch (err: any) {
-        logger.warn(`[col-timer final-delete] err: ${err?.message}`);
+        logger.warn(`[col-timer final-followup] card=${r.card_id} err: ${err?.message}`);
       }
     }
   } catch (err: any) {
-    logger.warn(`[col-timer final-delete] tick err: ${err?.message}`);
+    logger.warn(`[col-timer final-followup] tick err: ${err?.message}`);
   }
+}
+
+/** Move card cross-board pro "Resolvido" do board Atendimento (type='support').
+ *  Atualiza board_id E column_id. Loga stage_change + emite evento card_moved. */
+async function moveToResolvido(
+  tenantId: string,
+  cardId: string,
+  fromColumnId: string,
+): Promise<void> {
+  const db = getCrmDb();
+
+  // Acha "Resolvido" no board de suporte (type='support') do tenant
+  const target = db.prepare(`
+    SELECT col.id as column_id, col.board_id, col.name as col_name, b.name as board_name
+    FROM crm_columns col
+    JOIN crm_boards b ON b.id = col.board_id
+    WHERE b.tenant_id = ?
+      AND b.type = 'support'
+      AND col.name = 'Resolvido'
+    LIMIT 1
+  `).get(tenantId) as { column_id: string; board_id: string; col_name: string; board_name: string } | undefined;
+
+  if (!target) {
+    logger.warn(`[move-to-resolvido] Resolvido não encontrado em tenant=${tenantId.slice(0, 8)} — fallback soft-delete`);
+    const t = Date.now();
+    db.prepare(`UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(t, t, cardId);
+    return;
+  }
+
+  if (target.column_id === fromColumnId) return; // já está
+
+  // Cross-board move precisa atualizar board_id + column_id atomicamente
+  const cluster = await getCluster();
+  const lockKey = `col-timer:final-move:${cardId}`;
+  const ok = await cluster.setNxEx(lockKey, '1', 600);
+  if (!ok) return;
+
+  // Posição no final da coluna alvo
+  const posRow = db.prepare(
+    `SELECT COALESCE(MAX(position), -1) + 1 as p FROM crm_cards WHERE column_id = ? AND deleted_at IS NULL`,
+  ).get(target.column_id) as { p: number };
+
+  const now = Date.now();
+  db.prepare(
+    `UPDATE crm_cards SET board_id = ?, column_id = ?, position = ?, column_changed_at = ?, updated_at = ? WHERE id = ?`,
+  ).run(target.board_id, target.column_id, posRow.p, now, now, cardId);
+
+  // Loga stage_change manualmente (moveCard normal não cobre cross-board)
+  try {
+    store.logActivity(tenantId, {
+      cardId,
+      type: 'stage_change',
+      channel: 'manual',
+      content: `Movido de ${fromColumnId} para ${target.column_id} (Follow Up final → Resolvido)`,
+    });
+  } catch (err: any) {
+    logger.warn(`[move-to-resolvido] logActivity falhou: ${err?.message}`);
+  }
+
+  logger.info(`[move-to-resolvido] card=${cardId} → ${target.board_name}/${target.col_name}`);
 }
 
 // ─── Public tick ──────────────────────────────────────────────────────────

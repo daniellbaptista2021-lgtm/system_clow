@@ -6,7 +6,7 @@
  * custaram vendas). Se algum desses voltar a passar, e regressao critica.
  */
 import { describe, it, expect } from 'vitest';
-import { looksLikeMetaCommentary } from '../../../src/crm/agents/columnAgentRunner.js';
+import { looksLikeMetaCommentary, isReplyEmptyish } from '../../../src/crm/agents/columnAgentRunner.js';
 
 describe('looksLikeMetaCommentary — vazamentos historicos (DEVEM bloquear)', () => {
   // Screenshot 2026-04-30 — cliente Tania (5521984574332)
@@ -163,5 +163,102 @@ describe('looksLikeMetaCommentary — vazamento de identidade de role (Maria Cec
     expect(looksLikeMetaCommentary('Prazer, sou a Ana da PV Corretora')).toBe(false);
     expect(looksLikeMetaCommentary('Aqui e o Lucas, da SulAmerica')).toBe(false);
     expect(looksLikeMetaCommentary('Me chamo Marina, sou da PV Corretora')).toBe(false);
+  });
+});
+
+describe('looksLikeMetaCommentary — auditoria 2026-05-06 (vazamentos reais 63 cards)', () => {
+  // Cada string abaixo VAZOU pro cliente em produção entre 05/05 e 06/05.
+  // Adicionados patterns 25-38 pra capturar.
+  const vazamentosAuditoriaMaio06 = [
+    // Pattern 25 — "Vejo que..."
+    'Vejo que eu acabei pulando etapas importantes do fluxo — enviei mensagens automáticas',
+    // Pattern 26 — "Pelo que entendi, a/o <Nome>..."
+    'Já tem uma cotação salva aqui. A titular é Dejanira (71, FEMININO). Pelo que entendi, a Sandra é quem está falando comigo.',
+    // Pattern 27 — "Agora é aguardar"
+    'Pronto! Agora é aguardar o retorno dela.',
+    // Pattern 28 — "Ele tava na dúvida"
+    'Ele tava na dúvida sobre a esposa de 76 anos — vou retomar naturalmente o raciocínio.',
+    // Pattern 29 — "Vou retomar naturalmente o raciocínio"
+    'Pode ser. Vou retomar naturalmente o raciocínio sobre os netos.',
+    // Pattern 30 — cliente fechou/encerrou/indicou/continua/sumiu/parou
+    'A cliente já fechou o plano dela, indicou duas pessoas e tá de boa.',
+    'Não precisa cobrar — ela já encerrou o assunto dela.',
+    'A cliente continua sem responder.',
+    'O cliente sumiu depois da cotação.',
+    'A cliente parou de responder ontem.',
+    // Pattern 31 — "Vou só deixar quieto / ficar quieto / observar"
+    'Vou só deixar quieto, sem mensagem.',
+    'Vou ficar quieto por aqui.',
+    'Vou só observar em silêncio.',
+    // Pattern 33 — "Já tem(os) cotação salva aqui"
+    'Já temos uma cotação salva aqui. Deixa eu ver os detalhes.',
+    'Já tem uma cotação salva aqui.',
+    'Já temos os dados salvos.',
+    // Pattern 34 — "Agendei pra retomar"
+    'Já deixei agendado pra retomar daqui uns dias com ela.',
+    'Marquei pra retomar uns dias depois.',
+    // Pattern 35 — "Aqui foi anotado"
+    'Aqui foi anotado que ela tem 73 anos.',
+    'Aqui foi registrado o tipo plano.',
+    // Pattern 36 — "Não precisa cobrar/mandar mensagem"
+    'Não precisa cobrar — ela já fechou.',
+    'Não precisa mandar mensagem agora.',
+    // Pattern 37 — "Pronto! Agora é aguardar..."
+    'Pronto! Agora é aguardar o retorno dela.',
+    'Pronto. Agora vou só esperar.',
+    // Pattern 38 — "<Nome> já preencheu/forneceu/indicou os dados"
+    'Norma já preencheu os dados no formulário de entrada.',
+    'Antônio já indicou os familiares.',
+  ];
+
+  it.each(vazamentosAuditoriaMaio06)('bloqueia vazamento maio/06: %s', (msg) => {
+    expect(looksLikeMetaCommentary(msg)).toBe(true);
+  });
+
+  it('NAO bloqueia respostas legitimas que parecem com os patterns', () => {
+    // Falsos positivos a evitar — frases reais de cliente para humano
+    expect(looksLikeMetaCommentary('Vejo que você precisa de mais informação')).toBe(false);
+    expect(looksLikeMetaCommentary('Pelo que entendi, você quer cobrir 4 pessoas')).toBe(false);
+    expect(looksLikeMetaCommentary('Aqui foi feito tudo certinho')).toBe(false);
+    expect(looksLikeMetaCommentary('Já tem uma sugestao pra você ver')).toBe(false);
+    expect(looksLikeMetaCommentary('A indenização é em caso de acidente')).toBe(false);
+    expect(looksLikeMetaCommentary('Não precisa se preocupar com nada')).toBe(false);
+  });
+});
+
+describe('isReplyEmptyish — barra texto inutilizavel', () => {
+  it('detecta string vazia', () => {
+    expect(isReplyEmptyish('')).toBe(true);
+  });
+
+  it('detecta apenas aspas duplas (caso real Val Mulher de Fibra)', () => {
+    expect(isReplyEmptyish('""')).toBe(true);
+  });
+
+  it('detecta aspas simples', () => {
+    expect(isReplyEmptyish("''")).toBe(true);
+  });
+
+  it('detecta apenas espacos / pontuacao', () => {
+    expect(isReplyEmptyish('   ')).toBe(true);
+    expect(isReplyEmptyish('...')).toBe(true);
+    expect(isReplyEmptyish('!!')).toBe(true);
+    expect(isReplyEmptyish('. . .')).toBe(true);
+  });
+
+  it('detecta emoji solto (caso real Graça Pires "😄")', () => {
+    expect(isReplyEmptyish('😄')).toBe(true);
+    expect(isReplyEmptyish('🙏')).toBe(true);
+    expect(isReplyEmptyish('😊')).toBe(true);
+  });
+
+  it('NAO bloqueia respostas reais minimas', () => {
+    expect(isReplyEmptyish('Oi')).toBe(false);
+    expect(isReplyEmptyish('Ok')).toBe(false);
+    expect(isReplyEmptyish('Já')).toBe(false);
+    expect(isReplyEmptyish('Não')).toBe(false);
+    expect(isReplyEmptyish('Beleza')).toBe(false);
+    expect(isReplyEmptyish('Oi 😊')).toBe(false);
+    expect(isReplyEmptyish('Pode ser!')).toBe(false);
   });
 });
