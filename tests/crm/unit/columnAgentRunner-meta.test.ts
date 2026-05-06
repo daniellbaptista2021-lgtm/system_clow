@@ -226,6 +226,72 @@ describe('looksLikeMetaCommentary — auditoria 2026-05-06 (vazamentos reais 63 
   });
 });
 
+describe('looksLikeMetaCommentary — vazamento Jademar 2026-05-06 (pos-deploy)', () => {
+  // Caso real card crm_card_1c93ed7c749b 2026-05-06 20:16:00
+  // VAZOU pos-deploy do output validator. Frase tem 3 elementos meta:
+  // "Deixei registrado", "Se o <Nome> voltar a falar", "eu retomo daqui"
+  it('bloqueia o vazamento exato do Jademar', () => {
+    const msg = 'Deixei registrado. Se o Jademar voltar a falar, eu retomo daqui mesmo 😊';
+    expect(looksLikeMetaCommentary(msg)).toBe(true);
+  });
+
+  // Pattern 39 — "Deixei registrado" abertura
+  it('bloqueia "Deixei registrado." sozinho', () => {
+    expect(looksLikeMetaCommentary('Deixei registrado.')).toBe(true);
+  });
+  it('bloqueia "Deixei anotado aqui."', () => {
+    expect(looksLikeMetaCommentary('Deixei anotado aqui.')).toBe(true);
+  });
+  it('bloqueia "Já deixei registrado para acompanhar"', () => {
+    expect(looksLikeMetaCommentary('Já deixei registrado para acompanhar')).toBe(true);
+  });
+
+  // Pattern 40 — "Se o/a <Nome> voltar a falar/escrever/etc"
+  it('bloqueia "Se o Jademar voltar a falar"', () => {
+    expect(looksLikeMetaCommentary('Se o Jademar voltar a falar, eu retomo')).toBe(true);
+  });
+  it('bloqueia "Se a Maria voltar a escrever"', () => {
+    expect(looksLikeMetaCommentary('Se a Maria voltar a escrever, retomo')).toBe(true);
+  });
+  it('bloqueia "Se o Antônio retornar"', () => {
+    expect(looksLikeMetaCommentary('Se o Antônio retornar, eu sigo daqui')).toBe(true);
+  });
+
+  // Pattern 41 — "eu retomo/continuo daqui"
+  it('bloqueia "eu retomo daqui mesmo"', () => {
+    expect(looksLikeMetaCommentary('Vou aguardar e eu retomo daqui mesmo')).toBe(true);
+  });
+  it('bloqueia "eu continuo daqui"', () => {
+    expect(looksLikeMetaCommentary('Beleza! eu continuo daqui')).toBe(true);
+  });
+
+  // Pattern 42 — "Quando ele/ela voltar/responder"
+  it('bloqueia "Quando ele voltar, eu chamo"', () => {
+    expect(looksLikeMetaCommentary('Quando ele voltar, eu chamo de novo')).toBe(true);
+  });
+  it('bloqueia "Quando o Jademar responder, retomo"', () => {
+    expect(looksLikeMetaCommentary('Quando o Jademar responder, retomo')).toBe(true);
+  });
+
+  // Pattern 43 — "Se ela responder depois"
+  it('bloqueia "Se ela responder depois, eu reabro"', () => {
+    expect(looksLikeMetaCommentary('Se ela responder depois, eu reabro')).toBe(true);
+  });
+
+  // Falsos positivos a evitar
+  it('NÃO bloqueia "Deixei registrado, Lourdes" (vocativo, não meta)', () => {
+    // "Deixei registrado, Lourdes" — fala COM Lourdes, não SOBRE.
+    // Pattern 39 exige (se|que|o|a|aqui|isso|tudo|para) após "registrado"
+    expect(looksLikeMetaCommentary('Deixei registrado, Lourdes! Já te passo pra cima.')).toBe(false);
+  });
+  it('NÃO bloqueia "se você voltar a falar" (segunda pessoa)', () => {
+    expect(looksLikeMetaCommentary('Se você voltar a falar é só me chamar')).toBe(false);
+  });
+  it('NÃO bloqueia "Quando você responder eu volto" (segunda pessoa)', () => {
+    expect(looksLikeMetaCommentary('Quando você responder eu volto')).toBe(false);
+  });
+});
+
 describe('isReplyEmptyish — barra texto inutilizavel', () => {
   it('detecta string vazia', () => {
     expect(isReplyEmptyish('')).toBe(true);

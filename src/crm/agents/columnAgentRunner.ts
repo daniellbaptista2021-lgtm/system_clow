@@ -1078,6 +1078,19 @@ export function looksLikeMetaCommentary(text: string): boolean {
     // 38) "[NOME] (j[aá])? (preencheu|forneceu|deu|indicou) os? (dados|filhos|familiares|valores)" no inicio
     //     (extensao do pattern que ja existe — agora aceita "indicou" e "j[aá]")
     /^\s*[\wÀ-ú]+\s+(j[aá]\s+)?(preencheu|forneceu|deu|indicou|trouxe|passou|completou)\s+(os\s+|as\s+|um\s+|uma\s+|o\s+|a\s+)?(dados|filhos|familiares|idades|valores|nomes|cpf|cep|endere[cç]o)/im,
+    // FIX 2026-05-06 — vazamento real card JADEMAR (20:16, pos-deploy):
+    // "Deixei registrado. Se o Jademar voltar a falar, eu retomo daqui mesmo 😊"
+    // 39) "Deixei registrado/anotado/marcado" como abertura/sentenca solta (sem vocativo)
+    /^\s*(j[aá]\s+)?deixei\s+(registrado|anotado|marcado|agendado|salvo|gravado)\s*[.!]?\s*(se|que|o|a|aqui|isso|tudo|para)\b/i,
+    /^\s*(j[aá]\s+)?deixei\s+(registrado|anotado|marcado|agendado|salvo|gravado)\s*\.?\s*$/im,
+    // 40) "Se o/a <Nome> voltar a falar/escrever/responder" — 3a pessoa pelo nome
+    /\bse\s+(o|a)\s+[A-ZÀ-Ú][\wÀ-ú]+(\s+[\wÀ-ú]+)*\s+(voltar|retornar|aparecer|responder|escrever|falar|chamar|der\s+sinal)\b/i,
+    // 41) "eu retomo/continuo daqui/aqui/de onde paramos" — narrativa interna pos-fechamento
+    /\beu\s+(retomo|continuo|sigo|reabro|reativo|volto)\s+(daqui|aqui|de\s+onde|com\s+ele|com\s+ela|a\s+conversa|naturalmente)/i,
+    // 42) "Quando ele/ela/<Nome> voltar/responder/aparecer" — espera em 3a pessoa
+    /\bquando\s+(ele|ela|o\s+cliente|a\s+cliente|o\s+[A-Z][\wÀ-ú]+|a\s+[A-Z][\wÀ-ú]+)\s+(voltar|retornar|responder|aparecer|escrever|der\s+sinal)/i,
+    // 43) "Se ela/ele responder depois/amanhã, eu X" — condicional + 3a pessoa
+    /\bse\s+(ela|ele)\s+(responder|retornar|aparecer|voltar|escrever)\s+(depois|mais\s+tarde|amanh[aã]|em\s+breve|um\s+dia)/i,
   ];
   return patterns.some((p) => p.test(t));
 }
