@@ -866,6 +866,23 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /^\s*\*\*\d+\)?\*\*\s+(sobre|a\s+respeito|quanto\s+a|com\s+rela[cç][aã]o)/im,
     // 11) "Beleza! Agora vou te perguntar..." — combinacao saudacao + meta
     /^\s*(beleza|perfeito|certo|ok|bacana|massa)\s*[!.]?\s+(agora\s+)?vou\s+(te\s+)?(perguntar|mandar|enviar|fazer|coletar)/i,
+    // FIX 2026-05-06 (Daniel) — vazamentos novos pegos na auditoria:
+    // 12) "Vou seguir o fluxo natural" / "proxima pergunta do fluxo" / "do roteiro"
+    /\bvou\s+seguir\s+o\s+fluxo\b/i,
+    /\bpr[oó]xim[ao]\s+pergunta\s+do\s+fluxo\b/i,
+    /\bdo\s+roteiro\b/i,
+    /\bpergunta\s+\d+\s+do\s+(roteiro|fluxo|script)\b/i,
+    // 13) Bot mencionando API/sistema oficial pro cliente
+    /\bAPI\s+(oficial|do\s+sistema|da\s+sulamerica|da\s+sul\s*am[eé]rica)\b/i,
+    /\bvou\s+cotar\s+(aqui\s+)?com\s+a\s+api/i,
+    /\bsistema\s+oficial\s+da\s+sulamerica/i,
+    /\bcotador\s+oficial\b/i,
+    // 14) Pergunta fechada "Topa?" no final (e variacoes simples)
+    /[?!]\s*topa\??\s*$/im,
+    /\btopa\??\s*$/im,
+    /[?!]\s*aceita\??\s*$/im,
+    // 15) Bot anuncia "Vou cotar aqui" — desnecessario, soa robotico
+    /\bvou\s+cotar\s+aqui\b/i,
   ];
   return patterns.some((p) => p.test(t));
 }
