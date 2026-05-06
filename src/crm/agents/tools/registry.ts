@@ -8,6 +8,7 @@ import { COMMON_TOOLS } from './common.js';
 import { QUALIFICADOR_TOOLS } from './qualificador.js';
 import { VENDEDOR_FUNERAL_TOOLS } from './vendedor_funeral.js';
 import { COLETOR_DADOS_TOOLS } from './coletor_dados.js';
+import { COTACAO_SULAMERICA_TOOLS } from './cotacao_sulamerica.js';
 import { TAG_TOOLS } from './tags.js';
 import { PROMOCAO_TOOLS } from './promocao.js';
 import { FOLLOWUP_TOOLS } from './followup.js';
@@ -27,6 +28,7 @@ const ALL_TOOLS: ToolDef[] = [
   ...QUALIFICADOR_TOOLS,
   ...VENDEDOR_FUNERAL_TOOLS,
   ...COLETOR_DADOS_TOOLS,
+  ...COTACAO_SULAMERICA_TOOLS,
   ...TAG_TOOLS,
   ...PROMOCAO_TOOLS,
   ...FOLLOWUP_TOOLS,

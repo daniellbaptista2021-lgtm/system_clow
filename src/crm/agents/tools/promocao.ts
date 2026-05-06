@@ -68,8 +68,8 @@ const promoverParaColetor = makePromote(
 // urgent alert WhatsApp + outbound webhook ANTES de mover o card.
 const promoverParaLancarVenda: ToolDef = {
   name: 'promover_para_lancar_venda',
-  description: 'Move o card pra coluna "Lancar Venda" (humano finaliza com a seguradora). Chame so quando os 17 campos estiverem coletados, validados, e cliente autorizou LGPD.',
-  roles: ['coletor', 'coletor_dados'],
+  description: 'Move o card pra coluna "Lancar Venda" (humano finaliza com a seguradora). Chame so apos: (1) cotacao oficial enviada, (2) cliente confirmou que quer fechar, (3) escolheu forma de pagamento, (4) coletou os dados de contratacao via salvar_dados_proposta (nome_completo, cpf, rg, email, celular, cep, endereco_completo + dependentes pagos se houver).',
+  roles: ['coletor', 'coletor_dados', 'vendedor', 'vendedor_funeral'],
   parameters: {
     type: 'object',
     properties: {

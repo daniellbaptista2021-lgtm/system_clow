@@ -11,15 +11,17 @@ import type { ToolDef } from './types.js';
 
 const salvarDadosQualificacao: ToolDef = {
   name: 'salvar_dados_qualificacao',
-  description: 'Salva dados estruturados de qualificacao do lead (nome, idade, tipo de plano, composicao familiar, forma_pagamento, observacoes). Faz merge com o que ja existe — passe so os campos que voce confirmou agora.',
+  description: 'Salva dados estruturados de qualificacao do lead (nome, idade, sexo, tipo de plano, composicao familiar, forma_pagamento, observacoes). Faz merge com o que ja existe — passe so os campos que voce confirmou agora.',
   roles: ['qualificador', 'cotador', 'vendedor', 'vendedor_funeral'],
   parameters: {
     type: 'object',
     properties: {
       nome: { type: 'string', description: 'Nome do cliente como ele apresentou' },
       idade: { type: 'number', description: 'Idade do titular' },
+      sexo: { type: 'string', enum: ['MASCULINO', 'FEMININO'], description: 'Sexo do titular pra cotacao SulAmerica (formato exato).' },
       tipo_plano: { type: 'string', description: 'Tipo de plano de interesse (funeral / vida / saude / etc)' },
       composicao_familiar: { type: 'string', description: 'Resumo da composicao familiar — ex: "casal + 2 filhos"' },
+      forma_pagamento: { type: 'string', enum: ['cartao', 'boleto', 'pix'], description: 'Forma de pagamento escolhida no fechamento.' },
       observacoes: { type: 'string', description: 'Notas relevantes sobre o lead' },
     },
   },
