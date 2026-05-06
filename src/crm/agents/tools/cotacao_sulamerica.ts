@@ -174,6 +174,14 @@ const FUNERAL_NOME_RX: Record<string, RegExp> = {
 const PRECO_FILHO_MAIOR_21 = 10; // R$/mes — confirmado no front cotador
 const PRECO_OUTRO_FAMILIAR = 12;
 
+// PISO DE PRECO (Daniel 2026-05-06): NUNCA vender abaixo desses valores.
+// Plano Individual: minimo R$ 29,90/mes. Plano Familiar (qualquer
+// composicao com cobertura > so titular): minimo R$ 39,90/mes.
+// Aplicado APOS calculo da API. Se calculo da scaled price der menos,
+// usa piso.
+const PISO_INDIVIDUAL_CENTS = 2990;
+const PISO_FAMILIAR_CENTS = 3990;
+
 interface BreakdownLine { rotulo: string; valor_cents: number }
 
 function findCobertura(coberturas: ApiCobertura[], regex: RegExp): ApiCobertura | undefined {
@@ -308,18 +316,23 @@ const cotarSulamericaApi: ToolDef = {
       }
     }
 
-    // Funeral (servico)
+    // Funeral (servico) — Daniel 2026-05-06: produto eh Plano FUNERAL.
+    // Funeral SEMPRE incluido. Se LLM passou 'nenhum', forca pro nivel
+    // compativel com a composicao familiar inferida (individual default).
+    let funeralEffectiveNivel = funeralNivel;
+    if (funeralNivel === 'nenhum') {
+      logger.warn(`[cotar_sulamerica_api] LLM pediu funeral=nenhum mas o produto eh Plano Funeral — forcando 'individual' como minimo.`);
+      funeralEffectiveNivel = 'individual';
+    }
     let funeralIncluido = false;
-    if (funeralNivel !== 'nenhum') {
-      const rx = FUNERAL_NOME_RX[funeralNivel];
-      const sv = rx ? findServico(servicos, rx) : undefined;
-      if (sv) {
-        const v = sv.premio_mensal_desconto || sv.premio_mensal || 0;
-        breakdown.push({ rotulo: `Assistência Funeral (${funeralNivel.replace(/_/g, ' ')})`, valor_cents: Math.round(v * 100) });
-        funeralIncluido = true;
-      } else {
-        logger.warn(`[cotar_sulamerica_api] funeral nivel "${funeralNivel}" nao retornado pela API — segue sem`);
-      }
+    const rx = FUNERAL_NOME_RX[funeralEffectiveNivel];
+    const sv = rx ? findServico(servicos, rx) : undefined;
+    if (sv) {
+      const v = sv.premio_mensal_desconto || sv.premio_mensal || 0;
+      breakdown.push({ rotulo: `Assistência Funeral (${funeralEffectiveNivel.replace(/_/g, ' ')})`, valor_cents: Math.round(v * 100) });
+      funeralIncluido = true;
+    } else {
+      logger.warn(`[cotar_sulamerica_api] funeral nivel "${funeralEffectiveNivel}" nao retornado pela API.`);
     }
 
     // Servicos opcionais (Medico na Tela / Rede de Saude)
@@ -346,16 +359,23 @@ const cotarSulamericaApi: ToolDef = {
       breakdown.push({ rotulo: `${outros} outro(s) familiar(es)`, valor_cents: outros * PRECO_OUTRO_FAMILIAR * 100 });
     }
 
-    const totalCents = breakdown.reduce((s, b) => s + b.valor_cents, 0);
+    const calculatedTotalCents = breakdown.reduce((s, b) => s + b.valor_cents, 0);
+
+    // PISO DURO Daniel 2026-05-06: NUNCA vender abaixo do minimo.
+    const isIndividual = funeralEffectiveNivel === 'individual';
+    const piso = isIndividual ? PISO_INDIVIDUAL_CENTS : PISO_FAMILIAR_CENTS;
+    const totalCents = Math.max(calculatedTotalCents, piso);
+    if (totalCents > calculatedTotalCents) {
+      logger.info(`[cotar_sulamerica_api] piso aplicado: calculado=${calculatedTotalCents} → piso=${piso} (nivel=${funeralEffectiveNivel})`);
+    }
 
     // 5) Monta mensagem WhatsApp pronta — VALOR ÚNICO, coberturas como
     //    "benefícios inclusos" (estrategia de venda Daniel 2026-05-06: foco
     //    em valor agregado, nao em discriminar item por item).
-    const isIndividual = funeralNivel === 'individual';
     const carenciaNatural = isIndividual ? '90 dias' : '120 dias';
-    const planoLabel = funeralNivel === 'individual' ? 'Individual'
-                     : funeralNivel === 'casal_filhos' ? 'Casal e Filhos'
-                     : funeralNivel === 'casal_filhos_pais_sogros' ? 'Casal, Filhos, Pais e Sogros'
+    const planoLabel = funeralEffectiveNivel === 'individual' ? 'Individual'
+                     : funeralEffectiveNivel === 'casal_filhos' ? 'Casal e Filhos'
+                     : funeralEffectiveNivel === 'casal_filhos_pais_sogros' ? 'Casal, Filhos, Pais e Sogros'
                      : 'Personalizado';
 
     // Lista de beneficios inclusos pra o cliente — sem valor individual.
@@ -388,13 +408,13 @@ const cotarSulamericaApi: ToolDef = {
 
     // Quem está coberto pela apólice única (regras Daniel 2026-05-06).
     const coberturaParentesco: string[] = [];
-    if (funeralNivel === 'individual') {
+    if (funeralEffectiveNivel === 'individual') {
       coberturaParentesco.push('• *Titular* (você)');
-    } else if (funeralNivel === 'casal_filhos') {
+    } else if (funeralEffectiveNivel === 'casal_filhos') {
       coberturaParentesco.push('• *Titular* (você)');
       coberturaParentesco.push('• *Cônjuge* (esposa/marido)');
       coberturaParentesco.push('• *Filhos até 21 anos* (sem custo extra)');
-    } else if (funeralNivel === 'casal_filhos_pais_sogros') {
+    } else if (funeralEffectiveNivel === 'casal_filhos_pais_sogros') {
       coberturaParentesco.push('• *Titular* (você)');
       coberturaParentesco.push('• *Cônjuge*');
       coberturaParentesco.push('• *Filhos até 21 anos*');
@@ -446,7 +466,7 @@ const cotarSulamericaApi: ToolDef = {
       sexo,
       capital_morte_acidente: capMA,
       capital_invalidez: capInv,
-      funeral_nivel: funeralNivel,
+      funeral_nivel: funeralEffectiveNivel,
       filhos_maior_21: filhos21,
       outros_familiares: outros,
       breakdown,
@@ -471,7 +491,7 @@ const cotarSulamericaApi: ToolDef = {
       result: {
         total_cents: totalCents,
         breakdown,
-        funeral_nivel: funeralNivel,
+        funeral_nivel: funeralEffectiveNivel,
         capital_morte_acidente: capMA,
       },
       userVisible,
