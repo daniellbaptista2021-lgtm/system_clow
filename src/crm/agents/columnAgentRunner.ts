@@ -41,6 +41,7 @@ import {
 import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.js';
 import { cardHasTag } from './tools/tags.js';
 import { maybeAutoPromote } from './tools/common.js';
+import { validateOutput, type ToolCallRecord } from './outputValidator.js';
 import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
 import { getCrmDb } from '../schema.js';
@@ -331,6 +332,11 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   let finalText = '';
   let iteration = 0;
   let lastReplyForAntiLoop = '';
+  // FIX 2026-05-06 — track tool calls do turno pra validar valor monetário
+  // (caso Adriana: bot inventou "Familiar Ampliado R$133,90" sem chamar
+  // cotar_sulamerica_api). Validador anti-currency precisa saber.
+  const toolCallsThisTurn: ToolCallRecord[] = [];
+  let validationRetried = false;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
@@ -348,8 +354,34 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
 
     const toolCalls = llmMsg.tool_calls ?? [];
     if (toolCalls.length === 0) {
-      // Sem tool_calls — texto final
-      finalText = String(llmMsg.content || '').trim();
+      // Sem tool_calls — texto final candidato
+      const candidate = String(llmMsg.content || '').trim();
+
+      // VALIDAÇÃO PROGRAMÁTICA: se cita valor monetário sem cotação no turno,
+      // injeta feedback como tool-like response e deixa LLM regenerar UMA vez.
+      const v = validateOutput(candidate, toolCallsThisTurn);
+      if (!v.ok && !validationRetried) {
+        logger.warn(`[col-agent.runner] output_validator BLOQUEOU card=${card.id} reason=${v.reason} matches=[${v.detectedMatches?.join(',')}] — retry`);
+        recordAgentMetric({
+          tenantId, columnId: column.id, cardId: card.id,
+          event: 'blocked', reason: `output_validator_${v.reason}`,
+        });
+        // Injeta como user message (LLM regenera)
+        messages.push({ role: 'assistant', content: candidate });
+        messages.push({ role: 'user', content: v.feedback || 'Refaça a resposta sem inventar valor.' });
+        validationRetried = true;
+        continue; // próxima iteração do while
+      }
+      if (!v.ok && validationRetried) {
+        // Já tentou regenerar uma vez e ainda alucinou — bloqueia envio.
+        logger.error(`[col-agent.runner] output_validator BLOQUEOU 2x card=${card.id} — abort send`);
+        recordAgentMetric({
+          tenantId, columnId: column.id, cardId: card.id,
+          event: 'blocked', reason: `output_validator_${v.reason}_persistent`,
+        });
+        return { status: 'blocked', reason: 'meta_commentary' };
+      }
+      finalText = candidate;
       break;
     }
 
@@ -382,6 +414,7 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
 
     for (const tc of toolCalls) {
       const result = await executeToolCall(tc, toolCtx);
+      toolCallsThisTurn.push({ name: tc.function.name, ok: result.ok });
       messages.push({
         role: 'tool',
         tool_call_id: tc.id,
@@ -656,6 +689,10 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
 
   let finalText = '';
   let iter = 0;
+  // FIX 2026-05-06 — track tool calls pra validador anti-currency
+  const toolCallsThisFire: ToolCallRecord[] = [];
+  let validationRetried = false;
+
   while (iter < MAX_TOOL_ITERATIONS) {
     iter++;
     let llmMsg: DeepSeekToolMessage;
@@ -667,7 +704,28 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
     }
     const toolCalls = llmMsg.tool_calls ?? [];
     if (toolCalls.length === 0) {
-      finalText = String(llmMsg.content || '').trim();
+      const candidate = String(llmMsg.content || '').trim();
+      const v = validateOutput(candidate, toolCallsThisFire);
+      if (!v.ok && !validationRetried) {
+        logger.warn(`[col-agent.runFromFire] output_validator BLOQUEOU card=${card.id} reason=${v.reason} matches=[${v.detectedMatches?.join(',')}] — retry`);
+        recordAgentMetric({
+          tenantId, columnId: column.id, cardId: card.id,
+          event: 'blocked', reason: `output_validator_${v.reason}_inactivity`,
+        });
+        messages.push({ role: 'assistant', content: candidate });
+        messages.push({ role: 'user', content: v.feedback || 'Refaça sem inventar valor.' });
+        validationRetried = true;
+        continue;
+      }
+      if (!v.ok && validationRetried) {
+        logger.error(`[col-agent.runFromFire] output_validator BLOQUEOU 2x card=${card.id} — abort`);
+        recordAgentMetric({
+          tenantId, columnId: column.id, cardId: card.id,
+          event: 'blocked', reason: `output_validator_${v.reason}_persistent_inactivity`,
+        });
+        return { status: 'blocked', reason: 'meta_commentary' };
+      }
+      finalText = candidate;
       break;
     }
     messages.push({ role: 'assistant', content: llmMsg.content ?? '', tool_calls: toolCalls });
@@ -686,6 +744,7 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
 
     for (const tc of toolCalls) {
       const result = await executeToolCall(tc, toolCtx);
+      toolCallsThisFire.push({ name: tc.function.name, ok: result.ok });
       messages.push({
         role: 'tool', tool_call_id: tc.id, name: tc.function.name,
         content: JSON.stringify(result),
