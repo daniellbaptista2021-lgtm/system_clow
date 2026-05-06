@@ -11,6 +11,7 @@
  *   7. Update channel.lastInboundAt
  */
 
+import { logger } from '../utils/logger.js';
 import * as store from './store.js';
 import { getCrmDb } from './schema.js';
 import * as meta from './channels/meta.js';
