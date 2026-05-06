@@ -79,3 +79,62 @@ describe('parseFollowupDate — formatos invalidos', () => {
     expect(parseFollowupDate('texto qualquer')).toBeNull();
   });
 });
+
+describe('parseFollowupDate — formatos novos (HARDENING 4)', () => {
+  it('aceita "+24 horas" (PT-BR completo)', () => {
+    const before = Date.now();
+    const t = parseFollowupDate('+24 horas')!;
+    expect(t).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000 - 100);
+  });
+
+  it('aceita "+2 dias"', () => {
+    const before = Date.now();
+    const t = parseFollowupDate('+2 dias')!;
+    expect(t).toBeGreaterThanOrEqual(before + 2 * 24 * 60 * 60 * 1000 - 100);
+  });
+
+  it('aceita "+1 dia" singular', () => {
+    const before = Date.now();
+    const t = parseFollowupDate('+1 dia')!;
+    expect(t).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000 - 100);
+  });
+
+  it('aceita "+30min" / "+30 minutos"', () => {
+    const before = Date.now();
+    const a = parseFollowupDate('+30min')!;
+    const b = parseFollowupDate('+30 minutos')!;
+    expect(a).toBeGreaterThanOrEqual(before + 30 * 60 * 1000 - 100);
+    expect(b).toBeGreaterThanOrEqual(before + 30 * 60 * 1000 - 100);
+  });
+
+  it('aceita "24h" sem +', () => {
+    const before = Date.now();
+    const t = parseFollowupDate('24h')!;
+    expect(t).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000 - 100);
+  });
+
+  it('aceita "YYYY-MM-DD HH:MM" sem T (BRT)', () => {
+    const t = parseFollowupDate('2026-05-08 14:00');
+    expect(t).toBe(Date.UTC(2026, 4, 8, 17, 0, 0));
+  });
+
+  it('aceita "YYYY-MM-DD HH:MM:SS" sem T', () => {
+    const t = parseFollowupDate('2026-05-08 14:30:45');
+    expect(t).toBe(Date.UTC(2026, 4, 8, 17, 30, 45));
+  });
+
+  it('aceita BR sem zero-pad "8/5/2026"', () => {
+    const t = parseFollowupDate('8/5/2026');
+    expect(t).toBe(Date.UTC(2026, 4, 8, 17, 0, 0));
+  });
+
+  it('aceita BR sem zero-pad com hora "8/5/2026 9:30"', () => {
+    const t = parseFollowupDate('8/5/2026 9:30');
+    expect(t).toBe(Date.UTC(2026, 4, 8, 12, 30, 0));
+  });
+
+  it('continua null pra "amanhã" (texto natural não suportado)', () => {
+    expect(parseFollowupDate('amanhã')).toBeNull();
+    expect(parseFollowupDate('hoje à noite')).toBeNull();
+  });
+});

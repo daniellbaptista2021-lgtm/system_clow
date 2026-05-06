@@ -263,8 +263,11 @@ const agendarFollowup: ToolDef = {
 
     const t = parseFollowupDate(quando);
     if (t === null) {
-      logger.warn(`[tool.agendar_followup] BLOQUEADO card=${ctx.card.id} quando="${quando}" formato_invalido`);
-      return { ok: false, error: `formato_invalido: "${quando}". Use ISO ("2026-05-08T14:00:00Z"), "DD/MM/YYYY HH:MM", ou "+24h" (horas) / "+2d" (dias).` };
+      // Daniel 2026-05-06: log no nivel ERROR pra agregar inputs rejeitados
+      // facilmente; serve pra expandir parser depois com base nos formatos
+      // reais que LLM está tentando passar.
+      logger.error(`[tool.agendar_followup] formato_invalido card=${ctx.card.id} quando_raw="${quando}" role=${ctx.role}`);
+      return { ok: false, error: `formato_invalido: "${quando}". Aceito: "+24h"/"+2d"/"+30min"/"+24 horas"/"+2 dias", "2026-05-08", "2026-05-08 14:00", "08/05/2026 14:00", ou ISO 8601 completo.` };
     }
 
     // Tolerância de 60s no passado (cobre latência LLM); senão soma 1h.
@@ -293,32 +296,49 @@ const agendarFollowup: ToolDef = {
 /** Parser permissivo pra agendar_followup. Retorna timestamp ms ou null.
  *  Ordem dos checks importa: regex BR/date-only ANTES de Date.parse, senão
  *  Date.parse interpreta "08/05/2026" como US (Aug 5) ou "2026-05-08" como
- *  00h UTC (em vez de 14h BRT que queremos). */
+ *  00h UTC (em vez de 14h BRT que queremos).
+ *
+ *  Daniel 2026-05-06: ~16 falhas/sem com formato_invalido. Expandir pra
+ *  cobrir formatos extras que o LLM tende a passar:
+ *    - "+24 horas" / "+2 dias" (PT-BR com palavra)
+ *    - "YYYY-MM-DD HH:MM" sem T separator
+ *    - "D/M/YYYY" sem zero-pad
+ *    - "amanhã" / "hoje à noite" — NÃO suportado (peça pra LLM usar +Nh)
+ */
 export function parseFollowupDate(raw: string): number | null {
   const s = raw.trim();
-  // 1) "+Nh" / "+Nd" — relativo
-  const rel = s.match(/^\+\s*(\d+)\s*([hd])$/i);
+  // 1) "+Nh" / "+Nd" / "+N horas" / "+N dias" — relativo (PT/EN abreviado/completo)
+  const rel = s.match(/^\+?\s*(\d+)\s*(h(?:oras?)?|d(?:ias?)?|min(?:utos?)?)\.?$/i);
   if (rel) {
     const n = Number(rel[1]);
-    const unit = rel[2]!.toLowerCase();
+    const unitRaw = rel[2]!.toLowerCase();
     if (n > 0 && n < 1500) {
-      const ms = unit === 'h' ? n * 60 * 60 * 1000 : n * 24 * 60 * 60 * 1000;
+      let ms: number;
+      if (unitRaw.startsWith('min')) ms = n * 60 * 1000;
+      else if (unitRaw.startsWith('h')) ms = n * 60 * 60 * 1000;
+      else ms = n * 24 * 60 * 60 * 1000; // dias
       return Date.now() + ms;
     }
   }
   // 2) "YYYY-MM-DD" só data → assume 14h BRT (UTC-3) = 17h UTC.
-  //    CHECA ANTES de Date.parse senão ele retorna 00h UTC.
   const dateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnly) {
     const [, y, m, d] = dateOnly;
     return Date.UTC(Number(y), Number(m) - 1, Number(d), 17, 0, 0);
   }
-  // 3) "DD/MM/YYYY HH:MM" ou "DD/MM/YYYY" — formato BR.
-  //    CHECA ANTES de Date.parse senão ele interpreta como US (MM/DD/YYYY).
-  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  // 2b) "YYYY-MM-DD HH:MM" sem T separator → BRT (UTC-3).
+  const dateTimeNoT = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (dateTimeNoT) {
+    const [, y, m, d, hh, mm, ss = '0'] = dateTimeNoT;
+    // Se tem 'T' e termina com Z/+/-, deixa pro Date.parse no passo 4.
+    if (!/[Z+]/.test(s) && !/-\d{2}:\d{2}$/.test(s)) {
+      return Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) + 3, Number(mm), Number(ss));
+    }
+  }
+  // 3) "D/M/YYYY [HH:MM]" — formato BR (com ou sem zero-pad).
+  const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
   if (br) {
     const [, d, m, y, hh = '14', mm = '00'] = br;
-    // BRT (UTC-3) → soma 3h pra UTC
     return Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) + 3, Number(mm), 0);
   }
   // 4) ISO 8601 completo (com TZ). Date.parse trata.
@@ -373,21 +393,24 @@ const lerDadosCard: ToolDef = {
   },
   execute(args, ctx) {
     const wantsUnmask = args.unmask === true;
+    const isColetor = ctx.role === 'coletor_dados' || ctx.role === 'coletor';
     const fresh = getCardAgentState(ctx.card.id) ?? ctx.state;
     const collected = (fresh.collectedData ?? {}) as Record<string, unknown>;
     const qualification = collected.qualification ?? null;
     const sensitive = (collected.sensitive ?? null) as SensitiveBag | null;
 
     let sensitiveOut: Record<string, string> | Record<string, unknown>;
-    if (wantsUnmask) {
-      if (ctx.role !== 'coletor_dados' && ctx.role !== 'coletor') {
-        // Defesa em profundidade: outros roles nunca veem PII em claro.
-        // PR 7.0: aceita 'coletor' (novo nome) alem de 'coletor_dados' (deprecated).
-        return { ok: false, error: 'unmask_only_for_coletor' };
-      }
-      // Decifra tudo (so role coletor_dados chega aqui)
+    let unmaskIgnored = false;
+    if (wantsUnmask && isColetor) {
       sensitiveOut = decryptAllSensitive(sensitive);
     } else {
+      // Daniel 2026-05-06: vendedor chama unmask=true em ~65/sem (loop de
+      // tool_failed que custa tokens e atrasa resposta). Em vez de falhar
+      // com permission_denied — vendedor não precisa PII em claro mesmo —
+      // retorna sucesso mascarado e sinaliza unmask_ignored. PII fica
+      // protegida; LLM consome qualification + last_quotation que é o que
+      // ele realmente usa.
+      if (wantsUnmask && !isColetor) unmaskIgnored = true;
       sensitiveOut = maskAllSensitive(sensitive);
     }
 
@@ -407,6 +430,7 @@ const lerDadosCard: ToolDef = {
         last_quotation: lastQuotation,
         column: { id: ctx.column.id, name: ctx.column.name, role: ctx.role },
         turns: fresh.turnsCount,
+        ...(unmaskIgnored ? { unmask_ignored: true, unmask_ignored_reason: `role=${ctx.role} sem permissão; dados retornados mascarados` } : {}),
       },
     };
   },
