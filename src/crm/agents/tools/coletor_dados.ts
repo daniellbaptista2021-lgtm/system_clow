@@ -1,6 +1,6 @@
 /**
  * Tools do role 'coletor_dados' — coleta dados pra emissao da proposta
- * SulAmerica AP Flex (PR 5.1), valida formato, cifra dados sensiveis,
+ * Plano Funeral SulAmérica (PR 5.1), valida formato, cifra dados sensiveis,
  * e promove pro Daniel humano.
  *
  * Coleta os 17 campos requeridos:
@@ -146,7 +146,7 @@ interface DadosProposta {
 
 const salvarDadosProposta: ToolDef = {
   name: 'salvar_dados_proposta',
-  description: 'Salva dados pessoais do titular e dependentes pra proposta SulAmerica AP Flex. Cada campo eh cifrado individualmente (AES-256-GCM). Chame multiplas vezes — faz merge. Campos do titular: nome_completo, cpf, rg, data_nascimento, sexo, estado_civil, nacionalidade, nome_mae, dia_vencimento (1-28), celular, email, cep, endereco_completo (objeto), profissao, altura, peso. Dependentes: array de { nome_completo, parentesco, cpf, data_nascimento }. NUNCA salva senha ou cartao.',
+  description: 'Salva dados pessoais do titular e dependentes pra proposta Plano Funeral SulAmérica. Cada campo eh cifrado individualmente (AES-256-GCM). Chame multiplas vezes — faz merge. Campos do titular: nome_completo, cpf, rg, data_nascimento, sexo, estado_civil, nacionalidade, nome_mae, dia_vencimento (1-28), celular, email, cep, endereco_completo (objeto), profissao, altura, peso. Dependentes: array de { nome_completo, parentesco, cpf, data_nascimento }. NUNCA salva senha ou cartao.',
   roles: ['coletor_dados', 'coletor', 'vendedor', 'vendedor_funeral'],
   parameters: {
     type: 'object',

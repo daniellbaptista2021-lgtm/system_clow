@@ -1,7 +1,7 @@
 /**
- * sulamericaRules — regras de cotacao SulAmerica AP Flex (PR 5.1, Onda 62).
+ * sulamericaRules — regras de cotacao Plano Funeral SulAmérica (PR 5.1, Onda 62).
  *
- * Substitui o antigo realPaxRules.ts. SulAmerica AP Flex tem 4 modalidades
+ * Substitui o antigo sulamericaPlanoRules.ts. Plano Funeral SulAmérica tem 4 modalidades
  * com selecao automatica baseada na composicao familiar do lead:
  *
  *   1. Individual (R$ 29,90)         — só titular
@@ -18,8 +18,8 @@
  *     dependente de outro titular (filho/parente).
  *
  * Memorias do Daniel:
- *   - SEMPRE escrever "AP Flex" ou "Acidentes Pessoais Flex" — NUNCA "Real Pax"
- *   - Cobertura nacional, SEM surcharge regional ("fora do Rio" era do Real Pax)
+ *   - SEMPRE escrever "Plano Funeral SulAmérica" ou "Acidentes Pessoais Flex" — NUNCA "Plano Funeral SulAmérica"
+ *   - Cobertura nacional, SEM surcharge regional ("fora do Rio" era do Plano Funeral SulAmérica)
  *   - "Familiar" eh R$ 49,90, NAO R$ 59,90 (corrigido nesse PR)
  *   - Foco em beneficios EM VIDA (telemedicina, sorteios, descontos farmacia)
  */
@@ -36,7 +36,7 @@ import type {
 export const SULAMERICA_BASE_PRICES_CENTS: Record<Modalidade, number> = {
   individual: 2990,         // R$ 29,90
   casal: 3990,              // R$ 39,90
-  familiar: 4990,           // R$ 49,90 (corrigido — era 5990 no Real Pax)
+  familiar: 4990,           // R$ 49,90 (corrigido — era 5990 no Plano Funeral SulAmérica)
   familiar_ampliado: 8990,  // R$ 89,90
 };
 
@@ -45,16 +45,16 @@ export const DEPENDENTE_EXTRA_SURCHARGE_CENTS = 1000; // +R$ 10 cada
 
 export const TITULAR_MAX_AGE = 74;
 
-/** Heuristica: detecta planos SulAmerica pelo nome (substring "AP Flex" ou "SulAmérica"). */
+/** Heuristica: detecta planos SulAmerica pelo nome (substring "Plano Funeral SulAmérica" ou "SulAmérica"). */
 export function isSulamericaPlan(plan: TenantPlan): boolean {
   return /\bAP\s*Flex\b/i.test(plan.name) || /\bSulAm[ée]rica\b/i.test(plan.name);
 }
 
-/** Defesa: se nome do plano contiver "Real Pax" (cadastro errado), substitui
- *  por "SulAmérica AP Flex". Memoria do Daniel — produto antigo nao existe mais. */
+/** Defesa: se nome do plano contiver "Plano Funeral SulAmérica" (cadastro errado), substitui
+ *  por "Plano Funeral SulAmérica". Memoria do Daniel — produto antigo nao existe mais. */
 export function scrubPlanName(name: string): string {
   return name
-    .replace(/\bReal\s*Pax\b/gi, 'SulAmérica AP Flex')
+    .replace(/\bReal\s*Pax\b/gi, 'Plano Funeral SulAmérica')
     .replace(/\bPopular\b/gi, 'Essencial');
 }
 
@@ -98,7 +98,7 @@ export interface PriceResult {
 }
 
 /**
- * Calcula o preco final SulAmerica AP Flex aplicando:
+ * Calcula o preco final Plano Funeral SulAmérica aplicando:
  *  1. base por modalidade (individual / casal / familiar / familiar_ampliado)
  *  2. + R$ 8 cada filho >21
  *  3. + R$ 10 cada dependente extra
@@ -180,7 +180,7 @@ const MODALIDADE_LABEL: Record<Modalidade, string> = {
 };
 
 /**
- * Renderiza a mensagem completa SulAmerica AP Flex no formato exato do
+ * Renderiza a mensagem completa Plano Funeral SulAmérica no formato exato do
  * n8n tool fornecido pelo Daniel. Texto inteiro vai como userVisible
  * pra o LLM mandar palavra-por-palavra (sem reformular).
  */

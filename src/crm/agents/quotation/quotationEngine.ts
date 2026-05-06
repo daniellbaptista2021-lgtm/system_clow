@@ -1,7 +1,7 @@
 /**
- * quotationEngine — pipeline de cotacao SulAmerica AP Flex (PR 5.1, Onda 62).
+ * quotationEngine — pipeline de cotacao Plano Funeral SulAmérica (PR 5.1, Onda 62).
  *
- * Substitui a versao anterior baseada em Real Pax. Usa as regras de
+ * Substitui a versao anterior baseada em Plano Funeral SulAmérica. Usa as regras de
  * sulamericaRules.ts:
  *   - selecao automatica de modalidade (Individual/Casal/Familiar/Familiar Ampliado)
  *   - calculo de preco com adicionais (filhos>21 e dependentes extras)

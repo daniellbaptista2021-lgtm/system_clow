@@ -161,7 +161,7 @@ export type AgentMetricEvent =
 // ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
 export type ProductType =
   | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial'
-  | 'acidentes_pessoais' // PR 5.1: SulAmerica AP Flex
+  | 'acidentes_pessoais' // PR 5.1: Plano Funeral SulAmérica
   | 'outro';
 
 export interface TenantPlan {
@@ -185,7 +185,7 @@ export interface TenantPlan {
 
 /** Dados que o cotador usa pra calcular o preco. Vem de
  *  state.collected_data.qualification + extras passados pela tool.
- *  PR 5.1: estrutura ajustada pra SDR SulAmerica AP Flex. */
+ *  PR 5.1: estrutura ajustada pra SDR Plano Funeral SulAmérica. */
 export type Modalidade = 'individual' | 'casal' | 'familiar' | 'familiar_ampliado';
 
 export interface QualificationData {

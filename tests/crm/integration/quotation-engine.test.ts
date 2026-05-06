@@ -1,5 +1,5 @@
 /**
- * Quotation engine + tools SulAmerica AP Flex (Onda 62, PR 5.1).
+ * Quotation engine + tools Plano Funeral SulAmérica (Onda 62, PR 5.1).
  *
  * Cobre os 12 cenarios principais + edge cases:
  *  1. Cliente curioso "tô só vendo" → Qualificador NAO promove (testado em column-agent-tools)
@@ -11,7 +11,7 @@
  *  7. Cliente 76 anos → recusa, oferece como dependente (erro titular_acima_idade_maxima)
  *  8. Cliente pede desconto → consultar_margem_desconto retorna 0%
  *  9. CPF "137.44793737" → invalido (formato bagunçado)
- * 10. Mensagem NAO contem "Real Pax" em lugar nenhum
+ * 10. Mensagem NAO contem "Plano Funeral SulAmérica" em lugar nenhum
  * 11. Mensagem NAO menciona "10% desconto"
  * 12. Mensagem NAO promete que ela mesma fecha venda (fluxo da contratacao 4 passos)
  *
@@ -28,7 +28,7 @@ const TEST_DB_PATH = '/tmp/clow-pr51-' + randomBytes(6).toString('hex') + '.db';
 process.env.CRM_DB_PATH = TEST_DB_PATH;
 process.env.CLOW_PII_KEY = 'pr51-test-key-with-min-16-chars';
 
-describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
+describe('Quotation Engine Plano Funeral SulAmérica (PR 5.1)', () => {
   let schema: any, store: any, agentState: any, plansStore: any, engine: any, registry: any, rules: any;
 
   beforeAll(async () => {
@@ -53,26 +53,26 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
   /** Seed os 4 planos SulAmerica pro tenant. */
   function seedSulamericaPlans(tenantId: string) {
     plansStore.createPlan({
-      tenantId, name: 'SulAmérica AP Flex Individual',
+      tenantId, name: 'Plano Funeral SulAmérica Individual',
       productType: 'acidentes_pessoais', basePriceCents: 2990,
       coverageSummary: 'Assistência funeral nacional + R$50k morte acidental.',
       minAge: 1, maxAge: 74, surchargeOutsideRioCents: 0, priority: 10,
     });
     plansStore.createPlan({
-      tenantId, name: 'SulAmérica AP Flex Casal',
+      tenantId, name: 'Plano Funeral SulAmérica Casal',
       productType: 'acidentes_pessoais', basePriceCents: 3990,
       coverageSummary: 'Cobertura titular + cônjuge.',
       minAge: 1, maxAge: 74, surchargeOutsideRioCents: 0, priority: 20,
     });
     plansStore.createPlan({
-      tenantId, name: 'SulAmérica AP Flex Familiar',
+      tenantId, name: 'Plano Funeral SulAmérica Familiar',
       productType: 'acidentes_pessoais', basePriceCents: 4990,
       coverageSummary: 'Titular + cônjuge + filhos até 21.',
       minAge: 1, maxAge: 74, allowsDependents: true,
       surchargeOutsideRioCents: 0, priority: 30,
     });
     plansStore.createPlan({
-      tenantId, name: 'SulAmérica AP Flex Familiar Ampliado',
+      tenantId, name: 'Plano Funeral SulAmérica Familiar Ampliado',
       productType: 'acidentes_pessoais', basePriceCents: 8990,
       coverageSummary: 'Cobertura ampliada.',
       minAge: 1, maxAge: 74, allowsDependents: true,
@@ -247,7 +247,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     const tenantId = makeTenant();
     const ctx = setupCardCtx(tenantId, 'vendedor_funeral');
     const r = await registry.executeToolCall(
-      callTool('consultar_margem_desconto', { plano: 'SulAmérica AP Flex Familiar' }),
+      callTool('consultar_margem_desconto', { plano: 'Plano Funeral SulAmérica Familiar' }),
       ctx,
     );
     // Tool foi removida no PR 5.2 — registry retorna 'tool_unknown'
@@ -289,7 +289,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     expect((good2.result as any).valid).toBe(true);
   });
 
-  // ─── Scenario 10/11/12: Mensagem livre de "Real Pax" / "Popular" / "10% desconto" ──
+  // ─── Scenario 10/11/12: Mensagem livre de "Plano Funeral SulAmérica" / "Popular" / "10% desconto" ──
 
   it('10/11/12. Mensagem da cotação respeita memórias do Daniel', () => {
     const tenantId = makeTenant();
@@ -305,7 +305,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     expect(r.ok).toBe(true);
     const msg = r.message;
 
-    // 10. Sem "Real Pax"
+    // 10. Sem "Plano Funeral SulAmérica"
     expect(msg).not.toMatch(/Real\s*Pax/i);
     // Sem "Popular" (defesa scrubPlanName)
     expect(msg).not.toMatch(/\bPopular\b/i);
@@ -368,12 +368,12 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     expect(r.message).toMatch(/José/);
   });
 
-  // ─── Edge: scrub Real Pax → SulAmerica ──────────────────────────────
+  // ─── Edge: scrub Plano Funeral SulAmérica → SulAmerica ──────────────────────────────
 
-  it('Plano cadastrado errado com "Real Pax" eh scrubbed pra "SulAmerica AP Flex"', () => {
+  it('Plano cadastrado errado com "Plano Funeral SulAmérica" eh scrubbed pra "Plano Funeral SulAmérica"', () => {
     const tenantId = makeTenant();
     plansStore.createPlan({
-      tenantId, name: 'Real Pax Essencial Individual', // typo histórico
+      tenantId, name: 'Plano Funeral SulAmérica Individual', // typo histórico
       productType: 'acidentes_pessoais', basePriceCents: 2990,
       coverageSummary: 'Cobertura básica.',
       minAge: 1, maxAge: 74, surchargeOutsideRioCents: 0, priority: 10,
@@ -383,8 +383,8 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
       qualification: { idadeTitular: 35 },
     });
     expect(r.ok).toBe(true);
-    expect(r.snapshot.plans[0].name).toBe('SulAmérica AP Flex Essencial Individual');
-    expect(rules.scrubPlanName('Real Pax Essencial')).toBe('SulAmérica AP Flex Essencial');
+    expect(r.snapshot.plans[0].name).toBe('Plano Funeral SulAmérica Essencial Individual');
+    expect(rules.scrubPlanName('Plano Funeral SulAmérica')).toBe('Plano Funeral SulAmérica Essencial');
   });
 
   // ─── Snapshot persistido ─────────────────────────────────────────────
@@ -444,7 +444,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
           productType: 'acidentes_pessoais',
           modalidade: 'individual',
           qualification: { nomeTitular: 'João', idadeTitular: 35, modalidade: 'individual' },
-          plans: [{ name: 'SulAmérica AP Flex Individual', basePriceCents: 2990, coverageSummary: 'x' }],
+          plans: [{ name: 'Plano Funeral SulAmérica Individual', basePriceCents: 2990, coverageSummary: 'x' }],
           calculatedAt: Date.now(),
         },
       },

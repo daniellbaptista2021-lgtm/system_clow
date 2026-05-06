@@ -4,7 +4,7 @@
  * Substitui o antigo 'educador' (PR 5.2) e 'cotador'/'closer' (PR 5.1).
  * Vendedor Funeral COTA, APRESENTA VALOR, RESPONDE OBJEÇÕES, FECHA A
  * VENDA. Não SDR, não educador — é VENDEDOR de fato, com autoridade
- * pra conduzir a venda do plano funeral SulAmérica AP Flex SOZINHO.
+ * pra conduzir a venda do plano funeral Plano Funeral SulAmérica SOZINHO.
  *
  * Tools expostas:
  *   - gerar_cotacao_sulamerica: cota + retorna mensagem oficial pronta
@@ -27,7 +27,7 @@ import type { QualificationData, Modalidade } from '../../types.js';
 
 const gerarCotacaoSulamerica: ToolDef = {
   name: 'gerar_cotacao_sulamerica',
-  description: 'Cota o plano funeral SulAmerica AP Flex e retorna mensagem oficial pronta pra mandar pro cliente (palavra-por-palavra do template). Le qualification do collected_data automaticamente — voce so precisa passar dados que o cliente DEU AGORA e nao estavam salvos. Salva snapshot em collected_data.last_quotation. Use userVisible direto, NAO reformule.',
+  description: 'Cota o plano funeral Plano Funeral SulAmérica e retorna mensagem oficial pronta pra mandar pro cliente (palavra-por-palavra do template). Le qualification do collected_data automaticamente — voce so precisa passar dados que o cliente DEU AGORA e nao estavam salvos. Salva snapshot em collected_data.last_quotation. Use userVisible direto, NAO reformule.',
   roles: ['vendedor_funeral', 'vendedor', 'cotador'],
   parameters: {
     type: 'object',
@@ -160,7 +160,7 @@ const promoverParaColetorDados: ToolDef = {
 };
 
 // Daniel 2026-05-06: gerarCotacaoSulamerica DESATIVADA. Calculava offline com
-// regras Real Pax (R$29,90/39,90/49,90/89,90 modalidades) que NAO existem
+// regras Plano Funeral SulAmérica (R$29,90/39,90/49,90/89,90 modalidades) que NAO existem
 // no produto real. Vazou cotacao errada pro cliente Paulo moura
 // (R$ 49,90 Familiar com urna/coroa/ornamentacao). Substituida por
 // cotar_sulamerica_api (cotacao_sulamerica.ts) que chama API oficial.

@@ -339,6 +339,54 @@ describe('Patterns 44-49 — incidente Follow Up 2026-05-06', () => {
   });
 });
 
+describe('Patterns 50-54 — vazamentos Follow Up (Daniel 2026-05-06 feedback)', () => {
+  it('bloqueia "Vou agora fazer as 4 perguntas na ordem" (caso Maricleide)', () => {
+    expect(
+      looksLikeMetaCommentary('Vou agora fazer as 4 perguntas na ordem pra montar a cotação certinha')
+    ).toBe(true);
+  });
+
+  it('bloqueia "Vou pedir 5 dados" (variação)', () => {
+    expect(looksLikeMetaCommentary('Vou pedir 5 dados pra finalizar')).toBe(true);
+  });
+
+  it('bloqueia "Vou dar uma leve cobrada" (caso Maricleide)', () => {
+    expect(
+      looksLikeMetaCommentary('Vou dar uma leve cobrada, já que a última pergunta ficou sem resposta.')
+    ).toBe(true);
+  });
+
+  it('bloqueia "Vou mandar uma cutucada"', () => {
+    expect(looksLikeMetaCommentary('Vou mandar uma cutucada agora')).toBe(true);
+  });
+
+  it('bloqueia "cotação automática" (caso Adilson)', () => {
+    expect(
+      looksLikeMetaCommentary('infelizmente não consigo fazer a cotação automática pra você')
+    ).toBe(true);
+  });
+
+  it('bloqueia "fluxo do bot"', () => {
+    expect(looksLikeMetaCommentary('o fluxo do bot está configurado pra')).toBe(true);
+  });
+
+  it('bloqueia "Já tenho os dados"', () => {
+    expect(looksLikeMetaCommentary('Ótimo! Já tenho os dados.')).toBe(true);
+  });
+
+  it('bloqueia "Vou agora prosseguir com a cotação"', () => {
+    expect(looksLikeMetaCommentary('Vou agora prosseguir com a cotação')).toBe(true);
+  });
+
+  it('NÃO bloqueia "Vou fazer 30 anos esse mês" (números soltos sem meta)', () => {
+    expect(looksLikeMetaCommentary('Vou fazer 30 anos esse mês')).toBe(false);
+  });
+
+  it('NÃO bloqueia "Vou seguir suas orientações" (sem mandar cobrada)', () => {
+    expect(looksLikeMetaCommentary('Vou seguir suas orientações com calma')).toBe(false);
+  });
+});
+
 describe('isReplyEmptyish — barra texto inutilizavel', () => {
   it('detecta string vazia', () => {
     expect(isReplyEmptyish('')).toBe(true);

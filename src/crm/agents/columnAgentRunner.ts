@@ -1132,6 +1132,22 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /^\s*(hmm+|hum+|mmm+|n[oó]ssa+|opa+|epa+)\s*[,.!]?\s+(a\s+|o\s+|j[aá]\s+|essa|esse|isso|tag|status)/i,
     // 49) Combinacao "Tag X. Vou Y." (pattern de duas frases meta encadeadas)
     /\btag\s+[\wáéíóúâêôãõç\s]+\.\s+vou\s+(seguir|enviar|mandar|aplicar)/i,
+    // FIX 2026-05-06 — vazamentos novos pegos no Follow Up (Daniel feedback):
+    // 50) "Vou agora fazer/dar/pedir/montar/coletar as N perguntas/dados/coisas"
+    //     (caso Maricleide "Vou agora fazer as 4 perguntas na ordem pra montar a cotação")
+    /\bvou\s+(agora\s+)?(fazer|dar|pedir|montar|coletar|abrir|disparar)\s+(as\s+|os\s+|a\s+|o\s+)?\d+\s+(perguntas?|d[uú]vidas?|dados|coisas?|passos?|etapas?)/i,
+    // 51) "Vou (dar|fazer) uma cobrada/cobrança" — meta-narração de cobrança
+    //     (caso Maricleide "Vou dar uma leve cobrada")
+    /\bvou\s+(dar|fazer|mandar)\s+(uma\s+|um\s+)?(leve\s+|gentil\s+|firme\s+|simples\s+)?(cobrada|cobran[cç]a|cutucada|sacudida|alfinetada|insist[eê]ncia)/i,
+    // 52) "cotação automática" / "cotação automatica" — vazamento técnico
+    //     (caso Adilson "não consigo fazer a cotação automática pra você")
+    /\bcota[cç][aã]o\s+autom[aá]tica/i,
+    /\bsimula[cç][aã]o\s+autom[aá]tica/i,
+    // 53) "fluxo (do bot|da automacao|do sistema|do agente)" — termo técnico interno
+    /\b(o\s+|a\s+)?fluxo\s+(do\s+(bot|sistema|agente|atendimento)|da\s+(automa[cç][aã]o|conversa|venda))/i,
+    // 54) "Já tenho os dados" / "Vou agora seguir" / "Vou prosseguir" — narração pré-pergunta
+    /\bj[aá]\s+tenho\s+(os\s+|todos\s+(os\s+)?)?dados/i,
+    /\bvou\s+(agora\s+)?(prosseguir|continuar)\s+(com\s+|pra\s+|para\s+|na\s+|no\s+)/i,
   ];
   return patterns.some((p) => p.test(t));
 }
