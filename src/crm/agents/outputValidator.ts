@@ -46,17 +46,47 @@ const FORBIDDEN_TERMS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
   { pattern: /calcular\s+ao\s+vivo/i, label: 'calcular ao vivo' },
 ];
 
-/** Piso de mensalidade aplicado pela tool (ver cotacao_sulamerica.ts).
- *  Plano individual: R$ 29,90. Plano familiar: R$ 39,90. Aqui usamos o
- *  MAIS BAIXO dos dois (R$ 29,90 = 2990 cents) como piso absoluto de venda:
- *  qualquer valor mensal abaixo é alucinação ou bug histórico. */
-const PISO_MENSAL_CENTS_ABS = 2990;
+/** Piso absoluto de qualquer valor mensal/adicional citado.
+ *  Daniel 2026-05-06: menor valor válido da tabela é R$ 12 (adicional pra
+ *  filho > 21). Mensal mínimo é R$ 29,90 (cobertura via whitelist). Piso
+ *  aqui é o MENOR — abaixo disso é alucinação cierta (R$ 9,98 caso Claudio,
+ *  R$ 5/8/10 promoções inventadas). */
+const PISO_MENSAL_CENTS_ABS = 1200;
 
 /** Tolerância pra divergência entre valor citado e última cotação salva.
  *  Se o LLM cita R$ XX,XX e last_quotation_cents existe, o valor citado
  *  precisa estar dentro de ±15% (margem cobre arredondamento e variação
  *  por capital escolhido). Fora disso, bloqueia. */
 const QUOTE_DIVERGENCE_TOLERANCE = 0.15;
+
+/** Whitelist computada da tabela oficial Daniel 2026-05-06 + variantes
+ *  com Médico na Tela + adicionais (filho>21 R$12 + outros R$14, até 8
+ *  cada — cobertura folgada).
+ *
+ *  Bloqueia mensalidade in-range (R$ 10 a R$ 200) que não bate com
+ *  nenhuma combinação válida. Capital (R$ 50 mil, R$ 500 etc) e valores
+ *  altos passam (filtrados antes). */
+const WHITELIST_MENSAL_CENTS: ReadonlySet<number> = (() => {
+  const s = new Set<number>();
+  const PRINCIPAIS = [2990, 3990, 4990, 5990, 8990, 10990];
+  const MEDICO_TELA = [0, 1400];
+  const FILHO21 = 1200;
+  const OUTRO_DEP = 1400;
+  // Adicionais isolados (mensagem do tipo "R$ 12 cada filho")
+  s.add(FILHO21);
+  s.add(OUTRO_DEP);
+  for (const med of MEDICO_TELA) {
+    for (const p of PRINCIPAIS) {
+      const base = p + med;
+      for (let n = 0; n <= 8; n++) {
+        for (let m = 0; m <= 8; m++) {
+          s.add(base + n * FILHO21 + m * OUTRO_DEP);
+        }
+      }
+    }
+  }
+  return s;
+})();
 
 /** Resultado da validação. */
 export interface OutputValidation {
@@ -65,7 +95,8 @@ export interface OutputValidation {
     | 'unbacked_currency'
     | 'forbidden_term'
     | 'price_below_floor'
-    | 'price_diverged_from_quote';
+    | 'price_diverged_from_quote'
+    | 'price_off_table';
   detectedMatches?: string[];
   /** Mensagem actionable pro LLM regenerar (vai como tool_response). */
   feedback?: string;
@@ -85,11 +116,18 @@ export interface ValidationContext {
   lastQuotationCents?: number;
 }
 
+/** Detecta se um match de R$ está num contexto que NÃO é mensalidade.
+ *  Olha 30 chars depois do match. Inclui: "por dia", "diária", "/dia",
+ *  "de internação", "de capital", "de cobertura", "de indenização",
+ *  "mil de", "milhão de", "de teto". */
+const NON_MONTHLY_CONTEXT = /\s*(?:por\s+dia|di[aá]ria|\/\s*dia|de\s+(?:internac[aã]o|interna[cç][aã]o|capital|cobertura|indeniza[cç][aã]o|teto)|por\s+noite|por\s+acidente)/i;
+
 /** Tenta interpretar um match de R$ XX como cents.
- *  Ignora valores com "mil"/"milhão" (capital, não mensalidade) e valores
- *  >= R$ 10.000 (provavelmente capital também). Retorna null se não for
- *  classificável como mensalidade. */
-function parseMonthlyToCents(match: string): number | null {
+ *  Ignora valores com "mil"/"milhão" (capital, não mensalidade), valores
+ *  >= R$ 10.000 (capital também) e valores num contexto de "por dia /
+ *  internação / capital / etc". Retorna null se não for classificável
+ *  como mensalidade ou adicional. */
+function parseMonthlyToCents(match: string, fullText?: string, matchIndex?: number): number | null {
   const m = match.toLowerCase();
   if (/mil|milh/.test(m)) return null; // capital
   // Extrai dígitos com vírgula/ponto
@@ -112,6 +150,11 @@ function parseMonthlyToCents(match: string): number | null {
   if (!Number.isFinite(cents) || cents <= 0) return null;
   // > R$ 10.000 = capital, não mensalidade
   if (cents > 1_000_000) return null;
+  // Detecta contexto de NÃO-mensalidade (diária, capital, indenização)
+  if (fullText && typeof matchIndex === 'number') {
+    const after = fullText.slice(matchIndex + match.length, matchIndex + match.length + 30);
+    if (NON_MONTHLY_CONTEXT.test(after)) return null;
+  }
   return cents;
 }
 
@@ -142,8 +185,12 @@ export function validateOutput(
   // ───────────────────────────────────────────────────────────────────
   // 2) Valores monetários
   // ───────────────────────────────────────────────────────────────────
-  const matches = text.match(MONEY_REGEX);
-  if (!matches || matches.length === 0) {
+  // matchAll preserva índice — necessário pra regra de contexto
+  // (parseMonthlyToCents olha 30 chars depois do match pra detectar
+  // "por dia", "diária", "de capital" etc).
+  const matchData = [...text.matchAll(MONEY_REGEX)];
+  const matches = matchData.map((m) => m[0]);
+  if (matches.length === 0) {
     return { ok: true };
   }
 
@@ -162,19 +209,19 @@ export function validateOutput(
     };
   }
 
-  // 2b) Mensalidade abaixo do piso absoluto (R$ 29,90)
-  for (const match of matches) {
-    const cents = parseMonthlyToCents(match);
-    if (cents === null) continue; // não é mensalidade
+  // 2b) Mensalidade abaixo do piso absoluto (R$ 12 — menor adicional)
+  for (const m of matchData) {
+    const cents = parseMonthlyToCents(m[0], text, m.index!);
+    if (cents === null) continue; // não é mensalidade (capital/diária/etc)
     if (cents < PISO_MENSAL_CENTS_ABS) {
       return {
         ok: false,
         reason: 'price_below_floor',
-        detectedMatches: [match],
+        detectedMatches: [m[0]],
         feedback:
-          `BLOQUEADO: você citou ${match} como mensalidade, mas o piso absoluto de venda é R$ 29,90/mês (individual) ou R$ 39,90/mês (familiar). ` +
-          `NUNCA cite valor mensal abaixo de R$ 29,90 — não existe esse plano. ` +
-          `Se a tool de cotação retornou um valor menor, é bug — chame cotar_sulamerica_api de novo e use o total_cents corrigido. ` +
+          `BLOQUEADO: você citou ${m[0]} como valor mensal, abaixo do piso absoluto de R$ 12,00 (menor adicional da tabela). ` +
+          `NUNCA cite valor mensal abaixo disso — não existe. ` +
+          `Se a tool retornou valor menor, é bug — chame cotar_sulamerica_api de novo. ` +
           `Reescreva sem esse valor abaixo do piso.`,
       };
     }
@@ -185,8 +232,9 @@ export function validateOutput(
     const lastCents = context.lastQuotationCents;
     const minAccepted = Math.round(lastCents * (1 - QUOTE_DIVERGENCE_TOLERANCE));
     const maxAccepted = Math.round(lastCents * (1 + QUOTE_DIVERGENCE_TOLERANCE));
-    for (const match of matches) {
-      const cents = parseMonthlyToCents(match);
+    for (const m of matchData) {
+      const match = m[0];
+      const cents = parseMonthlyToCents(match, text, m.index!);
       if (cents === null) continue;
       // só valida se valor citado é razoavelmente próximo da escala da cotação
       // (mensal: 1k-100k cents = R$10 a R$1000). Capital já foi filtrado acima.
@@ -209,6 +257,32 @@ export function validateOutput(
         }
       }
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // 2d) Mensalidade fora da tabela oficial (Daniel 2026-05-06)
+  //     Bloqueia valores in-range (R$ 10–200) que não batem com nenhuma
+  //     combinação válida (apólice principal + Médico Tela + N filhos>21
+  //     + M outros dependentes). Capital (R$ 50 mil etc) é filtrado
+  //     antes via parseMonthlyToCents.
+  // ───────────────────────────────────────────────────────────────────
+  for (const m of matchData) {
+    const match = m[0];
+    const cents = parseMonthlyToCents(match, text, m.index!);
+    if (cents === null) continue;
+    if (WHITELIST_MENSAL_CENTS.has(cents)) continue;
+    // Out-of-table: provável alucinação
+    return {
+      ok: false,
+      reason: 'price_off_table',
+      detectedMatches: [match],
+      feedback:
+        `BLOQUEADO: você citou ${match} como mensalidade, mas esse valor não bate com nenhuma combinação válida da tabela oficial. ` +
+        `Valores válidos da apólice principal: R$ 29,90 / 39,90 / 49,90 / 59,90 / 89,90 / 109,90. ` +
+        `Variantes com Médico na Tela (+R$ 14): 43,90 / 53,90 / 63,90 / 73,90 / 103,90 / 123,90. ` +
+        `Adicionais separados: R$ 12 cada filho > 21, R$ 14 cada outro dependente. ` +
+        `Reescreva usando o valor exato que cotar_sulamerica_api retornou. NUNCA invente preço.`,
+    };
   }
 
   return { ok: true };

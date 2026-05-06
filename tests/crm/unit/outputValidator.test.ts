@@ -56,8 +56,8 @@ describe('validateOutput — anti-currency hallucination', () => {
   });
 
   describe('AUTORIZA: cotar_sulamerica_api foi chamada com sucesso', () => {
-    it('passa "R$ 50,00" se cotou com sucesso', () => {
-      const v = validateOutput('Sai por R$ 50,00/mês', [
+    it('passa "R$ 49,90" (tabela oficial) se cotou com sucesso', () => {
+      const v = validateOutput('Sai por R$ 49,90/mês', [
         { name: 'cotar_sulamerica_api', ok: true },
       ]);
       expect(v.ok).toBe(true);
@@ -70,8 +70,8 @@ describe('validateOutput — anti-currency hallucination', () => {
       expect(v.ok).toBe(true);
     });
 
-    it('passa múltiplos valores se cotou', () => {
-      const v = validateOutput('De R$ 50,00 a R$ 1.000,00 dependendo', [
+    it('passa múltiplos valores válidos se cotou', () => {
+      const v = validateOutput('De R$ 29,90 a R$ 109,90 dependendo do plano', [
         { name: 'cotar_sulamerica_api', ok: true },
       ]);
       expect(v.ok).toBe(true);
@@ -189,12 +189,13 @@ describe('validateOutput — piso de mensalidade (R$ 29,90 absoluto)', () => {
     expect(v.reason).toBe('price_below_floor');
   });
 
-  it('bloqueia R$ 25,90', () => {
+  it('bloqueia R$ 25,90 (entre piso e tabela — regra nova price_off_table)', () => {
     const v = validateOutput('Sai por R$ 25,90 mensais', [
       { name: 'cotar_sulamerica_api', ok: true },
     ]);
     expect(v.ok).toBe(false);
-    expect(v.reason).toBe('price_below_floor');
+    // 25,90 > piso (R$ 12) mas não está na whitelist da tabela
+    expect(v.reason).toBe('price_off_table');
   });
 
   it('passa R$ 29,90 (no piso)', () => {
@@ -238,50 +239,126 @@ describe('validateOutput — divergência da última cotação salva', () => {
     expect(['price_below_floor', 'price_diverged_from_quote']).toContain(v.reason);
   });
 
-  it('bloqueia LLM citando R$ 35,00 (diverge >15%) quando cotação foi R$ 76,62', () => {
+  it('bloqueia LLM citando R$ 29,90 quando cotação foi R$ 109,90 (diverge >15%)', () => {
     const v = validateOutput(
-      'Sai por R$ 35,00 mensais',
+      'Sai por R$ 29,90 mensais',
       [{ name: 'ler_dados_card', ok: true }],
-      { lastQuotationCents: 7662 },
+      { lastQuotationCents: 10990 },
     );
     expect(v.ok).toBe(false);
     expect(v.reason).toBe('price_diverged_from_quote');
   });
 
-  it('passa LLM citando R$ 76,62 quando cotação foi R$ 76,62', () => {
+  it('passa LLM citando R$ 49,90 quando cotação foi R$ 49,90', () => {
     const v = validateOutput(
-      'Plano fica R$ 76,62/mês',
+      'Plano fica R$ 49,90/mês',
       [{ name: 'cotar_sulamerica_api', ok: true }],
-      { lastQuotationCents: 7662 },
+      { lastQuotationCents: 4990 },
     );
     expect(v.ok).toBe(true);
   });
 
-  it('passa LLM citando R$ 80,00 quando cotação foi R$ 76,62 (dentro 15%)', () => {
+  it('passa LLM citando R$ 49,90 quando cotação foi R$ 49,90 (mesmo valor exato)', () => {
     const v = validateOutput(
-      'Plano fica R$ 80,00/mês',
+      'Plano fica R$ 49,90/mês',
       [{ name: 'cotar_sulamerica_api', ok: true }],
-      { lastQuotationCents: 7662 },
+      { lastQuotationCents: 4990 },
     );
     expect(v.ok).toBe(true);
   });
 
-  it('passa quando contexto não tem lastQuotationCents (regra desliga)', () => {
+  it('passa quando contexto não tem lastQuotationCents (e valor está na tabela)', () => {
     const v = validateOutput(
-      'Plano fica R$ 100,00/mês',
+      'Plano fica R$ 49,90/mês',
       [{ name: 'cotar_sulamerica_api', ok: true }],
       {},
     );
     expect(v.ok).toBe(true);
   });
 
-  it('lastQuotationCents permite citar valor mesmo sem chamar tool no turno', () => {
+  it('lastQuotationCents permite citar valor da tabela mesmo sem chamar tool no turno', () => {
     // cliente perguntou de novo após cotação salva — bot pode ecoar o valor
     const v = validateOutput(
-      'Como te disse, fica R$ 76,62/mês',
+      'Como te disse, fica R$ 49,90/mês',
       [{ name: 'ler_dados_card', ok: true }],
-      { lastQuotationCents: 7662 },
+      { lastQuotationCents: 4990 },
     );
     expect(v.ok).toBe(true);
+  });
+});
+
+describe('validateOutput — whitelist da tabela oficial (HARDENING 8)', () => {
+  it('bloqueia mensalidade R$ 76,62 (não está na tabela)', () => {
+    const v = validateOutput(
+      'Sai por R$ 76,62/mês',
+      [{ name: 'cotar_sulamerica_api', ok: true }],
+    );
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_off_table');
+  });
+
+  it('bloqueia mensalidade R$ 100,00 (sem tool, fora da tabela)', () => {
+    const v = validateOutput(
+      'Plano fica R$ 100,00/mês',
+      [{ name: 'cotar_sulamerica_api', ok: true }],
+    );
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('price_off_table');
+  });
+
+  it('passa todos os 6 valores principais', () => {
+    for (const v of ['29,90', '39,90', '49,90', '59,90', '89,90', '109,90']) {
+      const r = validateOutput(`Sai por R$ ${v}/mês`, [
+        { name: 'cotar_sulamerica_api', ok: true },
+      ]);
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it('passa variantes com Médico na Tela (+R$ 14)', () => {
+    for (const v of ['43,90', '53,90', '63,90', '73,90', '103,90', '123,90']) {
+      const r = validateOutput(`Sai por R$ ${v}/mês`, [
+        { name: 'cotar_sulamerica_api', ok: true },
+      ]);
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it('passa adicional isolado: filho>21 (R$ 12) e outro dependente (R$ 14)', () => {
+    expect(validateOutput('Cada filho: R$ 12,00', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]).ok).toBe(true);
+    expect(validateOutput('Outro dependente R$ 14,00 cada', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]).ok).toBe(true);
+  });
+
+  it('passa combinação principal + 1 filho>21 (R$ 49,90 + 12 = R$ 61,90)', () => {
+    const r = validateOutput('Total fica R$ 61,90/mês', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('passa capital R$ 50 mil (não é mensalidade)', () => {
+    const r = validateOutput('Indenização de R$ 50 mil em caso de acidente', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('passa diária R$ 500 (não é mensalidade)', () => {
+    const r = validateOutput('R$ 500 por dia de internação', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('feedback orienta o LLM a usar valores da tabela', () => {
+    const r = validateOutput('R$ 35,00 fica massa', [
+      { name: 'cotar_sulamerica_api', ok: true },
+    ]);
+    expect(r.feedback).toMatch(/29,90.*39,90.*49,90/);
+    expect(r.feedback).toMatch(/Médico na Tela|R\$ 14/);
   });
 });
