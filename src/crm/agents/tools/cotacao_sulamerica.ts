@@ -28,7 +28,7 @@ import type { ToolDef } from './types.js';
 
 // ── Config ─────────────────────────────────────────────────────────────
 const API_URL = 'https://cotador.sulamerica.pvcorretor01.com.br/api/cotar';
-const TIMEOUT_MS = 60_000;
+const TIMEOUT_MS = 90_000; // FIX 2026-05-06: era 60s, mas API SulAmerica timeoutava 4x/dia. 90s reduz timeouts sem prender o LLM.
 const RETRIES = 2; // total de tentativas = 1 + RETRIES = 3
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 
@@ -97,6 +97,9 @@ function brl(n: number): string {
 async function postCotar(payload: Record<string, unknown>): Promise<ApiResponse> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  // FIX 2026-05-06: log latência sempre (sucesso e falha). Daniel quer
+  // observar instabilidade da API SulAmérica — antes só timeout aparecia.
+  const startedAt = Date.now();
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -104,13 +107,19 @@ async function postCotar(payload: Record<string, unknown>): Promise<ApiResponse>
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
+    const latencyMs = Date.now() - startedAt;
     const data = await res.json().catch(() => ({})) as ApiResponse;
     if (!res.ok) {
+      logger.warn(`[cotar_sulamerica_api] HTTP ${res.status} latency=${latencyMs}ms`);
       return { ok: false, erro: `HTTP ${res.status}: ${JSON.stringify(data)}` };
     }
+    logger.info(`[cotar_sulamerica_api] OK latency=${latencyMs}ms produtos=${data.produtos?.length ?? 0}`);
     return data;
   } catch (err: any) {
-    return { ok: false, erro: err?.name === 'AbortError' ? `timeout_${TIMEOUT_MS}ms` : (err?.message || 'fetch_failed') };
+    const latencyMs = Date.now() - startedAt;
+    const isTimeout = err?.name === 'AbortError';
+    logger.warn(`[cotar_sulamerica_api] ${isTimeout ? 'TIMEOUT' : 'FETCH_FAIL'} latency=${latencyMs}ms err="${err?.message || 'unknown'}"`);
+    return { ok: false, erro: isTimeout ? `timeout_${TIMEOUT_MS}ms` : (err?.message || 'fetch_failed') };
   } finally {
     clearTimeout(t);
   }

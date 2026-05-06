@@ -245,24 +245,39 @@ const marcarMorno: ToolDef = {
 
 const agendarFollowup: ToolDef = {
   name: 'agendar_followup',
-  description: 'Agenda um follow-up automático pro cliente em uma data específica. Usa ISO 8601 (ex: 2026-05-01T14:00:00Z). PR 4 vai disparar o agente nessa hora.',
+  description: 'Agenda um follow-up automático pro cliente em uma data específica. Aceita ISO 8601 ("2026-05-01T14:00:00Z"), data ISO ("2026-05-01" — assume 14h BRT), formato BR ("01/05/2026 14:00"), ou tempo relativo em horas ("+24h", "+48h"). PR 4 dispara o agente na hora.',
   roles: ['*'],
   parameters: {
     type: 'object',
     properties: {
-      quando: { type: 'string', description: 'ISO 8601 timestamp (UTC ou com TZ)' },
+      quando: { type: 'string', description: 'Quando disparar. ISO 8601, "YYYY-MM-DD" (default 14h BRT), "DD/MM/YYYY HH:MM", ou "+Nh" / "+Nd"' },
     },
     required: ['quando'],
   },
   execute(args, ctx) {
-    const quando = String(args.quando || '');
-    const t = Date.parse(quando);
-    if (!Number.isFinite(t) || t < Date.now() - 1000) {
-      return { ok: false, error: 'data_invalida_ou_passada' };
+    const quando = String(args.quando || '').trim();
+    if (!quando) {
+      logger.warn(`[tool.agendar_followup] BLOQUEADO card=${ctx.card.id} quando=vazio`);
+      return { ok: false, error: 'data_obrigatoria: passe ISO ("2026-05-08T14:00:00Z") OU "+24h" OU "DD/MM/YYYY HH:MM"' };
+    }
+
+    const t = parseFollowupDate(quando);
+    if (t === null) {
+      logger.warn(`[tool.agendar_followup] BLOQUEADO card=${ctx.card.id} quando="${quando}" formato_invalido`);
+      return { ok: false, error: `formato_invalido: "${quando}". Use ISO ("2026-05-08T14:00:00Z"), "DD/MM/YYYY HH:MM", ou "+24h" (horas) / "+2d" (dias).` };
+    }
+
+    // Tolerância de 60s no passado (cobre latência LLM); senão soma 1h.
+    const now = Date.now();
+    let final = t;
+    if (t < now - 60_000) {
+      logger.warn(`[tool.agendar_followup] data no passado (${Math.round((now-t)/60000)}min atras) — ajustando pra +1h`);
+      final = now + 60 * 60 * 1000;
     }
     // Limita a 60 dias no futuro pra evitar follow-up "pra nunca"
-    const max = Date.now() + 60 * 24 * 60 * 60 * 1000;
-    const final = Math.min(t, max);
+    const max = now + 60 * 24 * 60 * 60 * 1000;
+    final = Math.min(final, max);
+
     upsertCardAgentState({
       cardId: ctx.card.id,
       columnId: ctx.column.id,
@@ -270,10 +285,47 @@ const agendarFollowup: ToolDef = {
       tenantId: ctx.tenantId,
       inactivityTimerAt: final,
     });
-    logger.info(`[tool.agendar_followup] card=${ctx.card.id} at=${new Date(final).toISOString()}`);
-    return { ok: true, result: { scheduled_at: final } };
+    logger.info(`[tool.agendar_followup] card=${ctx.card.id} at=${new Date(final).toISOString()} (input="${quando}")`);
+    return { ok: true, result: { scheduled_at: final, scheduled_iso: new Date(final).toISOString() } };
   },
 };
+
+/** Parser permissivo pra agendar_followup. Retorna timestamp ms ou null.
+ *  Ordem dos checks importa: regex BR/date-only ANTES de Date.parse, senão
+ *  Date.parse interpreta "08/05/2026" como US (Aug 5) ou "2026-05-08" como
+ *  00h UTC (em vez de 14h BRT que queremos). */
+export function parseFollowupDate(raw: string): number | null {
+  const s = raw.trim();
+  // 1) "+Nh" / "+Nd" — relativo
+  const rel = s.match(/^\+\s*(\d+)\s*([hd])$/i);
+  if (rel) {
+    const n = Number(rel[1]);
+    const unit = rel[2]!.toLowerCase();
+    if (n > 0 && n < 1500) {
+      const ms = unit === 'h' ? n * 60 * 60 * 1000 : n * 24 * 60 * 60 * 1000;
+      return Date.now() + ms;
+    }
+  }
+  // 2) "YYYY-MM-DD" só data → assume 14h BRT (UTC-3) = 17h UTC.
+  //    CHECA ANTES de Date.parse senão ele retorna 00h UTC.
+  const dateOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const [, y, m, d] = dateOnly;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d), 17, 0, 0);
+  }
+  // 3) "DD/MM/YYYY HH:MM" ou "DD/MM/YYYY" — formato BR.
+  //    CHECA ANTES de Date.parse senão ele interpreta como US (MM/DD/YYYY).
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  if (br) {
+    const [, d, m, y, hh = '14', mm = '00'] = br;
+    // BRT (UTC-3) → soma 3h pra UTC
+    return Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh) + 3, Number(mm), 0);
+  }
+  // 4) ISO 8601 completo (com TZ). Date.parse trata.
+  const iso = Date.parse(s);
+  if (Number.isFinite(iso)) return iso;
+  return null;
+}
 
 // ─── consultar_historico ─────────────────────────────────────────────────
 
