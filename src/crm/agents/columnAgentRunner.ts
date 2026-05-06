@@ -842,6 +842,30 @@ export function looksLikeMetaCommentary(text: string): boolean {
     // Quando aparecem 2+ headers em bold seguidos de dados estruturados, e
     // texto de operador interno — cliente normal nao recebe formulario.
     /\*\*\s*(nome|idade|tipo|composi[cç][aã]o|titular|dependentes?|composi[cç][aã]o\s+familiar)\s*[:：]\s*\*\*/i,
+    // FIX 2026-05-06 — vazamentos novos vendedor (Luiz Carlos, Val, Regiane, Rita, Norma).
+    // 1) "Agora vou mandar/perguntar/te enviar..." — narrativa de acao seguinte
+    /\bagora\s+vou\s+(mandar|enviar|te\s+mandar|te\s+enviar|fazer|perguntar|te\s+perguntar|chamar|coletar|gerar|montar|colocar|aplicar|disparar)/i,
+    // 2) "O card tem/contem/trouxe/veio com/já tem..." — narrando estado interno
+    /\bo\s+card\s+(tem|cont[eé]m|trouxe|veio\s+com|j[aá]\s+tem|acabou\s+de\s+chegar|chegou\s+com)/i,
+    // 3) "Pelo nome <X>, deduzo/presumo/infiro/chuto" — externando raciocinio
+    /\bpelo\s+nome\s+[\wÀ-ú]+\s*[,.]?\s*(deduzo|presumo|infiro|imagino|suponho|acredito\s+que|chuto|aposto)/i,
+    /\b(deduzo|presumo|infiro|chuto)\s+que\s+(o\s+|a\s+|seja\s+)?(sexo|idade|nome|titular)/i,
+    // 4) "Mas não tem o X salvo/registrado/coletado" — discutindo estado de campo
+    /\b(mas\s+)?n[aã]o\s+(tem|consta|est[aá])\s+(o\s+|a\s+)?\*?\*?(sexo|idade|nome|cpf|rg|email|tipo|capital|forma\s+de\s+pagamento)\*?\*?\s+(do|da)?\s*(titular|cliente|lead)?\s*(salvo|registrado|preenchido|coletado|gravado|disponivel|dispon[ií]vel)/i,
+    // 5) Confirmacoes parentéticas tipo "(confirmado)" / "(salvo)" / "(coletado)"
+    /\([\wÀ-ú\s,]*\b(confirmado|salvo|coletado|registrado|gravado|preenchido)\b[\wÀ-ú\s,]*\)/i,
+    // 6) "está/fica acima/fora da faixa de elegibilidade/aceitacao/contratacao"
+    /\b(est[aá]|fica|encontra-se|encontra\s+se)\s+(acima|fora|abaixo)\s+da\s+faixa\s+(de\s+)?(elegibilidade|aceita[cç][aã]o|contrata[cç][aã]o|idade)/i,
+    // 7) Tecniques: "max 74 para titular", "limite de X para Y" em texto
+    /\b(max|m[aá]ximo|limite\s+(de\s+)?(\d+|m[aá]ximo))\s+(de\s+)?\d+\s+(para|pra|aceito\s+pra)\s+(titular|dependente|contrata[cç][aã]o|adesao|adesão)/i,
+    // 8) Iniciar resposta com "Entendi." + tecnico (nao bloqueia "Entendi!" curto seguido de fala humana)
+    /^\s*entendi\s*[.!]?\s+(o\s+(card|hist[oó]rico|sistema|cliente)|a\s+cliente\s+[\wÀ-ú]|do\s+que\s+(consta|est[aá])\s+aqui)/i,
+    // 9) "vou agora montar/gerar a cotacao" / "vou aplicar a tag"
+    /\bvou\s+(agora\s+)?(aplicar|colocar|registrar|salvar|setar|usar)\s+(a\s+|o\s+|uma\s+|um\s+)?(tag|status|valor|capital|cota[cç][aã]o)/i,
+    // 10) Bullet com numero + "Sobre/A respeito de/Quanto a" no inicio (formato scratchpad enumerado)
+    /^\s*\*\*\d+\)?\*\*\s+(sobre|a\s+respeito|quanto\s+a|com\s+rela[cç][aã]o)/im,
+    // 11) "Beleza! Agora vou te perguntar..." — combinacao saudacao + meta
+    /^\s*(beleza|perfeito|certo|ok|bacana|massa)\s*[!.]?\s+(agora\s+)?vou\s+(te\s+)?(perguntar|mandar|enviar|fazer|coletar)/i,
   ];
   return patterns.some((p) => p.test(t));
 }
