@@ -358,6 +358,7 @@ export function listActivitiesByContact(tenantId: string, contactId: string, lim
   const db = getCrmDb();
   const rows = db.prepare(`
     SELECT * FROM crm_activities WHERE tenant_id = ? AND contact_id = ?
+      AND deleted_at IS NULL
     ORDER BY created_at ASC LIMIT ?
   `).all(tenantId, contactId, limit) as any[];
   return rows.map(rowToActivity);

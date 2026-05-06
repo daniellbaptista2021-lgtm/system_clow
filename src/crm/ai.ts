@@ -394,7 +394,7 @@ function gatherCardContext(tenantId: string, cardId: string): any {
     ? (db.prepare('SELECT id, name, email, phone FROM crm_contacts WHERE id = ? AND tenant_id = ?').get(card.contact_id, tenantId) as any)
     : null;
   const recentActivities = db.prepare(
-    'SELECT id, type, channel, direction, content, created_at FROM crm_activities WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC LIMIT 20'
+    'SELECT id, type, channel, direction, content, created_at FROM crm_activities WHERE tenant_id = ? AND card_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 20'
   ).all(tenantId, cardId) as any[];
   const proposals = db.prepare(
     'SELECT id, version, status, viewed_count FROM crm_proposals WHERE tenant_id = ? AND card_id = ? ORDER BY version DESC'
