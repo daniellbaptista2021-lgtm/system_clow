@@ -1113,6 +1113,25 @@ export function looksLikeMetaCommentary(text: string): boolean {
     /\bquando\s+(ele|ela|o\s+cliente|a\s+cliente|o\s+[A-Z][\wÀ-ú]+|a\s+[A-Z][\wÀ-ú]+)\s+(voltar|retornar|responder|aparecer|escrever|der\s+sinal)/i,
     // 43) "Se ela/ele responder depois/amanhã, eu X" — condicional + 3a pessoa
     /\bse\s+(ela|ele)\s+(responder|retornar|aparecer|voltar|escrever)\s+(depois|mais\s+tarde|amanh[aã]|em\s+breve|um\s+dia)/i,
+    // FIX 2026-05-06 (incidente disparo Follow Up — Helga, Sil, Hércules):
+    // 3 mensagens vazaram texto interno tipo "Tag já estava aplicada. Vou
+    // seguir com a mensagem do step 1, adaptada ao histórico dela." LLM
+    // narrava o handling de excecao + decisao de continuar pro cliente.
+    // 44) "Tag já (estava|foi|existia|aplicada)" — narrativa sobre tag
+    /\btag\s+j[aá]\s+(estava|foi|existia|tinha\s+sido|aplicada|estava\s+aplicada)/i,
+    /\b(a\s+)?tag\s+j[aá]\s+existia\b/i,
+    // 45) "Vou seguir com a mensagem" / "vou seguir o step" / "seguir com X mesmo assim"
+    /\bvou\s+seguir\s+(com\s+|o\s+|para\s+)?(a\s+|o\s+)?(mensagem|msg|step|fluxo|passo|roteiro)/i,
+    /\bseguir\s+com\s+(a\s+|o\s+)?(mensagem|msg|texto)\s+mesmo\s+assim/i,
+    // 46) "step N" / "step 1" / "step do follow" — referencia tecnica de passo
+    /\bstep\s+\d+\s+(do|de|da)?\s*(follow[\s\-]?up|fluxo|roteiro|cobran[cç]a)?/i,
+    /\bmensagem\s+do\s+step\b/i,
+    // 47) "adaptada ao histórico" — meta-reescrita
+    /\badaptad[ao]\s+(ao\s+)?(hist[oó]rico|contexto|conversa|caso|cliente)\s+(dela|dele|do\s+cliente|da\s+cliente)?/i,
+    // 48) "Hmm" no inicio — pensamento solto vazado
+    /^\s*(hmm+|hum+|mmm+|n[oó]ssa+|opa+|epa+)\s*[,.!]?\s+(a\s+|o\s+|j[aá]\s+|essa|esse|isso|tag|status)/i,
+    // 49) Combinacao "Tag X. Vou Y." (pattern de duas frases meta encadeadas)
+    /\btag\s+[\wáéíóúâêôãõç\s]+\.\s+vou\s+(seguir|enviar|mandar|aplicar)/i,
   ];
   return patterns.some((p) => p.test(t));
 }

@@ -108,7 +108,12 @@ function pickChannel(tenantId: string): Channel2 | null {
 // ─── A) ENTRY_DELAY ────────────────────────────────────────────────────────
 
 /** Cards onde column tem entry_delay > 0, e ja passou esse tempo desde
- *  card chegar na coluna, e bot ainda nao mandou msg desde column_changed. */
+ *  card chegar na coluna, e bot ainda nao mandou msg desde column_changed.
+ *
+ *  Daniel 2026-05-06 (incidente Follow Up): adicionados filtros pra
+ *  excluir cards lost/archived, soft-deleted, e cards com agent_state
+ *  done/paused. Sem isso o scheduler dispara em cards "perdidos" pelo
+ *  Daniel manualmente OU encerrados pelo bot. */
 export function findEntryDelayCards(nowMs = Date.now()): CardColumnRow[] {
   const db = getCrmDb();
   return db.prepare(`
@@ -124,12 +129,16 @@ export function findEntryDelayCards(nowMs = Date.now()): CardColumnRow[] {
       col.agent_followup_steps_hours_json
     FROM crm_cards c
     JOIN crm_columns col ON col.id = c.column_id
+    LEFT JOIN crm_card_agent_state s ON s.card_id = c.id
     WHERE col.agent_enabled = 1
       AND col.agent_role IS NOT NULL
       AND COALESCE(col.agent_entry_delay_minutes, 0) > 0
       AND c.column_changed_at IS NOT NULL
       AND (c.column_changed_at + (col.agent_entry_delay_minutes * 60000)) <= ?
       AND (c.last_bot_message_at IS NULL OR c.last_bot_message_at < c.column_changed_at)
+      AND c.deleted_at IS NULL
+      AND (c.status IS NULL OR c.status = 'active')
+      AND (s.status IS NULL OR s.status NOT IN ('done','paused','escalated'))
     LIMIT ?
   `).all(nowMs, MAX_PER_CATEGORY) as CardColumnRow[];
 }
@@ -210,7 +219,10 @@ export interface ChaseFire {
 }
 
 /** Cards onde bot mandou msg, cliente nao respondeu, e algum step de chase
- *  esta vencido (e ainda nao foi disparado — verificacao por tag). */
+ *  esta vencido (e ainda nao foi disparado — verificacao por tag).
+ *
+ *  Daniel 2026-05-06 (incidente Follow Up): mesmos filtros do entry_delay
+ *  pra excluir cards lost/archived/deleted/done/paused. */
 export function findChaseCards(nowMs = Date.now()): ChaseFire[] {
   const db = getCrmDb();
   const rows = db.prepare(`
@@ -226,11 +238,15 @@ export function findChaseCards(nowMs = Date.now()): ChaseFire[] {
       col.agent_followup_steps_hours_json
     FROM crm_cards c
     JOIN crm_columns col ON col.id = c.column_id
+    LEFT JOIN crm_card_agent_state s ON s.card_id = c.id
     WHERE col.agent_enabled = 1
       AND col.agent_role IS NOT NULL
       AND col.agent_no_response_chase_steps_json IS NOT NULL
       AND c.last_bot_message_at IS NOT NULL
       AND (c.last_client_message_at IS NULL OR c.last_client_message_at < c.last_bot_message_at)
+      AND c.deleted_at IS NULL
+      AND (c.status IS NULL OR c.status = 'active')
+      AND (s.status IS NULL OR s.status NOT IN ('done','paused','escalated'))
     LIMIT 1000
   `).all() as CardColumnRow[];
 
@@ -267,6 +283,11 @@ export interface FollowupFire {
 
 export function findFollowupCards(nowMs = Date.now()): FollowupFire[] {
   const db = getCrmDb();
+  // Daniel 2026-05-06 (incidente disparo em massa): filtros pra excluir
+  // cards lost/archived (status), soft-deleted (deleted_at), e cards com
+  // agent_state já em done/paused/escalated. Sem isso o scheduler dispara
+  // em cards que o Daniel marcou como perdido manualmente — ou em cards
+  // que o próprio bot encerrou — gerando spam pra cliente esquecido.
   const rows = db.prepare(`
     SELECT
       c.id AS card_id, c.title AS card_title, c.board_id AS card_board_id,
@@ -280,10 +301,14 @@ export function findFollowupCards(nowMs = Date.now()): FollowupFire[] {
       col.agent_followup_steps_hours_json
     FROM crm_cards c
     JOIN crm_columns col ON col.id = c.column_id
+    LEFT JOIN crm_card_agent_state s ON s.card_id = c.id
     WHERE col.agent_enabled = 1
       AND col.name = 'Follow Up'
       AND col.agent_followup_steps_hours_json IS NOT NULL
       AND c.column_changed_at IS NOT NULL
+      AND c.deleted_at IS NULL
+      AND (c.status IS NULL OR c.status = 'active')
+      AND (s.status IS NULL OR s.status NOT IN ('done','paused','escalated'))
     LIMIT 1000
   `).all() as CardColumnRow[];
 
@@ -545,12 +570,66 @@ async function moveToResolvido(
 
 // ─── Public tick ──────────────────────────────────────────────────────────
 
+/** Daniel 2026-05-06 — incidente Follow Up: tick disparou 16 mensagens em
+ *  ~4s pelo mesmo canal Z-API. Risco de ban do número + cliente recebendo
+ *  2 msgs no mesmo segundo. Rate-limit em 2 camadas:
+ *    - MAX_DISPATCHES_PER_TICK: máx N envios por tick total.
+ *    - INTER_DISPATCH_MS: stagger entre dispatches (mesmo tick).
+ *    - PER_CARD_COOLDOWN_MS: não dispara se card recebeu msg do bot < N seg.
+ */
+const MAX_DISPATCHES_PER_TICK = 5;
+const INTER_DISPATCH_MS = 3000;
+const PER_CARD_COOLDOWN_MS = 30_000;
+
+/** Verifica se o card recebeu msg do bot recentemente (cooldown). Retorna
+ *  true se está em cooldown e dispatch deve ser pulado. Fail-open: erro de
+ *  DB libera o disparo (não trava o fluxo). */
+function isCardInCooldown(cardId: string): boolean {
+  try {
+    const row = getCrmDb()
+      .prepare('SELECT last_bot_message_at FROM crm_cards WHERE id = ?')
+      .get(cardId) as { last_bot_message_at?: number } | undefined;
+    const lastBot = row?.last_bot_message_at ?? 0;
+    return lastBot > 0 && (Date.now() - lastBot) < PER_CARD_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
 export async function tickColumnTimers(): Promise<void> {
   const t0 = Date.now();
   let entryCount = 0, chaseCount = 0, fuCount = 0, unrespCount = 0;
+  let dispatched = 0;
+  let skippedCooldown = 0;
+  let deferredQuota = 0;
+
+  /** Despacha lista respeitando MAX_DISPATCHES_PER_TICK + cooldown +
+   *  stagger. Items que ficam de fora pelo limite ficam pra próximo tick. */
+  async function dispatchAll<T extends { row: CardColumnRow } | CardColumnRow>(
+    items: T[],
+    fn: (x: T) => Promise<void>,
+  ): Promise<number> {
+    let count = 0;
+    for (const item of items) {
+      if (dispatched >= MAX_DISPATCHES_PER_TICK) {
+        deferredQuota += items.length - count;
+        break;
+      }
+      const cardId = ('row' in item ? item.row.card_id : (item as CardColumnRow).card_id);
+      if (isCardInCooldown(cardId)) { skippedCooldown++; continue; }
+
+      await fn(item);
+      dispatched++;
+      count++;
+      if (dispatched < MAX_DISPATCHES_PER_TICK) {
+        await new Promise((r) => setTimeout(r, INTER_DISPATCH_MS));
+      }
+    }
+    return count;
+  }
+
   try {
-    const entry = findEntryDelayCards();
-    for (const r of entry) { await dispatchEntry(r); entryCount++; }
+    entryCount = await dispatchAll(findEntryDelayCards(), dispatchEntry);
 
     // DISABLED 2026-05-05 — safety net disparou bot em cards velhos onde LLM
     // gerou meta-commentary que passou pelo filtro looksLikeMetaCommentary,
@@ -562,17 +641,14 @@ export async function tickColumnTimers(): Promise<void> {
     // const unresp = findUnrespondedInboundCards();
     // for (const f of unresp) { await dispatchUnresponded(f); unrespCount++; }
 
-    const chase = findChaseCards();
-    for (const f of chase) { await dispatchChase(f); chaseCount++; }
-
-    const fu = findFollowupCards();
-    for (const f of fu) { await dispatchFollowup(f); fuCount++; }
+    chaseCount = await dispatchAll(findChaseCards(), dispatchChase);
+    fuCount = await dispatchAll(findFollowupCards(), dispatchFollowup);
 
     await executeFinalDeletes();
   } catch (err: any) {
     logger.warn(`[columnTimerScheduler.tick] err: ${err?.message}`);
   }
-  if (entryCount + chaseCount + fuCount + unrespCount > 0) {
-    logger.info(`[col-timer] tick took ${Date.now() - t0}ms — entry=${entryCount} unresp=${unrespCount} chase=${chaseCount} fu=${fuCount}`);
+  if (dispatched > 0 || skippedCooldown > 0 || deferredQuota > 0) {
+    logger.info(`[col-timer] tick took ${Date.now() - t0}ms — entry=${entryCount} unresp=${unrespCount} chase=${chaseCount} fu=${fuCount} cooldown_skipped=${skippedCooldown} deferred_quota=${deferredQuota}`);
   }
 }

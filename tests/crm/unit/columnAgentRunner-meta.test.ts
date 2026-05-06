@@ -292,6 +292,53 @@ describe('looksLikeMetaCommentary — vazamento Jademar 2026-05-06 (pos-deploy)'
   });
 });
 
+describe('Patterns 44-49 — incidente Follow Up 2026-05-06', () => {
+  it('bloqueia "Tag já estava aplicada. Vou seguir." (caso Sil)', () => {
+    expect(looksLikeMetaCommentary('Tag já estava aplicada. Vou seguir.')).toBe(true);
+  });
+
+  it('bloqueia "Tag já estava aplicada. Vou seguir com a mensagem do step 1, adaptada ao histórico dela." (caso Helga)', () => {
+    expect(
+      looksLikeMetaCommentary(
+        'Tag já estava aplicada. Vou seguir com a mensagem do step 1, adaptada ao histórico dela.\n\nOi Helma!'
+      )
+    ).toBe(true);
+  });
+
+  it('bloqueia "Hmm, a tag já existia. Vou seguir com a mensagem mesmo assim." (caso Hércules)', () => {
+    expect(
+      looksLikeMetaCommentary(
+        'Hmm, a tag já existia. Vou seguir com a mensagem mesmo assim.\n\nOi Hércules!'
+      )
+    ).toBe(true);
+  });
+
+  it('bloqueia "vou seguir com a mensagem do step 2"', () => {
+    expect(looksLikeMetaCommentary('Vou seguir com a mensagem do step 2 do follow-up')).toBe(true);
+  });
+
+  it('bloqueia "step 1 do roteiro"', () => {
+    expect(looksLikeMetaCommentary('Vou disparar o step 1 do roteiro pra ela.')).toBe(true);
+  });
+
+  it('bloqueia "adaptada ao histórico dela"', () => {
+    expect(looksLikeMetaCommentary('mensagem adaptada ao histórico dela')).toBe(true);
+  });
+
+  it('bloqueia "Hmm, a tag já existia"', () => {
+    expect(looksLikeMetaCommentary('Hmm, a tag já existia, sem problema.')).toBe(true);
+  });
+
+  it('NÃO bloqueia "Hmm, posso te ajudar com isso!" (hesitação humana real)', () => {
+    // Pattern 48 só bate quando "hmm" é seguido de meta-marker (a/o/já/tag/status/etc)
+    expect(looksLikeMetaCommentary('Hmm, posso te ajudar com isso!')).toBe(false);
+  });
+
+  it('NÃO bloqueia "vou seguir as orientações do médico" (uso natural de "vou seguir")', () => {
+    expect(looksLikeMetaCommentary('Vou seguir as orientações do médico')).toBe(false);
+  });
+});
+
 describe('isReplyEmptyish — barra texto inutilizavel', () => {
   it('detecta string vazia', () => {
     expect(isReplyEmptyish('')).toBe(true);
