@@ -107,6 +107,18 @@ const promoverParaLancarVenda: ToolDef = {
         error: 'venda_nao_fechada: cotacao oficial via cotar_sulamerica_api ainda nao foi gerada. Gere a cotacao primeiro, espere cliente confirmar fechamento, COLETE os dados de contratacao via salvar_dados_proposta, e SO depois promova.',
       };
     }
+    // PISO Daniel 2026-05-06: cotacoes antigas sem piso (R$8,69, R$9,98 etc)
+    // gravadas no state ANTES do fix de piso. Se total_cents < 2990 (R$29,90),
+    // bloqueia — forca o LLM a re-chamar cotar_sulamerica_api e gerar
+    // cotacao nova ja com piso aplicado.
+    const totalCents = (cotacao.total_cents as number) || 0;
+    if (totalCents < 2990) {
+      logger.warn(`[tool.promover_para_lancar_venda] BLOQUEADO card=${ctx.card.id} — cotacao abaixo do piso: total_cents=${totalCents}`);
+      return {
+        ok: false,
+        error: `cotacao_abaixo_do_piso: total_cents=${totalCents} < 2990 (piso R$29,90). Cotacao antiga ou erro de calculo. CHAME cotar_sulamerica_api de novo (com funeral_nivel correto, capital >=50k) — a tool aplica o piso automaticamente. Manda a nova cotacao pro cliente confirmar antes de promover.`,
+      };
+    }
     if (missingSensitive.length > 0) {
       logger.warn(`[tool.promover_para_lancar_venda] BLOQUEADO card=${ctx.card.id} — faltam dados: ${missingSensitive.join(',')}`);
       return {
