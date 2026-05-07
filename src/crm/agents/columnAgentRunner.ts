@@ -91,6 +91,54 @@ function isCardStillOnAgentColumn(tenantId: string, cardId: string): boolean {
  *  outputValidator pra detectar divergência entre valor citado pelo LLM e o
  *  valor que a tool retornou. Falha silenciosa retorna undefined — validator
  *  só pula a checagem de divergência, mas piso e termos seguem ativos. */
+/**
+ * Onda 63 (refino 2026-05-07): decide se a resposta deve sair por audio (TTS)
+ * ou texto. Mesmo com voice_enabled=1 e cliente tendo mandado audio, certos
+ * tipos de resposta NUNCA devem virar audio:
+ *
+ *   - Valores monetarios (R$): cliente precisa conferir o numero por escrito
+ *     e o validator de cotacao bloqueia divergencias frequentes.
+ *   - CPF / CNPJ / CEP / email: dados estruturados que cliente vai precisar
+ *     ler/copiar.
+ *   - Texto >400 chars: vira audio de >25s, ninguem ouve.
+ *   - Tool de cotacao/salvar dados executou: significa que a resposta tem
+ *     resumo de plano/dados → manda escrito.
+ *   - Lista com 3+ bullets: estrutura visual.
+ *
+ * Default → audio (saudacao, duvida curta, conversa rasa).
+ */
+function shouldUseVoice(
+  text: string,
+  toolCalls: ReadonlyArray<ToolCallRecord>,
+): { use: boolean; reason: string } {
+  if (!text) return { use: false, reason: 'empty_text' };
+  if (/R\$\s*[\d.,]+/i.test(text)) return { use: false, reason: 'has_currency' };
+  if (/\b\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}\b/.test(text)) return { use: false, reason: 'has_cpf' };
+  if (/\b\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/.\s]?\d{4}[-\s]?\d{2}\b/.test(text)) return { use: false, reason: 'has_cnpj' };
+  if (/\b\d{5}[-\s]?\d{3}\b/.test(text)) return { use: false, reason: 'has_cep' };
+  if (/\b[\w._%+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(text)) return { use: false, reason: 'has_email' };
+  if (text.length > 400) return { use: false, reason: 'too_long' };
+  const STRUCTURED_TOOLS = new Set([
+    'cotar_sulamerica_api',
+    'gerar_cotacao_sulamerica',
+    'salvar_dados_qualificacao',
+    'salvar_dados_proposta',
+    'gerar_cotacao_pdf',
+    'promover_para_lancar_venda',
+    'promover_pendente_daniel',
+  ]);
+  if (toolCalls.some((tc) => STRUCTURED_TOOLS.has(tc.name) && tc.ok)) {
+    return { use: false, reason: 'structured_tool_called' };
+  }
+  const bulletLines = (text.match(/^\s*(?:[-*•]|\d+[\.\)])\s+/gm) || []).length;
+  if (bulletLines >= 3) return { use: false, reason: 'has_list' };
+  return { use: true, reason: 'ok' };
+}
+
+/** Mensagem generica de transicao quando outputValidator bloqueia 2x.
+ *  Sai como TEXTO (nao TTS) pra cliente nao ficar em silencio. */
+const VALIDATOR_FALLBACK_TEXT = 'Só um instante que estou montando isso aqui certinho pra você 😊';
+
 function readLastQuotationCents(cardId: string): number | undefined {
   try {
     const row = getCrmDb()
@@ -361,6 +409,7 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   // cotar_sulamerica_api). Validador anti-currency precisa saber.
   const toolCallsThisTurn: ToolCallRecord[] = [];
   let validationRetried = false;
+  let validationFailedTwice = false;
 
   while (iteration < MAX_TOOL_ITERATIONS) {
     iteration++;
@@ -399,13 +448,17 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
         continue; // próxima iteração do while
       }
       if (!v.ok && validationRetried) {
-        // Já tentou regenerar uma vez e ainda alucinou — bloqueia envio.
-        logger.error(`[col-agent.runner] output_validator BLOQUEOU 2x card=${card.id} — abort send`);
+        // Ja tentou regenerar e ainda alucinou. Em vez de abortar e deixar
+        // cliente em silencio, manda mensagem generica de transicao em TEXTO.
+        // validationFailedTwice forca texto (sem TTS) no envio abaixo.
+        logger.error(`[col-agent.runner] output_validator BLOQUEOU 2x card=${card.id} — fallback texto generico`);
         recordAgentMetric({
           tenantId, columnId: column.id, cardId: card.id,
           event: 'blocked', reason: `output_validator_${v.reason}_persistent`,
         });
-        return { status: 'blocked', reason: 'meta_commentary' };
+        finalText = VALIDATOR_FALLBACK_TEXT;
+        validationFailedTwice = true;
+        break;
       }
       finalText = candidate;
       break;
@@ -522,10 +575,23 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   }
 
   // 10) Envia (sendOutbound loga message_out + bumpa card pro topo)
-  // Onda 63: se coluna tem agent_voice_enabled=1 E cliente mandou audio,
-  // gera TTS via OpenAI e envia como audio. Senao texto como sempre.
+  // Onda 63: TTS so quando (a) coluna tem voice_enabled, (b) cliente mandou
+  // audio, (c) shouldUseVoice aprova (saudacao/duvida curta — sem R$, CPF,
+  // CEP, email, lista, tool de cotacao, ou texto >400 chars), (d) validator
+  // nao caiu no fallback generico.
   const clientSentAudio = !!(input.clientSentAudio || input.audioUrl);
-  const wantsVoice = column.agentVoiceEnabled === true && clientSentAudio;
+  let wantsVoice = column.agentVoiceEnabled === true && clientSentAudio && !validationFailedTwice;
+  let voiceSkipReason: string | null = null;
+  if (wantsVoice) {
+    const dec = shouldUseVoice(finalText, toolCallsThisTurn);
+    wantsVoice = dec.use;
+    if (!dec.use) voiceSkipReason = dec.reason;
+  } else if (validationFailedTwice) {
+    voiceSkipReason = 'validator_fallback';
+  }
+  if (voiceSkipReason) {
+    logger.info(`[col-agent.runner] tts skipped card=${card.id} reason=${voiceSkipReason}`);
+  }
   try {
     if (wantsVoice) {
       await sendVoiceReply(
@@ -769,7 +835,10 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
         continue;
       }
       if (!v.ok && validationRetried) {
-        logger.error(`[col-agent.runFromFire] output_validator BLOQUEOU 2x card=${card.id} — abort`);
+        // Disparos de inatividade: se validator bloqueia 2x, melhor nao
+        // mandar nada do que mandar fallback generico (cobranca espontanea
+        // com texto vazio confunde mais que ajuda). Mantem abort silencioso.
+        logger.error(`[col-agent.runFromFire] output_validator BLOQUEOU 2x card=${card.id} — abort silencioso`);
         recordAgentMetric({
           tenantId, columnId: column.id, cardId: card.id,
           event: 'blocked', reason: `output_validator_${v.reason}_persistent_inactivity`,
