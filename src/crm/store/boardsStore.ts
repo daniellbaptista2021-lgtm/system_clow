@@ -174,6 +174,8 @@ function rowToColumn(r: any): BoardColumn {
     agentEntryDelayMinutes: r.agent_entry_delay_minutes ?? undefined,
     agentNoResponseChaseStepsJson: r.agent_no_response_chase_steps_json ?? undefined,
     agentFollowupStepsHoursJson: r.agent_followup_steps_hours_json ?? undefined,
+    agentVoiceEnabled: r.agent_voice_enabled === 1,
+    agentVoiceId: r.agent_voice_id ?? undefined,
   };
 }
 

@@ -178,6 +178,21 @@
           </div>
         </div>
 
+        <div class="switch-row" style="margin-top:12px;">
+          <label class="toggle"><input type="checkbox" id="agcfg-voice-enabled" ${cfg.agent_voice_enabled ? 'checked' : ''}/><span class="slider"></span></label>
+          <label for="agcfg-voice-enabled">Responder em áudio quando cliente mandar áudio <span class="hint">— TTS via OpenAI (tts-1)</span></label>
+        </div>
+
+        <label>Voz do bot <span class="hint">— OpenAI TTS</span></label>
+        <select id="agcfg-voice-id">
+          <option value="nova" ${(cfg.agent_voice_id || 'nova') === 'nova' ? 'selected' : ''}>nova (feminina, jovem)</option>
+          <option value="shimmer" ${cfg.agent_voice_id === 'shimmer' ? 'selected' : ''}>shimmer (feminina, suave)</option>
+          <option value="alloy" ${cfg.agent_voice_id === 'alloy' ? 'selected' : ''}>alloy (neutra)</option>
+          <option value="fable" ${cfg.agent_voice_id === 'fable' ? 'selected' : ''}>fable (britânica)</option>
+          <option value="echo" ${cfg.agent_voice_id === 'echo' ? 'selected' : ''}>echo (masculina, clara)</option>
+          <option value="onyx" ${cfg.agent_voice_id === 'onyx' ? 'selected' : ''}>onyx (masculina, grave)</option>
+        </select>
+
         <div class="err" id="agcfg-err"></div>
 
         <div class="footer">
@@ -301,6 +316,8 @@
         agent_active_hours_end: bg.querySelector('#agcfg-h-end').value,
         agent_max_turns: parseInt(bg.querySelector('#agcfg-max-turns').value, 10) || 30,
         agent_inactivity_timeout_minutes: parseInt(bg.querySelector('#agcfg-inactivity').value, 10) || 20,
+        agent_voice_enabled: bg.querySelector('#agcfg-voice-enabled').checked,
+        agent_voice_id: bg.querySelector('#agcfg-voice-id').value || 'nova',
       };
 
       try {

@@ -313,7 +313,10 @@ export interface InboundContext {
   channel: Channel2;
   customerPhone: string;
   text?: string;       // texto da mensagem (se for texto)
-  audioUrl?: string;   // URL do audio (se for audio)
+  audioUrl?: string;   // URL do audio (se for audio) — Z-API
+  /** Onda 63: flag explicito pra Meta (que transcreve antes do dispatch e
+   *  nao tem URL publica de audio). Z-API tambem pode setar pra clareza. */
+  clientSentAudio?: boolean;
   imageUrl?: string;   // URL da imagem (se for imagem)
   senderName?: string;
   // Onda 62 (PR 2): provider message id pro cluster lock
@@ -388,6 +391,7 @@ async function dispatchAfterDebounce(ctx: InboundContext): Promise<void> {
       customerPhone,
       text: ctx.text,
       audioUrl: ctx.audioUrl,
+      clientSentAudio: ctx.clientSentAudio || !!ctx.audioUrl,
       imageUrl: ctx.imageUrl,
       senderName: ctx.senderName,
       messageId: ctx.messageId,

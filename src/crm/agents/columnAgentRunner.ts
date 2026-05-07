@@ -42,6 +42,8 @@ import { getToolsForRole, toLLMTools, executeToolCall } from './tools/registry.j
 import { cardHasTag } from './tools/tags.js';
 import { maybeAutoPromote } from './tools/common.js';
 import { validateOutput, type ToolCallRecord } from './outputValidator.js';
+import { synthesizeSpeech, isValidVoice, type TtsVoice } from './tts.js';
+import { sendOutbound } from '../inbox.js';
 import type { ToolContext } from './tools/types.js';
 import * as store from '../store.js';
 import { getCrmDb } from '../schema.js';
@@ -131,6 +133,9 @@ export interface RunColumnAgentInput {
   /** Texto da mensagem (ja resolvido) OU audioUrl pra transcrever. */
   text?: string;
   audioUrl?: string;
+  /** Onda 63: flag pro voice-mirror. True se cliente mandou audio (mesmo que
+   *  ja tenha sido transcrito antes — caso Meta). Z-API tambem seta. */
+  clientSentAudio?: boolean;
   imageUrl?: string;
   senderName?: string;
   /** Provider message id — usado pro cluster lock. Se faltar, lock degrada
@@ -517,8 +522,19 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   }
 
   // 10) Envia (sendOutbound loga message_out + bumpa card pro topo)
+  // Onda 63: se coluna tem agent_voice_enabled=1 E cliente mandou audio,
+  // gera TTS via OpenAI e envia como audio. Senao texto como sempre.
+  const clientSentAudio = !!(input.clientSentAudio || input.audioUrl);
+  const wantsVoice = column.agentVoiceEnabled === true && clientSentAudio;
   try {
-    await sendReply(channel, customerPhone, finalText, contactId);
+    if (wantsVoice) {
+      await sendVoiceReply(
+        channel, customerPhone, finalText, contactId,
+        column.agentVoiceId || 'nova', tenantId, card.id, column.id,
+      );
+    } else {
+      await sendReply(channel, customerPhone, finalText, contactId);
+    }
   } catch (err: any) {
     logger.error('[col-agent.runner] send falhou:', err?.message);
     return { status: 'error', message: err?.message || 'send_failed' };
@@ -1218,6 +1234,51 @@ export function isWithinActiveHours(start: string, end: string, override?: { hou
 function parseHHMM(s: string): [number, number] {
   const [h, m] = s.split(':');
   return [Number(h) || 0, Number(m) || 0];
+}
+
+/**
+ * Onda 63: gera audio TTS e envia como mediaType:'audio'. Em caso de
+ * falha, faz fallback pra texto pra nao deixar cliente sem resposta.
+ * Loga metric pra observabilidade.
+ */
+async function sendVoiceReply(
+  channel: Channel2,
+  customerPhone: string,
+  finalText: string,
+  contactId: string | null,
+  voiceRaw: string,
+  tenantId: string,
+  cardId: string,
+  columnId: string,
+): Promise<void> {
+  const voice: TtsVoice = isValidVoice(voiceRaw) ? voiceRaw : 'nova';
+  const tts = await synthesizeSpeech(finalText, voice, tenantId);
+
+  if (!tts.ok) {
+    logger.warn(`[col-agent.runner] TTS falhou (${tts.error}) — fallback texto`);
+    recordAgentMetric({
+      tenantId, columnId, cardId,
+      event: 'tts_failed', reason: tts.error,
+    });
+    // Fallback: manda texto pra nao deixar cliente sem resposta
+    const { sendReply } = await import('../ai/agent.js');
+    await sendReply(channel, customerPhone, finalText, contactId);
+    return;
+  }
+
+  // Resolve cardId pra atividade vincular ao card certo (sendOutbound
+  // usa contact lookup, mas explicito eh mais seguro).
+  await sendOutbound(channel, {
+    to: customerPhone,
+    mediaUrl: tts.mediaUrl,
+    mediaType: 'audio',
+    contactId: contactId || undefined,
+    cardId,
+  });
+  recordAgentMetric({
+    tenantId, columnId, cardId,
+    event: 'tts_sent', reason: `voice=${voice} bytes=${tts.bytes}`,
+  });
 }
 
 function buildLockKey(input: RunColumnAgentInput): string {

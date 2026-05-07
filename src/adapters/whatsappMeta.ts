@@ -799,10 +799,13 @@ export function buildMetaWhatsAppRoutes(pool: SessionPool): Hono {
         logger.info(`[meta-wa] [tenant=${tenantId.slice(0,8)}] CRM ingestInbound: card=${r.cardId ?? 'n/a'} act=${r.activityId ?? 'n/a'} from=${maskPhone(phone)}`);
         if (r.ok && r.cardId) {
           const aiAgent = await import('../crm/ai/agent.js');
+          // Onda 63: sinaliza que cliente mandou audio (Meta transcreveu antes
+          // mas a flag e necessaria pro voice-mirror funcionar).
           aiAgent.handleInboundForAI({
             channel,
             customerPhone: phone,
             text,
+            clientSentAudio: type === 'audio',
             senderName: name,
             messageId,
           });

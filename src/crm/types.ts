@@ -72,6 +72,12 @@ export interface BoardColumn {
   /** Steps de followup escalonados quando card esta na coluna Follow Up.
    *  JSON array de horas. Ex: [24, 48, 72]. */
   agentFollowupStepsHoursJson?: string;
+  // ── Onda 63: Resposta em audio (TTS) por coluna (migration 014) ──
+  /** Quando true, runner gera audio TTS se cliente mandou audio (mirror).
+   *  Bot mantem texto pra cliente que escreveu em texto. */
+  agentVoiceEnabled?: boolean;
+  /** Voz OpenAI: alloy, echo, fable, onyx, nova, shimmer. Default 'nova'. */
+  agentVoiceId?: string;
 }
 
 // PR 7.0: funil v2 timer-driven. 5 roles:
@@ -156,7 +162,9 @@ export type AgentMetricEvent =
   | 'inactive_timeout'   // timer de inatividade disparou (PR 4)
   | 'tool_called'        // PR 3: agente chamou uma tool com sucesso
   | 'tool_failed'        // PR 3: tool falhou (validacao, permissao, erro)
-  | 'tool_loop_max';     // PR 3: bateu o limite de iteracoes LLM↔tool
+  | 'tool_loop_max'      // PR 3: bateu o limite de iteracoes LLM↔tool
+  | 'tts_sent'           // Onda 63: resposta enviada como audio TTS
+  | 'tts_failed';        // Onda 63: TTS falhou (api/save) → fallback texto
 
 // ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
 export type ProductType =

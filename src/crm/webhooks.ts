@@ -196,6 +196,7 @@ app.post('/zapi/:secret', async (c) => {
         customerPhone: String(phone),
         text,
         audioUrl,
+        clientSentAudio: !!audioUrl,
         imageUrl,
         senderName,
         // Onda 62 (PR 2): propaga messageId pro cluster lock do column agent

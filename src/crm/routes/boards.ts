@@ -537,6 +537,8 @@ export function registerBoardsRoutes(app: Hono): void {
       agent_active_hours_end: row.agent_active_hours_end ?? '23:59',
       agent_max_turns: row.agent_max_turns ?? 30,
       agent_inactivity_timeout_minutes: row.agent_inactivity_timeout_minutes ?? 20,
+      agent_voice_enabled: !!row.agent_voice_enabled,
+      agent_voice_id: row.agent_voice_id ?? 'nova',
     });
   });
 
@@ -611,6 +613,13 @@ export function registerBoardsRoutes(app: Hono): void {
       return badRequest(c, 'agent_max_turns deve ser inteiro > 0');
     }
 
+    // Onda 63: TTS — voz precisa ser uma das suportadas pelo OpenAI
+    const VALID_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+    if (body.agent_voice_id !== undefined && body.agent_voice_id !== null
+        && !VALID_VOICES.includes(body.agent_voice_id)) {
+      return badRequest(c, 'agent_voice_id invalido', { allowed: VALID_VOICES });
+    }
+
     // Update
     const fields: Array<{ col: string; val: unknown }> = [];
     const candidates: Record<string, string> = {
@@ -627,11 +636,13 @@ export function registerBoardsRoutes(app: Hono): void {
       agent_active_hours_end: 'agent_active_hours_end',
       agent_max_turns: 'agent_max_turns',
       agent_inactivity_timeout_minutes: 'agent_inactivity_timeout_minutes',
+      agent_voice_enabled: 'agent_voice_enabled',
+      agent_voice_id: 'agent_voice_id',
     };
     for (const [k, dbCol] of Object.entries(candidates)) {
       if (body[k] !== undefined) {
         let val: any = body[k];
-        if (k === 'agent_enabled') val = val ? 1 : 0;
+        if (k === 'agent_enabled' || k === 'agent_voice_enabled') val = val ? 1 : 0;
         fields.push({ col: dbCol, val });
       }
     }
