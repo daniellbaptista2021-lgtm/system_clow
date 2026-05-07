@@ -33,12 +33,16 @@ const TICK_INTERVAL_MS = 60_000;
 const TICK_LOCK_TTL_S = 55;
 const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
 const COLUMN_TIMER_TICK_INTERVAL_MS = 60_000; // PR 7.0
+// Daniel 2026-05-07: snapshot de saúde a cada 5 min — visibilidade
+// da pipeline + qualidade dos bots, com alerta no log se algo crítico.
+const HEALTH_SNAPSHOT_INTERVAL_MS = 5 * 60_000;
 const STALE_DAYS = 7;
 const DUE_APPROACHING_HOURS = 24;
 
 let _timer: NodeJS.Timeout | null = null;
 let _inactivityTimer: NodeJS.Timeout | null = null;
 let _columnTimerTimer: NodeJS.Timeout | null = null;
+let _healthSnapshotTimer: NodeJS.Timeout | null = null;
 let _runningInactivityTick = false;
 let _runningColumnTimerTick = false;
 let _runningTick = false;
@@ -84,9 +88,13 @@ export function startScheduler(): void {
   _columnTimerTimer = setInterval(() => { void columnTimerTick(); }, COLUMN_TIMER_TICK_INTERVAL_MS);
   setTimeout(() => { void columnTimerTick(); }, 20_000);
 
+  // Fase 3 Daniel 2026-05-07: snapshot de saúde a cada 5 min
+  _healthSnapshotTimer = setInterval(() => { void healthSnapshotTick(); }, HEALTH_SNAPSHOT_INTERVAL_MS);
+  setTimeout(() => { void healthSnapshotTick(); }, 30_000);
+
   logger.info(
     `[CRM] Scheduler started (main tick ${TICK_INTERVAL_MS / 1000}s, inactivity tick ${INACTIVITY_TICK_INTERVAL_MS / 1000}s, ` +
-    `column-timer tick ${COLUMN_TIMER_TICK_INTERVAL_MS / 1000}s, ` +
+    `column-timer tick ${COLUMN_TIMER_TICK_INTERVAL_MS / 1000}s, health snapshot ${HEALTH_SNAPSHOT_INTERVAL_MS / 60_000}min, ` +
     `worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`,
   );
 }
@@ -95,6 +103,16 @@ export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
   if (_inactivityTimer) { clearInterval(_inactivityTimer); _inactivityTimer = null; }
   if (_columnTimerTimer) { clearInterval(_columnTimerTimer); _columnTimerTimer = null; }
+  if (_healthSnapshotTimer) { clearInterval(_healthSnapshotTimer); _healthSnapshotTimer = null; }
+}
+
+async function healthSnapshotTick(): Promise<void> {
+  try {
+    const { logHealthSnapshot } = await import('./observability/healthMetrics.js');
+    logHealthSnapshot();
+  } catch (err: any) {
+    logger.warn('[health-snapshot-tick] err:', err?.message);
+  }
 }
 
 async function columnTimerTick(): Promise<void> {

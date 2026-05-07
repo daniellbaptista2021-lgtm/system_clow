@@ -264,5 +264,19 @@ export function buildHealthRoutes(): Hono {
     }),
   );
 
+  // Daniel 2026-05-07 — Fase 3.1: dashboard de saúde da pipeline PV
+  // Corretora. Snapshot completo: cards aguardando, bloqueios validator,
+  // tool failures, meta-commentary, pipeline 24h, alertas críticos.
+  health.get('/clow-dashboard', async (c) => {
+    try {
+      const { collectClowHealthSnapshot } = await import('../crm/observability/healthMetrics.js');
+      const tenantId = c.req.query('tenant_id') || undefined;
+      const snap = collectClowHealthSnapshot(tenantId);
+      return c.json(snap);
+    } catch (err: any) {
+      return c.json({ ok: false, error: err?.message || 'snapshot_failed' }, 500);
+    }
+  });
+
   return health;
 }
