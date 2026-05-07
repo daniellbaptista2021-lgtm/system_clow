@@ -161,7 +161,44 @@ describe('healthMetrics — snapshot de saúde', () => {
     expect(snap.alerts.some((a: string) => /bloqueios.*validator/i.test(a))).toBe(true);
   });
 
-  it('logHealthSnapshot não throws (log-only)', () => {
-    expect(() => healthMetrics.logHealthSnapshot()).not.toThrow();
+  it('logHealthSnapshot não throws (log-only)', async () => {
+    await expect(healthMetrics.logHealthSnapshot()).resolves.not.toThrow();
+  });
+});
+
+describe('alertSender — dedupe + envio condicional', () => {
+  let schema: any, store: any, alertSender: any;
+
+  beforeAll(async () => {
+    schema = await import('../../../src/crm/schema.js');
+    store = await import('../../../src/crm/store.js');
+    alertSender = await import('../../../src/crm/observability/alertSender.js');
+    schema.getCrmDb();
+  });
+
+  function makeSnap(alerts: string[]): any {
+    return {
+      collected_at: new Date().toISOString(),
+      tenant_id: 'fake_tenant',
+      cards_waiting_client_reply: { total: 0, over_30min: 0, over_2h: 0, over_24h: 0, sample_titles_over_30min: [] },
+      column_load: [],
+      validator_blocks_24h: { price_off_table: 5 },
+      tool_failures_24h: { cotar_sulamerica_api: 2 },
+      meta_commentary_blocked_24h: 10,
+      bursts_outbound_60s_24h: { total_messages: 3, affected_cards: 2 },
+      pipeline_summary: { new_cards_24h: 5, promoted_to_lancar_venda_24h: 1, moved_to_followup_24h: 0, marked_lost_24h: 2 },
+      alerts,
+    };
+  }
+
+  it('retorna 0 quando não há alertas', async () => {
+    const sent = await alertSender.maybeSendAlerts(makeSnap([]));
+    expect(sent).toBe(0);
+  });
+
+  it('retorna 0 quando CLOW_ALERT_PHONE não está setado', async () => {
+    delete process.env.CLOW_ALERT_PHONE;
+    const sent = await alertSender.maybeSendAlerts(makeSnap(['⚠ teste alert']));
+    expect(sent).toBe(0);
   });
 });

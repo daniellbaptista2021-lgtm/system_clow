@@ -242,8 +242,9 @@ export function collectClowHealthSnapshot(tenantId = PV_TENANT): ClowHealthSnaps
 
 /** Loga snapshot resumido em formato pronto pra grep. Chamado pelo
  *  scheduler (worker 0) a cada 5 min. Linhas curtas, sem dump completo
- *  do snapshot — pra dump completo use o endpoint HTTP. */
-export function logHealthSnapshot(): void {
+ *  do snapshot — pra dump completo use o endpoint HTTP. Se houver
+ *  alertas e CLOW_ALERT_PHONE estiver setado, dispara WhatsApp. */
+export async function logHealthSnapshot(): Promise<void> {
   try {
     const snap = collectClowHealthSnapshot();
     const summary = [
@@ -258,6 +259,15 @@ export function logHealthSnapshot(): void {
     logger.info(`[clow-health] ${summary}`);
     for (const alert of snap.alerts) {
       logger.warn(`[clow-health] ${alert}`);
+    }
+    // Fase 3.3: dispara alerta WhatsApp se config setada
+    if (snap.alerts.length > 0) {
+      try {
+        const { maybeSendAlerts } = await import('./alertSender.js');
+        await maybeSendAlerts(snap);
+      } catch (err: any) {
+        logger.warn('[clow-health] alertSender err:', err?.message);
+      }
     }
   } catch (err: any) {
     logger.warn('[clow-health] snapshot falhou:', err?.message);

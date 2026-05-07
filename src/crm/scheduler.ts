@@ -109,7 +109,7 @@ export function stopScheduler(): void {
 async function healthSnapshotTick(): Promise<void> {
   try {
     const { logHealthSnapshot } = await import('./observability/healthMetrics.js');
-    logHealthSnapshot();
+    await logHealthSnapshot();
   } catch (err: any) {
     logger.warn('[health-snapshot-tick] err:', err?.message);
   }
