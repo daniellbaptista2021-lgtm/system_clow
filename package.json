@@ -20,6 +20,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:rollback": "tsx scripts/db-migrate.ts --rollback",
     "db:status": "tsx scripts/db-migrate.ts --status",
+    "smoke-test": "tsx scripts/smoke-test-clow.ts",
     "scan:secrets": "node scripts/run-gitleaks.cjs protect --staged --redact -v",
     "scan:secrets:full": "node scripts/run-gitleaks.cjs detect --source . --redact -v --report-path .gitleaks-report.json --report-format json",
     "scan:secrets:history": "node scripts/run-gitleaks.cjs detect --redact -v",
