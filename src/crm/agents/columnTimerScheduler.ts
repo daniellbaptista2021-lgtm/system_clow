@@ -166,6 +166,10 @@ export interface UnrespondedFire {
 export function findUnrespondedInboundCards(nowMs = Date.now()): UnrespondedFire[] {
   const db = getCrmDb();
   const cutoff = nowMs - UNRESPONDED_GRACE_MIN * 60_000;
+  // Daniel 2026-05-07: REATIVADO. Mesmo set de filtros do Hardening 5
+  // (status, deleted_at, agent_state.status). Risco de meta-commentary
+  // mitigado pelos 54 patterns (H5+H7) + whitelist da tabela (H8) +
+  // tool offline (H6) — não chama mais API que dava timeout.
   const rows = db.prepare(`
     SELECT
       c.id AS card_id, c.title AS card_title, c.board_id AS card_board_id,
@@ -180,12 +184,15 @@ export function findUnrespondedInboundCards(nowMs = Date.now()): UnrespondedFire
       col.agent_followup_steps_hours_json
     FROM crm_cards c
     JOIN crm_columns col ON col.id = c.column_id
+    LEFT JOIN crm_card_agent_state s ON s.card_id = c.id
     WHERE col.agent_enabled = 1
       AND col.agent_role IS NOT NULL
       AND c.last_inbound_at IS NOT NULL
       AND c.last_inbound_at <= ?
       AND (c.last_bot_message_at IS NULL OR c.last_bot_message_at < c.last_inbound_at)
       AND c.deleted_at IS NULL
+      AND (c.status IS NULL OR c.status = 'active')
+      AND (s.status IS NULL OR s.status NOT IN ('done','paused','escalated'))
     LIMIT ?
   `).all(cutoff, MAX_PER_CATEGORY) as Array<CardColumnRow & { last_inbound_at: number }>;
   return rows.map((r) => ({ row: r, lastInboundAt: r.last_inbound_at }));
@@ -631,15 +638,16 @@ export async function tickColumnTimers(): Promise<void> {
   try {
     entryCount = await dispatchAll(findEntryDelayCards(), dispatchEntry);
 
-    // DISABLED 2026-05-05 — safety net disparou bot em cards velhos onde LLM
-    // gerou meta-commentary que passou pelo filtro looksLikeMetaCommentary,
-    // vazando relato interno pro cliente (3 vendas perdidas reportado pelo
-    // Daniel). Reabilitar SO depois de endurecer o filtro de meta_commentary
-    // E garantir guard adicional aqui (ex: nao disparar se card ja teve
-    // qualquer activity nas ultimas N horas sem bot resposta — provavel sinal
-    // de prompt bug nao de crash de worker).
-    // const unresp = findUnrespondedInboundCards();
-    // for (const f of unresp) { await dispatchUnresponded(f); unrespCount++; }
+    // REATIVADO 2026-05-07 (Daniel) — sem essa safety net, cards onde o
+    // inbound flow falhou ficam plantados. Risco de meta-commentary
+    // mitigado por:
+    //  - Hardening 5+7: 54 patterns em looksLikeMetaCommentary
+    //  - Hardening 6: tool offline sem timeout (era a causa do hang
+    //    que gerava prompt confuso)
+    //  - Hardening 8: whitelist da tabela (price_off_table)
+    //  - filtros adicionais na findUnrespondedInboundCards: pula cards
+    //    com state.status done/paused/escalated
+    unrespCount = await dispatchAll(findUnrespondedInboundCards(), dispatchUnresponded);
 
     chaseCount = await dispatchAll(findChaseCards(), dispatchChase);
     fuCount = await dispatchAll(findFollowupCards(), dispatchFollowup);
