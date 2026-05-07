@@ -211,9 +211,13 @@ async function dispatchUnresponded(fire: UnrespondedFire): Promise<void> {
 
   logger.info(`[col-timer unresponded] safety net firing card=${fire.row.card_id} column="${fire.row.column_name}" lastIn=${new Date(fire.lastInboundAt).toISOString()}`);
 
+  // Daniel 2026-05-07: flag fromUnrespondedSafetyNet=true faz o runner
+  // pular o guard `client_replied_after_bot` — a safety net É o fallback
+  // pra quando o inbound flow falhou; sem o bypass, deadlock lógico.
   void runFromInactivityFire({
     channel, card: loaded.card, column: loaded.column,
     fireCount: 0, elapsedMin: Math.floor((Date.now() - fire.lastInboundAt) / 60000),
+    fromUnrespondedSafetyNet: true,
   }).catch((err: any) => logger.warn(`[col-timer unresponded] err: ${err?.message}`));
 }
 

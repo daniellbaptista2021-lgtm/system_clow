@@ -579,10 +579,17 @@ export interface InactivityFireInput {
   fireCount: number;
   /** Minutos desde que o timer venceu. */
   elapsedMin: number;
+  /** Daniel 2026-05-07: flag pra safety net (findUnrespondedInboundCards).
+   *  A safety net EXISTE precisamente pra cobrir quando o inbound flow
+   *  falhou em disparar o agente. O guard `client_replied_after_bot`
+   *  bloquearia a safety net por achar que "inbound vai responder" — mas
+   *  inbound já falhou. Quando true, esse guard é pulado.
+   *  Os outros guards (kill switch, rapid_fire 60s, max_turns) seguem. */
+  fromUnrespondedSafetyNet?: boolean;
 }
 
 export async function runFromInactivityFire(input: InactivityFireInput): Promise<RunResult> {
-  const { channel, card, column, fireCount, elapsedMin } = input;
+  const { channel, card, column, fireCount, elapsedMin, fromUnrespondedSafetyNet } = input;
   const tenantId = channel.tenantId;
   const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
 
@@ -614,9 +621,15 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
       });
       return { status: 'blocked', reason: 'agent_disabled' };
     }
-    // Cliente respondeu DEPOIS do último bot msg → fluxo inbound vai responder, scheduler nao
+    // Cliente respondeu DEPOIS do último bot msg → fluxo inbound vai responder, scheduler nao.
+    // EXCEÇÃO (Daniel 2026-05-07): se a chamada veio da safety net
+    // (fromUnrespondedSafetyNet=true), bypass — a safety net é justamente
+    // o fallback pra quando o inbound flow já falhou em responder.
     const clientLast = recent?.last_inbound_at ?? recent?.last_client_message_at;
-    if (clientLast && recent?.last_bot_message_at && clientLast > recent.last_bot_message_at) {
+    if (
+      !fromUnrespondedSafetyNet &&
+      clientLast && recent?.last_bot_message_at && clientLast > recent.last_bot_message_at
+    ) {
       logger.info(`[col-agent.runFromFire] suprimido card=${card.id} client_replied_after_bot — inbound flow vai responder`);
       recordAgentMetric({
         tenantId, columnId: column.id, cardId: card.id,
