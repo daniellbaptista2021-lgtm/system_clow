@@ -57,6 +57,26 @@ async function sendUpcomingReminders(): Promise<void> {
       WHERE status = 'active' AND next_charge_at >= ? AND next_charge_at <= ? AND reminders_sent <= ?
     `).all(windowStart, windowEnd, REMINDER_DAYS.length - REMINDER_DAYS.indexOf(days)) as any[];
     for (const r of rows) {
+      // FIX 2026-05-08 (Daniel): dedupe por (sub, days, 12h). Sem isso, o
+      // scheduler de 60s dispara ~60 lembretes dentro da janela ±30min do
+      // mesmo bucket de days. Bug visivel: 4 msgs identicas T-3d em 2min
+      // no card Daniel (06/05 20:30-32). Cap reminders_sent impedia >4
+      // mas nao impede multiplos dispatches dentro do MESMO bucket.
+      const dupCheck = db.prepare(`
+        SELECT 1 FROM crm_activities
+        WHERE tenant_id = ? AND type = 'billing'
+          AND content LIKE ?
+          AND created_at > ?
+          AND (card_id = ? OR (card_id IS NULL AND contact_id = ?))
+        LIMIT 1
+      `).get(
+        r.tenant_id,
+        `%T-${days}d%${r.plan_name}%`,
+        now - 12 * 3600_000,
+        r.card_id,
+        r.contact_id,
+      );
+      if (dupCheck) continue;
       try { await sendBillingReminder(rowToSub(r), days); }
       catch (e: any) { logger.warn('[billing reminder] failed', e.message); }
     }
