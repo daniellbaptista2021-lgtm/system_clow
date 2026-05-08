@@ -210,7 +210,7 @@ export interface WebhookValue {
  *   gente filtra esses ecos (caso contrario o bot vai responder a
  *   propria saudacao em looping).
  */
-export function parseWebhook(payload: any, connectedPhone?: string): WebhookValue {
+export function parseWebhook(payload: any, connectedPhone?: string, allowSelfChat?: boolean): WebhookValue {
   const out: WebhookValue = { messages: [] };
 
   // Normalizacao do connected phone — só digitos, pra comparar igual.
@@ -257,9 +257,16 @@ export function parseWebhook(payload: any, connectedPhone?: string): WebhookValu
     // quando o "receive-all-notifications" esta ativo. Resultado: cada
     // outbound do bot virava um message_in fake do proprio numero,
     // criava contato "5521969927641" duplicado e bagunçava o history.
+    //
+    // FIX 2026-05-08 (Daniel/PV): channel.allow_self_chat=1 permite
+    // self-msgs com fromMe=true (sistema externo usa Z-API da PV pra
+    // notificar leads de site no proprio numero). Echoes do receive-all
+    // chegam com fromMe=false e continuam dropados.
     if (connectedNorm) {
       const phoneNorm = String(phone).replace(/\D/g, '');
-      if (phoneNorm === connectedNorm) continue;
+      if (phoneNorm === connectedNorm) {
+        if (!allowSelfChat || !fromMe) continue;
+      }
     }
 
     // Onda 61: pra fromMe=true (corretor enviou), senderName eh o NOME DO

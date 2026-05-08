@@ -430,6 +430,9 @@ export interface Channel2 {
   webhookSecret?: string;
   lastInboundAt?: number;
   createdAt: number;
+  /** Quando true, parseWebhook aceita self-msgs (phone == numero conectado)
+   *  com fromMe=true. Usado pra relay de site externo via Z-API da PV. */
+  allowSelfChat?: boolean;
 }
 
 export interface Subscription {

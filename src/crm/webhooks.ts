@@ -166,7 +166,10 @@ app.post('/zapi/:secret', async (c) => {
     logger.warn('[crm-webhook] LID resolve failed:', err?.message);
   }
 
-  const parsed = zapi.parseWebhook(payload, connectedPhone || undefined);
+  // FIX 2026-05-08: per-channel allow_self_chat flag — quando ON, aceita
+  // msgs com phone=connected E fromMe=true (relay externo via Z-API).
+  const allowSelfChat = !!(channel as any).allowSelfChat || !!(channel as any).allow_self_chat;
+  const parsed = zapi.parseWebhook(payload, connectedPhone || undefined, allowSelfChat);
   for (const msg of parsed.messages) {
     void ingestInbound(channel, msg);
   }

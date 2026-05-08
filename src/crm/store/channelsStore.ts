@@ -96,6 +96,7 @@ function rowToChannel(r: any): Channel2 {
     phoneNumber: r.phone_number ?? undefined, phoneNumberId: r.phone_number_id ?? undefined,
     webhookSecret: r.webhook_secret ?? undefined, lastInboundAt: r.last_inbound_at ?? undefined,
     createdAt: r.created_at,
+    allowSelfChat: r.allow_self_chat === 1,
   };
 }
 
