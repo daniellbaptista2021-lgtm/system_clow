@@ -560,6 +560,18 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     return { status: 'blocked', reason: 'meta_commentary' };
   }
 
+  // 9.5b) FIX 2026-05-08 — Classificador LLM 2a passada. Pega parafrases
+  //       novas que regex nao cobre. Fail-open em erro de rede.
+  const addressee = await classifyAddressee(finalText, tenantId);
+  if (addressee === 'about_client') {
+    logger.warn(`[col-agent.runner] meta_commentary_llm bloqueou envio para ${customerPhone}: "${finalText.slice(0, 100)}"`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'meta_commentary_llm',
+    });
+    return { status: 'blocked', reason: 'meta_commentary' };
+  }
+
   // 9.6) KILL SWITCH: card foi movido pra coluna SEM agente durante o turno?
   //      Daniel 2026-05-05: "cliente na tabela de atendimento humano nao deve
   //      receber msg de bot nenhum". Se promover_* moveu o card durante o
@@ -890,6 +902,19 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
       event: 'blocked', reason: 'meta_commentary_inactivity',
     });
     finalText = '';
+  }
+
+  // FIX 2026-05-08 — Classificador LLM 2a passada (defesa em camadas)
+  if (finalText) {
+    const addressee = await classifyAddressee(finalText, tenantId);
+    if (addressee === 'about_client') {
+      logger.warn(`[col-agent.runFromFire] meta_commentary_llm bloqueou envio para ${customerPhone}: "${finalText.slice(0, 100)}"`);
+      recordAgentMetric({
+        tenantId, columnId: column.id, cardId: card.id,
+        event: 'blocked', reason: 'meta_commentary_llm_inactivity',
+      });
+      finalText = '';
+    }
   }
 
   // FIX 2026-05-06 — barra "" / so pontuacao / single-emoji do inactivity fire
@@ -1246,8 +1271,95 @@ export function looksLikeMetaCommentary(text: string): boolean {
     // 54) "Já tenho os dados" / "Vou agora seguir" / "Vou prosseguir" — narração pré-pergunta
     /\bj[aá]\s+tenho\s+(os\s+|todos\s+(os\s+)?)?dados/i,
     /\bvou\s+(agora\s+)?(prosseguir|continuar)\s+(com\s+|pra\s+|para\s+|na\s+|no\s+)/i,
+    // FIX 2026-05-08 (Daniel) — vazamentos novos pegos em prod nas ultimas 48h
+    // (Rosana, Creusa, Gilmar, Antonio, Renato, Maria, Nilza, Dilceu, Wilson,
+    // Clodoaldo, Lucia, Carlos, Paulo Sergio, etc). Categorias novas:
+    // 55) "Vou deixar [ele|ela|registrado|agendado|salvo|aqui|...]"
+    //     Cobre: "Vou deixar ele/ela em follow-up", "Vou deixar registrado aqui",
+    //     "Vou deixar agendado pra tentar amanhã", "Vou deixar tudo separado pra ele",
+    //     "Vou deixar anotado". NAO bloqueia "vou deixar pra você" (vocativo direto).
+    /\bvou\s+deixar\s+(ele|ela|esse|essa|este|esta|aquilo|registrado|anotado|agendado|salvo|gravado|marcado|tudo\s+(separado|registrado|anotado|salvo)|aqui\b)/i,
+    // 56) "Já atendi a/o [Nome]" — relato pos-fechamento ("Já atendi a Rosana direitinho")
+    /\bj[aá]\s+atendi\s+(a|o|ela|ele|esse|essa|este|esta)\s+[\wÀ-ú]+/i,
+    // 57) "Atendimento foi concluído/finalizado/encerrado/completado" — status interno
+    /\b(o\s+)?atendimento\s+(foi|est[aá]|j[aá]\s+(foi|est[aá]))\s+(conclu[ií]d[oa]|finalizad[oa]|encerrad[oa]|completad[oa]|completo|terminad[oa])/i,
+    // 58) "Não precisa de cobrança/follow-up/insistir" — instrucao interna
+    /\bn[aã]o\s+precisa\s+(de\s+)?(cobran[cç]a|cobrar|follow[\s\-]?up|insistir|abordar)\b/i,
+    /\bn[aã]o\s+precisa\s+nem\s+(de\s+)?(cobran[cç]a|cobrar|follow[\s\-]?up|insistir|abordar)\b/i,
+    // 59) "Follow-up agendado" sem vocativo — estado interno do sistema
+    /\bfollow[\s\-]?up\s+agendad[oa]\b/i,
+    // 60) "[Ela|Ele|Cliente] tá [no trabalho|sumiu|na duvida|ocupada|inativa|sem responder]"
+    //     (extensao do pattern 28 que so cobria "tava" — agora cobre "tá", "está", "continua")
+    /\b(ela|ele|a\s+cliente|o\s+cliente)\s+(t[aá]|tava|estava|continua|anda|t[aá]\s+sem)\s+(no\s+trabalho|sumi|na\s+d[uú]vida|em\s+casa|ocupad|inativ|sem\s+responder|ausente|fora|viajando|sem\s+sinal|ocupad)/i,
+    // 61) "Cliente existente" / "Já é cliente" — status do cliente em narrativa
+    /\bcliente\s+(existente|antig[oa]|fiel|j[aá]\s+contratante)\b/i,
+    /\bj[aá]\s+[ée]\s+cliente\b/i,
+    // 62) "Resolvi a dúvida/questão/problema/caso d(ela|ele|o cliente)"
+    /\bresolvi\s+(a\s+|o\s+)?(d[uú]vida|quest[aã]o|pergunta|problema|caso|atendimento)\s+(d[ela]e?|do\s+cliente|do\s+atendimento)/i,
+    // 63) "[Ela|Ele|Cliente] (agradeceu|aceitou|recusou|fechou|preferiu|sumiu|desistiu)"
+    //     - verbo no passado em 3a pessoa, sem complemento que indique fala
+    /\b(ela|ele|a\s+cliente|o\s+cliente)\s+(agradeceu|aceitou|recusou|negou|fechou|preferiu|sumiu|desistiu|n[aã]o\s+quis)\b/i,
+    // 64) Texto comeca com "Vou deixar [Nome proprio]" - narrar dispatch em 3a pessoa
+    /^\s*(j[aá]\s+)?vou\s+deixar\s+[A-ZÀ-Ú][\wÀ-ú]+\b/im,
+    // 65) Texto inicia com "Já atendi" / "Já resolvi" / "Já passei" - relato de acao concluida
+    /^\s*j[áa]\s+(atendi|resolvi|passei|encaminhei|finalizei|encerrei|conclu[ií]|fechei)\b/im,
+    // 66) "Vou deixar agendado" - narra agendamento sem vocativo
+    /\bvou\s+deixar\s+agendado\b/i,
+    // 67) "Vai/vou tentar de novo amanhã/depois/em breve" sobre o cliente
+    /\b(vai|vou)\s+tentar\s+(de\s+novo|novamente)\s+(amanh[aã]|depois|em\s+breve|mais\s+tarde|daqui\s+a)/i,
+    // 68) "Cliente (não) respondeu/voltou/falou (mais|nada|nenhuma vez)" - status em 3a pessoa
+    /\b(o\s+)?cliente\s+(n[aã]o\s+)?(respondeu|voltou|falou|escreveu|reagiu|deu\s+sinal)\s+(mais|nada|nenhuma\s+vez|ainda|sequer)/i,
   ];
   return patterns.some((p) => p.test(t));
+}
+
+/**
+ * FIX 2026-05-08 (Daniel) — Classificador LLM como 2a passada (defesa em
+ * camadas). Pergunta a um modelo curto: "esse texto e MENSAGEM PRA o
+ * cliente, ou NOTA INTERNA SOBRE o cliente?". Bloqueia se 'about_client'.
+ *
+ * Estrategia complementar a `looksLikeMetaCommentary` (regex). Pega
+ * variantes que regex nao cobre (ex: parafrases novas do LLM principal).
+ *
+ * Custo: 1 chamada DeepSeek curta por mensagem que passou no regex.
+ * Latencia: +300-700ms por mensagem.
+ *
+ * Fail-open em caso de erro de rede/timeout — preferimos vazar uma msg
+ * raramente a deixar bot mudo permanente. Erros sao logados pra observar.
+ */
+export async function classifyAddressee(
+  text: string,
+  tenantId: string,
+): Promise<'to_client' | 'about_client'> {
+  if (!text) return 'to_client';
+  // Curto-circuito: textos curtissimos (saudacao, ack) nao precisam de LLM.
+  // "Oi", "Tudo bem?", "Bom dia!" tem < 25 chars e nunca sao narrativa.
+  if (text.trim().length < 25) return 'to_client';
+
+  const sys = `Voce e um classificador binario.
+
+Receba um texto em portugues e decida se e:
+- "client": MENSAGEM ESCRITA PARA o cliente (vendedor falando com ele, em 2a pessoa, com vocativo, pergunta direta, saudacao, instrucao, agradecimento).
+- "internal": NOTA INTERNA SOBRE o cliente (3a pessoa, narrar acoes proprias do sistema, descrever estado/decisao, relatar o que aconteceu).
+
+Sinais de "internal": "vou deixar ele/ela", "ela tá", "o cliente nao respondeu", "atendimento concluido", "follow-up agendado", "ja atendi a [nome]", "resolvi a duvida dela", "vou deixar registrado", "ela agradeceu", "nao precisa de cobranca".
+
+Sinais de "client": vocativo direto ("Bom dia, Joao!"), pergunta direta ("Voce prefere o plano X ou Y?"), instrucao ("Manda seu CPF"), agradecimento ("Obrigada por aguardar").
+
+Casos ambiguos: se ha QUALQUER mistura de relato/narrativa com texto que poderia ser pro cliente, classifique como "internal" (cliente nao deveria receber narrativa de jeito nenhum).
+
+Responda APENAS com 1 palavra: "client" ou "internal". Sem pontuacao, sem explicacao.`;
+
+  try {
+    const { callDeepSeek } = await import('../ai/agent.js');
+    const r = await callDeepSeek(sys, [], text, 'deepseek-chat', tenantId);
+    const norm = r.toLowerCase().trim().replace(/[.!?"'`\s]+/g, '');
+    if (norm.startsWith('internal')) return 'about_client';
+    return 'to_client';
+  } catch (err: any) {
+    logger.warn(`[col-agent.classifier] LLM falhou (fail-open): ${err?.message || 'unknown'}`);
+    return 'to_client';
+  }
 }
 
 // FIX 2026-05-06 — bug "" (2 chars) chegando no cliente:
