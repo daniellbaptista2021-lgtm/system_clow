@@ -213,6 +213,7 @@ async function tick(): Promise<void> {
       detectStaleCards(),
       detectDueApproaching(),
       processBillingTick(),
+      runPvAtendimentoBackstop(),
       reportsScheduler.tick(),
       (async () => {
         try {
@@ -251,6 +252,16 @@ async function tick(): Promise<void> {
     logger.warn('[CRM scheduler] tick error:', e.message);
   } finally {
     _runningTick = false;
+  }
+}
+
+async function runPvAtendimentoBackstop(): Promise<void> {
+  try {
+    const { promoteQualifiedPvAtendimentoBacklog } = await import('./agents/pvAtendimentoBackstop.js');
+    const moved = promoteQualifiedPvAtendimentoBacklog();
+    if (moved > 0) logger.warn(`[scheduler] pv-atendimento-backstop moved=${moved}`);
+  } catch (err: any) {
+    logger.warn('[scheduler pv-atendimento-backstop] err:', err?.message);
   }
 }
 
