@@ -167,11 +167,137 @@ const DEFAULT_HOURS_END = '23:59';
 const LOCK_TTL_SECONDS = 60;
 const TENANT_TIMEZONE = 'America/Sao_Paulo'; // hardcoded — decisao 4 do PR 2
 const MAX_TOOL_ITERATIONS = 4; // PR 3: limite LLM↔tool por turno
+const PV_TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
+const PV_ATENDIMENTO_COLUMN_ID = 'crm_col_591b12179732';
 
 /** Mensagem padrao fora de horario. {{start}} eh substituido pelo horario
  *  inicial da coluna. Justificativa pra hardcode em decisao 3 do PR 2. */
 const OUT_OF_HOURS_TEMPLATE =
   'Recebi sua mensagem! 😊 Volto a te responder a partir das {{start}}.';
+
+function isPvAtendimentoQualifier(tenantId: string, column: BoardColumn, role: ColumnAgentRole): boolean {
+  return tenantId === PV_TENANT_ID
+    && column.id === PV_ATENDIMENTO_COLUMN_ID
+    && role === 'qualificador'
+    && !!column.agentPromoteToColumnId;
+}
+
+function stripDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+function inferPlanType(text: string): string | undefined {
+  const n = stripDiacritics(text).toLowerCase();
+  if (/\b(familia|familiar|esposa|marido|conjuge|companheir|filh[oa]s?|pai|mae|maes|pais|sogr[oa]s?)\b/i.test(n)) {
+    return 'familiar';
+  }
+  if (/\b(individual|so\s+pra\s+(mim|voce)|apenas\s+(eu|voce)|titular)\b/i.test(n)) {
+    return 'individual';
+  }
+  if (/\b(funeral|funerario|seguro)\b/i.test(n)) return 'funeral';
+  return undefined;
+}
+
+function extractAge(text: string): number | undefined {
+  const dateMatch = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
+  if (dateMatch) {
+    const rawYear = Number(dateMatch[3]);
+    const year = rawYear < 100 ? 1900 + rawYear : rawYear;
+    const age = new Date().getFullYear() - year;
+    if (age > 0 && age <= 120) return age;
+  }
+  const ageMatch = stripDiacritics(text).match(/\b(\d{1,3})\s*(?:anos?|idade)?\b/i);
+  if (!ageMatch) return undefined;
+  const age = Number(ageMatch[1]);
+  return age > 0 && age <= 120 ? age : undefined;
+}
+
+function extractLeadName(text: string, cardTitle?: string): string | undefined {
+  const cleaned = text
+    .replace(/[✅🍀😊]/g, ' ')
+    .replace(/\b(plano|familia|familiar|individual|clique|aqui|idade|anos?)\b/gi, ' ')
+    .trim();
+  const fromMessage = cleaned.match(/^([A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,})?)/)?.[1]?.trim();
+  if (fromMessage) return fromMessage;
+  const title = (cardTitle || '').trim();
+  if (title && !/^\d+$/.test(title) && !/clique|plano/i.test(title)) return title;
+  return undefined;
+}
+
+async function maybeHandlePvAtendimentoFastPath(input: {
+  tenantId: string;
+  channel: Channel2;
+  card: Card;
+  column: BoardColumn;
+  state: NonNullable<ReturnType<typeof getCardAgentState>>;
+  role: ColumnAgentRole;
+  customerPhone: string;
+  contactId: string | null;
+  userMessage: string;
+  history: ChatMessage[];
+}): Promise<RunResult | null> {
+  const { tenantId, channel, card, column, state, role, customerPhone, contactId, userMessage, history } = input;
+  if (!isPvAtendimentoQualifier(tenantId, column, role)) return null;
+
+  const existing = (state.collectedData ?? {}) as Record<string, unknown>;
+  const existingQ = ((existing.qualification as Record<string, unknown>) ?? {}) as Record<string, unknown>;
+  const historyText = history.map((m) => m.content).join('\n');
+  const allText = `${historyText}\n${userMessage}\n${card.title || ''}`;
+
+  const nome = typeof existingQ.nome === 'string' && existingQ.nome.trim()
+    ? existingQ.nome.trim()
+    : extractLeadName(userMessage, card.title);
+  const idade = typeof existingQ.idade === 'number' && existingQ.idade > 0
+    ? existingQ.idade
+    : extractAge(userMessage);
+  const tipoPlano = typeof existingQ.tipo_plano === 'string' && existingQ.tipo_plano.trim()
+    ? existingQ.tipo_plano.trim()
+    : inferPlanType(allText);
+
+  if (!nome || !idade || !tipoPlano) return null;
+
+  const qualification = {
+    ...existingQ,
+    nome,
+    idade,
+    tipo_plano: tipoPlano,
+    ...(tipoPlano === 'familiar' ? { composicao_familiar: userMessage } : {}),
+  };
+  upsertCardAgentState({
+    cardId: card.id,
+    columnId: column.id,
+    currentAgentRole: role,
+    tenantId,
+    collectedData: { ...existing, qualification },
+  });
+
+  const firstName = nome.split(/\s+/)[0] || nome;
+  const finalText = `Perfeito, ${firstName}! Obrigada 😊 Já deixei seus dados separados e o Nilson vai te chamar por aqui com a cotação SulAmérica pronta, com valores, benefícios e as opções de cobertura certinhas pra você.`;
+
+  try {
+    await sendReply(channel, customerPhone, finalText, contactId);
+  } catch (err: any) {
+    logger.error(`[col-agent.runner] pv_fast_path send falhou card=${card.id}:`, err?.message);
+    return { status: 'error', message: err?.message || 'send_failed' };
+  }
+
+  recordAgentTurn(card.id, 'agent');
+  const freshState = getCardAgentState(card.id) ?? state;
+  const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
+  const refreshedColumn = store.listColumns(tenantId, card.boardId!)
+    .find((c) => c.id === refreshedCard.columnId) ?? column;
+  const promoted = maybeAutoPromote({
+    tenantId,
+    channel,
+    card: refreshedCard,
+    column: refreshedColumn,
+    state: freshState,
+    customerPhone,
+    role,
+  });
+  logger.info(`[col-agent.runner] pv_fast_path card=${card.id} promoted=${promoted.promoted} reason=${promoted.reason || 'ok'}`);
+  return { status: 'executed', reply: finalText };
+}
 
 // ─── Input ───────────────────────────────────────────────────────────────
 
@@ -391,6 +517,20 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   // Se o LLM falhar, ja contamos esse turno — evita loop infinito.
   recordAgentTurn(card.id, 'client');
   state = getCardAgentState(card.id) ?? state;
+
+  const pvFastResult = await maybeHandlePvAtendimentoFastPath({
+    tenantId,
+    channel,
+    card,
+    column,
+    state,
+    role,
+    customerPhone,
+    contactId,
+    userMessage,
+    history,
+  });
+  if (pvFastResult) return pvFastResult;
 
   // 8) Tool loop (PR 3 da Onda 62) — max MAX_TOOL_ITERATIONS
   const tools = getToolsForRole(role);
