@@ -528,13 +528,13 @@ const PV_TENANT_ID = 'be5f5042-d939-447d-8777-5ac841e7aa07';
 /**
  * Auto-promote deterministico (PV Corretora apenas).
  *
- * Daniel 2026-05-05: o LLM as vezes coleta os dados via salvar_dados_qualificacao
+ * Daniel 2026-05-12: o LLM as vezes coleta os dados via salvar_dados_qualificacao
  * mas esquece de chamar promover_para_vendedor_funeral, deixando o card preso no
- * Lead apos cliente ja ter dado todos os dados pra cotacao. O fluxo Daniel quer
- * (Lead → Atendimento Humano) tem que ser garantido independente do LLM.
+ * Atendimento apos cliente ja ter dado todos os dados pra cotacao. O fluxo atual
+ * da PV e simples: nome, idade e tipo de plano/interesse → coluna Nilson.
  *
  * Chamado apos cada turno bem-sucedido do agente. Se o state tem qualification
- * completa (4 campos minimos), move o card pra coluna alvo automaticamente.
+ * completa (3 campos minimos), move o card pra coluna alvo automaticamente.
  * Idempotente — validatePromotionTarget retorna alreadyPromoted se ja moveu.
  */
 export function maybeAutoPromote(ctx: ToolContext): { promoted: boolean; reason?: string } {
@@ -542,7 +542,7 @@ export function maybeAutoPromote(ctx: ToolContext): { promoted: boolean; reason?
   if (ctx.tenantId !== PV_TENANT_ID) return { promoted: false, reason: 'not_pv' };
   // GUARD 2: coluna precisa ter destino configurado.
   if (!ctx.column.agentPromoteToColumnId) return { promoted: false, reason: 'no_promote_target' };
-  // GUARD 0 (Daniel 2026-05-06): auto-promote SO opera Lead→Atendimento Humano
+  // GUARD 0 (Daniel 2026-05-06): auto-promote SO opera role qualificador
   // (role qualificador). Bug grave: o vendedor herdava `qualification` do Lead
   // (nome/idade/tipo/composicao todos preenchidos) e era promovido auto pra
   // "Lancar Venda" SEM ter fechado venda nem coletado CPF/RG/email/telefone.
@@ -561,16 +561,11 @@ export function maybeAutoPromote(ctx: ToolContext): { promoted: boolean; reason?
     | Record<string, unknown> | undefined;
   if (!q) return { promoted: false, reason: 'no_qualification' };
   const hasNome = typeof q.nome === 'string' && q.nome.trim().length > 0;
-  const hasIdade = typeof q.idade === 'number' && q.idade > 0 && q.idade <= 74;
+  const hasIdade = typeof q.idade === 'number' && q.idade > 0 && q.idade <= 120;
   const hasTipo = typeof q.tipo_plano === 'string' && q.tipo_plano.trim().length > 0;
-  const hasComp = typeof q.composicao_familiar === 'string' && q.composicao_familiar.trim().length > 0;
-  if (!hasNome || !hasIdade || !hasTipo || !hasComp) {
-    return { promoted: false, reason: `missing:${[!hasNome && 'nome', !hasIdade && 'idade', !hasTipo && 'tipo', !hasComp && 'composicao'].filter(Boolean).join(',')}` };
+  if (!hasNome || !hasIdade || !hasTipo) {
+    return { promoted: false, reason: `missing:${[!hasNome && 'nome', !hasIdade && 'idade', !hasTipo && 'tipo'].filter(Boolean).join(',')}` };
   }
-
-  // GUARD 4: pelo menos 2 turnos do cliente — evita promover na primeira msg
-  // se o LLM por algum motivo salvar tudo de cara (edge case suspeito).
-  if (fresh.turnsCount < 2) return { promoted: false, reason: `turns_too_low=${fresh.turnsCount}` };
 
   // Valida destino e move
   const v = validatePromotionTarget(ctx);

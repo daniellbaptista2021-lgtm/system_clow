@@ -71,17 +71,19 @@ function isAgentEnabledFresh(columnId: string): boolean {
  *  pode receber msg automatica — se card foi movido durante o turno do
  *  agente (ex: promover_para_vendedor_funeral disparou e moveu), o envio
  *  da mensagem final tem que ser suprimido. Falha CLOSED em erro de DB. */
-function isCardStillOnAgentColumn(tenantId: string, cardId: string): boolean {
+function isCardStillOnAgentColumn(tenantId: string, cardId: string, allowedMovedToColumnId?: string): boolean {
   try {
     const row = getCrmDb()
       .prepare(`
-        SELECT col.agent_enabled AS enabled
+        SELECT col.id AS column_id, col.agent_enabled AS enabled
         FROM crm_cards c
         JOIN crm_columns col ON col.id = c.column_id
         WHERE c.id = ? AND c.tenant_id = ?
       `)
-      .get(cardId, tenantId) as { enabled?: number } | undefined;
-    return !!(row && row.enabled === 1);
+      .get(cardId, tenantId) as { column_id?: string; enabled?: number } | undefined;
+    if (!row) return false;
+    if (row.enabled === 1) return true;
+    return !!(allowedMovedToColumnId && row.column_id === allowedMovedToColumnId);
   } catch {
     return false; // fail closed
   }
@@ -577,7 +579,7 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
   //      receber msg de bot nenhum". Se promover_* moveu o card durante o
   //      tool loop, a coluna atual pode ser Atendimento Humano (agent_enabled=0)
   //      e enviar agora vazaria msg pro cliente. Refaz query do DB e aborta.
-  if (!isCardStillOnAgentColumn(tenantId, card.id)) {
+  if (!isCardStillOnAgentColumn(tenantId, card.id, column.agentPromoteToColumnId)) {
     logger.warn(`[col-agent.runner] card=${card.id} foi movido pra coluna sem agente durante o turno — abort send para ${customerPhone}`);
     recordAgentMetric({
       tenantId, columnId: column.id, cardId: card.id,

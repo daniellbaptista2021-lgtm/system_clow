@@ -40,6 +40,7 @@ import * as m012 from './migrations/012_agent_config_audit.js';
 import * as m013 from './migrations/013_revoked_tokens.js';
 import * as m014 from './migrations/014_voice_response.js';
 import * as m015 from './migrations/015_channel_allow_self_chat.js';
+import * as m016 from './migrations/016_pv_atendimento_to_nilson.js';
 
 export interface Migration {
   version: number;
@@ -48,7 +49,7 @@ export interface Migration {
   down(db: Database): void;
 }
 
-const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015];
+const ALL_MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007, m008, m009, m010, m011, m012, m013, m014, m015, m016];
 
 // ─── Validation (runs once at module load) ────────────────────────────────
 
