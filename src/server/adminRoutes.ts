@@ -22,6 +22,7 @@ import {
 } from '../tenancy/tenantStore.js';
 import { adminAuth } from './middleware/tenantAuth.js';
 import type { TierName } from '../tenancy/tiers.js';
+import { logger } from '../utils/logger.js';
 
 function normalizeTierName(input: unknown): TierName | null {
   if (typeof input !== 'string') return null;
@@ -183,7 +184,7 @@ export function buildBillingRoutes(): Hono {
       return c.json({ ok: true }); // Ignore malformed
     }
 
-    console.log(`[billing] Event: ${event} | Customer: ${payment.customer}`);
+    logger.info(`[billing] Event: ${event} | Customer: ${payment.customer}`);
 
     if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') {
       await handlePaymentConfirmed(payment);
@@ -213,9 +214,9 @@ async function handlePaymentConfirmed(payment: any): Promise<void> {
       next_billing_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
     });
     resetMonthlyUsage(tenant.id);
-    console.log(`[billing] Renewed tenant ${tenant.email}`);
+    logger.info(`[billing] Renewed tenant ${tenant.email}`);
   } else {
-    console.log(`[billing] Payment confirmed for unknown customer ${customerId} — manual resolution needed`);
+    logger.info(`[billing] Payment confirmed for unknown customer ${customerId} — manual resolution needed`);
   }
 }
 
@@ -227,5 +228,5 @@ async function handlePaymentOverdue(payment: any): Promise<void> {
   if (!tenant) return;
 
   // Don't suspend yet — 7 day grace period handled by the cron
-  console.log(`[billing] Payment overdue for ${tenant.email} — grace period active`);
+  logger.info(`[billing] Payment overdue for ${tenant.email} — grace period active`);
 }

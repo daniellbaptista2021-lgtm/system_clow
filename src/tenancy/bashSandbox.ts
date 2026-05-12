@@ -1,103 +1,84 @@
 /**
  * bashSandbox.ts — Bash command validation for multi-tenant safety
  *
- * Regular users get sandboxed Bash:
- *   - Commands restricted to whitelist
- *   - Dangerous patterns blocked
- *   - Execution locked to tenant workspace
+ * 2026-04-29 mudanca de modelo: WHITELIST → BLACKLIST.
+ * Daniel: "todos os comandos exceto mexer no proprio sistema". Tenant pode
+ * rodar QUALQUER binario/comando dentro do seu workspace; bloqueamos so o
+ * que toca o System Clow propriamente dito (codigo, processo, .env, banco
+ * dos tenants) ou que escala privilegio (sudo/su).
  *
- * Admin users: unrestricted.
+ * Garantias estruturais que continuam (NAO precisam estar nessa lista):
+ *  - bwrap namespace isola filesystem do tenant: ele so ve /opt/clow-workspaces/<tid>
+ *    em rw + /usr /lib /lib64 /bin /etc em ro. Outros tenants nem existem
+ *    no namespace.
+ *  - SQL queries do CRM filtram por tenant_id.
+ *  - Sem sudo, processos rodam como user nao-root no sandbox.
+ *
+ * Por isso a blacklist abaixo e CURTA: cobre apenas o que sandbox/SQL nao
+ * isolam por conta propria — comandos que escalam ou acessam o System Clow
+ * pelo canal de processo/PID/arquivos especiais.
+ *
+ * Admin: unrestricted (path separado em BashTool).
  */
 
 // ════════════════════════════════════════════════════════════════════════════
 // Configuration
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Commands allowed for regular users */
-const ALLOWED_COMMANDS = new Set([
-  'ls', 'cat', 'head', 'tail', 'wc', 'sort', 'uniq', 'tr', 'cut', 'paste',
-  'grep', 'find', 'echo', 'printf', 'date', 'pwd', 'which', 'whoami',
-  'node', 'npm', 'npx', 'python', 'python3', 'pip', 'pip3',
-  'git', 'curl', 'wget',
-  'mkdir', 'cp', 'mv', 'touch', 'rm', 'chmod',
-  'tar', 'zip', 'unzip', 'gzip', 'gunzip',
-  'jq', 'sed', 'awk', 'diff', 'tee', 'xargs',
-  'tsc', 'tsx', 'bun', 'deno',
-]);
-
-/** Patterns that are ALWAYS blocked for regular users */
+/** Patterns que afetam o System Clow ou escalam privilegio. */
 const BLOCKED_PATTERNS = [
-  // System control
-  /\bpm2\b/i,
-  /\bsystemctl\b/i,
-  /\bservice\b/i,
-  /\bsudo\b/i,
-  /\bsu\b\s/,
-  /\bkill\b/,
-  /\bkillall\b/i,
-  /\bpkill\b/i,
-  /\breboot\b/i,
-  /\bshutdown\b/i,
+  // Privilege escalation
+  /\bsudo\b/,
+  /(^|\s|;|&|\|)su\s+(-|\w)/,         // su -, su user
+  /\bdoas\b/,
+  /\bpolkit\b/i,
+
+  // System Clow process control
+  /\bpm2\b/,
+  /\bsystemctl\b/,
+  /(^|\s|;|&|\|)service\s+\S+\s+(start|stop|restart|reload)/,
+  /\breboot\b/,
+  /\bshutdown\b/,
   /\binit\b\s+\d/,
 
-  // Environment / secrets
-  /\bexport\b/,
-  /\benv\b(?!\s)/,  // "env" standalone but not "environment"
-  /\/etc\/(?!hostname)/,  // /etc/ except hostname
+  // Mata processo do System Clow / sistema (PID 1, ranges)
+  /\bkill\s+-9\s+1\b/,
+  /\bkill\s+1\b/,
+  /\bkillall\s+(node|clow|pm2)\b/,
+  /\bpkill\s+(node|clow|pm2)\b/,
+
+  // Firewall / rede de baixo nivel — afeta o servidor todo
+  /\biptables\b/,
+  /\bufw\b/,
+  /\bnft(ables)?\b/,
+
+  // Dispositivos / filesystem do servidor
+  /\bmkfs(\.|\b)/i,
+  /\bdd\s+if=/,
+  />\s*\/dev\/(sd|nvme|hd)/,
+
+  // Leak/modificacao de credenciais e do banco do System Clow
   /\.env\b/,
   /tenants\.json/i,
-  /\.clow\//,
-  /ANTHROPIC_API_KEY/i,
-  /CLOW_ADMIN/i,
-  /API_KEY/i,
-  /SECRET/i,
-
-  // Server code modification
-  /src\/server\//,
-  /src\/tenancy\//,
-  /src\/hooks\//,
-  /src\/api\//,
-  /src\/utils\/context/,
-  /dist\//,
-  /package\.json/,
-  /tsconfig/,
-  /node_modules/,
-
-  // Dangerous operations
-  /rm\s+(-rf?|--recursive)\s+\//,  // rm -rf /
-  />\s*\/dev\/sd/,                   // writing to devices
-  /mkfs/i,
-  /dd\s+if=/i,
-  /chmod\s+777/,
-  /chown/i,
-  /chgrp/i,
-  /\biptables\b/i,
-  /\bufw\b/i,
-
-  // Network abuse
-  /nc\s+-l/i,     // netcat listener
-  /nmap\b/i,
-  /ssh\b/i,
-  /scp\b/i,
-  /rsync\b/i,
-
-  // Process/system info leakage
-  /\/proc\//,
-  /\/sys\//,
-  /\/root\//,
-  /\/home\/(?!clow)/,
-  /passwd/i,
-  /shadow/i,
+  /\bANTHROPIC_API_KEY\b/,
+  /\bCLOW_ADMIN[A-Z_]*\b/,
 ];
 
-/** Paths that are always blocked */
+/** Paths que sao do sistema/clow — read e write proibidos pra tenant.
+ *  /etc fica acessivel via bwrap como ro-bind, entao leitura e ok mas
+ *  escrita ja nao funciona naturalmente. */
 const BLOCKED_PATHS = [
-  '/etc/',
-  '/root/',
-  '/opt/system-clow/src/',
-  '/opt/system-clow/dist/',
+  '/opt/system-clow/src',
+  '/opt/system-clow/dist',
   '/opt/system-clow/.env',
   '/opt/system-clow/package.json',
+  '/opt/system-clow/tsconfig',
+  '/opt/system-clow/node_modules',
+  '/opt/system-clow/scripts',
+  '/root/.clow',                        // banco SQLite multi-tenant + tenants.json
+  '/root/.ssh',
+  '/etc/shadow', '/etc/passwd', '/etc/sudoers',
+  '/etc/systemd', '/etc/nginx',
 ];
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -115,59 +96,37 @@ export interface SandboxResult {
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Validate a Bash command for a regular (non-admin) user.
- * Returns { allowed: true } if safe, or { allowed: false, reason } if blocked.
+ * Valida um comando Bash de tenant SaaS.
+ *
+ * Modelo blacklist (2026-04-29): tenant pode rodar qualquer binario/comando.
+ * Bloqueamos so o que toca o proprio System Clow (processo, codigo, banco)
+ * ou escala privilegio (sudo/su). Isolamento de filesystem entre tenants e
+ * feito pelo bwrap namespace em SandboxRunner (nao por path matching aqui).
  */
 export function validateBashCommand(
   command: string,
   workspaceRoot: string,
   isAdmin: boolean = false,
 ): SandboxResult {
-  // Admin: unrestricted
   if (isAdmin) return { allowed: true };
 
   const trimmed = command.trim();
   if (!trimmed) return { allowed: false, reason: 'Empty command' };
 
-  // Check blocked patterns
   for (const pattern of BLOCKED_PATTERNS) {
     if (pattern.test(trimmed)) {
       return {
         allowed: false,
-        reason: `Comando bloqueado por politica de seguranca: ${pattern.source.slice(0, 30)}`,
+        reason: `Bloqueado: comando afeta o System Clow ou escala privilegio (${pattern.source.slice(0, 40)}). Voce pode rodar qualquer outra coisa no seu workspace.`,
       };
     }
   }
 
-  // Check blocked paths
   for (const blockedPath of BLOCKED_PATHS) {
     if (trimmed.includes(blockedPath)) {
       return {
         allowed: false,
-        reason: `Acesso negado ao caminho: ${blockedPath}`,
-      };
-    }
-  }
-
-  // Extract first command (handle pipes, && , ||)
-  const firstCmd = extractFirstCommand(trimmed);
-  if (!firstCmd) return { allowed: false, reason: 'Comando nao reconhecido' };
-
-  // Validate first command is in whitelist
-  if (!ALLOWED_COMMANDS.has(firstCmd)) {
-    return {
-      allowed: false,
-      reason: `Comando "${firstCmd}" nao esta na lista de comandos permitidos`,
-    };
-  }
-
-  // Validate all piped/chained commands
-  const allCmds = extractAllCommands(trimmed);
-  for (const cmd of allCmds) {
-    if (!ALLOWED_COMMANDS.has(cmd)) {
-      return {
-        allowed: false,
-        reason: `Comando "${cmd}" nao esta na lista de comandos permitidos`,
+        reason: `Bloqueado: caminho pertence ao System Clow ou ao sistema operacional (${blockedPath}).`,
       };
     }
   }
@@ -186,29 +145,6 @@ export function getTenantWorkspaceDir(tenantId: string): string {
 // ════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════════════
-
-function extractFirstCommand(cmd: string): string | null {
-  // Remove leading env vars (VAR=val command)
-  const withoutEnv = cmd.replace(/^(\w+=\S+\s+)+/, '');
-  // Get first word
-  const match = withoutEnv.match(/^(\S+)/);
-  if (!match) return null;
-  // Remove path prefix (e.g., /usr/bin/ls → ls)
-  return match[1].split('/').pop() || null;
-}
-
-function extractAllCommands(cmd: string): string[] {
-  // Split by pipe, &&, ||, ;
-  const parts = cmd.split(/\s*(?:\|{1,2}|&&|;)\s*/);
-  const commands: string[] = [];
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const first = extractFirstCommand(trimmed);
-    if (first) commands.push(first);
-  }
-  return commands;
-}
 
 function sanitizeTenantId(tenantId: string): string {
   return tenantId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'default';

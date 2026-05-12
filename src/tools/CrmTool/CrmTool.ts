@@ -5,26 +5,53 @@
  * a multi-tenant session, only that tenant's data is touched.
  *
  * Tools exposed:
- *   - crm_find_or_create_contact
- *   - crm_create_card
- *   - crm_move_card
- *   - crm_add_note
- *   - crm_send_whatsapp
- *   - crm_search
- *   - crm_pipeline
- *   - crm_get_contact
- *   - crm_create_reminder
- *   - crm_dashboard
+ *   Operação de dados:
+ *   - crm_find_or_create_contact, crm_create_card, crm_move_card, crm_add_note,
+ *     crm_send_whatsapp, crm_search, crm_pipeline, crm_get_contact,
+ *     crm_create_reminder, crm_dashboard, crm_create_subscription,
+ *     crm_mark_subscription_paid, crm_create_task, crm_create_appointment
+ *   Configuração (System Clow monta o funnel pro cliente):
+ *   - crm_list_boards, crm_create_board, crm_list_columns, crm_create_column,
+ *     crm_update_column, crm_delete_column, crm_configure_column_agent,
+ *     crm_disable_column_agent, crm_update_card
  */
 
 import { z } from 'zod';
 import { buildTool, type ToolResult, type ToolUseContext } from '../Tool.js';
 import * as crm from '../../crm/store.js';
+import { getCrmDb } from '../../crm/schema.js';
 import { sendOutbound } from '../../crm/inbox.js';
+import { markPaid as billingMarkPaid } from '../../crm/billing.js';
+import { createTask as tasksCreate, listTasks as tasksList } from '../../crm/tasks.js';
+import { createAppointment as calCreate } from '../../crm/calendar.js';
+import { logger } from '../../utils/logger.js';
+import {
+  listCardTags,
+  listCardIdsByTag,
+} from '../../crm/agents/tools/tags.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+//
+// Resolve o tenantId do contexto da chamada. FAIL-CLOSED por design: se
+// ctx.tenantId nao esta setado, lanca — JAMAIS cai num tenant default,
+// porque caso contrario as tools de CRM vazam dados entre tenants quando
+// o caminho de resolucao upstream (webhook → resolveTenantForMeta, sessao
+// admin reusada, header faltante etc) deixa o campo vazio.
+//
+// Bug 2026-04-29: o fallback antigo `ctx.tenantId || 'default'` fazia o
+// agente System Clow consultar dados do tenant 'default' (admin/dev) quando
+// usuarios SaaS interagiam — mostrou cards/valores que nao eram deles.
 function tid(ctx: ToolUseContext): string {
-  return ctx.tenantId || 'default';
+  const t = ctx.tenantId;
+  if (typeof t !== 'string' || !t.trim()) {
+    throw new Error(
+      `crm_tool_tenant_missing: ctx.tenantId vazio (sessionId=${ctx.sessionId ?? 'unknown'}). Tool de CRM bloqueada por seguranca — nao caiu em tenant default. Caller upstream perdeu o tenantId; investigue resolveTenantForMeta / sessionPool / authMiddleware.`,
+    );
+  }
+  // Audit log — toda chamada de tool de CRM marca o tenant ativo no journal
+  // pra debug de "que tenant a IA tava operando quando aconteceu X".
+  logger.info(`[crm-tool] tenant=${t.slice(0, 8)} session=${(ctx.sessionId || '?').slice(0, 8)}`);
+  return t;
 }
 
 function fmtMoney(cents: number): string {
@@ -508,6 +535,717 @@ export const CrmDashboardTool = buildTool<z.infer<typeof DashboardSchema>>({
   },
 });
 
+// ════════════════════════════════════════════════════════════════════════
+// 11. crm_create_subscription (mensalidade recorrente)
+// ════════════════════════════════════════════════════════════════════════
+const CreateSubscriptionSchema = z.object({
+  contactId: z.string().describe('ID do contato (use crm_find_or_create_contact antes se nao tiver)'),
+  cardId: z.string().optional().describe('ID do card pra vincular (opcional)'),
+  planName: z.string().describe('Nome do plano (ex: "Sulamerica Vida", "MAG", "Plano Bronze")'),
+  amount: z.number().describe('Valor em REAIS (ex: 178 = R$178,00)'),
+  cycle: z.enum(['monthly','weekly','quarterly','yearly','one_time']).describe('Ciclo de cobranca'),
+  firstChargeDate: z.string().describe('Data da PRIMEIRA cobranca em ISO ou YYYY-MM-DD (ex: "2026-05-10")'),
+});
+
+export const CrmCreateSubscriptionTool = buildTool<z.infer<typeof CreateSubscriptionSchema>>({
+  name: 'crm_create_subscription',
+  searchHint: 'crm subscription mensalidade cobrança recorrente plano',
+  description: 'Cria uma mensalidade/assinatura recorrente pra um cliente. Vai cobrar lembretes T-3/T-1/T-0 via WhatsApp automaticamente.',
+  inputSchema: CreateSubscriptionSchema,
+  userFacingName: (i) => i ? `crm_create_subscription(${i.planName})` : 'crm_create_subscription',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.planName,
+  renderToolUseMessage: (i) => `Criar mensalidade: ${i.planName} R$${i.amount} ${i.cycle}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const dt = new Date(input.firstChargeDate);
+    if (isNaN(dt.getTime())) return { output: null, outputText: 'Data invalida' };
+    const sub = crm.createSubscription(t, {
+      contactId: input.contactId, cardId: input.cardId,
+      planName: input.planName, amountCents: Math.round(input.amount * 100),
+      cycle: input.cycle, nextChargeAt: dt.getTime(),
+    });
+    return { output: sub, outputText: `Mensalidade criada: ${input.planName} ${fmtMoney(sub.amountCents)} ${input.cycle}, primeira cobranca ${dt.toLocaleDateString('pt-BR')}` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 12. crm_mark_subscription_paid (dar baixa em mensalidade)
+// ════════════════════════════════════════════════════════════════════════
+const MarkSubscriptionPaidSchema = z.object({
+  subscriptionId: z.string().optional().describe('ID da assinatura (use se souber)'),
+  contactId: z.string().optional().describe('ID do contato — pega a 1a sub ativa dele se subscriptionId vazio'),
+  contactName: z.string().optional().describe('Nome do contato pra fuzzy lookup (ex: "Daniel Baptista")'),
+});
+
+export const CrmMarkSubscriptionPaidTool = buildTool<z.infer<typeof MarkSubscriptionPaidSchema>>({
+  name: 'crm_mark_subscription_paid',
+  searchHint: 'crm subscription paid mensalidade pago baixa cobrança recebida',
+  description: 'Marca uma mensalidade como paga. Avanca next_charge_at pro proximo ciclo. Use quando user disser "X pagou", "recebi pagamento de Y".',
+  inputSchema: MarkSubscriptionPaidSchema,
+  userFacingName: () => 'crm_mark_subscription_paid',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => false,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.contactName || 'mark paid',
+  renderToolUseMessage: (i) => `Marcar paga: ${i.contactName || i.subscriptionId || i.contactId}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    let subId = input.subscriptionId;
+    if (!subId) {
+      let contactId = input.contactId;
+      if (!contactId && input.contactName) {
+        // Fuzzy: busca contato por nome
+        const contacts = crm.listContacts(t, { limit: 200 });
+        const found = contacts.find(c => c.name?.toLowerCase().includes(input.contactName!.toLowerCase()));
+        contactId = found?.id;
+      }
+      if (!contactId) return { output: null, outputText: 'Não achei o contato. Forneça subscriptionId ou contactId.' };
+      const subs = crm.listSubscriptions(t).filter((s: any) => s.contactId === contactId && (s.status === 'active' || s.status === 'past_due'));
+      if (!subs.length) return { output: null, outputText: 'Esse contato não tem mensalidade ativa.' };
+      subId = subs[0].id;
+    }
+    const r = billingMarkPaid(t, subId);
+    if (!r) return { output: null, outputText: 'Mensalidade não encontrada' };
+    return { output: r, outputText: `✓ ${r.planName} marcada como paga. Próxima cobrança: ${new Date(r.nextChargeAt).toLocaleDateString('pt-BR')}` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 13. crm_create_task (tarefa/follow-up com prazo)
+// ════════════════════════════════════════════════════════════════════════
+const CreateTaskSchema = z.object({
+  title: z.string().describe('Título curto (ex: "Cobrar Daniel pelo plano", "Ligar pro João sobre proposta")'),
+  type: z.enum(['call','email','meeting','followup','other']).optional().describe('Tipo (default: followup)'),
+  priority: z.enum(['low','med','high','urgent']).optional().describe('Prioridade (default: med)'),
+  dueInHours: z.number().optional().describe('Prazo em horas a partir de agora (ex: 24 = amanhã, 168 = 1 semana)'),
+  dueDate: z.string().optional().describe('OU data específica em ISO/YYYY-MM-DD (alternativa a dueInHours)'),
+  contactId: z.string().optional(),
+  cardId: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const CrmCreateTaskTool = buildTool<z.infer<typeof CreateTaskSchema>>({
+  name: 'crm_create_task',
+  searchHint: 'crm task tarefa followup follow-up acompanhar lembrete',
+  description: 'Cria uma tarefa com prazo. Use pra "follow-up amanhã", "ligar pro X em 2 dias", "cobrar mensalidade do Y semana que vem".',
+  inputSchema: CreateTaskSchema,
+  userFacingName: (i) => i ? `crm_create_task(${i.title.slice(0,40)})` : 'crm_create_task',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.title,
+  renderToolUseMessage: (i) => `Tarefa: ${i.title.slice(0,50)}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    let dueAt: number | undefined;
+    if (input.dueInHours) dueAt = Date.now() + input.dueInHours * 3600_000;
+    else if (input.dueDate) {
+      const dt = new Date(input.dueDate);
+      if (!isNaN(dt.getTime())) dueAt = dt.getTime();
+    }
+    const task = tasksCreate(t, {
+      title: input.title,
+      description: input.description,
+      type: input.type || 'followup',
+      priority: input.priority || 'med',
+      dueAt,
+      contactId: input.contactId,
+      cardId: input.cardId,
+    });
+    const when = dueAt ? new Date(dueAt).toLocaleString('pt-BR') : 'sem prazo';
+    return { output: task, outputText: `✓ Tarefa criada: "${input.title}" — ${when} [${input.priority || 'med'}]` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// 14. crm_create_appointment (agendar reunião/ligação)
+// ════════════════════════════════════════════════════════════════════════
+const CreateAppointmentSchema = z.object({
+  title: z.string().describe('Título (ex: "Reunião proposta Daniel", "Ligação João — fechamento")'),
+  startsAt: z.string().describe('Inicio em ISO ou YYYY-MM-DD HH:MM (ex: "2026-05-15 14:00")'),
+  durationMinutes: z.number().optional().describe('Duração em minutos (default: 30)'),
+  type: z.enum(['call','meeting','visit','demo','other']).optional(),
+  location: z.string().optional().describe('Local físico ou link (ex: "Google Meet: meet.google.com/...")'),
+  contactId: z.string().optional(),
+  cardId: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const CrmCreateAppointmentTool = buildTool<z.infer<typeof CreateAppointmentSchema>>({
+  name: 'crm_create_appointment',
+  searchHint: 'crm appointment reunião agenda agendar marcar meeting call',
+  description: 'Agenda uma reunião/ligação/visita. Aparece na agenda do CRM.',
+  inputSchema: CreateAppointmentSchema,
+  userFacingName: (i) => i ? `crm_create_appointment(${i.title.slice(0,40)})` : 'crm_create_appointment',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.title,
+  renderToolUseMessage: (i) => `Agendar: ${i.title.slice(0,40)} @ ${i.startsAt}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const start = new Date(input.startsAt);
+    if (isNaN(start.getTime())) return { output: null, outputText: 'Data invalida' };
+    const dur = input.durationMinutes ?? 30;
+    const appt = calCreate(t, {
+      title: input.title,
+      startsAt: start.getTime(),
+      endsAt: start.getTime() + dur * 60_000,
+      type: input.type || 'meeting',
+      location: input.location,
+      contactId: input.contactId,
+      cardId: input.cardId,
+      notes: input.notes,
+    } as any);
+    return { output: appt, outputText: `✓ Agendado: "${input.title}" em ${start.toLocaleString('pt-BR')} (${dur}min)` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// CONFIG TOOLS — System Clow monta funnels para tenants (qualquer nicho).
+// Workflow conversacional documentado em src/skills/builtin/crm-funnel-setup.md
+// ════════════════════════════════════════════════════════════════════════
+
+// 15. crm_list_boards
+const ListBoardsSchema = z.object({});
+export const CrmListBoardsTool = buildTool<z.infer<typeof ListBoardsSchema>>({
+  name: 'crm_list_boards',
+  searchHint: 'crm boards list config',
+  description: `Lista todos os boards (funis) do tenant com id, nome, tipo. Use antes de configurar
+colunas ou agentes pra saber qual board está sendo trabalhado.`,
+  inputSchema: ListBoardsSchema,
+  isReadOnly: () => true,
+  async call(_input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const boards = crm.listBoards(t);
+    if (boards.length === 0) return { output: { boards: [] }, outputText: 'Nenhum board ainda. Use crm_create_board ou crm_setup_funnel_template pra criar.' };
+    return { output: { boards }, outputText: `${boards.length} board(s):\n${boards.map(b => `- ${b.name} (id=${b.id}, type=${b.type})`).join('\n')}` };
+  },
+});
+
+// 16. crm_create_board
+const CreateBoardSchema = z.object({
+  name: z.string().describe('Nome do board (ex: "Vendas", "Suporte", "Onboarding")'),
+  type: z.enum(['sales', 'support', 'custom']).optional().default('sales').describe('Tipo do board'),
+});
+export const CrmCreateBoardTool = buildTool<z.infer<typeof CreateBoardSchema>>({
+  name: 'crm_create_board',
+  searchHint: 'crm board create new',
+  description: `Cria um novo board (funil) vazio. Útil quando o cliente tem mais de um produto/fluxo
+e quer separar (ex: board "Plano Funeral" e board "Plano Saúde"). NÃO cria colunas — use crm_create_column depois.`,
+  inputSchema: CreateBoardSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const board = crm.createBoard(t, { name: input.name, type: input.type as any });
+    return { output: { board }, outputText: `✓ Board criado: "${board.name}" (id=${board.id})` };
+  },
+});
+
+// 17. crm_list_columns
+const ListColumnsSchema = z.object({
+  boardId: z.string().optional().describe('Id do board. Se omitido, usa o board principal do tenant.'),
+});
+export const CrmListColumnsTool = buildTool<z.infer<typeof ListColumnsSchema>>({
+  name: 'crm_list_columns',
+  searchHint: 'crm columns list config agent',
+  description: `Lista colunas de um board com TODA configuração de agente (role, prompt, entry_delay,
+chase, followup, promote_to). Use antes de mexer em qualquer coluna pra ver o estado atual.`,
+  inputSchema: ListColumnsSchema,
+  isReadOnly: () => true,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const boardId = input.boardId ?? ensureBoardForTenant(t).id;
+    const cols = crm.listColumns(t, boardId);
+    if (cols.length === 0) return { output: { columns: [] }, outputText: `Board ${boardId} sem colunas.` };
+    const lines = cols.map(c => {
+      const agent = c.agentEnabled
+        ? ` [agent=${c.agentRole ?? '?'}, entry=${c.agentEntryDelayMinutes ?? 0}min, chase=${c.agentNoResponseChaseStepsJson ?? '-'}, fu=${c.agentFollowupStepsHoursJson ?? '-'}, promote→${c.agentPromoteToColumnId ?? '-'}]`
+        : '';
+      return `- ${c.name} (id=${c.id}, pos=${c.position}${c.isTerminal ? ', terminal' : ''})${agent}`;
+    });
+    return { output: { columns: cols }, outputText: `${cols.length} coluna(s):\n${lines.join('\n')}` };
+  },
+});
+
+// 18. crm_create_column
+const CreateColumnSchema = z.object({
+  boardId: z.string().describe('Id do board onde criar a coluna'),
+  name: z.string().describe('Nome da coluna (ex: "Lead novo", "Qualificado", "Negociação")'),
+  color: z.string().optional().describe('Cor hex (ex: "#9B59FC")'),
+  isTerminal: z.boolean().optional().default(false).describe('true se é coluna final (Ganho/Perdido)'),
+});
+export const CrmCreateColumnTool = buildTool<z.infer<typeof CreateColumnSchema>>({
+  name: 'crm_create_column',
+  searchHint: 'crm column create stage funnel',
+  description: `Cria uma coluna (estágio) no board. Posição é automática (final do board).
+Pra configurar agente IA da coluna, chame crm_configure_column_agent depois.`,
+  inputSchema: CreateColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const col = crm.createColumn(t, { boardId: input.boardId, name: input.name, color: input.color, isTerminal: input.isTerminal });
+    if (!col) return { output: { error: 'board_not_found' }, outputText: `❌ Board ${input.boardId} não encontrado pra este tenant.`, isError: true };
+    return { output: { column: col }, outputText: `✓ Coluna "${col.name}" criada (id=${col.id}, pos=${col.position})` };
+  },
+});
+
+// 19. crm_update_column
+const UpdateColumnSchema = z.object({
+  columnId: z.string(),
+  name: z.string().optional().describe('Novo nome'),
+  position: z.number().int().optional().describe('Nova posição (order)'),
+  color: z.string().optional(),
+  isTerminal: z.boolean().optional(),
+  stageType: z.enum(['open', 'won', 'lost']).optional().describe('Tipo de estágio'),
+});
+export const CrmUpdateColumnTool = buildTool<z.infer<typeof UpdateColumnSchema>>({
+  name: 'crm_update_column',
+  searchHint: 'crm column update rename reorder',
+  description: `Atualiza uma coluna (renomear, mudar posição, marcar como terminal/won/lost).
+Cliente pode mudar nome de coluna a qualquer momento — use isso. Só os campos passados são alterados.`,
+  inputSchema: UpdateColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const patch: any = {};
+    if (input.name !== undefined) patch.name = input.name;
+    if (input.position !== undefined) patch.position = input.position;
+    if (input.color !== undefined) patch.color = input.color;
+    if (input.isTerminal !== undefined) patch.isTerminal = input.isTerminal;
+    let updated: any = null;
+    if (Object.keys(patch).length > 0) {
+      updated = crm.updateColumn(t, input.columnId, patch);
+      if (!updated) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    }
+    if (input.stageType !== undefined) {
+      const db = getCrmDb();
+      const r = db.prepare(`UPDATE crm_columns SET stage_type = ? WHERE id = ? AND board_id IN (SELECT id FROM crm_boards WHERE tenant_id = ?)`)
+        .run(input.stageType, input.columnId, t);
+      if (r.changes === 0 && !updated) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    }
+    return { output: { column: updated ?? { id: input.columnId } }, outputText: `✓ Coluna atualizada.` };
+  },
+});
+
+// 20. crm_delete_column
+const DeleteColumnSchema = z.object({
+  columnId: z.string(),
+  force: z.boolean().optional().default(false).describe('Se true, apaga mesmo com cards dentro (cascade)'),
+});
+export const CrmDeleteColumnTool = buildTool<z.infer<typeof DeleteColumnSchema>>({
+  name: 'crm_delete_column',
+  searchHint: 'crm column delete remove',
+  description: `Remove uma coluna do board. Por padrão FALHA se a coluna tem cards (segurança).
+Pra apagar mesmo assim, passe force=true (cards serão deletados em cascade pela FK).`,
+  inputSchema: DeleteColumnSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    if (!input.force) {
+      const cnt = db.prepare(`SELECT COUNT(*) as n FROM crm_cards WHERE column_id = ? AND tenant_id = ?`).get(input.columnId, t) as { n: number };
+      if (cnt.n > 0) return { output: { error: 'has_cards', cardCount: cnt.n }, outputText: `❌ Coluna tem ${cnt.n} card(s). Use force=true pra apagar com os cards, ou mova os cards primeiro.`, isError: true };
+    }
+    const ok = crm.deleteColumn(t, input.columnId);
+    if (!ok) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada.`, isError: true };
+    return { output: { deleted: true }, outputText: `✓ Coluna removida.` };
+  },
+});
+
+// 21. crm_configure_column_agent — A grande tool
+const ChaseStepsSchema = z.array(z.number().int().positive()).describe('Lista de minutos pra cobranças escalonadas (ex: [30, 120, 360])');
+const FollowupStepsSchema = z.array(z.number().int().positive()).describe('Lista de horas pra mensagens de followup (ex: [24, 48, 72])');
+const ConfigureColumnAgentSchema = z.object({
+  columnId: z.string(),
+  agentEnabled: z.boolean().optional(),
+  agentName: z.string().optional().describe('Nome do agente exibido (ex: "Sofia")'),
+  agentRole: z.string().optional().describe('Role do agente (ex: "qualificador", "cotador", "vendedor", "coletor", "followupper", ou nome livre)'),
+  agentRoleType: z.string().optional().describe('Tipo do role (igual ao agentRole na maioria dos casos)'),
+  agentSystemPrompt: z.string().optional().describe('Prompt-mãe do agente nesta coluna. Define personalidade, missão, regras de comportamento, quando promover/escalar.'),
+  agentPromoteToColumnId: z.string().optional().describe('Id da coluna pra promover automaticamente quando agente decidir'),
+  agentEntryDelayMinutes: z.number().int().min(0).optional().describe('Min antes do agente agir após card chegar na coluna (ex: 5 = espera 5min antes de mandar 1ª msg)'),
+  agentNoResponseChaseSteps: ChaseStepsSchema.optional(),
+  agentFollowupStepsHours: FollowupStepsSchema.optional(),
+  agentInactivityTimeoutMinutes: z.number().int().positive().optional().describe('Min sem resposta antes de escalar/marcar inativo'),
+  agentMaxTurns: z.number().int().positive().optional().describe('Max trocas de mensagem antes de forçar promoção/escalar'),
+  agentActiveHoursStart: z.string().optional().describe('Início horário comercial (HH:MM)'),
+  agentActiveHoursEnd: z.string().optional().describe('Fim horário comercial (HH:MM)'),
+  agentPromotionCriteria: z.string().optional().describe('Texto descrevendo quando promover (alimenta decisão do agente)'),
+});
+export const CrmConfigureColumnAgentTool = buildTool<z.infer<typeof ConfigureColumnAgentSchema>>({
+  name: 'crm_configure_column_agent',
+  searchHint: 'crm column agent configure prompt entry chase followup automation',
+  description: `Configura o agente IA de uma coluna. PATCH: só altera os campos passados, preserva o resto.
+Use isso pra: definir prompt do agente, ajustar entry_delay, configurar cobranças (chase), configurar
+followup, mudar pra qual coluna promove, alterar horário ativo. Disponível pra qualquer nicho —
+o agente IA da coluna executa o agentSystemPrompt no contexto do CRM.`,
+  inputSchema: ConfigureColumnAgentSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    // Valida que a coluna pertence ao tenant
+    const col = db.prepare(`SELECT c.id FROM crm_columns c JOIN crm_boards b ON b.id = c.board_id WHERE c.id = ? AND b.tenant_id = ?`).get(input.columnId, t) as { id: string } | undefined;
+    if (!col) return { output: { error: 'not_found' }, outputText: `❌ Coluna ${input.columnId} não encontrada pra este tenant.`, isError: true };
+    // Map input → coluna SQL
+    const fields: string[] = [];
+    const values: any[] = [];
+    const map: Array<[string, string, any]> = [
+      ['agentEnabled', 'agent_enabled', input.agentEnabled === undefined ? undefined : (input.agentEnabled ? 1 : 0)],
+      ['agentName', 'agent_name', input.agentName],
+      ['agentRole', 'agent_role', input.agentRole],
+      ['agentRoleType', 'agent_role_type', input.agentRoleType ?? input.agentRole], // se não passar role_type, usa role
+      ['agentSystemPrompt', 'agent_system_prompt', input.agentSystemPrompt],
+      ['agentPromoteToColumnId', 'agent_promote_to_column_id', input.agentPromoteToColumnId],
+      ['agentEntryDelayMinutes', 'agent_entry_delay_minutes', input.agentEntryDelayMinutes],
+      ['agentNoResponseChaseSteps', 'agent_no_response_chase_steps_json', input.agentNoResponseChaseSteps ? JSON.stringify(input.agentNoResponseChaseSteps) : undefined],
+      ['agentFollowupStepsHours', 'agent_followup_steps_hours_json', input.agentFollowupStepsHours ? JSON.stringify(input.agentFollowupStepsHours) : undefined],
+      ['agentInactivityTimeoutMinutes', 'agent_inactivity_timeout_minutes', input.agentInactivityTimeoutMinutes],
+      ['agentMaxTurns', 'agent_max_turns', input.agentMaxTurns],
+      ['agentActiveHoursStart', 'agent_active_hours_start', input.agentActiveHoursStart],
+      ['agentActiveHoursEnd', 'agent_active_hours_end', input.agentActiveHoursEnd],
+      ['agentPromotionCriteria', 'agent_promotion_criteria', input.agentPromotionCriteria],
+    ];
+    for (const [key, sqlCol, val] of map) {
+      if (key === 'agentRoleType' && input.agentRoleType === undefined && input.agentRole === undefined) continue;
+      if (val === undefined) continue;
+      fields.push(`${sqlCol} = ?`);
+      values.push(val);
+    }
+    if (fields.length === 0) return { output: { unchanged: true }, outputText: `Nenhum campo passado. Nada alterado.` };
+    values.push(input.columnId);
+    db.prepare(`UPDATE crm_columns SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return { output: { configured: true, fieldsUpdated: fields.length }, outputText: `✓ Agente da coluna configurado (${fields.length} campo(s) atualizado(s)).` };
+  },
+});
+
+// 22. crm_disable_column_agent
+const DisableColumnAgentSchema = z.object({ columnId: z.string() });
+export const CrmDisableColumnAgentTool = buildTool<z.infer<typeof DisableColumnAgentSchema>>({
+  name: 'crm_disable_column_agent',
+  searchHint: 'crm column agent disable off',
+  description: `Atalho: desativa o agente IA de uma coluna (agent_enabled=0). Mantém toda a config
+salva — pra reativar, chame crm_configure_column_agent com agentEnabled=true.
+Útil quando o cliente quer que uma coluna seja só handoff humano.`,
+  inputSchema: DisableColumnAgentSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const db = getCrmDb();
+    const r = db.prepare(`UPDATE crm_columns SET agent_enabled = 0 WHERE id = ? AND board_id IN (SELECT id FROM crm_boards WHERE tenant_id = ?)`).run(input.columnId, t);
+    if (r.changes === 0) return { output: { error: 'not_found' }, outputText: `❌ Coluna não encontrada.`, isError: true };
+    return { output: { disabled: true }, outputText: `✓ Agente da coluna desativado (config preservada).` };
+  },
+});
+
+// 23. crm_update_card — renomeia card, muda value, dueDate, etc
+const UpdateCardSchema = z.object({
+  cardId: z.string(),
+  title: z.string().optional().describe('Novo título (renomeia card)'),
+  description: z.string().optional(),
+  valueCents: z.number().int().min(0).optional().describe('Valor em centavos'),
+  probability: z.number().int().min(0).max(100).optional().describe('Probabilidade 0-100'),
+  dueDate: z.number().int().optional().describe('Timestamp ms'),
+  ownerAgentId: z.string().optional().describe('Id do agente humano dono do card'),
+});
+export const CrmUpdateCardTool = buildTool<z.infer<typeof UpdateCardSchema>>({
+  name: 'crm_update_card',
+  searchHint: 'crm card update rename value owner',
+  description: `Atualiza um card existente: renomear (title), mudar valor, probabilidade, due date,
+ou trocar o dono. PATCH — só os campos passados são alterados. Cliente pode mudar nome do card
+a qualquer momento — use isso.`,
+  inputSchema: UpdateCardSchema,
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const patch: any = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.valueCents !== undefined) patch.valueCents = input.valueCents;
+    if (input.probability !== undefined) patch.probability = input.probability;
+    if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
+    if (input.ownerAgentId !== undefined) patch.ownerAgentId = input.ownerAgentId;
+    if (Object.keys(patch).length === 0) return { output: { unchanged: true }, outputText: 'Nenhum campo passado.' };
+    const upd = crm.updateCard(t, input.cardId, patch);
+    if (!upd) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} não encontrado.`, isError: true };
+    return { output: { card: upd }, outputText: `✓ Card atualizado: "${upd.title}"${input.valueCents !== undefined ? ` (${fmtMoney(upd.valueCents)})` : ''}` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_list_cards — lista cards detalhados com filtros (coluna/tag/label)
+// ════════════════════════════════════════════════════════════════════════
+const ListCardsSchema = z.object({
+  boardName: z.string().optional().describe('Nome do board (default: principal)'),
+  columnName: z.string().optional().describe('Filtra por coluna (ex: "Lead novo"). Se omitido, lista de todas as colunas do board.'),
+  tag: z.string().optional().describe('Filtra por TAG INTERNA de funil (ex: "entry_dispatched", "final_delete_scheduled"). Sistema. Use raramente.'),
+  label: z.string().optional().describe('Filtra por ETIQUETA visivel do card (ex: "Premium", "lead_quente"). E o que o usuario ve na UI.'),
+  limit: z.number().optional().describe('Max resultados (default 100)'),
+});
+
+export const CrmListCardsTool = buildTool<z.infer<typeof ListCardsSchema>>({
+  name: 'crm_list_cards',
+  searchHint: 'crm cards lista list filter tag column board',
+  description: `Lista cards detalhados (id, titulo, contato, coluna, etiquetas, valor) com filtros
+opcionais por coluna, tag ou label. USE ISSO quando o usuario pedir "cards com etiqueta X",
+"cards do Lead novo", "cards do funil", etc. Retorna array de cards pronto pra iterar
+(mover, mandar mensagem, atualizar).
+
+OUTPUT: cada card tem dois campos separados:
+  - "labels" → ETIQUETAS visiveis pro usuario (mexa com crm_apply_tag / crm_remove_tag).
+  - "tags" → tags internas de funil (entry_dispatched, etc). Somente leitura.
+Quando o usuario fala "tag" ou "etiqueta" sem especificar, ele quase sempre quer dizer "labels".`,
+  inputSchema: ListCardsSchema,
+  userFacingName: (i) => {
+    const parts = [i?.columnName, i?.tag ? `tag=${i.tag}` : null].filter(Boolean);
+    return parts.length ? `crm_list_cards(${parts.join(', ')})` : 'crm_list_cards';
+  },
+  isReadOnly: () => true,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.columnName || i.tag || 'cards',
+  renderToolUseMessage: (i) => `Listar cards${i.columnName ? ` em "${i.columnName}"` : ''}${i.tag ? ` com tag "${i.tag}"` : ''}`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const limit = input.limit ?? 100;
+
+    // Resolve board
+    const boards = crm.listBoards(t);
+    const board = input.boardName
+      ? boards.find((b) => b.name.toLowerCase().includes(input.boardName!.toLowerCase()))
+      : boards[0];
+    if (!board) return { output: { cards: [] }, outputText: 'Nenhum board encontrado.' };
+    const cols = crm.listColumns(t, board.id);
+
+    // Resolve coluna alvo (opcional)
+    let cards: any[];
+    let columnFilter: string | null = null;
+    if (input.columnName) {
+      const col = cols.find((c) => c.name.toLowerCase().includes(input.columnName!.toLowerCase()));
+      if (!col) return { output: { cards: [] }, outputText: `Coluna "${input.columnName}" nao encontrada.` };
+      columnFilter = col.name;
+      cards = crm.listCardsByColumn(t, col.id);
+    } else {
+      cards = crm.listCardsByBoard(t, board.id);
+    }
+
+    // Filtra por tag (faz lookup em crm_card_tags) — intersecta com cards do board.
+    if (input.tag) {
+      const tag = input.tag.trim().toLowerCase();
+      const idsWithTag = new Set(listCardIdsByTag(t, tag, 1000));
+      cards = cards.filter((c) => idsWithTag.has(c.id));
+    }
+
+    // Filtra por label (label fica no proprio crm_cards, array json)
+    if (input.label) {
+      const lbl = input.label.toLowerCase();
+      cards = cards.filter((c) => Array.isArray(c.labels) && c.labels.some((l: string) => l.toLowerCase() === lbl));
+    }
+
+    // Paginacao + decora com info do contato e tags
+    const sliced = cards.slice(0, limit);
+    const colMap = new Map(cols.map((c) => [c.id, c.name]));
+    const decorated = sliced.map((c) => {
+      const contact = c.contactId ? crm.getContact?.(t, c.contactId) : null;
+      return {
+        id: c.id,
+        title: c.title,
+        contactId: c.contactId,
+        contactName: contact?.name || null,
+        contactPhone: contact?.phone || null,
+        columnName: colMap.get(c.columnId) || c.columnId,
+        labels: c.labels || [],
+        tags: listCardTags(c.id),
+        valueCents: c.valueCents,
+        probability: c.probability,
+      };
+    });
+
+    const filterDesc = [
+      `board="${board.name}"`,
+      columnFilter ? `coluna="${columnFilter}"` : null,
+      input.tag ? `tag="${input.tag}"` : null,
+      input.label ? `label="${input.label}"` : null,
+    ].filter(Boolean).join(', ');
+    const lines = decorated.map((c, i) =>
+      `  ${i + 1}. ${c.title}${c.contactName ? ` (${c.contactName}${c.contactPhone ? ` ${c.contactPhone}` : ''})` : ''} — ${c.columnName}${c.tags.length ? ` [${c.tags.join(',')}]` : ''}`,
+    );
+    return {
+      output: { cards: decorated, total: cards.length, returned: decorated.length, filter: filterDesc },
+      outputText: `${decorated.length}/${cards.length} cards (${filterDesc}):\n${lines.join('\n') || '(vazio)'}`,
+    };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_apply_tag — adiciona ETIQUETA (label) em um card.
+// ════════════════════════════════════════════════════════════════════════
+// IMPORTANTE: existem 2 sistemas de classificacao no CRM:
+//   - card.labels (labels_json) — VISIVEL ao usuario no menu "Etiquetas..."
+//     do kanban. E o que o cliente espera quando pede "muda a etiqueta".
+//   - crm_card_tags (tabela) — INTERNO, controle de fluxo de funil
+//     (entry_dispatched, final_delete_scheduled, etc). Gerenciado
+//     automaticamente pelo columnTimerScheduler/inbox/followup.
+//     NAO e visivel na UI e o agente NAO deve mexer aqui.
+// Esta tool atua em card.labels — o que o usuario ve.
+const ApplyTagSchema = z.object({
+  cardId: z.string().describe('ID do card (use crm_list_cards pra achar)'),
+  tag: z.string().describe('Etiqueta exibida pro usuario (ex: "Premium", "lead_quente", "Atrasado"). Mantem maiusculas/espacos.'),
+});
+
+export const CrmApplyTagTool = buildTool<z.infer<typeof ApplyTagSchema>>({
+  name: 'crm_apply_tag',
+  searchHint: 'crm card tag apply add label classify etiqueta rotulo',
+  description: 'Aplica uma ETIQUETA (label) visivel no card — a mesma que o usuario ve no menu "Etiquetas..." da UI do kanban. Idempotente (case-insensitive). NAO mexe em tags internas de funil.',
+  inputSchema: ApplyTagSchema,
+  userFacingName: (i) => i ? `crm_apply_tag(${i.tag})` : 'crm_apply_tag',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.tag,
+  renderToolUseMessage: (i) => `Aplicar etiqueta "${i.tag}"`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const card = crm.getCard?.(t, input.cardId);
+    if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
+    const tag = input.tag.trim().slice(0, 50);
+    if (!tag) return { output: { error: 'empty' }, outputText: '❌ Etiqueta vazia.', isError: true };
+    const labels = Array.isArray(card.labels) ? card.labels : [];
+    const already = labels.some(l => String(l).toLowerCase() === tag.toLowerCase());
+    if (already) return { output: { tag, inserted: false }, outputText: `(ja tinha) Etiqueta "${tag}".` };
+    const newLabels = [...labels, tag];
+    const upd = crm.updateCard(t, input.cardId, { labels: newLabels });
+    if (!upd) return { output: { error: 'update_failed' }, outputText: `❌ Falha ao aplicar etiqueta no card.`, isError: true };
+    return { output: { tag, inserted: true, labels: newLabels }, outputText: `✓ Etiqueta "${tag}" aplicada (visivel no card).` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_remove_tag — remove ETIQUETA (label) visivel de um card.
+// Mesma observacao do crm_apply_tag: atua em card.labels, nao em tags internas.
+// ════════════════════════════════════════════════════════════════════════
+const RemoveTagSchema = z.object({
+  cardId: z.string().describe('ID do card'),
+  tag: z.string().describe('Etiqueta a remover (case-insensitive)'),
+});
+
+export const CrmRemoveTagTool = buildTool<z.infer<typeof RemoveTagSchema>>({
+  name: 'crm_remove_tag',
+  searchHint: 'crm card tag remove delete unclassify etiqueta rotulo',
+  description: 'Remove ETIQUETA (label) visivel do card. Idempotente — se nao tinha, no-op. Compara case-insensitive. NAO mexe em tags internas de funil.',
+  inputSchema: RemoveTagSchema,
+  userFacingName: (i) => i ? `crm_remove_tag(${i.tag})` : 'crm_remove_tag',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => true,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: (i) => i.tag,
+  renderToolUseMessage: (i) => `Remover etiqueta "${i.tag}"`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const card = crm.getCard?.(t, input.cardId);
+    if (!card) return { output: { error: 'not_found' }, outputText: `❌ Card ${input.cardId} nao encontrado neste tenant.`, isError: true };
+    const target = input.tag.trim().toLowerCase();
+    const labels = Array.isArray(card.labels) ? card.labels : [];
+    const filtered = labels.filter(l => String(l).toLowerCase() !== target);
+    if (filtered.length === labels.length) {
+      return { output: { tag: input.tag, removed: false }, outputText: `(nao tinha) Etiqueta "${input.tag}".` };
+    }
+    const upd = crm.updateCard(t, input.cardId, { labels: filtered });
+    if (!upd) return { output: { error: 'update_failed' }, outputText: `❌ Falha ao remover etiqueta do card.`, isError: true };
+    return { output: { tag: input.tag, removed: true, labels: filtered }, outputText: `✓ Etiqueta "${input.tag}" removida (atualizada na UI).` };
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// crm_send_whatsapp_batch — manda WhatsApp pra varios cards/contatos com delay
+// ════════════════════════════════════════════════════════════════════════
+const SendWhatsAppBatchSchema = z.object({
+  cardIds: z.array(z.string()).describe('Lista de cardIds (use crm_list_cards pra obter)'),
+  message: z.string().describe('Texto da mensagem (mesma pra todos). Suporta WhatsApp markdown (*negrito* _italico_).'),
+  delayMinutes: z.number().optional().describe('Intervalo em minutos entre mensagens (default 0 = imediato). Ex: 5 = espera 5min entre cada envio.'),
+});
+
+export const CrmSendWhatsAppBatchTool = buildTool<z.infer<typeof SendWhatsAppBatchSchema>>({
+  name: 'crm_send_whatsapp_batch',
+  searchHint: 'crm whatsapp batch broadcast lote disparo intervalo delay',
+  description: `Manda WhatsApp pra varios contatos a partir de uma lista de cards, com intervalo
+configuravel entre cada envio. Use pra disparos em lote ("manda boa tarde pra todos os cards
+com tag X com 5min de intervalo"). Cada card tem que ter contato com telefone. Sucesso e falhas
+sao retornados por card.`,
+  inputSchema: SendWhatsAppBatchSchema,
+  userFacingName: (i) => i ? `crm_send_whatsapp_batch(${i.cardIds.length} cards, ${i.delayMinutes ?? 0}min)` : 'crm_send_whatsapp_batch',
+  isReadOnly: () => false,
+  isConcurrencySafe: () => false,
+  isDestructive: () => false,
+  interruptBehavior: () => 'cancel' as const,
+  toAutoClassifierInput: () => 'batch',
+  renderToolUseMessage: (i) => `Disparar ${i.cardIds.length} mensagem(ns) WhatsApp com ${i.delayMinutes ?? 0}min de intervalo`,
+  checkPermissions: async () => ({ behavior: 'allow' as const }),
+  async call(input, ctx): Promise<ToolResult> {
+    const t = tid(ctx);
+    const delayMs = Math.max(0, (input.delayMinutes ?? 0) * 60 * 1000);
+
+    // Resolve channel WhatsApp do tenant
+    const channels = crm.listChannels?.(t) || [];
+    const channel = channels.find((c: any) => (c.type === 'meta' || c.type === 'zapi') && c.status !== 'inactive');
+    if (!channel) {
+      return { output: { error: 'no_channel' }, outputText: '❌ Nenhum canal WhatsApp ativo neste tenant.', isError: true };
+    }
+
+    const results: Array<{ cardId: string; status: 'sent' | 'scheduled' | 'failed'; reason?: string; scheduledFor?: number }> = [];
+    let scheduledCount = 0;
+
+    for (let i = 0; i < input.cardIds.length; i++) {
+      const cardId = input.cardIds[i];
+      const card = crm.getCard?.(t, cardId);
+      if (!card || !card.contactId) { results.push({ cardId, status: 'failed', reason: 'card_or_contact_missing' }); continue; }
+      const contact = crm.getContact?.(t, card.contactId);
+      if (!contact?.phone) { results.push({ cardId, status: 'failed', reason: 'contact_without_phone' }); continue; }
+
+      const offsetMs = i * delayMs;
+      if (offsetMs === 0) {
+        // Envio imediato
+        try {
+          await sendOutbound(channel as any, { to: contact.phone, text: input.message });
+          results.push({ cardId, status: 'sent' });
+        } catch (err: any) {
+          results.push({ cardId, status: 'failed', reason: err?.message || 'send_failed' });
+        }
+      } else {
+        // Agendado: dispara via setTimeout (memoria do worker — nao sobrevive restart;
+        // ok pra batches curtos. Pra agendamentos longos, usar crm_create_reminder).
+        const dueAt = Date.now() + offsetMs;
+        const phoneCapture = contact.phone;
+        const channelCapture = channel as any;
+        const messageCapture = input.message;
+        setTimeout(() => {
+          sendOutbound(channelCapture, { to: phoneCapture, text: messageCapture }).catch((err) => {
+            logger.warn(`[crm_send_whatsapp_batch] envio agendado falhou cardId=${cardId}: ${err?.message}`);
+          });
+        }, offsetMs);
+        scheduledCount += 1;
+        results.push({ cardId, status: 'scheduled', scheduledFor: dueAt });
+      }
+    }
+
+    const sent = results.filter((r) => r.status === 'sent').length;
+    const failed = results.filter((r) => r.status === 'failed').length;
+    const summary = `📤 Batch: ${sent} enviados imediato + ${scheduledCount} agendados${failed ? `, ${failed} falharam` : ''} (intervalo ${input.delayMinutes ?? 0}min).`;
+    return { output: { results, sent, scheduled: scheduledCount, failed }, outputText: summary };
+  },
+});
+
 // ─── Registry: array exposto pra tools.ts ───────────────────────────────
 export const CrmTools = [
   CrmFindOrCreateContactTool,
@@ -520,4 +1258,23 @@ export const CrmTools = [
   CrmGetContactTool,
   CrmCreateReminderTool,
   CrmDashboardTool,
+  CrmCreateSubscriptionTool,
+  CrmMarkSubscriptionPaidTool,
+  CrmCreateTaskTool,
+  CrmCreateAppointmentTool,
+  // CRM config tools (agente conversacional monta funnel pro cliente)
+  CrmListBoardsTool,
+  CrmCreateBoardTool,
+  CrmListColumnsTool,
+  CrmCreateColumnTool,
+  CrmUpdateColumnTool,
+  CrmDeleteColumnTool,
+  CrmConfigureColumnAgentTool,
+  CrmDisableColumnAgentTool,
+  CrmUpdateCardTool,
+  // PR 7.5: tools de operacao em lote (lista por tag/coluna, tag mgmt, batch WA)
+  CrmListCardsTool,
+  CrmApplyTagTool,
+  CrmRemoveTagTool,
+  CrmSendWhatsAppBatchTool,
 ];

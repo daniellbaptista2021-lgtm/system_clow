@@ -1,15 +1,105 @@
 {
   "name": "System Clow Workspace",
   "short_name": "System Clow",
-  "description": "Workspace premium do System Clow para chat, automações e execução assistida.",
-  "start_url": "/",
+  "description": "CRM completo + Agente IA via WhatsApp + Automações n8n. Gerencie carteira de clientes, pipeline de vendas e atendimento por WhatsApp em uma única plataforma.",
+  "start_url": "/?source=pwa",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#1f1d1a",
+  "background_color": "#0F0E14",
   "theme_color": "#1f1d1a",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "communication"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "/assets/logo-new.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/logo-new.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/assets/icon-192-gold.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512-gold.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/assets/logo-new.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/screenshots/screenshot-01-login.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tela de login do System Clow"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-02-agente-ia.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Agente IA — Como posso ajudar?"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-03-pipeline.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pipeline de Vendas — Kanban com leads e probabilidade"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-04-menu-crm.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Menu do CRM — Pipeline, Contatos, WhatsApp, Equipe e mais"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-06-performance.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Performance — Dashboard de vendas por agente"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-07-relatorios.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Relatórios — Forecast ponderado e origem dos leads"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-08-conversa-ia.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Conversa com Agente IA"
+    },
+    {
+      "src": "/assets/screenshots/screenshot-09-agenda.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Agenda — Compromissos e reuniões"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pipeline",
+      "short_name": "Pipeline",
+      "description": "Abrir pipeline de vendas",
+      "url": "/crm/?view=pipeline",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Contatos",
+      "short_name": "Contatos",
+      "description": "Lista de contatos",
+      "url": "/crm/?view=contacts",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tarefas",
+      "short_name": "Tarefas",
+      "description": "Tarefas de hoje",
+      "url": "/crm/?view=tasks",
+      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+    }
   ]
 }

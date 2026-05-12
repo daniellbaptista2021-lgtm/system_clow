@@ -1,3 +1,4 @@
+import { logger } from '../logger.js';
 /**
  * retry.ts — Error Recovery with Exponential Backoff
  *
@@ -179,7 +180,7 @@ export async function withRetry<T>(
 
       // ── Log ───────────────────────────────────────────────────────────
       const msg = error?.message || String(error);
-      console.error(
+      logger.error(
         `[retry] attempt ${attempt + 1}/${maxRetries} after ${backoffMs}ms — ${errorType}: ${msg}`,
       );
 

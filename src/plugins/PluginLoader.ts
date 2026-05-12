@@ -47,6 +47,7 @@ import type {
   PluginTrustState,
 } from './types.js';
 import type { ConfiguredHook } from '../hooks/types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ export class PluginLoader {
     const duration = Date.now() - startTime;
     const componentCount = this.countComponents(loadedPlugin);
     if (allErrors.length > 0) {
-      console.warn(
+      logger.warn(
         `[PluginLoader] ${manifest.name}@${manifest.version}: loaded ${componentCount} components with ${allErrors.length} error(s) in ${duration}ms`,
       );
     }

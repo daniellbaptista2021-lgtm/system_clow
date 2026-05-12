@@ -305,7 +305,9 @@ export interface HookMetrics {
   hooksByEvent: Record<string, number>;
   /** Hooks by type */
   hooksByType: Record<string, number>;
-  /** Total executions */
+  /** Total times .fire() was dispatched (one per event) */
+  totalFires: number;
+  /** Total individual hook executions across all fires */
   totalExecutions: number;
   /** Total blocks */
   totalBlocks: number;

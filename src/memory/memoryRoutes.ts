@@ -13,6 +13,27 @@ import { Hono } from 'hono';
 import { MemoryStore } from './MemoryStore.js';
 import { RAGEngine } from './ragEngine.js';
 
+/**
+ * Resolve tenantId pra rotas de /v1/memory. Fail-closed.
+ *
+ * Antes: lia `c.req.query('tenant_id') || 'default'` — qualquer user
+ * autenticado podia ler/deletar memórias de outro tenant passando
+ * `?tenant_id=alvo`. Agora: prioriza tenantId do contexto auth; admin
+ * pode passar via query (admin não tem tenantId próprio).
+ */
+function memTenant(c: any): string {
+  const ctxTid = c.get?.('tenantId');
+  if (typeof ctxTid === 'string' && ctxTid.trim()) return ctxTid;
+  // Sem tenantId no contexto → só admin pode passar via query
+  const authMode = c.get?.('authMode');
+  if (authMode === 'admin_session' || authMode === 'clow_sonnet') {
+    const q = c.req.query('tenant_id');
+    if (typeof q === 'string' && q.trim()) return q;
+  }
+  // Não autenticado ou user sem tenant → bloqueia
+  throw new Error('tenant_context_missing');
+}
+
 export function buildMemoryRoutes(): Hono {
   const app = new Hono();
 
@@ -20,7 +41,8 @@ export function buildMemoryRoutes(): Hono {
 
   app.get('/search', (c) => {
     const q = c.req.query('q') || '';
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
     const type = c.req.query('type');
     const limit = parseInt(c.req.query('limit') || '10', 10);
 
@@ -40,7 +62,8 @@ export function buildMemoryRoutes(): Hono {
   // ─── Sessions List ──────────────────────────────────────────────
 
   app.get('/sessions', (c) => {
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
     const limit = parseInt(c.req.query('limit') || '10', 10);
 
     try {
@@ -60,7 +83,8 @@ export function buildMemoryRoutes(): Hono {
 
   app.get('/sessions/:id/timeline', (c) => {
     const sessionId = c.req.param('id');
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
 
     try {
       const store = new MemoryStore(tenantId);
@@ -75,7 +99,8 @@ export function buildMemoryRoutes(): Hono {
 
   app.delete('/sessions/:id', (c) => {
     const sessionId = c.req.param('id');
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
 
     try {
       const store = new MemoryStore(tenantId);
@@ -90,7 +115,8 @@ export function buildMemoryRoutes(): Hono {
 
   app.get('/semantic', (c) => {
     const q = c.req.query('q') || '';
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
     const limit = parseInt(c.req.query('limit') || '10', 10);
 
     if (!q) return c.json({ error: 'Query "q" required' }, 400);
@@ -107,7 +133,8 @@ export function buildMemoryRoutes(): Hono {
   // ─── Stats ──────────────────────────────────────────────────────
 
   app.get('/stats', (c) => {
-    const tenantId = c.req.query('tenant_id') || 'default';
+    let tenantId: string;
+    try { tenantId = memTenant(c); } catch { return c.json({ error: 'unauthorized' }, 401); }
 
     try {
       const store = new MemoryStore(tenantId);

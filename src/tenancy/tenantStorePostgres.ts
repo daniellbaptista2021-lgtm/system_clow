@@ -12,6 +12,7 @@
 import { createHash, randomBytes } from 'crypto';
 import type { TierName } from './tiers.js';
 import { getTierConfig } from './tiers.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types (same as tenantStore.ts)
@@ -107,9 +108,9 @@ export class TenantStorePostgres {
       // Run schema migration
       await this.pool.query(SCHEMA_SQL);
       this.initialized = true;
-      console.log('[TenantStore] PostgreSQL connected and schema migrated');
+      logger.info('[TenantStore] PostgreSQL connected and schema migrated');
     } catch (err) {
-      console.error('[TenantStore] PostgreSQL connection failed:', (err as Error).message);
+      logger.error('[TenantStore] PostgreSQL connection failed:', (err as Error).message);
       throw err;
     }
   }

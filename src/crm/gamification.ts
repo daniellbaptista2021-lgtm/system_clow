@@ -9,6 +9,7 @@
 
 import { randomBytes } from 'crypto';
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 function nid(prefix: string): string { return prefix + '_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -404,5 +405,5 @@ export function tickDailyBadges(): void {
     const db = getCrmDb();
     const tenants = db.prepare('SELECT DISTINCT tenant_id FROM crm_badges WHERE auto_award = 1').all() as any[];
     for (const t of tenants) evaluateAllBadges(t.tenant_id);
-  } catch (err: any) { console.warn('[gam daily]', err.message); }
+  } catch (err: any) { logger.warn('[gam daily]', err.message); }
 }

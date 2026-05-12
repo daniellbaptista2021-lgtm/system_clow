@@ -9,6 +9,7 @@ import { addCost, addAPIDuration, setLastAPIRequestTimestamp, setLastApiCompleti
 import type { Tool } from '../tools/Tool.js';
 import { withRetry } from '../utils/retry/retry.js';
 import stringify from 'json-stable-stringify';
+import { logger } from '../utils/logger.js';
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -319,7 +320,7 @@ function convertToAnthropicMessages(messages: ClovMessage[]): any[] {
 
   // Validate: no pending tool_use without tool_result
   if (pendingToolUseIds.size > 0) {
-    console.warn(`Warning: ${pendingToolUseIds.size} tool_use(s) without corresponding tool_result: ${Array.from(pendingToolUseIds).join(', ')}`);
+    logger.warn(`Warning: ${pendingToolUseIds.size} tool_use(s) without corresponding tool_result: ${Array.from(pendingToolUseIds).join(', ')}`);
   }
 
   return converted;

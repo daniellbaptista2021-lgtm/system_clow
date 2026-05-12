@@ -14,6 +14,7 @@
 import { randomBytes } from 'crypto';
 import { getCrmDb } from './schema.js';
 import { sendEmail } from '../notifications/mailer.js';
+import { logger } from '../utils/logger.js';
 
 const BATCH_SIZE = 20; // sends per tick per campaign — keeps tick under 5s
 const PIXEL_BASE = '/p/e/o/';
@@ -274,7 +275,7 @@ export function promoteScheduledCampaigns(): void {
   ).all(Date.now()) as any[];
   for (const camp of due) {
     try { enqueueCampaign(camp.tenant_id, camp.id); }
-    catch (err: any) { console.warn('[em] enqueue failed', camp.id, err.message); }
+    catch (err: any) { logger.warn('[em] enqueue failed', camp.id, err.message); }
   }
 }
 

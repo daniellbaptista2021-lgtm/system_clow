@@ -22,6 +22,7 @@ import {
   DEFAULT_BACKOFF,
   TransportDisconnectedError,
 } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -197,7 +198,7 @@ export class HybridTransport implements Transport {
       parsed = JSON.parse(data) as InboundMessage;
     } catch {
       // eslint-disable-next-line no-console
-      console.error('[HybridTransport] Failed to parse inbound message');
+      logger.error('[HybridTransport] Failed to parse inbound message');
       return;
     }
 
@@ -206,7 +207,7 @@ export class HybridTransport implements Transport {
         handler(parsed);
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[HybridTransport] Handler threw', err);
+        logger.error('[HybridTransport] Handler threw', err);
       }
     }
   }
@@ -250,7 +251,7 @@ export class HybridTransport implements Transport {
       const msg = this.queue.shift()!;
       void this.postMessage(msg).catch((err) => {
         // eslint-disable-next-line no-console
-        console.error('[HybridTransport] Failed to drain queued message', err);
+        logger.error('[HybridTransport] Failed to drain queued message', err);
       });
     }
   }

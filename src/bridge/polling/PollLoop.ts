@@ -4,6 +4,7 @@ import type {
   BackoffConfig,
   WorkResponse,
 } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,7 +123,7 @@ export class PollLoop {
         if (work) {
           this.resetBackoffState();
           this.workHandler(work).catch((err) => {
-            console.error(
+            logger.error(
               '[PollLoop] Work handler error:',
               err instanceof Error ? err.message : String(err),
             );
@@ -159,7 +160,7 @@ export class PollLoop {
         this.backoffConfig.maxDelayMs,
       );
       if (this.shouldGiveUp(this.backoff.connStartedAt, this.backoffConfig.generalGiveUpMs)) {
-        console.error('[PollLoop] Connection backoff exhausted, stopping');
+        logger.error('[PollLoop] Connection backoff exhausted, stopping');
         this.running = false;
       }
     } else {
@@ -172,7 +173,7 @@ export class PollLoop {
         this.backoffConfig.generalCapMs,
       );
       if (this.shouldGiveUp(this.backoff.generalStartedAt, this.backoffConfig.generalGiveUpMs)) {
-        console.error('[PollLoop] General backoff exhausted, stopping');
+        logger.error('[PollLoop] General backoff exhausted, stopping');
         this.running = false;
       }
     }

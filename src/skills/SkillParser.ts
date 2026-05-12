@@ -6,6 +6,7 @@ import * as path from 'path';
 import { validateFrontmatter } from './SkillFrontmatterSchema.js';
 import { SKILL_FILE_NAME, MAX_SKILL_BODY_TOKENS } from './types.js';
 import type { ParsedSkill, SkillReference } from './types.js';
+import { logger } from '../utils/logger.js';
 
 export class SkillParser {
   async parse(filePath: string): Promise<ParsedSkill | null> {
@@ -15,17 +16,17 @@ export class SkillParser {
 
   parseString(content: string, filePath: string): ParsedSkill | null {
     const { fm, body } = this.split(content);
-    if (!fm) { console.warn(`[SkillParser] No frontmatter: ${filePath}`); return null; }
+    if (!fm) { logger.warn(`[SkillParser] No frontmatter: ${filePath}`); return null; }
 
     const parsed = this.parseYaml(fm);
-    if (!parsed) { console.warn(`[SkillParser] Bad YAML: ${filePath}`); return null; }
+    if (!parsed) { logger.warn(`[SkillParser] Bad YAML: ${filePath}`); return null; }
 
     const v = validateFrontmatter(parsed);
-    if (!v.valid) { console.warn(`[SkillParser] Invalid: ${filePath} — ${v.errors.join(', ')}`); return null; }
+    if (!v.valid) { logger.warn(`[SkillParser] Invalid: ${filePath} — ${v.errors.join(', ')}`); return null; }
 
     const dir = path.dirname(filePath);
     const tokens = Math.ceil(body.length / 4);
-    if (tokens > MAX_SKILL_BODY_TOKENS) { console.warn(`[SkillParser] ${v.data.name} too large: ${tokens} tokens`); return null; }
+    if (tokens > MAX_SKILL_BODY_TOKENS) { logger.warn(`[SkillParser] ${v.data.name} too large: ${tokens} tokens`); return null; }
 
     return {
       frontmatter: v.data, body: body.trim(), bodyTokens: tokens,
@@ -124,7 +125,7 @@ export class SkillParser {
         const skill = await this.parse(fp);
         if (skill) results.push(skill);
       } catch {
-        console.warn(`[SkillParser] Failed to parse: ${fp}`);
+        logger.warn(`[SkillParser] Failed to parse: ${fp}`);
       }
     }
     return results;
@@ -481,7 +482,7 @@ export class SkillParser {
       await fsp.writeFile(filePath, content, 'utf-8');
       return filePath;
     } catch (err) {
-      console.warn(`[SkillParser] Failed to create skill file: ${(err as Error).message}`);
+      logger.warn(`[SkillParser] Failed to create skill file: ${(err as Error).message}`);
       return null;
     }
   }

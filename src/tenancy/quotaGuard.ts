@@ -22,8 +22,11 @@ export interface QuotaError {
 /**
  * Check all quotas before processing a message.
  * Returns null if all clear, QuotaError if blocked.
+ *
+ * Now async because the active-session counter went cluster-shared via
+ * clusterStore (Redis SCARD round-trip when REDIS_URL is set).
  */
-export function checkQuota(tenant: Tenant): QuotaError | null {
+export async function checkQuota(tenant: Tenant): Promise<QuotaError | null> {
   // Message quota
   if (tenant.current_month_messages >= tenant.max_messages_per_month) {
     return {
@@ -42,8 +45,8 @@ export function checkQuota(tenant: Tenant): QuotaError | null {
     };
   }
 
-  // Concurrent sessions
-  const activeSessions = countActiveSessions(tenant.id);
+  // Concurrent sessions (cluster-wide count)
+  const activeSessions = await countActiveSessions(tenant.id);
   if (activeSessions >= tenant.max_concurrent_sessions) {
     return {
       code: 'too_many_sessions',

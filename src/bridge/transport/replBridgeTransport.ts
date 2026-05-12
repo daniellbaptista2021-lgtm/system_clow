@@ -16,6 +16,7 @@ import type {
   TransportMessageHandler,
 } from '../types.js';
 import { TransportDisconnectedError } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -137,7 +138,7 @@ export class ReplBridgeTransport implements Transport {
       parsed = JSON.parse(trimmed) as InboundMessage;
     } catch {
       // eslint-disable-next-line no-console
-      console.error('[ReplBridgeTransport] Invalid JSON on stdin');
+      logger.error('[ReplBridgeTransport] Invalid JSON on stdin');
       return;
     }
 
@@ -146,7 +147,7 @@ export class ReplBridgeTransport implements Transport {
         handler(parsed);
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[ReplBridgeTransport] Handler threw', err);
+        logger.error('[ReplBridgeTransport] Handler threw', err);
       }
     }
   }

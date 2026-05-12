@@ -97,7 +97,6 @@
               el('option', { value: 'cancelled' }, 'Canceladas'),
             ),
           ),
-          el('div', {}, el('button', { id: 'newSubBtn' }, '+ Nova Assinatura')),
         ),
         el('div', { class: 'list', id: 'subsList' }),
       ),
@@ -112,7 +111,6 @@
     });
     $('#browseTemplatesBtn')?.addEventListener('click', openTemplatesModal);
     $('#newAutomationBtn')?.addEventListener('click', openAutomationModal);
-    $('#newSubBtn')?.addEventListener('click', openSubscriptionModal);
     $('#subStatusFilter')?.addEventListener('change', renderSubsList);
   }
 
@@ -257,47 +255,234 @@
     const status = $('#subStatusFilter')?.value || '';
     try {
       const path = status ? `/subscriptions?status=${status}` : '/subscriptions';
-      const r = await api(path);
+      // Pega subs + contatos em paralelo pra exibir nome/telefone/tags
+      // no card e habilitar botao "Cobrar via WhatsApp" com template.
+      const [r, contactsRes] = await Promise.all([
+        api(path),
+        api('/contacts?limit=500').catch(() => ({ contacts: [] })),
+      ]);
+      const contactsMap = new Map((contactsRes.contacts || []).map(c => [c.id, c]));
       if (!r.subscriptions.length) {
-        l.append(el('div', { class: 'empty' }, 'Nenhuma assinatura. Clique "+ Nova Assinatura" pra criar.'));
+        l.append(el('div', { class: 'empty' }, 'Nenhuma mensalidade ainda. Adicione abrindo o card do cliente no Pipeline → aba Vínculos → "+ Adicionar" em Mensalidades.'));
         return;
       }
-      for (const s of r.subscriptions) {
+      // Ordena: pendentes/atrasadas no topo, pagas no meio, canceladas
+      // no fim. Dentro de cada grupo, ordem cronologica (mais antigos
+      // primeiro pra acao).
+      const subsSorted = [...r.subscriptions].sort((a, b) => {
+        const rank = (s) => {
+          if (s.status === 'cancelled') return 3;
+          const paid = !!s.lastPaidAt && s.nextChargeAt > Date.now();
+          if (paid) return 2;
+          if (s.nextChargeAt < Date.now()) return 0; // atrasada primeiro
+          return 1; // aguardando
+        };
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return a.nextChargeAt - b.nextChargeAt;
+      });
+      for (const s of subsSorted) {
         const due = new Date(s.nextChargeAt);
-        const overdue = due.getTime() < Date.now() && s.status === 'active';
-        const statusClass = s.status === 'active' ? 'green' : s.status === 'past_due' ? 'red' : 'gray';
-        const subItem = el('div', { class: 'list-item', style: 'flex-direction:column;align-items:stretch;cursor:pointer', on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } } },
-          el('div', { style: 'display:flex;align-items:center;justify-content:space-between' },
-            el('div', { class: 'list-item-left' },
-              el('div', {},
-                el('div', { class: 'list-item-title' }, s.planName),
-                el('div', { class: 'list-item-sub' },
-                  `${fmtMoney(s.amountCents)} / ${s.cycle} · próxima cobrança ${fmtDate(s.nextChargeAt)}${overdue ? ' ⚠️' : ''} · ${s.remindersSent} lembrete(s) enviado(s)`,
-                ),
+        const dueMs = due.getTime() - Date.now();
+        const dueDays = Math.ceil(dueMs / 86400000);
+        const overdue = dueMs < 0 && s.status === 'active';
+        const overdueDays = overdue ? Math.abs(dueDays) : 0;
+        // Logica simples e correta: se lastPaidAt existe E proxima
+        // cobranca ainda nao venceu, esta pago. Se venceu de novo (1
+        // mes/semana/etc depois sem novo pagamento), volta a pendente.
+        // Sub recem-criada: lastPaidAt=null → aguardando (correto).
+        const paidThisCycle = !!s.lastPaidAt && s.nextChargeAt > Date.now();
+        // Botao "Marcar como pago" so aparece se: ativo/vencida E ainda
+        // nao foi pago nesse ciclo. Cancelada nao mostra.
+        const needsAction = (s.status === 'active' || s.status === 'past_due') && !paidThisCycle;
+        // Formata "vence" humano
+        const dueText = overdue
+          ? `atrasada ${overdueDays}d`
+          : dueDays === 0 ? 'vence hoje'
+          : dueDays === 1 ? 'vence amanhã'
+          : dueDays <= 7 ? `vence em ${dueDays}d`
+          : `próxima cobrança ${fmtDate(s.nextChargeAt)}`;
+        // Cores do status:
+        //  - Cancelada → cinza
+        //  - paidThisCycle → verde "Paga"
+        //  - overdue/past_due → vermelha "Atrasada"
+        //  - resto (active aguardando 1º pagamento ou ciclo novo) → âmbar "Aguardando pagamento"
+        const statusColors = s.status === 'cancelled'
+          ? { bg: 'rgba(148,163,184,.12)', border: 'rgba(148,163,184,.30)', fg: '#94A3B8', label: 'Cancelada' }
+          : paidThisCycle
+          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Paga' }
+          : (s.status === 'past_due' || overdue)
+          ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
+          : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'Aguardando pagamento' };
+        const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
+
+        // Lookup do contato pra exibir info no card e habilitar
+        // botao "Cobrar via WhatsApp" com template prontinho.
+        const contact = contactsMap.get(s.contactId);
+        const phoneDigits = contact?.phone ? String(contact.phone).replace(/\D/g, '') : '';
+        const phoneFormatted = phoneDigits.length >= 12
+          ? `+${phoneDigits.slice(0,2)} (${phoneDigits.slice(2,4)}) ${phoneDigits.slice(4,9)}-${phoneDigits.slice(9,13)}`
+          : phoneDigits ? `+${phoneDigits}` : '';
+        const tags = Array.isArray(contact?.tags) ? contact.tags : [];
+        const initials = (contact?.name || s.planName)
+          .split(/\s+/).slice(0,2).map(w => w[0] || '').join('').toUpperCase().slice(0,2);
+
+        const subItem = el('div', {
+          class: 'list-item',
+          style: 'flex-direction:column;align-items:stretch;cursor:pointer;padding:18px 20px;gap:14px;transition:border-color .15s ease',
+          on: { click: (e) => { if (e.target.closest('button')) return; openEditSubscriptionModal(s); } },
+        },
+          // Header: title + status pill
+          el('div', { style: 'display:flex;align-items:flex-start;justify-content:space-between;gap:12px' },
+            el('div', { style: 'min-width:0;flex:1' },
+              el('div', { style: 'font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, s.planName),
+              // Info row: valor + vence + lembretes
+              el('div', { style: 'display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-dim)' },
+                el('span', { style: 'color:var(--text);font-weight:600;font-size:14px' }, fmtMoney(s.amountCents)),
+                el('span', { style: 'color:var(--text-dim);font-size:12px;margin-left:-10px' }, cycleLabel),
+                el('span', { style: 'opacity:.4' }, '·'),
+                el('span', { style: `color:${overdue ? '#F87171' : 'var(--text-dim)'};${overdue ? 'font-weight:600' : ''}` }, dueText),
+                s.remindersSent > 0
+                  ? el('span', { style: 'opacity:.4' }, '·')
+                  : null,
+                s.remindersSent > 0
+                  ? el('span', { style: 'color:var(--text-dim)' }, `${s.remindersSent} lembrete${s.remindersSent === 1 ? '' : 's'}`)
+                  : null,
               ),
             ),
-            el('span', { class: `pill ${statusClass}` }, s.status),
+            // Status pill compacto
+            el('span', {
+              style: `display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;background:${statusColors.bg};border:1px solid ${statusColors.border};color:${statusColors.fg};white-space:nowrap;flex-shrink:0`,
+            },
+              el('span', { style: `width:6px;height:6px;border-radius:50%;background:${statusColors.fg};display:inline-block` }),
+              statusColors.label,
+            ),
           ),
-          el('div', { style: 'margin-top:8px;display:flex;gap:6px' },
-            s.status === 'active' || s.status === 'past_due' ?
-              el('button', { class: 'save-btn', style: 'flex:1;background:var(--green);font-size:12px;padding:6px',
-                on: { click: async () => {
-                  await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
-                  toast('Marcada como paga', 'success');
-                  await renderSubsList();
-                } } }, '✓ Marcar como pago') : null,
-            s.status !== 'cancelled' ?
-              el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);font-size:12px;padding:6px 12px',
-                on: { click: async () => {
-                  if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
-                  await api(`/subscriptions/${s.id}`, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } });
-                  toast('Cancelada', 'success');
-                  await renderSubsList();
-                } } }, 'Cancelar') : null,
-          ),
+          // Bloco do cliente: avatar + nome + telefone + tags
+          contact ? el('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(155,89,252,.04);border:1px solid rgba(155,89,252,.10);border-radius:10px' },
+            el('div', { style: 'width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12.5px;flex-shrink:0' }, initials),
+            el('div', { style: 'min-width:0;flex:1' },
+              el('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' },
+                el('span', { style: 'font-weight:600;color:var(--text);font-size:13.5px;overflow:hidden;text-overflow:ellipsis' }, contact.name || 'Sem nome'),
+                phoneFormatted ? el('span', { style: 'color:var(--text-dim);font-size:12px;font-family:"SF Mono",Consolas,monospace' }, phoneFormatted) : null,
+              ),
+              tags.length > 0 ? el('div', { style: 'display:flex;gap:5px;margin-top:5px;flex-wrap:wrap' },
+                ...tags.slice(0, 4).map(t => el('span', {
+                  style: 'background:rgba(155,89,252,.16);border:1px solid rgba(155,89,252,.28);color:#C5A4FF;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
+                }, t)),
+                tags.length > 4 ? el('span', { style: 'color:var(--text-dim);font-size:10.5px;align-self:center' }, `+${tags.length - 4}`) : null,
+              ) : null,
+            ),
+          ) : null,
+          // Actions row (botoes ghost discretos, alinhados a direita)
+          (needsAction || s.status !== 'cancelled')
+            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px;flex-wrap:wrap' },
+              // Botao "Cobrar no chat" — abre painel de conversa do CRM
+              // (interno, nao wa.me externo) com template ja no composer.
+              (needsAction && contact)
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.16)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.50)'; },
+                      mouseleave: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.08)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.30)'; },
+                      click: async (e) => {
+                        const btn = e.currentTarget;
+                        const oldHTML = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.innerHTML = 'Abrindo...';
+                        try {
+                          // Garante card vinculado (cria se sub nao tem)
+                          const r2 = await api(`/subscriptions/${s.id}/ensure-card`, { method: 'POST' });
+                          if (!r2?.cardId) throw new Error('sem cardId');
+                          // Monta template
+                          const valorBR = (s.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                          const dueBR = new Date(s.nextChargeAt).toLocaleDateString('pt-BR');
+                          const isOverdue = s.nextChargeAt < Date.now();
+                          const firstName = (contact.name || '').split(/\s+/)[0] || 'tudo bem';
+                          const intro = isOverdue
+                            ? `notei aqui que a sua mensalidade do *${s.planName}* venceu em *${dueBR}* e ainda consta em aberto.`
+                            : `passando pra lembrar da sua mensalidade do *${s.planName}* que vence em *${dueBR}*.`;
+                          const template = `Olá ${firstName}! 👋\n\n${intro}\n\n💰 *Valor:* R$ ${valorBR}\n📅 *${isOverdue ? 'Venceu em' : 'Vencimento'}:* ${dueBR}\n\nCaso já tenha realizado o pagamento, por favor desconsidere essa mensagem 🙏\n\nAguardo confirmação por aqui!`;
+                          // Abre painel de conversa do card
+                          if (typeof window.openCardPanel === 'function') {
+                            await window.openCardPanel(r2.cardId);
+                          }
+                          // Pre-popula textarea + foca (espera render do panel)
+                          setTimeout(() => {
+                            const ta = document.getElementById('composerText');
+                            if (ta) {
+                              ta.value = template;
+                              ta.focus();
+                              try { ta.setSelectionRange(template.length, template.length); } catch(_){}
+                              ta.dispatchEvent(new Event('input', { bubbles: true }));
+                              // Garante que a aba "Conversa" esta ativa
+                              const convoTab = document.querySelector('.panel-tab[data-tab="conversation"]');
+                              if (convoTab && !convoTab.classList.contains('active')) convoTab.click();
+                            }
+                          }, 250);
+                        } catch (err) {
+                          toast('Erro ao abrir chat: ' + (err.message || 'desconhecido'), 'error');
+                        } finally {
+                          btn.disabled = false;
+                          btn.innerHTML = oldHTML;
+                        }
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                      el('path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' }),
+                    ),
+                    'Cobrar no chat',
+                  )
+                : null,
+              needsAction
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
+                      mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },
+                      click: async () => {
+                        const updated = await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
+                        const nx = updated?.subscription?.nextChargeAt
+                          ? fmtDate(updated.subscription.nextChargeAt)
+                          : null;
+                        toast(nx ? `✓ Paga · próxima ${nx}` : '✓ Marcada como paga', 'success');
+                        await renderSubsList();
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                      el('polyline', { points: '20 6 9 17 4 12' }),
+                    ),
+                    'Marcar como pago',
+                  )
+                : null,
+              s.status !== 'cancelled'
+                ? el('button', {
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;transition:all .15s ease',
+                    on: {
+                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(239,68,68,.10)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,.40)'; e.currentTarget.style.color = '#F87171'; },
+                      mouseleave: (e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'; },
+                      click: async () => {
+                        if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
+                        await api(`/subscriptions/${s.id}`, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } });
+                        toast('Cancelada', 'success');
+                        await renderSubsList();
+                      },
+                    },
+                  },
+                    el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                      el('path', { d: 'M18 6L6 18' }),
+                      el('path', { d: 'M6 6l12 12' }),
+                    ),
+                    'Cancelar',
+                  )
+                : null,
+            )
+            : null,
         );
-      window.attachListItemContextMenu(subItem, (x, y) => showSubscriptionContextMenu(s, x, y, renderSubsList));
-      l.append(subItem);
+        window.attachListItemContextMenu(subItem, (x, y) => showSubscriptionContextMenu(s, x, y, renderSubsList));
+        l.append(subItem);
       }
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
   }
