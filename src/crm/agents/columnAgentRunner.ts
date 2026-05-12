@@ -519,6 +519,25 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     return { status: 'error', message: 'tool_loop_max_iterations' };
   }
 
+  // Auto-promote deterministico precisa rodar ANTES de qualquer bloqueio de
+  // texto final. Caso real 2026-05-12: LLM salvou nome/idade/tipo_plano,
+  // mandou mensagem final ao cliente, mas a rodada seguinte retornou
+  // meta-commentary e saiu antes do antigo auto-promote pos-envio.
+  // Se os dados minimos ja estao no state, o card nao pode ficar preso.
+  try {
+    const freshStateForPromote = getCardAgentState(card.id) ?? state;
+    const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
+    const refreshedColumn = store.listColumns(tenantId, card.boardId!)
+      .find((c) => c.id === refreshedCard.columnId) ?? column;
+    const autoCtx: ToolContext = {
+      tenantId, channel, card: refreshedCard, column: refreshedColumn,
+      state: freshStateForPromote, customerPhone, role,
+    };
+    maybeAutoPromote(autoCtx);
+  } catch (err: any) {
+    logger.warn(`[col-agent.runner] pre-send auto-promote falhou card=${card.id}: ${err?.message}`);
+  }
+
   // FIX 2026-05-06 — barra "" / single-emoji / so pontuacao chegando ao cliente
   if (isReplyEmptyish(finalText)) {
     if (finalText) {
@@ -633,22 +652,6 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     `[col-agent.runner] ✓ executed card=${card.id} role=${role} ` +
       `column="${column.name}" turns=${finalState.turnsCount} iter=${iteration}`,
   );
-
-  // Auto-promote deterministico (PV Corretora apenas). Se LLM coletou os
-  // dados via salvar_dados_qualificacao mas esqueceu de chamar a tool de
-  // promocao, move o card pra Atendimento Humano. Helper checa scope/guards.
-  try {
-    const refreshedCard = store.getCard?.(tenantId, card.id) ?? card;
-    const refreshedColumn = store.listColumns(tenantId, card.boardId!)
-      .find((c) => c.id === refreshedCard.columnId) ?? column;
-    const autoCtx: ToolContext = {
-      tenantId, channel, card: refreshedCard, column: refreshedColumn,
-      state: finalState, customerPhone, role,
-    };
-    maybeAutoPromote(autoCtx);
-  } catch (err: any) {
-    logger.warn(`[col-agent.runner] auto-promote falhou card=${card.id}: ${err?.message}`);
-  }
 
   void lastReplyForAntiLoop; // kept for future debugging
   return { status: 'executed', reply: finalText };
