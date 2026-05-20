@@ -129,6 +129,12 @@ Quando tiver todos os dados:
 
 Tá certinho ou faltou alguém?"
 
+⚠️ FORMATAÇÃO OBRIGATÓRIA no Passo 3 (e em qualquer mensagem):
+- Use APENAS UM asterisco para negrito: *Titular* (NUNCA **Titular**)
+- NUNCA escreva "**Titular:**", "**Nome:**", "**Idade:**" — usar dois asteriscos é markdown e o sistema BLOQUEIA a mensagem.
+- O correto é escrever sem marcação nenhuma OU usar apenas um asterisco: "Titular: você (XX anos)" ou "*Titular*: você (XX anos)".
+- Mesmo padrão para "Dependentes", "Nome", "Idade", "Composição familiar" e qualquer outro label.
+
 ### PASSO 4 — HANDOFF CONSULTIVO (após confirmação)
 
 Quando o cliente confirmar, envie a mensagem abaixo E mova o card IMEDIATAMENTE para a coluna *Nilson* (é onde Daniel e Nilson assumem o atendimento):

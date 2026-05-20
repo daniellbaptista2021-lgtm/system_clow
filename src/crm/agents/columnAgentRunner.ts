@@ -224,6 +224,24 @@ function extractLeadName(text: string, cardTitle?: string): string | undefined {
   return undefined;
 }
 
+/** WhatsApp não interpreta `**bold**` / `__italic__` (markdown), só `*bold*` /
+ *  `_italic_`. Quando o LLM da Safira (PV Atendimento) vaza markdown, o
+ *  detector meta_commentary bate em `**Titular:**`/`**Nome:**` e bloqueia a
+ *  mensagem de confirmação inteira. Esta normalização roda ANTES do filtro
+ *  para PV/qualificador apenas, convertendo markdown em formatação WhatsApp
+ *  sem alterar o conteúdo da mensagem. */
+function normalizeMarkdownToWhatsAppForPvSafira(
+  tenantId: string,
+  column: BoardColumn,
+  role: ColumnAgentRole,
+  text: string,
+): string {
+  if (!isPvAtendimentoQualifier(tenantId, column, role)) return text;
+  return text
+    .replace(/\*\*([^*\n]+?)\*\*/g, '*$1*')
+    .replace(/__([^_\n]+?)__/g, '_$1_');
+}
+
 async function maybeHandlePvAtendimentoFastPath(input: {
   tenantId: string;
   channel: Channel2;
@@ -710,6 +728,10 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     }
   }
 
+  // 9.4b) PV/Safira: LLM vaza markdown ** em vez de formatação WhatsApp.
+  //       Normaliza ANTES do filtro pra não bloquear msg de confirmação.
+  finalText = normalizeMarkdownToWhatsAppForPvSafira(tenantId, column, role, finalText);
+
   // 9.5) Anti-meta-commentary: se o LLM retornou texto que parece ser
   //      relato interno em vez de mensagem pro cliente, descarta e nao envia.
   if (looksLikeMetaCommentary(finalText)) {
@@ -1035,6 +1057,13 @@ faixa etaria/dependentes), segue fluxo normal de qualificacao.
       event: 'tool_loop_max', reason: `inactivity_fire iter=${iter}`,
     });
     return { status: 'error', message: 'tool_loop_max_iterations' };
+  }
+
+  // PV/Safira: normaliza markdown ** → * ANTES do filtro (mesmo motivo
+  // do bloco 9.4b acima — evita que confirmação do Passo 3 caia no
+  // detector por usar ** em headers).
+  if (finalText) {
+    finalText = normalizeMarkdownToWhatsAppForPvSafira(tenantId, column, role, finalText);
   }
 
   // Anti-meta-commentary (defesa em profundidade): se o LLM retornou
