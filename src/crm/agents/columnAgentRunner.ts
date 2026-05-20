@@ -272,7 +272,7 @@ async function maybeHandlePvAtendimentoFastPath(input: {
   });
 
   const firstName = nome.split(/\s+/)[0] || nome;
-  const finalText = `Perfeito, ${firstName}! Obrigada 😊 Já deixei seus dados separados e o Nilson vai te chamar por aqui com a cotação SulAmérica pronta, com valores, benefícios e as opções de cobertura certinhas pra você.`;
+  const finalText = `Perfeito, ${firstName}! Obrigada 😊 Já passei suas informações pro nosso corretor — a cotação SulAmérica vai ser passada por um dos nossos corretores (*Daniel* ou *Nilson*) direto aqui no WhatsApp, com valores, benefícios e as opções de cobertura certinhas pra você.`;
 
   try {
     await sendReply(channel, customerPhone, finalText, contactId);
