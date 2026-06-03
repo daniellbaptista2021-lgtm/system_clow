@@ -18,3 +18,4 @@ export * from './store/channelsStore.js';
 export * from './store/subscriptionsStore.js';
 export * from './store/inventoryStore.js';
 export * from './store/automationsStore.js';
+export * from './store/quickMessagesStore.js';

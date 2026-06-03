@@ -1441,6 +1441,278 @@ async function uploadAndSendFile(file) {
   }
 }
 
+// ─── Quick messages (mensagens prontas) ────────────────────────────────
+// CRUD via /v1/crm/quick-messages. Popover ancorado no botão #quickMsgBtn.
+// Envio reaproveita sendCurrentMessage(text, mediaUrl, mediaType, filename).
+const qmState = { items: null, loading: false, q: '' };
+
+function qmMediaIcon(type) {
+  if (type === 'image') return '🖼️';
+  if (type === 'video') return '🎬';
+  if (type === 'audio') return '🎙️';
+  if (type === 'document') return '📄';
+  return '';
+}
+
+async function qmLoad(force) {
+  if (qmState.items && !force) return qmState.items;
+  if (qmState.loading) return qmState.items || [];
+  qmState.loading = true;
+  try {
+    const r = await api('/quick-messages');
+    qmState.items = Array.isArray(r?.items) ? r.items : [];
+  } catch (e) {
+    qmState.items = [];
+    toast('Falha ao carregar mensagens prontas: ' + e.message, 'error');
+  } finally {
+    qmState.loading = false;
+  }
+  return qmState.items;
+}
+
+function qmPreview(item) {
+  if (item.body) return item.body.slice(0, 120);
+  if (item.mediaFilename) return '[' + (item.mediaType || 'mídia') + '] ' + item.mediaFilename;
+  if (item.mediaUrl) return '[' + (item.mediaType || 'mídia') + ']';
+  return '—';
+}
+
+function qmRenderPopover() {
+  const pop = document.getElementById('quickMsgPopover');
+  if (!pop) return;
+  const items = (qmState.items || []).filter((it) => {
+    if (!qmState.q) return true;
+    const q = qmState.q.toLowerCase();
+    return (it.title || '').toLowerCase().includes(q) || (it.body || '').toLowerCase().includes(q);
+  });
+  pop.innerHTML = '';
+  const head = el('div', { class: 'qm-popover-head' });
+  const search = el('input', {
+    type: 'search',
+    placeholder: 'Buscar...',
+    value: qmState.q,
+  });
+  search.addEventListener('input', (e) => {
+    qmState.q = e.target.value || '';
+    qmRenderPopover();
+  });
+  const newBtn = el('button', { class: 'qm-new', type: 'button' }, '+ Nova');
+  newBtn.addEventListener('click', () => qmOpenEditor(null));
+  head.append(search, newBtn);
+  pop.append(head);
+
+  const list = el('div', { class: 'qm-list' });
+  if (!items.length) {
+    list.append(el('div', { class: 'qm-empty' }, qmState.q
+      ? 'Nenhum resultado.'
+      : 'Nenhuma mensagem pronta. Clique em "+ Nova" pra criar.'));
+  } else {
+    for (const it of items) {
+      const row = el('div', { class: 'qm-item' });
+      const top = el('div', { class: 'qm-item-row' });
+      top.append(el('div', { class: 'qm-item-title' },
+        (it.mediaType ? qmMediaIcon(it.mediaType) + ' ' : '') + (it.title || 'Sem título')));
+      const actions = el('div', { class: 'qm-item-actions' });
+      const sendBtn = el('button', { type: 'button', class: 'qm-send', title: 'Enviar' }, '➤ Enviar');
+      sendBtn.addEventListener('click', async () => {
+        sendBtn.disabled = true;
+        try { await qmSend(it); } finally { sendBtn.disabled = false; }
+      });
+      const editBtn = el('button', { type: 'button', class: 'qm-edit', title: 'Editar' }, '✏');
+      editBtn.addEventListener('click', () => qmOpenEditor(it));
+      const delBtn = el('button', { type: 'button', class: 'qm-del', title: 'Apagar' }, '🗑');
+      delBtn.addEventListener('click', () => qmDelete(it));
+      actions.append(sendBtn, editBtn, delBtn);
+      top.append(actions);
+      row.append(top);
+      row.append(el('div', { class: 'qm-item-preview' }, qmPreview(it)));
+      list.append(row);
+    }
+  }
+  pop.append(list);
+}
+
+async function qmTogglePopover(force) {
+  const pop = document.getElementById('quickMsgPopover');
+  if (!pop) return;
+  const willShow = force === true || (force === undefined && pop.hidden);
+  if (!willShow) { pop.hidden = true; return; }
+  await qmLoad(false);
+  qmRenderPopover();
+  pop.hidden = false;
+  setTimeout(() => {
+    const ev = (e) => {
+      if (!pop.contains(e.target) && !e.target.closest('#quickMsgBtn')) {
+        pop.hidden = true;
+        document.removeEventListener('click', ev, true);
+      }
+    };
+    document.addEventListener('click', ev, true);
+  }, 0);
+}
+
+async function qmSend(item) {
+  if (!state.currentCard?.card) {
+    return toast('Abra um card antes de enviar a mensagem pronta', 'info');
+  }
+  try {
+    await sendCurrentMessage(
+      item.body || undefined,
+      item.mediaUrl || undefined,
+      item.mediaType || undefined,
+      item.mediaFilename || undefined,
+    );
+    document.getElementById('quickMsgPopover').hidden = true;
+    toast('Mensagem enviada', 'success');
+  } catch (e) {
+    toast('Erro ao enviar: ' + e.message, 'error');
+  }
+}
+
+async function qmDelete(item) {
+  const ok = await clowConfirm('Apagar a mensagem pronta "' + (item.title || '') + '"?', {
+    title: 'Apagar mensagem pronta', confirmLabel: 'Apagar',
+  });
+  if (!ok) return;
+  try {
+    await api('/quick-messages/' + encodeURIComponent(item.id), { method: 'DELETE' });
+    qmState.items = (qmState.items || []).filter((x) => x.id !== item.id);
+    qmRenderPopover();
+    toast('Apagada', 'success');
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  }
+}
+
+function qmOpenEditor(existing) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const state = {
+    mediaUrl: existing?.mediaUrl || '',
+    mediaType: existing?.mediaType || '',
+    mediaFilename: existing?.mediaFilename || '',
+  };
+  const mediaInfo = el('div', { style: 'font-size:12px;color:var(--text-dim);margin-top:4px' });
+  function refreshMedia() {
+    if (state.mediaUrl) {
+      mediaInfo.innerHTML = '';
+      mediaInfo.append(
+        el('span', { class: 'qm-media-chip' },
+          qmMediaIcon(state.mediaType) + ' ' + (state.mediaType || 'mídia') +
+          (state.mediaFilename ? ' · ' + state.mediaFilename : '')),
+        el('button', {
+          type: 'button',
+          style: 'margin-left:8px;background:transparent;border:0;color:var(--red);cursor:pointer',
+          on: { click: () => {
+            state.mediaUrl = ''; state.mediaType = ''; state.mediaFilename = '';
+            refreshMedia();
+          } },
+        }, 'remover'),
+      );
+    } else {
+      mediaInfo.textContent = 'Sem mídia anexada.';
+    }
+  }
+  refreshMedia();
+
+  const fileInput = el('input', { type: 'file', hidden: '',
+    accept: 'image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt' });
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await api('/media/upload', { method: 'POST', body: fd });
+      state.mediaUrl = r.url;
+      state.mediaType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('audio/') ? 'audio'
+        : file.type.startsWith('video/') ? 'video' : 'document';
+      state.mediaFilename = file.name;
+      refreshMedia();
+      toast('Mídia anexada', 'success');
+    } catch (err) {
+      toast('Upload falhou: ' + err.message, 'error');
+    } finally { fileInput.value = ''; }
+  });
+
+  const urlInput = el('input', { type: 'url', placeholder: 'https://...', value: state.mediaUrl });
+  urlInput.addEventListener('change', () => {
+    const v = (urlInput.value || '').trim();
+    if (!v) return;
+    state.mediaUrl = v;
+    if (!state.mediaType) state.mediaType = 'document';
+    if (!state.mediaFilename) state.mediaFilename = v.split('/').pop() || '';
+    refreshMedia();
+  });
+
+  const mediaTypeSel = el('select', { name: '__mediaType' });
+  for (const [v, label] of [['', '— Auto —'], ['image', '🖼 Imagem'], ['video', '🎬 Vídeo'], ['audio', '🎙 Áudio'], ['document', '📄 Documento']]) {
+    const opt = el('option', { value: v }, label);
+    if (v === state.mediaType) opt.selected = true;
+    mediaTypeSel.append(opt);
+  }
+  mediaTypeSel.addEventListener('change', () => {
+    state.mediaType = mediaTypeSel.value || '';
+    refreshMedia();
+  });
+
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload = {
+      title: (fd.get('title') || '').toString().trim(),
+      body: (fd.get('body') || '').toString(),
+      mediaUrl: state.mediaUrl || null,
+      mediaType: state.mediaType || null,
+      mediaFilename: state.mediaFilename || null,
+    };
+    if (!payload.title) return toast('Dê um título', 'error');
+    if (!payload.body.trim() && !payload.mediaUrl) return toast('Adicione texto ou mídia', 'error');
+    try {
+      if (existing) {
+        await api('/quick-messages/' + encodeURIComponent(existing.id), { method: 'PATCH', body: payload });
+      } else {
+        await api('/quick-messages', { method: 'POST', body: payload });
+      }
+      backdrop.remove();
+      await qmLoad(true);
+      qmRenderPopover();
+      toast(existing ? 'Atualizada' : 'Criada', 'success');
+    } catch (err) {
+      toast('Erro: ' + err.message, 'error');
+    }
+  } } });
+
+  form.append(
+    field('Título (apelido)', 'title', 'text', existing?.title || '',
+      { required: '', placeholder: 'Ex.: Saudação inicial' }),
+    fieldTextarea('Mensagem (pode conter link, emoji, *negrito*)', 'body', existing?.body || ''),
+    el('div', { class: 'field' },
+      el('label', {}, 'Mídia (opcional — imagem, vídeo, áudio, documento)'),
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+        el('button', { type: 'button',
+          style: 'padding:6px 10px;border-radius:6px;border:1px solid var(--border-2);background:var(--bg-3);color:var(--text);cursor:pointer',
+          on: { click: () => fileInput.click() } }, '📎 Anexar arquivo'),
+        mediaTypeSel,
+        fileInput,
+      ),
+      el('div', { style: 'margin-top:6px' },
+        el('label', { style: 'font-size:12px;color:var(--text-dim)' }, 'ou cole uma URL de mídia:'),
+        urlInput,
+      ),
+      mediaInfo,
+    ),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, existing ? 'Salvar' : 'Criar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' },
+    el('h3', {}, existing ? 'Editar mensagem pronta' : 'Nova mensagem pronta'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
+
 // Audio recording via MediaRecorder
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -1602,6 +1874,220 @@ function openAudioPreview(file) {
       toast('Erro: ' + (e.message || e.name || ''), 'error');
     }
   });
+}
+
+// ─── Câmera: foto + vídeo (multiplataforma) ─────────────────────────
+// Estratégia híbrida pra funcionar em TODO lugar:
+//  • Celular (Android/iOS): <input capture> abre a câmera NATIVA do
+//    sistema — robusto e contorna o getUserMedia instável do iOS dentro
+//    de webviews. O próprio app de câmera dá o passo de revisão.
+//  • Desktop (PC/notebook): getUserMedia + MediaRecorder num modal, com
+//    preview antes de enviar (desktop ignora o atributo capture).
+// Em ambos o arquivo final cai no uploadAndSendFile() que já existe; o
+// backend (/media/upload) normaliza vídeo pra mp4/H.264 via ffmpeg.
+
+function isMobileDevice() {
+  const ua = navigator.userAgent || '';
+  if (/android|iphone|ipod|ipad|mobile/i.test(ua)) return true;
+  // iPad em "modo desktop" se identifica como Mac mas tem touch
+  if (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+let camStream = null;
+let camRecorder = null;
+let camChunks = [];
+let camPendingFile = null;
+let camPreviewUrl = null;
+
+function pickVideoMime() {
+  if (!window.MediaRecorder) return '';
+  const candidates = [
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  for (const m of candidates) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {}
+  }
+  return ''; // navegador escolhe o default
+}
+
+// Envio direto (usado no fluxo nativo do celular — a câmera do SO já
+// revisou). uploadAndSendFile trata seu próprio erro internamente.
+async function sendCapturedFile(file) {
+  await uploadAndSendFile(file);
+  toast(file.type.startsWith('video/') ? 'Vídeo enviado' : 'Foto enviada', 'success');
+}
+
+function handleNativeCapture(file) {
+  if (!file) return;
+  sendCapturedFile(file).catch((e) => toast('Erro ao enviar: ' + (e.message || e.name || ''), 'error'));
+}
+
+// Action sheet simples no celular pra escolher Foto x Vídeo (cada um
+// dispara o input capture correspondente).
+function showMobileCaptureChoice() {
+  const close = () => { try { sheet.remove(); } catch (e) {} };
+  const photoBtn = el('button', { type: 'button', class: 'cam-sheet-btn' }, '📸 Tirar foto');
+  const videoBtn = el('button', { type: 'button', class: 'cam-sheet-btn' }, '🎥 Gravar vídeo');
+  const cancelBtn = el('button', { type: 'button', class: 'cam-sheet-btn cam-sheet-cancel' }, 'Cancelar');
+  photoBtn.addEventListener('click', () => { close(); const i = $('#cameraPhotoInput'); if (i) i.click(); });
+  videoBtn.addEventListener('click', () => { close(); const i = $('#cameraVideoInput'); if (i) i.click(); });
+  cancelBtn.addEventListener('click', close);
+  const panel = el('div', { class: 'cam-sheet-panel' }, photoBtn, videoBtn, cancelBtn);
+  const sheet = el('div', { class: 'cam-sheet' }, panel);
+  sheet.addEventListener('click', (ev) => { if (ev.target === sheet) close(); });
+  document.body.appendChild(sheet);
+}
+
+function openCamera() {
+  if (isMobileDevice()) { showMobileCaptureChoice(); return; }
+  openDesktopCamera();
+}
+
+function resetCameraModalToLive() {
+  const preview = $('#cameraPreview');
+  const playback = $('#cameraPlayback');
+  const photo = $('#cameraPhotoPreview');
+  if (preview) preview.hidden = false;
+  if (playback) { playback.hidden = true; playback.removeAttribute('src'); }
+  if (photo) { photo.hidden = true; photo.removeAttribute('src'); }
+  const live = $('#cameraControls');
+  const review = $('#cameraReviewControls');
+  if (live) live.hidden = false;
+  if (review) review.hidden = true;
+  if (camPreviewUrl) { try { URL.revokeObjectURL(camPreviewUrl); } catch (e) {} camPreviewUrl = null; }
+  camPendingFile = null;
+}
+
+async function openDesktopCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return toast('Navegador não suporta câmera', 'error');
+  }
+  if (!window.isSecureContext) {
+    return toast('Câmera só funciona via HTTPS', 'error');
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true,
+    });
+  } catch (e) {
+    let msg = 'Câmera bloqueada';
+    if (e.name === 'NotAllowedError') msg = 'Você precisa permitir a câmera no navegador (cadeado na barra de endereço → Site settings → Câmera)';
+    else if (e.name === 'NotFoundError') msg = 'Nenhuma câmera detectada no dispositivo';
+    else if (e.name === 'NotReadableError') msg = 'Câmera está em uso por outro app';
+    else if (e.message) msg = msg + ': ' + e.message;
+    return toast(msg, 'error');
+  }
+  const modal = $('#cameraModal');
+  const preview = $('#cameraPreview');
+  resetCameraModalToLive();
+  if (preview) preview.srcObject = camStream;
+  if (modal) modal.hidden = false;
+}
+
+function capturePhoto() {
+  const preview = $('#cameraPreview');
+  if (!preview || !preview.videoWidth) return toast('Câmera ainda carregando...', 'error');
+  const canvas = document.createElement('canvas');
+  canvas.width = preview.videoWidth;
+  canvas.height = preview.videoHeight;
+  canvas.getContext('2d').drawImage(preview, 0, 0);
+  canvas.toBlob((blob) => {
+    if (!blob) return toast('Falha ao capturar foto', 'error');
+    camPendingFile = new File([blob], 'foto-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+    showCameraReview(URL.createObjectURL(blob), 'image');
+  }, 'image/jpeg', 0.92);
+}
+
+function toggleCameraRecording() {
+  const btn = $('#camRecordBtn');
+  if (camRecorder && camRecorder.state === 'recording') {
+    try { camRecorder.stop(); } catch (e) {}
+    if (btn) { btn.classList.remove('recording'); btn.textContent = '⏺ Vídeo'; }
+    return;
+  }
+  if (!window.MediaRecorder || !camStream) return toast('Navegador não tem MediaRecorder', 'error');
+  const mime = pickVideoMime();
+  try {
+    camRecorder = mime ? new MediaRecorder(camStream, { mimeType: mime }) : new MediaRecorder(camStream);
+  } catch (e) {
+    return toast('Erro ao iniciar gravador: ' + (e.message || e.name), 'error');
+  }
+  camChunks = [];
+  camRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) camChunks.push(e.data); };
+  camRecorder.onerror = (e) => {
+    toast('Erro na gravação: ' + (e.error?.name || 'desconhecido'), 'error');
+    if (btn) { btn.classList.remove('recording'); btn.textContent = '⏺ Vídeo'; }
+  };
+  camRecorder.onstop = () => {
+    if (camChunks.length === 0) return toast('Gravação vazia', 'error');
+    const finalMime = camRecorder.mimeType || mime || 'video/webm';
+    const ext = finalMime.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(camChunks, { type: finalMime });
+    camPendingFile = new File([blob], 'video-' + Date.now() + '.' + ext, { type: finalMime });
+    showCameraReview(URL.createObjectURL(blob), 'video');
+  };
+  try {
+    camRecorder.start();
+    if (btn) { btn.classList.add('recording'); btn.textContent = '⏹ Parar'; }
+    toast('Gravando... clique em Parar pra finalizar', '');
+  } catch (e) {
+    toast('Não pude iniciar: ' + (e.message || e.name), 'error');
+  }
+}
+
+function showCameraReview(url, kind) {
+  if (camPreviewUrl) { try { URL.revokeObjectURL(camPreviewUrl); } catch (e) {} }
+  camPreviewUrl = url;
+  const preview = $('#cameraPreview');
+  const playback = $('#cameraPlayback');
+  const photo = $('#cameraPhotoPreview');
+  if (preview) preview.hidden = true;
+  if (kind === 'video') {
+    if (playback) { playback.src = url; playback.hidden = false; }
+    if (photo) photo.hidden = true;
+  } else {
+    if (photo) { photo.src = url; photo.hidden = false; }
+    if (playback) playback.hidden = true;
+  }
+  const live = $('#cameraControls');
+  const review = $('#cameraReviewControls');
+  if (live) live.hidden = true;
+  if (review) review.hidden = false;
+}
+
+function closeCamera() {
+  if (camRecorder && camRecorder.state === 'recording') { try { camRecorder.stop(); } catch (e) {} }
+  camRecorder = null;
+  camChunks = [];
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  const preview = $('#cameraPreview');
+  if (preview) preview.srcObject = null;
+  resetCameraModalToLive();
+  const modal = $('#cameraModal');
+  if (modal) modal.hidden = true;
+}
+
+async function sendCameraCapture() {
+  if (!camPendingFile) return;
+  const file = camPendingFile;
+  const sendBtn = $('#camSendBtn');
+  const retake = $('#camRetakeBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  if (retake) retake.disabled = true;
+  try {
+    await sendCapturedFile(file);
+    closeCamera();
+  } catch (e) {
+    toast('Erro: ' + (e.message || e.name || ''), 'error');
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    if (retake) retake.disabled = false;
+  }
 }
 
 // ─── Emoji picker (estilo WhatsApp) ─────────────────────────────────
@@ -3949,7 +4435,25 @@ function wireEvents() {
     if (e.target) e.target.value = '';
   });
   wire('#recordBtn', 'click', toggleRecording);
+  // Câmera (foto + vídeo) — mobile usa input capture, desktop usa modal getUserMedia
+  wire('#cameraBtn', 'click', openCamera);
+  wire('#cameraPhotoInput', 'change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) handleNativeCapture(file);
+    if (e.target) e.target.value = '';
+  });
+  wire('#cameraVideoInput', 'change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) handleNativeCapture(file);
+    if (e.target) e.target.value = '';
+  });
+  wire('#camPhotoBtn', 'click', capturePhoto);
+  wire('#camRecordBtn', 'click', toggleCameraRecording);
+  wire('#camCloseBtn', 'click', closeCamera);
+  wire('#camRetakeBtn', 'click', resetCameraModalToLive);
+  wire('#camSendBtn', 'click', sendCameraCapture);
   wire('#emojiBtn', 'click', toggleEmojiPicker);
+  wire('#quickMsgBtn', 'click', (e) => { e.stopPropagation(); qmTogglePopover(); });
 
   // Contact search
   wire('#contactSearchInput', 'input', async (e) => {

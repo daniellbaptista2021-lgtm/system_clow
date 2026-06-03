@@ -26,6 +26,7 @@ import { registerSubscriptionsRoutes } from './routes/subscriptions.js';
 import { registerInventoryRoutes } from './routes/inventory.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerAutomationsRoutes } from './routes/automations.js';
+import { registerQuickMessagesRoutes } from './routes/quickMessages.js';
 
 const app = new Hono();
 
@@ -44,5 +45,6 @@ registerSubscriptionsRoutes(app);
 registerInventoryRoutes(app);
 registerMediaRoutes(app);
 registerAutomationsRoutes(app);
+registerQuickMessagesRoutes(app);
 
 export default app;

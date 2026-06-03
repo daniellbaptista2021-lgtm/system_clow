@@ -359,10 +359,22 @@ export function registerMediaRoutes(app: Hono): void {
     const formData = await c.req.formData();
     const file = formData.get('file');
     if (!file || typeof file === 'string') return badRequest(c, 'file required');
-    const bytes = Buffer.from(await (file as any).arrayBuffer());
-    const filename = (file as any).name || 'upload.bin';
-    const mime = (file as any).type || 'application/octet-stream';
-    const saved = (await import('.././media.js')).saveMedia(tid, bytes, { mime, suggestedFilename: filename });
+    let bytes = Buffer.from(await (file as any).arrayBuffer());
+    let filename = (file as any).name || 'upload.bin';
+    let mime = (file as any).type || 'application/octet-stream';
+    const mediaMod = await import('.././media.js');
+    // Vídeo gravado no navegador/celular vem em formatos variados (webm desktop,
+    // .mov/HEVC no iPhone). Normaliza pra mp4/H.264 pra tocar em qualquer WhatsApp.
+    // Já-mp4 passa direto; falha de transcode mantém o original (não perde mídia).
+    if (mime.startsWith('video/') && mime !== 'video/mp4') {
+      const t = await mediaMod.transcodeVideoToMp4(bytes);
+      if (t) {
+        bytes = t.bytes;
+        mime = t.mime;
+        filename = filename.replace(/\.[^./\\]+$/, '') + '.mp4';
+      }
+    }
+    const saved = mediaMod.saveMedia(tid, bytes, { mime, suggestedFilename: filename });
     // Return full URL with tenantId path
     return ok(c, { url: saved.publicUrl, bytes: saved.bytes, mime: saved.mime }, 201);
   });
