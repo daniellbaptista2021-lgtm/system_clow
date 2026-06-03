@@ -215,14 +215,17 @@ async function processInBackground(
   sessionId: string,
   phone: string,
   userMessage: string,
+  tenantId?: string,
 ): Promise<void> {
   try {
+    const wsDir = path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', sessionId);
     const engine = await pool.getOrCreate(sessionId, {
-      cwd: path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', phone),
+      cwd: wsDir,
+      workspaceRoot: wsDir,
+      tenantId: tenantId || undefined,
     });
 
     // Ensure workspace dir exists
-    const wsDir = path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', phone);
     try { fs.mkdirSync(wsDir, { recursive: true }); } catch {}
 
     let buffer = '';
@@ -339,8 +342,11 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
     // Send typing immediately for UX
     void sendTypingIndicator(phone);
 
+    // Resolve tenantId from CRM forward header (x-clow-tenant-id)
+    const tenantIdFromHeader = c.req.header('x-clow-tenant-id');
+
     // Process in background (don't block webhook response)
-    void processInBackground(pool, sessionId, phone, userMessage);
+    void processInBackground(pool, sessionId, phone, userMessage, tenantIdFromHeader);
 
     // Respond 200 immediately (Z-API timeout is ~10s)
     return c.json({ ok: true });
