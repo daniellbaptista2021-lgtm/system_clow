@@ -7506,3 +7506,215 @@ function openExportContactsMenu() {
   window.__onda60 = { refresh, onAlert, toggleMute, connect };
 })();
 // ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ ONDA 61: BUSCA RÁPIDA DE CLIENTE (nome / telefone / CPF) ═══════════
+// Card de pesquisa ao lado do sino. Digita nome, telefone ou CPF →
+// /contacts/search (já cobre os 3, ignorando formatação) → abre a conversa
+// (card vinculado; cria um se o contato ainda não tiver).
+// ═══════════════════════════════════════════════════════════════════════
+(function onda61QuickSearch() {
+  let _t = null, _lastQ = '', _results = [], _sel = -1;
+
+  function token() {
+    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+  }
+
+  function injectStyles() {
+    if (document.getElementById('onda61-styles')) return;
+    const css = `
+    #quickSearchBox{position:relative;flex:0 1 240px;min-width:170px;max-width:300px;display:flex;align-items:center}
+    #quickSearchBox .qs-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-dim,#888);pointer-events:none;display:flex}
+    #quickSearchInput{width:100%;height:36px;box-sizing:border-box;padding:0 30px 0 32px;background:var(--bg-3,#1f1f1f)!important;border:1px solid var(--border,#333);border-radius:10px;color:var(--text,#eee)!important;font-family:inherit;font-size:13px;outline:none}
+    #quickSearchInput:focus{border-color:var(--accent,#3b82f6)}
+    #quickSearchInput::placeholder{color:var(--text-dim,#888)}
+    #quickSearchClear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-dim,#888);cursor:pointer;font-size:16px;line-height:1;display:none;padding:2px}
+    #quickSearchResults{position:fixed;z-index:9002;width:340px;max-width:calc(100vw - 28px);max-height:60vh;overflow-y:auto;background:var(--bg-2,#161616);border:1px solid var(--border,#333);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none}
+    #quickSearchResults.open{display:block}
+    .qs-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border,#222)}
+    .qs-item:last-child{border-bottom:0}
+    .qs-item:hover,.qs-item.sel{background:var(--bg-3,#1f1f1f)}
+    .qs-av{flex:0 0 auto;width:32px;height:32px;border-radius:50%;background:var(--grad,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;overflow:hidden}
+    .qs-av img{width:100%;height:100%;object-fit:cover}
+    .qs-meta{min-width:0;flex:1}
+    .qs-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .qs-sub{font-size:11px;color:var(--text-dim,#9aa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .qs-empty{padding:18px 12px;text-align:center;color:var(--text-dim,#888);font-size:12px}
+    @media (max-width:768px){#quickSearchBox{flex:1 1 140px;max-width:none}}
+    `;
+    const s = document.createElement('style'); s.id = 'onda61-styles'; s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  function fmtSub(ct) {
+    const bits = [];
+    if (ct.phone) bits.push(ct.phone);
+    if (ct.cpfCnpj || ct.cpf_cnpj) bits.push('CPF ' + (ct.cpfCnpj || ct.cpf_cnpj));
+    if (!bits.length && ct.email) bits.push(ct.email);
+    return bits.join(' · ');
+  }
+
+  function resultsEl() { return document.getElementById('quickSearchResults'); }
+
+  function closeResults() { const r = resultsEl(); if (r) r.classList.remove('open'); _sel = -1; }
+
+  function positionResults() {
+    const inp = document.getElementById('quickSearchInput'); const r = resultsEl();
+    if (!inp || !r) return;
+    const b = inp.getBoundingClientRect();
+    const w = Math.min(340, window.innerWidth - 16);
+    let left = Math.max(8, Math.min(b.left, window.innerWidth - w - 8));
+    r.style.width = w + 'px';
+    r.style.left = left + 'px';
+    r.style.top = (b.bottom + 6) + 'px';
+  }
+
+  function renderResults() {
+    const r = resultsEl(); if (!r) return;
+    r.innerHTML = '';
+    if (!_results.length) {
+      r.append(el('div', { class: 'qs-empty' }, _lastQ.length < 2 ? 'Digite ao menos 2 caracteres' : 'Nenhum cliente encontrado'));
+    } else {
+      _results.forEach((ct, i) => {
+        const av = el('div', { class: 'qs-av' });
+        const url = ct.avatarUrl || ct.avatar_url;
+        if (url) av.append(el('img', { src: url, alt: '' }));
+        else av.textContent = (typeof initials === 'function' ? initials(ct.name) : (ct.name || '?').slice(0, 2).toUpperCase());
+        const item = el('div', { class: 'qs-item' + (i === _sel ? ' sel' : '') },
+          av,
+          el('div', { class: 'qs-meta' },
+            el('div', { class: 'qs-name' }, ct.name || ct.phone || 'Sem nome'),
+            el('div', { class: 'qs-sub' }, fmtSub(ct) || '—'),
+          ),
+        );
+        item.addEventListener('mousedown', (e) => { e.preventDefault(); choose(ct); });
+        r.append(item);
+      });
+    }
+    positionResults();
+    r.classList.add('open');
+  }
+
+  async function doSearch(q) {
+    _lastQ = q;
+    if (q.length < 2) { _results = []; renderResults(); return; }
+    try {
+      const data = await api('/contacts/search?q=' + encodeURIComponent(q));
+      // só re-renderiza se ainda é a query atual (evita corrida)
+      if (q !== _lastQ) return;
+      _results = (data.contacts || []).slice(0, 8);
+      _sel = _results.length ? 0 : -1;
+      renderResults();
+    } catch (e) {
+      _results = []; renderResults();
+    }
+  }
+
+  async function choose(ct) {
+    closeResults();
+    const inp = document.getElementById('quickSearchInput');
+    if (inp) { inp.value = ''; toggleClear(); }
+    await openConversation(ct);
+  }
+
+  async function openConversation(ct) {
+    try {
+      const detail = await api('/contacts/' + ct.id);
+      const card = detail.cards && detail.cards[0];
+      if (card) { openCardPanel(card.id); return; }
+      // Sem card vinculado → cria um no 1º board/coluna não-terminal e abre.
+      const boards = (window.state && window.state.boards) || [];
+      const board = boards[0];
+      if (!board) { toast('Nenhum board configurado', 'error'); return; }
+      const cols = (window.state?.pipeline?.columns?.length ? window.state.pipeline.columns
+        : (await api('/boards/' + board.id + '/columns')).columns) || [];
+      const firstCol = cols.find(c => !c.isTerminal) || cols[0];
+      if (!firstCol) { toast('Board sem colunas', 'error'); return; }
+      const created = await api('/cards', { method: 'POST', body: {
+        boardId: board.id, columnId: firstCol.id, title: ct.name || ct.phone || 'Cliente', contactId: ct.id,
+      } });
+      const newId = (created && (created.card?.id || created.id)) || null;
+      if (newId) openCardPanel(newId);
+      else toast('Card criado', 'success');
+    } catch (e) { toast('Erro ao abrir conversa: ' + e.message, 'error'); }
+  }
+
+  // ─── Monta o card de busca e ancora ao lado do sino ───────────────────
+  function ensureBox() {
+    injectStyles();
+    if (document.getElementById('quickSearchBox')) { placeSearch(); return true; }
+    const box = el('div', { id: 'quickSearchBox' });
+    box.append(el('span', { class: 'qs-ico', html:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' }));
+    const inp = el('input', { id: 'quickSearchInput', type: 'text', autocomplete: 'off', placeholder: 'Buscar cliente (nome, telefone, CPF)' });
+    const clear = el('button', { id: 'quickSearchClear', title: 'Limpar', html: '×' });
+    box.append(inp, clear);
+    const res = el('div', { id: 'quickSearchResults' });
+    document.body.append(res);
+
+    let typeTimer = null;
+    inp.addEventListener('input', () => {
+      toggleClear();
+      const q = inp.value.trim();
+      clearTimeout(typeTimer);
+      typeTimer = setTimeout(() => doSearch(q), 250);
+    });
+    inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2) renderResults(); });
+    inp.addEventListener('keydown', (e) => {
+      const open = resultsEl()?.classList.contains('open');
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (_results.length) { _sel = (_sel + 1) % _results.length; renderResults(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (_results.length) { _sel = (_sel - 1 + _results.length) % _results.length; renderResults(); } }
+      else if (e.key === 'Enter') { if (_results[_sel]) { e.preventDefault(); choose(_results[_sel]); } }
+      else if (e.key === 'Escape') { inp.value = ''; toggleClear(); closeResults(); inp.blur(); }
+    });
+    clear.addEventListener('click', () => { inp.value = ''; toggleClear(); closeResults(); inp.focus(); });
+    document.addEventListener('click', (e) => {
+      if (!box.contains(e.target) && !resultsEl()?.contains(e.target)) closeResults();
+    });
+    window.addEventListener('resize', () => { if (resultsEl()?.classList.contains('open')) positionResults(); });
+
+    // Insere no DOM ANTES de posicionar — placeSearch() localiza o box via
+    // getElementById, então ele precisa já estar anexado em algum lugar.
+    document.body.append(box);
+    placeSearch();
+    return true;
+  }
+
+  function toggleClear() {
+    const inp = document.getElementById('quickSearchInput'); const clr = document.getElementById('quickSearchClear');
+    if (inp && clr) clr.style.display = inp.value ? 'block' : 'none';
+  }
+
+  // Mantém o card de busca imediatamente à esquerda do sino, na barra
+  // de ação da view ativa (o sino é reposicionado pela Onda 60).
+  function placeSearch() {
+    const bell = document.getElementById('alertsBell');
+    const box = document.getElementById('quickSearchBox');
+    if (!box) return;
+    if (bell && bell.parentNode) {
+      if (bell.previousElementSibling !== box) bell.parentNode.insertBefore(box, bell);
+    } else {
+      // sem sino: cai no top-bar da view ativa
+      const av = document.querySelector('.view.active');
+      const host = av?.querySelector('#refreshBtn')?.parentNode || av?.querySelector('.top-bar-left') || av?.querySelector('.top-bar');
+      if (host && box.parentNode !== host) host.appendChild(box);
+    }
+  }
+
+  function init() {
+    ensureBox();
+    // garante posicionamento depois que a Onda 60 cria/realoca o sino
+    let n = 0;
+    const t = setInterval(() => { placeSearch(); if (++n > 12) clearInterval(t); }, 400);
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.nav-item')) setTimeout(placeSearch, 130);
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.__onda61 = { doSearch, placeSearch, openConversation };
+})();
+// ═══════════════════════════════════════════════════════════════════════
