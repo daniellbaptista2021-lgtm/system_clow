@@ -2295,6 +2295,7 @@ async function showView(viewName) {
   else if (viewName === 'inventory') { await loadInventory(); renderInventoryList(); }
   else if (viewName === 'stats') renderStats();
   else if (viewName === 'tasks') { await renderTasksView(); }
+  else if (viewName === 'notifications') { if (typeof window.__renderNotificationsView === 'function') await window.__renderNotificationsView(); }
   else if (viewName === 'agenda') { await renderAgendaView(); }
   else if (viewName === 'documents') { await renderDocumentsView(); }
   else if (viewName === 'forms') { await renderFormsView(); }
@@ -6230,8 +6231,8 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
     try {
       const n = new Notification(title, {
         body: bodyPreview,
-        icon: '/crm/icon-192.png',
-        badge: '/crm/icon-192.png',
+        icon: '/assets/icon-192.png',
+        badge: '/assets/icon-192.png',
         tag: 'wa-' + (data.cardId || ''),
         renotify: true,
       });
@@ -7090,3 +7091,418 @@ function openExportContactsMenu() {
   document.body.append(dialog);
 }
 
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ ONDA 60: CENTRAL DE ALERTAS (sino + aba + som + visual + push) ═════
+// Unifica alertas standing (tarefas/mensalidades/vencimentos) + conversas
+// não-lidas num só lugar. NÃO duplica o beep de nova mensagem (Onda 48 já
+// trata message.in). EventSource dedicado p/ o evento 'alert' — isolado:
+// se falhar, não afeta o realtime de mensagens.
+// ═══════════════════════════════════════════════════════════════════════
+(function onda60Alerts() {
+  const S = {
+    es: null,
+    alerts: [],
+    conversations: [],
+    unread: 0,
+    filter: 'all',
+    muted: localStorage.getItem('clow_alerts_muted') === '1',
+    refreshTimer: null,
+    ac: null,
+  };
+
+  function token() {
+    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+  }
+  async function jget(path) {
+    const r = await fetch('/v1/crm' + path, { headers: { Authorization: 'Bearer ' + token() } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+  async function jpost(path) {
+    return fetch('/v1/crm' + path, { method: 'POST', headers: { Authorization: 'Bearer ' + token() } });
+  }
+
+  // ─── Estilos (injetados, sem tocar crm.css) ───────────────────────────
+  function injectStyles() {
+    if (document.getElementById('onda60-styles')) return;
+    const css = `
+    .nav-badge{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1}
+    .nav-item{position:relative}
+    #alertsBell{position:relative;flex:0 0 auto;width:36px;height:36px;min-width:36px;padding:0;box-sizing:border-box;border-radius:10px;background:var(--bg-3,#1f1f1f)!important;border:1px solid var(--border,#333);color:var(--text,#eee)!important;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;vertical-align:middle}
+    #alertsBell:hover{background:var(--bg-2,#161616);border-color:var(--accent,#3b82f6)}
+    #alertsBell .a60-bell-ico{display:flex;transform-origin:50% 0}
+    #alertsBell.ring .a60-bell-ico{animation:bellRing .6s ease}
+    @keyframes bellRing{0%,100%{transform:rotate(0)}20%{transform:rotate(14deg)}40%{transform:rotate(-12deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-6deg)}}
+    #alertsBellBadge{position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px}
+    #alertsDropdown{position:fixed;top:62px;left:14px;z-index:9001;width:340px;max-width:calc(100vw - 28px);max-height:70vh;overflow:hidden;background:var(--bg-2,#161616);border:1px solid var(--border,#333);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none;flex-direction:column}
+    #alertsDropdown.open{display:flex}
+    .a60-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border,#2a2a2a)}
+    .a60-head b{font-size:14px}
+    .a60-head .a60-actions{display:flex;gap:6px}
+    .a60-mini{background:transparent;border:1px solid var(--border,#333);color:var(--text-dim,#aaa);font-size:11px;padding:4px 8px;border-radius:8px;cursor:pointer}
+    .a60-mini:hover{color:var(--text,#fff)}
+    .a60-list{overflow-y:auto;max-height:60vh}
+    .a60-item{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border,#222);cursor:pointer;align-items:flex-start}
+    .a60-item:hover{background:var(--bg-3,#1f1f1f)}
+    .a60-item.unread{background:rgba(59,130,246,.07)}
+    .a60-ico{font-size:18px;flex:0 0 auto;line-height:1.2}
+    .a60-body{min-width:0;flex:1}
+    .a60-title{font-size:13px;font-weight:600;margin-bottom:1px}
+    .a60-sub{font-size:12px;color:var(--text-dim,#9aa);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .a60-time{font-size:10px;color:var(--text-dim,#777);margin-top:3px}
+    .a60-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:6px}
+    .a60-dot.urgent{background:#ef4444}.a60-dot.warning{background:#f59e0b}.a60-dot.info{background:#3b82f6}
+    .a60-empty{padding:30px 14px;text-align:center;color:var(--text-dim,#888);font-size:13px}
+    .a60-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+    .a60-chip{background:var(--bg-2,#1a1a1a);border:1px solid var(--border,#333);color:var(--text-dim,#aaa);font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer}
+    .a60-chip.active{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff}
+    .toast.a60-toast{cursor:pointer;border-left:3px solid var(--accent,#3b82f6)}
+    .toast.a60-toast.urgent{border-left-color:#ef4444}.toast.a60-toast.warning{border-left-color:#f59e0b}
+    `;
+    const s = document.createElement('style');
+    s.id = 'onda60-styles';
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  // ─── Som / vibração / notificação nativa ──────────────────────────────
+  function playTone(sev) {
+    if (S.muted) return;
+    try {
+      S.ac = S.ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (S.ac.state === 'suspended') S.ac.resume();
+      const seq = sev === 'urgent' ? [880, 660, 880] : sev === 'warning' ? [660, 880] : [780];
+      seq.forEach((f, i) => {
+        const o = S.ac.createOscillator(), g = S.ac.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        const t0 = S.ac.currentTime + i * 0.14;
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.13, t0 + 0.02);
+        g.gain.linearRampToValueAtTime(0, t0 + 0.12);
+        o.connect(g).connect(S.ac.destination);
+        o.start(t0); o.stop(t0 + 0.13);
+      });
+    } catch {}
+  }
+  function vibrate(sev) {
+    if (S.muted) return;
+    try { navigator.vibrate?.(sev === 'urgent' ? [60, 40, 60] : 30); } catch {}
+  }
+  function nativeNotif(a) {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const n = new Notification(a.title || 'Clow', {
+        body: a.body || '', icon: '/assets/icon-192.png', badge: '/assets/icon-192.png',
+        tag: 'a60-' + (a.id || ''), renotify: false,
+      });
+      n.onclick = () => { window.focus(); openFromAlert(a); n.close(); };
+    } catch {}
+  }
+  function a60Toast(a) {
+    try {
+      const root = document.getElementById('toastRoot');
+      if (!root) return;
+      const t = el('div', { class: 'toast a60-toast ' + (a.severity || 'info') },
+        el('div', { style: 'font-weight:600;font-size:13px' }, (iconFor(a.type) + ' ' + (a.title || ''))),
+        a.body ? el('div', { style: 'font-size:12px;color:var(--text-dim,#9aa);margin-top:2px' }, a.body) : null,
+      );
+      t.addEventListener('click', () => { openFromAlert(a); t.remove(); });
+      root.append(t);
+      setTimeout(() => t.remove(), 5000);
+    } catch {}
+  }
+
+  function iconFor(type) {
+    return ({
+      task_due: '📋', task_overdue: '⏰',
+      billing_due: '💰', billing_overdue: '💰',
+      due_date: '📅', reminder: '🔔', message: '💬', system: 'ℹ️',
+    })[type] || '🔔';
+  }
+
+  // Abre o card pelo MESMO caminho do kanban: openCardPanel(cardIdString)
+  // — a função local (não a wrapped que repassa objeto). Em contexto fresco
+  // (clique em push abre o PWA antes do login terminar), espera o token.
+  let _pendingCard = null, _pendingTimer = null;
+  function doOpenCard(cardId) {
+    const fn = (typeof openCardPanel === 'function') ? openCardPanel
+             : (typeof window !== 'undefined' && window.openCardPanel) ? window.openCardPanel : null;
+    if (!fn) return false;
+    try { Promise.resolve(fn(cardId)).catch(() => {}); } catch { return false; }
+    return true;
+  }
+  function openCardSafe(cardId) {
+    if (!cardId) return;
+    if (token() && doOpenCard(cardId)) return; // logado → abre já
+    _pendingCard = cardId;                     // senão guarda e tenta quando o token chegar
+    clearInterval(_pendingTimer);
+    let tries = 0;
+    _pendingTimer = setInterval(() => {
+      if (++tries > 40) { clearInterval(_pendingTimer); return; } // ~20s e desiste
+      if (_pendingCard && token() && doOpenCard(_pendingCard)) { _pendingCard = null; clearInterval(_pendingTimer); }
+    }, 500);
+  }
+  function openFromAlert(a) {
+    try {
+      if (a && a.cardId) { openCardSafe(a.cardId); return; }
+      if (a && a.url) { const h = a.url.split('#')[1]; if (h && !h.startsWith('card=')) location.hash = h; }
+    } catch (e) { console.warn('[onda60] openFromAlert', e); }
+  }
+  // Trata #card=<id> (clique em push/notification nativa abre /crm/#card=ID).
+  function handleCardHash() {
+    const m = (location.hash || '').match(/card=([A-Za-z0-9_-]+)/);
+    if (m) openCardSafe(m[1]);
+  }
+
+  // ─── Badges ───────────────────────────────────────────────────────────
+  function totalCount() {
+    const conv = S.conversations.reduce((n, c) => n + (c.count || 0), 0);
+    return (S.unread || 0) + conv;
+  }
+  function updateBadges() {
+    const total = totalCount();
+    const bb = document.getElementById('alertsBellBadge');
+    if (bb) { bb.textContent = total > 99 ? '99+' : String(total); bb.style.display = total > 0 ? 'flex' : 'none'; }
+    const nb = document.getElementById('navAlertsBadge');
+    if (nb) { nb.textContent = total > 99 ? '99+' : String(total); nb.style.display = total > 0 ? 'flex' : 'none'; }
+    try {
+      if ('setAppBadge' in navigator) { total > 0 ? navigator.setAppBadge(total).catch(() => {}) : navigator.clearAppBadge?.().catch(() => {}); }
+    } catch {}
+  }
+  function ringBell() {
+    const b = document.getElementById('alertsBell');
+    if (!b) return;
+    b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring');
+  }
+
+  // ─── Recebe um alerta novo (SSE) ──────────────────────────────────────
+  function onAlert(a) {
+    if (!a || !a.id) return;
+    if (!S.alerts.some(x => x.id === a.id)) S.alerts.unshift(a);
+    if (!a.read) S.unread++;
+    updateBadges(); ringBell();
+    playTone(a.severity); vibrate(a.severity); nativeNotif(a); a60Toast(a);
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  function scheduleRefresh() {
+    clearTimeout(S.refreshTimer);
+    S.refreshTimer = setTimeout(() => { refresh().catch(() => {}); }, 1200);
+  }
+
+  async function refresh() {
+    if (!token()) return;
+    const d = await jget('/alerts?limit=80');
+    S.alerts = d.alerts || [];
+    S.conversations = d.conversations || [];
+    S.unread = d.unread || 0;
+    updateBadges();
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  // ─── Lista combinada (alertas + conversas) com filtro ─────────────────
+  function combinedItems() {
+    const conv = S.conversations.map(c => ({
+      id: 'conv-' + c.cardId, type: 'message', severity: 'info',
+      title: c.contactName || 'Nova mensagem', body: (c.count || 1) + ' não lida(s)',
+      cardId: c.cardId, url: '/crm/#card=' + c.cardId, read: false, createdAt: c.lastInboundAt || Date.now(),
+      _conv: true, count: c.count,
+    }));
+    let items = [...conv, ...S.alerts];
+    const f = S.filter;
+    if (f === 'messages') items = items.filter(i => i.type === 'message');
+    else if (f === 'tasks') items = items.filter(i => i.type === 'task_due' || i.type === 'task_overdue');
+    else if (f === 'billing') items = items.filter(i => i.type === 'billing_due' || i.type === 'billing_overdue');
+    else if (f === 'duedate') items = items.filter(i => i.type === 'due_date' || i.type === 'reminder');
+    items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return items;
+  }
+
+  function itemEl(a) {
+    const node = el('div', { class: 'a60-item' + (a.read ? '' : ' unread') },
+      el('div', { class: 'a60-ico' }, iconFor(a.type)),
+      el('div', { class: 'a60-body' },
+        el('div', { class: 'a60-title' }, a.title || ''),
+        a.body ? el('div', { class: 'a60-sub' }, a.body) : null,
+        el('div', { class: 'a60-time' }, (typeof fmtDate === 'function' ? fmtDate(a.createdAt) : '')),
+      ),
+      el('div', { class: 'a60-dot ' + (a.severity || 'info') }),
+    );
+    node.addEventListener('click', async () => {
+      openFromAlert(a);
+      if (!a._conv && !a.read && a.id) {
+        try { await jpost('/alerts/' + a.id + '/read'); a.read = true; if (S.unread > 0) S.unread--; updateBadges(); } catch {}
+      }
+      closeDropdown();
+    });
+    return node;
+  }
+
+  // ─── Dropdown do sino ─────────────────────────────────────────────────
+  function renderDropdown() {
+    const dd = document.getElementById('alertsDropdown');
+    if (!dd) return;
+    dd.innerHTML = '';
+    const head = el('div', { class: 'a60-head' },
+      el('b', {}, 'Notificações'),
+      el('div', { class: 'a60-actions' },
+        el('button', { class: 'a60-mini', title: S.muted ? 'Ativar som' : 'Silenciar', on: { click: toggleMute } }, S.muted ? '🔕' : '🔔'),
+        el('button', { class: 'a60-mini', on: { click: markAllRead } }, 'Marcar lidas'),
+        el('button', { class: 'a60-mini', on: { click: () => { closeDropdown(); (window.showView || showView)('notifications'); } } }, 'Ver todas'),
+      ),
+    );
+    const list = el('div', { class: 'a60-list' });
+    const items = combinedItems().slice(0, 20);
+    if (!items.length) list.append(el('div', { class: 'a60-empty' }, '✓ Tudo em dia, nenhum alerta.'));
+    else items.forEach(a => list.append(itemEl(a)));
+    dd.append(head, list);
+  }
+  function openDropdown() {
+    injectStyles();
+    const dd = ensureBell() && document.getElementById('alertsDropdown');
+    if (!dd) return;
+    renderDropdown();
+    // Posiciona o painel logo abaixo do sino, mantendo na tela.
+    const bell = document.getElementById('alertsBell');
+    if (bell) {
+      const r = bell.getBoundingClientRect();
+      const w = Math.min(340, window.innerWidth - 16);
+      let left = r.right - w; // alinha borda direita do painel com o sino
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      dd.style.left = left + 'px';
+      dd.style.right = 'auto';
+      dd.style.top = (r.bottom + 8) + 'px';
+    }
+    dd.classList.add('open');
+  }
+  function closeDropdown() { document.getElementById('alertsDropdown')?.classList.remove('open'); }
+  function toggleDropdown() { const dd = document.getElementById('alertsDropdown'); if (dd && dd.classList.contains('open')) closeDropdown(); else openDropdown(); }
+
+  async function markAllRead() {
+    try { await jpost('/alerts/read-all'); } catch {}
+    S.alerts.forEach(a => a.read = true);
+    S.unread = 0; updateBadges();
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+  function toggleMute() {
+    S.muted = !S.muted;
+    localStorage.setItem('clow_alerts_muted', S.muted ? '1' : '0');
+    if (typeof toast === 'function') toast(S.muted ? 'Alertas silenciados' : 'Alertas com som', '');
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  // ─── Aba completa (sidebar → Notificações) ────────────────────────────
+  function renderNotificationsView() {
+    const root = document.getElementById('notificationsContent');
+    if (!root) return;
+    const actions = document.getElementById('notifTopActions');
+    if (actions) {
+      actions.innerHTML = '';
+      actions.append(
+        el('button', { class: 'a60-mini', style: 'margin-right:6px', on: { click: toggleMute } }, S.muted ? '🔕 Silenciado' : '🔔 Som ligado'),
+        el('button', { class: 'a60-mini', on: { click: markAllRead } }, 'Marcar todas como lidas'),
+      );
+    }
+    root.innerHTML = '';
+    const filters = [
+      ['all', 'Todas'], ['messages', '💬 Mensagens'], ['tasks', '📋 Tarefas'],
+      ['billing', '💰 Mensalidades'], ['duedate', '📅 Vencimentos'],
+    ];
+    const fbar = el('div', { class: 'a60-filters' });
+    filters.forEach(([k, label]) => {
+      fbar.append(el('button', { class: 'a60-chip' + (S.filter === k ? ' active' : ''), on: { click: () => { S.filter = k; renderNotificationsView(); } } }, label));
+    });
+    root.append(fbar);
+    const items = combinedItems();
+    if (!items.length) { root.append(el('div', { class: 'a60-empty' }, '✓ Nenhum alerta neste filtro.')); return; }
+    const list = el('div', { style: 'border:1px solid var(--border,#2a2a2a);border-radius:12px;overflow:hidden' });
+    items.forEach(a => list.append(itemEl(a)));
+    root.append(list);
+  }
+  window.__renderNotificationsView = async function () { try { await refresh(); } catch {} renderNotificationsView(); };
+
+  // ─── Posiciona o sino na barra de ação da view ativa, à direita do
+  //     botão "Atualizar" (#refreshBtn). Sem #refreshBtn, vai pro fim do
+  //     grupo esquerdo do top-bar da view ativa. Segue a troca de views.
+  function placeBell() {
+    const bell = document.getElementById('alertsBell');
+    if (!bell) return;
+    const activeView = document.querySelector('.view.active') || document;
+    const refreshBtn = activeView.querySelector('#refreshBtn');
+    if (refreshBtn) { refreshBtn.insertAdjacentElement('afterend', bell); return; }
+    const tb = activeView.querySelector('.top-bar');
+    const host = tb ? (tb.querySelector('.top-bar-left') || tb) : null;
+    if (host) host.appendChild(bell);
+    else document.body.appendChild(bell);
+  }
+
+  function ensureBell() {
+    injectStyles();
+    if (document.getElementById('alertsBell')) { placeBell(); return true; }
+    const bell = el('button', { id: 'alertsBell', class: 'secondary', title: 'Notificações', html:
+      '<span class="a60-bell-ico"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>' });
+    const badge = el('span', { id: 'alertsBellBadge' });
+    bell.append(badge);
+    bell.addEventListener('click', (e) => { e.stopPropagation(); try { S.ac?.resume?.(); } catch {} toggleDropdown(); });
+    document.body.append(bell);
+    placeBell();
+    const dd = el('div', { id: 'alertsDropdown' });
+    document.body.append(dd);
+    document.addEventListener('click', (e) => {
+      const dd2 = document.getElementById('alertsDropdown');
+      if (dd2?.classList.contains('open') && !dd2.contains(e.target) && e.target.id !== 'alertsBell' && !document.getElementById('alertsBell')?.contains(e.target)) closeDropdown();
+    });
+    // Reposiciona quando o usuário troca de view (nav-item) — o sino
+    // acompanha o top-bar da view ativa.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.nav-item')) setTimeout(placeBell, 60);
+    });
+    return true;
+  }
+
+  // ─── EventSource dedicado (evento 'alert') ────────────────────────────
+  function connect() {
+    const t = token();
+    if (!t) { setTimeout(connect, 3000); return; }
+    try {
+      if (S.es) try { S.es.close(); } catch {}
+      S.es = new EventSource('/v1/crm/events?token=' + encodeURIComponent(t));
+      S.es.addEventListener('alert', (ev) => { try { onAlert(JSON.parse(ev.data)); } catch {} });
+      S.es.addEventListener('message.in', () => scheduleRefresh());   // só atualiza badge, sem beep (Onda 48 já beepa)
+      S.es.addEventListener('message.read', () => scheduleRefresh());
+      S.es.onerror = () => { try { S.es.close(); } catch {} setTimeout(connect, 6000); };
+    } catch { setTimeout(connect, 6000); }
+  }
+
+  // ─── Init ─────────────────────────────────────────────────────────────
+  function init() {
+    ensureBell();
+    // espera login (apiKey) pra seed + conexão
+    const wait = setInterval(() => {
+      if (token()) {
+        clearInterval(wait);
+        refresh().catch(() => {});
+        connect();
+      }
+    }, 600);
+    // re-seed ao voltar pro app (mobile suspende abas)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && token()) refresh().catch(() => {});
+    });
+    // abre card se a URL veio com #card=ID (clique em push/notificação nativa)
+    handleCardHash();
+    window.addEventListener('hashchange', handleCardHash);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.__onda60 = { refresh, onAlert, toggleMute, connect };
+})();
+// ═══════════════════════════════════════════════════════════════════════

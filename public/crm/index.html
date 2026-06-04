@@ -52,6 +52,7 @@
       <button class="nav-item" data-view="agenda"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><span class="nav-label">Agenda</span></button>
       <button class="nav-item" data-view="documents"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="nav-label">Documentos</span></button>
       <button class="nav-item" data-view="performance"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span><span class="nav-label">Performance</span></button>
+      <button class="nav-item" data-view="notifications"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span class="nav-label">Notificações</span><span class="nav-badge" id="navAlertsBadge" style="display:none"></span></button>
       <!-- REMOVIDOS DA SIDEBAR (panels e backend preservados, sem dia-a-dia):
            forms, campaigns, search, insights, security, privacy -->
     </nav>
@@ -333,6 +334,15 @@
       <div id="trashContent" style="padding:20px"></div>
     </div>
 
+    <!-- NOTIFICAÇÕES VIEW (Onda 60) -->
+    <div class="view" data-view="notifications" id="notificationsView">
+      <header class="top-bar">
+        <div class="top-bar-left"><h2>Notificações</h2></div>
+        <div class="top-bar-right" id="notifTopActions"></div>
+      </header>
+      <div id="notificationsContent" style="padding:16px 20px"></div>
+    </div>
+
   </main>
 
   <!-- SIDE PANEL (card detail + conversation) -->
@@ -411,7 +421,7 @@
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/crm/clow-dialog.js?v=58"></script>
-<script type="module" src="/crm/crm.js?v=80"></script>
+<script type="module" src="/crm/crm.js?v=85"></script>
 <script src="/crm/crm-extras.js?v=58"></script>
 <script src="/crm/crm-settings-ext.js?v=68"></script>
 <script src="/crm/agent-config-modal.js?v=3"></script>

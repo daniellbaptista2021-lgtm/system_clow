@@ -22,6 +22,7 @@ import * as push from './push.js';
 import * as ai from './ai.js';
 import * as gam from './gamification.js';
 import * as lgpd from './lgpd.js';
+import * as alerts from './alerts.js';
 import { logger } from '../utils/logger.js';
 import { getCluster } from '../utils/clusterStore.js';
 
@@ -215,6 +216,7 @@ async function tick(): Promise<void> {
       processBillingTick(),
       runPvAtendimentoBackstop(),
       reportsScheduler.tick(),
+      alerts.tickStandingAlerts().catch((e: any) => logger.warn('[alerts tick]', e?.message)),
       (async () => {
         try {
           emailMarketing.promoteScheduledCampaigns();

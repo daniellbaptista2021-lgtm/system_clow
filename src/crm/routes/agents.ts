@@ -39,6 +39,7 @@ import { fieldSelectionMiddleware } from '.././fieldSelector.js';
 import { encodeCursor, decodeCursor } from '.././cursor.js';
 import * as mobile from '.././mobile.js';
 import { subscribe, formatSseFrame } from '.././events.js';
+import * as alerts from '.././alerts.js';
 import { findTenantByApiKeyHash, hashApiKey } from '../../tenancy/tenantStore.js';
 import { readMedia } from '.././media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from '.././types.js';
@@ -628,6 +629,29 @@ export function registerAgentsRoutes(app: Hono): void {
     });
     return ok(c, r);
   });
+
+  // ─── Central de Alertas (sino + aba Notificações) ─────────────────────
+  app.get('/alerts', (c) => {
+    const tid = tenantOf(c);
+    const type = c.req.query('type') as any;
+    const unreadOnly = c.req.query('unread') === '1';
+    const limit = parseInt(c.req.query('limit') || '50', 10);
+    const before = c.req.query('before') ? parseInt(c.req.query('before')!, 10) : undefined;
+    return ok(c, {
+      alerts: alerts.listAlerts(tid, { type, unreadOnly, limit, before }),
+      unread: alerts.unreadCount(tid),
+      conversations: alerts.unreadConversations(tid),
+    });
+  });
+  app.post('/alerts/read-all', (c) => {
+    const tid = tenantOf(c);
+    return ok(c, { marked: alerts.markAllRead(tid) });
+  });
+  app.post('/alerts/:id/read', (c) => {
+    const tid = tenantOf(c);
+    return alerts.markRead(tid, c.req.param('id')) ? c.body(null, 204) : notFound(c, 'alert');
+  });
+
   app.get('/mobile/today', (c) => {
     const tid = tenantOf(c);
     return ok(c, mobile.todayBundle(tid, c.req.query('agentId') || undefined));
