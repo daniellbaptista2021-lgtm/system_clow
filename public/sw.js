@@ -1,10 +1,12 @@
-// System Clow PWA Service Worker — v118
+// System Clow PWA Service Worker — v119
 // Bypass: /v1/* /auth/* /webhooks/* /crm/* /downloads/* — sempre fresh do server
 // Cache: assets estaticos do shell (icons, manifest)
 // v118: bump pra invalidar cache de icones antigos (bege/dourado) — agora
 //       todos os assets de marca sao preto + infinito branco proporcional.
+// v119: bump de cache pra forcar update de SWs antigos presos servindo
+//       shell stale do /crm/ (clientes travando na splash roxa).
 
-const CACHE = 'clow-v59-icons-pwa-black';
+const CACHE = 'clow-v60-icons-pwa-black';
 const STATIC = ['/assets/logo.png', '/assets/favicon.png', '/assets/icon-192.png', '/assets/icon-512.png', '/assets/apple-touch-icon.png', '/manifest.json'];
 
 self.addEventListener('install', e => {
