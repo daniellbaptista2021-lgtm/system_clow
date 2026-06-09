@@ -9,6 +9,7 @@
 
 **Live:** https://system-clow.pvcorretor01.com.br
 **Stack:** Node 22 + TypeScript + Hono + better-sqlite3 + GLM-5.1 (via LiteLLM/OpenRouter)
+**Production branch:** `fix/hardening-2026-05` · PM2 cluster, 2 workers
 
 ---
 
@@ -34,10 +35,15 @@ Single-engine, by design:
 
 ### AI Agent
 - WhatsApp conversations driven by GLM-5.1
-- 10 native CRM tools the AI invokes via natural language:
-  `crm_find_or_create_contact`, `crm_create_card`, `crm_move_card`,
-  `crm_add_note`, `crm_send_whatsapp`, `crm_search`, `crm_pipeline`,
-  `crm_get_contact`, `crm_create_reminder`, `crm_dashboard`
+- **27 native CRM tools** the AI invokes via natural language
+  (`src/tools/CrmTool/CrmTool.ts`) — contacts/cards, boards/columns,
+  per-column agents, notes/tags, tasks/reminders/appointments,
+  subscriptions, single + batch WhatsApp messaging, dashboard
+- **Per-column funnel agents** (funnel v2, timer-driven): each column can
+  carry its own persona/role (data collector, qualifier, quote, follow-up,
+  promotion), fired by inactivity / entry-delay / chase timers
+- **Voice replies (per-column TTS)**: flagged columns mirror the reply as
+  audio, with automatic fallback to text if TTS fails
 - Per-phone persistent session (cross-conversation memory)
 - Per-number isolated workspace at `~/.clow/sessions/`
 
@@ -48,11 +54,13 @@ Single-engine, by design:
 | Kanban Pipeline | Custom boards, drag-and-drop, terminal columns (Won/Lost) |
 | Contacts | Full record, real-time search, tags, unified history |
 | WhatsApp Channels | Meta Cloud API + Z-API, AES-256-GCM encrypted credentials |
-| Side Panel | Inline conversation with bubble UI, text/audio/image/PDF |
+| Side Panel | Inline conversation with bubble UI, text/audio/image/PDF/video, **in-chat camera** (photo/video — native on mobile + getUserMedia on desktop, ffmpeg→mp4) and **quick messages** (templates) |
 | Team | Agents with roles (owner/admin/agent/viewer), auto assignment |
 | Inventory | SKU, price, stock, line items, auto-reduce on Win |
 | Subscriptions | Recurring billing, T-3/T-1/T-0 WhatsApp reminders, mark paid |
 | Automations | 6 triggers × 9 conditions × 8 actions, 5 one-click templates |
+| Alerts Center | Floating bell + **Notifications** tab with sound, web push and visual cues (`crm_alerts`, SSE `alert` event, standing-alert tick on the 60s scheduler) |
+| Quick search | Customer lookup by name / phone / CPF from the action bar |
 | Stats | Weighted forecast, per-agent metrics |
 | Real-time | SSE pub/sub, no polling |
 
@@ -64,6 +72,17 @@ Single-engine, by design:
 - Stripe Checkout: `POST /api/billing/checkout` creates a session,
   webhook auto-creates the tenant
 - Tenant status driven by Stripe events (active / past_due / cancelled)
+- Multi-user per tenant via `additional_logins` in `tenants.json` (extra
+  login points to an `agent_id` — e.g. a customer-service teammate)
+
+### MCP server (`/v1/mcp`)
+
+`POST /v1/mcp` (JSON-RPC 2.0) exposes **17 CRM tools** so an external agent
+(e.g. OpenClaw on another VPS) can command the CRM — read the pipeline, move
+cards, reply to customers on WhatsApp, create tasks/follow-ups, add notes.
+Each tool is a thin proxy to the existing `/v1/crm` routes; the caller's
+`Authorization: Bearer clow_...` API key is forwarded verbatim, inheriting
+per-tenant isolation (fail-closed). Code: `src/server/clowMcpServer.ts`.
 
 ## 🛠️ Installation
 
@@ -164,15 +183,18 @@ src/
   api/           Anthropic SDK wrapper (routed to LiteLLM)
   auth/          ★ Multi-user signup/login + HMAC tokens
   billing/       Stripe routes, n8n routes, quota guard
-  crm/           ★ ~50 modules (CRM core)
+  crm/           ★ ~50 modules (CRM core), ~80 SQLite tables (initial schema + 18 migrations)
     routes.ts        REST API
     store.ts         SQLite store
     channels/        meta.ts + zapi.ts
+    agents/          ★ Per-column funnel agents (runner + per-role tools + inactivity/timer schedulers)
+    alerts.ts        ★ Alerts Center — emitAlert (persist+SSE+push) + tickStandingAlerts
     webhooks.ts      /webhooks/crm/{meta|zapi}/:secret
     ...
   memory/        Persistent agent memory + RAG
   notifications/ mailer, openaiMedia (Whisper/vision), whatsapper
   server/        HTTP API, session pool, middleware
+    clowMcpServer.ts ★ MCP server (/v1/mcp, 17 tools for external agents)
   tenancy/       Path guards, tiers, quotas, tenant store
   tools/         Native tools + registry
   ...
