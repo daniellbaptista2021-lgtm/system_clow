@@ -6,6 +6,7 @@
 
 **Live:** https://system-clow.pvcorretor01.com.br
 **Stack:** Node 22 + TypeScript + Hono + better-sqlite3 + GLM-5.1 (via LiteLLM/OpenRouter)
+**Branch de produção:** `fix/hardening-2026-05` · PM2 cluster 2 workers
 
 ---
 
@@ -22,7 +23,7 @@
 │  └───────┬────────┘         │                              │    │
 │          │                  │  • Pipeline Kanban           │    │
 │          │ tools            │  • Contatos                  │    │
-│          │ (10 crm_*)       │  • Canais WhatsApp           │    │
+│          │ (27 crm_*)       │  • Canais WhatsApp           │    │
 │          │                  │  • Equipe                    │    │
 │  ┌───────▼────────┐         │  • Produtos                  │    │
 │  │ LiteLLM proxy  │         │  • Stats                     │    │
@@ -42,7 +43,7 @@
 - Cada **cliente assinante** = 1 `tenant`
 - Login email + senha per-tenant (bcrypt)
 - Token de sessão HMAC com `tenantId` propagado pelo sistema todo
-- Todas as 12 tabelas do CRM têm `tenant_id` — isolamento garantido na camada de DB
+- Todas as tabelas do CRM (~80, schema inicial + 18 migrations) têm `tenant_id` — isolamento garantido na camada de DB (fail-closed: sem `tenantId` resolvido, nenhuma query roda)
 - Telefone WhatsApp do cliente = único autorizado a invocar a IA dele
 - Cada cliente conecta sua própria conta WhatsApp Meta ou Z-API ao CRM dele
 
@@ -73,10 +74,16 @@ Arquivos relevantes:
 ### Agente IA (System Clow)
 
 - Conversa via WhatsApp com cliente final usando GLM-5.1
-- **10 ferramentas CRM** que a IA opera por comando natural:
-  - `crm_find_or_create_contact` · `crm_create_card` · `crm_move_card`
-  - `crm_add_note` · `crm_send_whatsapp` · `crm_search`
-  - `crm_pipeline` · `crm_get_contact` · `crm_create_reminder` · `crm_dashboard`
+- **27 ferramentas CRM** (`src/tools/CrmTool/CrmTool.ts`) que a IA opera por comando natural:
+  - Contatos/cards: `crm_find_or_create_contact` · `crm_get_contact` · `crm_create_card` · `crm_update_card` · `crm_move_card` · `crm_list_cards` · `crm_search` · `crm_pipeline`
+  - Boards/colunas: `crm_list_boards` · `crm_create_board` · `crm_list_columns` · `crm_create_column` · `crm_update_column` · `crm_delete_column`
+  - Agentes por coluna: `crm_configure_column_agent` · `crm_disable_column_agent`
+  - Notas/tags: `crm_add_note` · `crm_apply_tag` · `crm_remove_tag`
+  - Tarefas/lembretes/agenda: `crm_create_task` · `crm_create_reminder` · `crm_create_appointment`
+  - Mensalidades: `crm_create_subscription` · `crm_mark_subscription_paid`
+  - Mensageria: `crm_send_whatsapp` · `crm_send_whatsapp_batch` · `crm_dashboard`
+- **Agentes por coluna do funil** (funnel v2 timer-driven): cada coluna pode ter sua persona/role própria — coletor de dados, qualificador, cotação, follow-up, promoção (`src/crm/agents/`), disparados por inatividade / timer de entrada / chase
+- **Resposta em áudio (TTS por coluna, Onda 63)**: colunas marcadas espelham a resposta em voz, com fallback pra texto se o TTS falhar
 - Sessão persistente por número de telefone (memória cross-conversation)
 - Workspace isolado por número em `~/.clow/sessions/`
 
@@ -87,14 +94,16 @@ Arquivos relevantes:
 | **Pipeline Kanban** | Boards customizáveis, drag-and-drop, cores, colunas terminais (Ganho/Perdido). Cada tenant tem seus próprios boards/colunas (isolamento total por `tenant_id`) |
 | **Contatos** | Cadastro completo, busca em tempo real, tags, histórico unificado |
 | **Canais WhatsApp** | Suporte Meta Cloud API + Z-API, credenciais criptografadas (AES-256-GCM), webhook URL pronto pra colar |
-| **Side Panel do card** | 4 abas: **Conversa** (bubble UI, áudio/imagem/PDF) · **Info** · **📎 Vínculos** · **💬 Comentários**. Aba "Editar" e "AI" foram removidas — propriedades editáveis via menu contextual |
+| **Side Panel do card** | 4 abas: **Conversa** (bubble UI, áudio/imagem/PDF/vídeo, **📷 câmera no chat** — foto/vídeo nativo no mobile + getUserMedia no desktop, vídeo normalizado pra mp4 via ffmpeg) · **Info** · **📎 Vínculos** · **💬 Comentários**. **Mensagens rápidas** (templates) na barra de envio. Aba "Editar" e "AI" foram removidas — propriedades editáveis via menu contextual |
 | **📎 Vínculos do card** | 4 seções com `+ Adicionar` que pré-preenche `cardId+contactId`: **Tarefas** · **Documentos** · **Propostas** · **Mensalidades**. Itens criados aqui aparecem automaticamente nos menus laterais correspondentes (vínculo na origem) |
 | **Equipe** | Agentes com papéis (owner/admin/agent/viewer), atribuição automática (round-robin/load-balanced/manual) |
 | **Produtos (estoque)** | SKU, preço, estoque, vinculação a cards (line items), baixa automática ao ganhar |
 | **Mensalidades** | Cobrança recorrente (weekly/monthly/quarterly/yearly), lembretes T-3/T-1/T-0 via WhatsApp. **`markPaid` avança `nextChargeAt` + salva `lastPaidAt`** (campo persistente). UI: pill "Paga"/"Aguardando"/"Atrasada"/"Cancelada" baseado em `lastPaidAt` real, não inferência por data. Botão **"Cobrar no chat"** abre painel do CRM com template prontinho (interno, sem wa.me externo) |
 | **Automações** | 6 triggers × 9 conditions × 8 actions, 5 templates one-click, scheduler 60s |
 | **Stats** | Forecast ponderado, métricas por agente (cards/valor/tempo de resposta) |
-| **Real-time** | SSE pub/sub, UI atualiza sem polling |
+| **Central de Alertas (Onda 60)** | Sino flutuante + aba **Notificações** na sidebar — som, web push e visual. Engine `src/crm/alerts.ts` persiste em `crm_alerts` (migration 019), publica via SSE (evento `alert`) e dispara push. `tickStandingAlerts` no scheduler 60s cobre tarefas/mensalidades/vencimentos, com dedup por bucket de dia |
+| **Busca rápida** | Busca de cliente por nome/telefone/CPF direto na barra de ação do CRM |
+| **Real-time** | SSE pub/sub, UI atualiza sem polling (canais separados: `message.in` do dia-a-dia + `alert` da central de notificações) |
 | **Sidebar enxuta** | 14 abas focadas no dia-a-dia (Pipeline, Contatos, Canais WA, Equipe, Produtos, Relatórios, Tarefas, Agenda, Documentos, Performance, Automações, Mensalidades, Configurações, Lixeira). Removidas: Formulários, Campanhas, Busca, Insights AI, Segurança, Privacidade (panels e backend preservados, só os botões da sidebar) |
 
 ### Multi-tenant SaaS
@@ -121,8 +130,10 @@ src/
 ├── bridge/           External integration (Clow ↔ System Clow)
 ├── cli/ + cli.ts     Standalone CLI
 ├── coordinator/      Agent orchestration
-├── crm/              ★ CRM module completo (12 tabelas, REST, webhooks, automations, billing)
+├── crm/              ★ CRM module completo (~80 tabelas, REST, webhooks, automations, billing, agentes por coluna, alertas)
 │   ├── channels/     Meta + Z-API send/receive
+│   ├── agents/       ★ Agentes por coluna do funil (runner + tools por role + schedulers de inatividade/timer)
+│   ├── alerts.ts     ★ Central de Alertas — emitAlert (persist+SSE+push) + tickStandingAlerts
 │   ├── automations.ts  Engine (triggers/conditions/actions) + 5 templates
 │   ├── billing.ts    Subscriptions runtime (charge + reminders)
 │   ├── assignment.ts Round-robin/load-balanced agent assignment
@@ -135,11 +146,12 @@ src/
 │   ├── schema.ts     SQLite migrations (WAL, FK on)
 │   └── types.ts      TypeScript types
 ├── hooks/            Lifecycle hooks
-├── mcp/              MCP server support
+├── mcp/              MCP client/manager (Clow consome MCP servers externos) — ≠ do clowMcpServer que EXPÕE o CRM
 ├── memory/           Persistent memory per tenant
 ├── plugins/          Plugin system (4 discovery sources)
 ├── query/            QueryEngine (orchestrator de tools)
 ├── server/           Hono server + middleware (tenantAuth, sessionPool)
+│   └── clowMcpServer.ts  ★ MCP server HTTP/JSON-RPC em /v1/mcp (17 tools, agente externo)
 ├── skills/           Skills system
 ├── swarm/            Multi-agent
 ├── tenancy/          ★ Tenant store (JSON-backed) + license + quotas
@@ -151,12 +163,12 @@ public/
 ├── crm/              ★ CRM SPA
 │   ├── index.html    App shell (auto-loader, no manual API key prompt)
 │   ├── crm.css       Dark theme + nav 3D + brand SVG
-│   ├── crm.js        ~37KB vanilla JS (kanban + side panel + edit modals)
+│   ├── crm.js        ~386KB vanilla JS (kanban + side panel + edit modals + câmera + central de alertas)
 │   └── crm-extras.js Automations + Subscriptions UI
-└── sw.js             Service worker v100 (bypass /crm/ /v1/ /auth/)
+└── sw.js             Service worker v119 (bypass /crm/ /v1/ /auth/)
 
 ~/.clow/             (state, fora do repo)
-├── crm.sqlite3       12 tabelas CRM
+├── crm.sqlite3       ~80 tabelas CRM (schema inicial + 18 migrations)
 ├── crm-media/{tenant}/{date}/  Mídia recebida
 ├── memory/{tenant}.sqlite3     Memória persistente do agente
 ├── sessions/{uuid}.jsonl       Sessions do agente
@@ -203,7 +215,29 @@ POST   /reminders
 POST   /media/upload · GET /media/:tenantId/:date/:file
 GET    /events                     (SSE)
 GET    /stats
+GET/POST /alerts · PATCH /alerts/:id/read · POST /alerts/read-all   (Central de Alertas, Onda 60)
 POST   /auth/exchange              (System Clow session → CRM api_key)
+```
+
+### MCP Server (`/v1/mcp`) — controle do CRM por agente externo
+```
+POST   /v1/mcp                     JSON-RPC 2.0 (initialize · tools/list · tools/call)
+```
+Expõe **17 tools** que proxyam as rotas `/v1/crm` existentes, com auth per-tenant
+via API key (`Authorization: Bearer clow_...`, fail-closed — sem token, sem dado).
+Permite um agente externo (ex: OpenClaw em outra VPS) comandar o CRM:
+
+`list_boards` · `get_pipeline` · `get_card` · `create_card` · `update_card` ·
+`move_card` · `win_card` · `lose_card` · `list_contacts` · `search_contacts` ·
+`add_contact_note` · `list_channels` · `send_message` · `create_task` ·
+`list_tasks` · `complete_task` · `add_card_comment`
+
+Config no cliente MCP:
+```json
+{ "mcpServers": { "system-clow": {
+  "url": "http://<clow-host>:3001/v1/mcp",
+  "headers": { "Authorization": "Bearer clow_live_xxx" }
+} } }
 ```
 
 ### Webhooks (públicos, secret-validated)
@@ -798,9 +832,9 @@ pm2 restart clow --update-env   # 15-30s downtime
 
 ---
 
-## 📌 Estado atual (2026-04-27)
+## 📌 Estado atual (2026-06-09)
 
-**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `5cb7b9e`
+**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `fix/hardening-2026-05` · HEAD `691b076`
 
 ### 💰 Planos comerciais (Stripe ao vivo)
 
@@ -834,8 +868,10 @@ clica "Adicionar código promocional" e digita `CORRETOR2026`. Painel do cupom: 
 
 | Camada | O que tem |
 |---|---|
-| **CRM** | 12 tabelas, 50+ endpoints REST, automations, subscriptions, kanban, agentes, webhook Meta+Z-API, side panel 4 tabs (Conversa/Info/Vínculos/Comentários), SSE real-time. **Vínculos card↔menu** com criação na origem (cardId+contactId pré-preenchidos), sem botão "+ Nova" nos menus laterais |
-| **Agente IA** | GLM-5.1 via LiteLLM, 10 ferramentas CRM, sessão persistente. Phone whitelist **fail-closed** com limite por tier (1/3/5) — `POST /auth/authorized-phones` retorna 403 se exceder |
+| **CRM** | ~80 tabelas, 50+ endpoints REST, automations, subscriptions, kanban, agentes, webhook Meta+Z-API, side panel 4 tabs (Conversa/Info/Vínculos/Comentários) com **câmera no chat** + mensagens rápidas, SSE real-time, **Central de Alertas (sino + Notificações)**, busca rápida cliente. **Vínculos card↔menu** com criação na origem (cardId+contactId pré-preenchidos) |
+| **Agente IA** | GLM-5.1 via LiteLLM, **27 ferramentas CRM** + **agentes por coluna do funil** (funnel v2 timer-driven, disparados por inatividade/entry-delay/chase), **resposta em áudio TTS por coluna** (Onda 63), sessão persistente. Phone whitelist **fail-closed** com limite por tier (1/3/5). **Lock de execução per-card** serializa fire de inatividade vs inbound no cluster (evita promoção dupla) |
+| **MCP server** | `/v1/mcp` (JSON-RPC) expõe **17 tools** do CRM pra agente externo (OpenClaw) comandar pipeline/cards/WhatsApp/tarefas, auth per-tenant via API key fail-closed |
+| **Multi-user por tenant** | `additional_logins` em `tenants.json` — login extra por tenant aponta pra um `agent_id`, permite time de atendimento (ex: PV → Nilson) |
 | **Auth multi-tenant** | Signup/login email+senha (bcrypt), tokens HMAC user_session (30d) e admin (12h), `/auth/verify` aceita **ambos** (corrige bug que matava sessão a cada reload). Botão "Cadastre-se agora" → `/pricing#planos` |
 | **Billing Stripe** | Checkout ao vivo (live mode), webhooks ponta-a-ponta validados, **Stripe Embedded Checkout** (`ui_mode: embedded`) renderiza card do Stripe **dentro do app** (sem nova aba). Polling PIX/boleto com nudge em 5min. `/signup/success` mostra credenciais inline (botão Copiar). Cupom CORRETOR2026 ativo. `markPaid` avança `nextChargeAt` + salva `lastPaidAt` |
 | **Cluster mode** | PM2 reload zero-downtime, 5 estados in-memory migrados pra Redis (`clusterStore`), scheduler isolado no worker 0 |
@@ -843,30 +879,22 @@ clica "Adicionar código promocional" e digita `CORRETOR2026`. Painel do cupom: 
 | **Backup** | SQLite snapshot WAL-safe horário (CRM + memory), retenção tier hourly/daily/weekly, restore com pre-backup automático. **Cron instalado em prod** (`0 * * * *` backup, `30 * * * *` verify). Primeiro snapshot validado: 2026-04-27-00 (4 DBs OK) |
 | **CI** | 4 jobs paralelos (typecheck, vitest, gitleaks, build) + 2 guards extras (bare `require()` em ESM compilado, smoke import do server.js) |
 | **Mailer** | 3 backends (SMTP/Resend/SendGrid), fallback automático em disco (`data/pending-emails/*.json`) se nenhum configurado |
-| **Migrations** | Sistema versionado em `src/crm/migrations/` (idempotente, transaction-wrapped). Versões aplicadas em prod: 1 (initial schema 102 tabelas) + 2 (last_paid_at em crm_subscriptions) |
+| **Migrations** | Sistema versionado em `src/crm/migrations/` (idempotente, transaction-wrapped, aplicado no boot via `getCrmDb`). **19 migrations aplicadas (001→019)**: schema inicial (~80 tabelas) + subscriptions, agentes de canal/coluna, planos por tenant, funnel v2 timer-driven, audit de config, tokens revogados, resposta em voz, allow_self_chat, quick messages, **central de alertas (019)** |
 | **Ops docs** | Soft-launch checklist, incident runbook, on-call handbook, rollback procedures (em [docs/operations/](docs/operations/)) |
 
-### 📈 Recent improvements (últimos 10 dias)
+### 📈 Recent improvements (leva de hardening maio–junho 2026)
 
-- **`5cb7b9e`** — Aba "Editar" removida do painel do card (4 tabs agora: Conversa/Info/Vínculos/Comentários). Edição via menu contextual do kanban
-- **`ec4437d`** — `max_authorized_phones` por tier (1/3/5) com enforcement no backend (403 se exceder), pill "X de Y" + botão desabilitado na UI Configurações, linha no quadro comparativo da landing
-- **`483bf6b`** — Vínculos card↔menu: nova rota `GET /cards/:id/subscriptions`, seção "Mensalidades" no painel Vínculos, modal "Nova tarefa" do menu pede Cliente + auto-resolve cardId
-- **`07cd4a6`** — Botão "Cobrar no chat" abre painel CRM interno com template prontinho (não wa.me externo). Endpoint `POST /subscriptions/:id/ensure-card` cria/reusa card vinculado
-- **`9ce5cf4`** — Card de mensalidade redesign: dados do cliente (avatar+nome+telefone+tags), ordenação automática (atrasadas→pendentes→pagas→canceladas), botões ghost discretos
-- **`c377629`** — Plano Piloto: removido modal próprio + endpoint dedicado, agora via cupom Stripe `CORRETOR2026` (allow_promotion_codes:true no checkout). UX mais limpa, gestão por dashboard
-- **`adbf595`** — `markPaid` avança `nextChargeAt` 1 ciclo + salva `lastPaidAt`. UI esconde botão quando ciclo pago, pill "Paga"/"Aguardando"/"Atrasada" baseado em estado real
-- **`2bc0086`** — Card de mensalidade redesign visual (pill compacto, vencimento humanizado, botões ghost)
-- **`48db83e`** — Stripe Embedded Checkout no modal piloto + signup tradicional. Substitui `location.href` por `Stripe(pk).initEmbeddedCheckout({clientSecret}).mount()` (card do Stripe dentro do app)
-- **`92a3f8f`** — Sidebar enxuta: removidas 6 abas (Formulários, Campanhas, Busca, Insights AI, Segurança, Privacidade). Panels e backend preservados
-- **`4754c17`** — Cards KPI sem sobra (Relatórios+Tarefas), `color-scheme:dark` global em selects/inputs
-- **`87448a9`** — `/signup/success` mostra email+senha inline (botão Copiar), independe de SMTP. Mailer faz fallback em disco
-- **`ec794a2`** — `/auth/verify` aceita `usr.*` (user_session); CRM "Relogar" virou mini-form inline (zero refresh)
-- **`996ac11`** — CI guard contra bare `require()` em ESM compilado + smoke-import de `dist/server/server.js`
-- **`4ae9044`** — Hotfix prod: `proper-lockfile` via `createRequire(import.meta.url)` (incidente 2026-04-26 que tirou prod do ar)
-- **`8dc0667`** — Polling PIX/boleto: banner "demorando mais que esperado" em 5min
-- **`1bc714a`** — Docs ops: soft-launch checklist + incident runbook + on-call handbook + rollback
-- **`dc9e291`** — Perf CRM: SQLite WAL tuning + prepared statement cache + query audit + benchmark
-- **`99e5654`** — Observability: Prometheus `/metrics` + Sentry error tracking com auto-tagging
+- **`4bc00de`** — **MCP server `/v1/mcp`** (JSON-RPC, 17 tools) pra agente externo (OpenClaw) comandar o CRM, auth per-tenant fail-closed
+- **`922106d` / `60b6ab3`** — Fix de **race conditions multi-worker** no CRM (lock de execução per-card serializa fire de inatividade vs inbound) + hardening de segurança; correção do script de deploy
+- **`7a0ece2`** — PWA: bump `sw.js` v119 + `script ?v=` pra destravar service workers presos na splash
+- **`732762e`** — **Busca rápida de cliente** (nome/telefone/CPF) na barra de ação
+- **`55fddfd`** — **Central de Alertas (Onda 60)**: sino + aba Notificações com som, web push e visual (`crm_alerts`, migration 019, SSE `alert`)
+- **`d6f6510`** — **Câmera no chat** (foto/vídeo, nativo mobile + getUserMedia desktop, ffmpeg→mp4) + mensagens rápidas
+- **`629154f`** — Propaga `tenantId` no processamento background do adapter WhatsApp (fix de vazamento de tenant)
+- **`14a619e` / `8be3911`** — **Resposta em áudio (TTS por coluna, Onda 63)** — voice mirror com fallback pra texto
+- **`22ea294` / `3928a66` / …`5f3dd2c`** — Funil PV: handoff determinístico Atendimento→Nilson, login adicional/time de Atendimento, Safira SDR consultiva, +meta-patterns anti-vazamento
+- **`[HARDENING 1–16]`** — Endurecimento amplo: outputValidator anti-alucinação de valor/currency, tools de cotação offline, filtros de vazamento, safety net de cards não respondidos, dedup de lembretes de cobrança, health dashboard, smoke test E2E, allow_self_chat por canal (migration 015)
+- **`feat/funnel-v2-timer-driven` / migration 011** — Funil v2 movido a timers: entry_delay / chase / followup por coluna, agentes por coluna disparados pelo scheduler
 
 ### ⏭️ Próximas etapas (em aberto)
 
@@ -874,6 +902,7 @@ clica "Adicionar código promocional" e digita `CORRETOR2026`. Painel do cupom: 
 - **Sentry DSN** em produção — criar conta free em sentry.io, copiar DSN e setar `SENTRY_DSN` no `.env` do VPS (errors hoje vão pra `pm2 logs clow --err`)
 - **Branch protection na `main`** — ativar via UI do GitHub (instruções na seção CI)
 - **Sticky session no nginx** — só necessário se aumentar `CLOW_INSTANCES` além de 2 (`sessionPool` ainda é worker-local)
+- **MCP server → OpenClaw** — `/v1/mcp` já está no ar; falta só abrir a rede entre as VPS pro agente externo conectar
 - **N8N integration** — 1/4/8 fluxos por plano (esqueleto pronto em `src/n8n/`)
 - **White-label** — logo + cores customizáveis por tenant
 
