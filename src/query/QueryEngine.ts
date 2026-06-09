@@ -423,13 +423,17 @@ export class QueryEngine {
               true,
             );
             blockedInThisTurn++;
-            // KILL SWITCH pt1: se 3+ bloqueios no mesmo turno, proxima API call nao envia tools
-            if (blockedInThisTurn >= 3) {
-              logger.warn('[hard-dedupe] KILL SWITCH turno: 3+ bloqueios — proxima call sem tools, forca resposta textual');
+            // Thresholds ajustaveis por env pra workloads diferentes
+            // (defaults preservam o comportamento historico 3/8).
+            const turnKillThreshold = Number(process.env.CLOW_DEDUPE_TURN_KILL || 3);
+            const sessionKillThreshold = Number(process.env.CLOW_DEDUPE_SESSION_KILL || 8);
+            // KILL SWITCH pt1: N+ bloqueios no mesmo turno, proxima API call nao envia tools
+            if (blockedInThisTurn >= turnKillThreshold) {
+              logger.warn(`[hard-dedupe] KILL SWITCH turno: ${blockedInThisTurn} bloqueios (limite ${turnKillThreshold}) — proxima call sem tools, forca resposta textual`);
               this.forceNoTools = true;
             }
-            // KILL SWITCH pt2: sessao inteira com 8+ bloqueios — aborta submitMessage
-            if (this.sessionBlockedTotal >= 8) {
+            // KILL SWITCH pt2: sessao inteira com N+ bloqueios — aborta submitMessage
+            if (this.sessionBlockedTotal >= sessionKillThreshold) {
               logger.warn('[hard-dedupe] KILL SWITCH sessao: ' + this.sessionBlockedTotal + ' bloqueios — abortando submitMessage');
               yield { type: 'result', subtype: 'tool_loop_aborted', content: 'Loop de leituras detectado. Analise interrompida automaticamente pra economizar tokens. Formule a pergunta de forma mais especifica (ex: "analise SO billing.ts") e tente de novo.', cost: this.budget.getTotalCost() } as any;
               return;

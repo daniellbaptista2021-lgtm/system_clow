@@ -35,6 +35,8 @@ export interface ClusterStore {
    * Used for "did anyone else dedupe this in the last N seconds?".
    */
   setNxEx(key: string, value: string, ttlSec: number): Promise<boolean>;
+  /** Delete a key (early lock release). Best-effort — TTL is the safety net. */
+  del(key: string): Promise<void>;
   /** Add member to a set. Returns true if newly added. */
   sAdd(setKey: string, member: string): Promise<boolean>;
   /** Remove member from a set. */
@@ -82,6 +84,11 @@ class MemoryStore implements ClusterStore {
     return true;
   }
 
+  async del(key: string): Promise<void> {
+    this.dedupes.delete(key);
+    this.counters.delete(key);
+  }
+
   async sAdd(setKey: string, member: string): Promise<boolean> {
     let s = this.sets.get(setKey);
     if (!s) { s = new Set(); this.sets.set(setKey, s); }
@@ -127,6 +134,10 @@ class RedisStore implements ClusterStore {
   async setNxEx(key: string, value: string, ttlSec: number): Promise<boolean> {
     const reply = await this.client.set(key, value, 'EX', ttlSec, 'NX');
     return reply === 'OK';
+  }
+
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
   }
 
   async sAdd(setKey: string, member: string): Promise<boolean> {

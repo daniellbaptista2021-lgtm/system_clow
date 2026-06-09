@@ -93,7 +93,9 @@ const DEFAULT_MAX_TURNS = 30;
 const DEFAULT_HOURS_START = '00:00';
 const DEFAULT_HOURS_END = '23:59';
 const LOCK_TTL_SECONDS = 60;
-const TENANT_TIMEZONE = 'America/Sao_Paulo'; // hardcoded — decisao 4 do PR 2
+// TTL do lock por card cobre o pior caso do tool loop (4 iteracoes LLM).
+const CARD_LOCK_TTL_SECONDS = 120;
+const TENANT_TIMEZONE = process.env.CLOW_CRM_TIMEZONE || 'America/Sao_Paulo';
 const MAX_TOOL_ITERATIONS = 4; // PR 3: limite LLM↔tool por turno
 
 /** Mensagem padrao fora de horario. {{start}} eh substituido pelo horario
@@ -160,6 +162,23 @@ export async function runColumnAgent(input: RunColumnAgentInput): Promise<RunRes
     // Falha no lock NAO bloqueia execucao — degrada pra modo single-worker.
     // Em produçao com Redis, isso e raro; em testes (in-memory) nunca falha.
   }
+
+  // 1b) Per-card execution lock — serializa com fires de inatividade e
+  // outras mensagens do mesmo card. Mensagem inbound nunca e descartada:
+  // espera o lock liberar e, no pior caso, degrada pro comportamento
+  // antigo (roda sem lock) em vez de dropar a resposta ao cliente.
+  const releaseCardLock = await acquireCardRunLockWithWait(tenantId, card.id);
+  try {
+    return await runColumnAgentCore(input);
+  } finally {
+    await releaseCardLock();
+  }
+}
+
+async function runColumnAgentCore(input: RunColumnAgentInput): Promise<RunResult> {
+  const { channel, card, column, customerPhone } = input;
+  const tenantId = channel.tenantId;
+  const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
 
   // 2) Estado atual (cria se for primeiro turno do agente neste card)
   let state = getCardAgentState(card.id);
@@ -537,6 +556,33 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     return { status: 'blocked', reason: 'agent_disabled' };
   }
 
+  // 0b) Per-card execution lock — impede o fire de rodar em paralelo com
+  // uma mensagem inbound (ou outro fire) do mesmo card em outro worker.
+  // Lock ocupado = outra execucao em andamento; pular o fire e o
+  // comportamento certo (se o cliente acabou de responder, a cobranca de
+  // inatividade nem e desejada). O dispatch lock do scheduler ja impede
+  // o MESMO fire de repetir.
+  const releaseCardLock = await acquireCardRunLock(tenantId, card.id);
+  if (!releaseCardLock) {
+    logger.info(`[col-agent.runFromFire] locked_out card=${card.id} fireCount=${fireCount} (card run em andamento)`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'locked_out', reason: 'card_run_lock_held',
+    });
+    return { status: 'locked_out' };
+  }
+  try {
+    return await runFromInactivityFireCore(input);
+  } finally {
+    await releaseCardLock();
+  }
+}
+
+async function runFromInactivityFireCore(input: InactivityFireInput): Promise<RunResult> {
+  const { channel, card, column, fireCount, elapsedMin } = input;
+  const tenantId = channel.tenantId;
+  const role = (column.agentRole ?? 'custom') as ColumnAgentRole;
+
   // Tenta resolver phone do contato pra context
   const contact = card.contactId ? store.getContact?.(tenantId, card.contactId) : null;
   const customerPhone = contact?.phone || '';
@@ -886,12 +932,61 @@ function parseHHMM(s: string): [number, number] {
   return [Number(h) || 0, Number(m) || 0];
 }
 
-function buildLockKey(input: RunColumnAgentInput): string {
+export function buildLockKey(input: RunColumnAgentInput): string {
   if (input.messageId) {
-    return `crm:col-agent:msg:${input.messageId}`;
+    // messageId vem do provider — escopa por tenant pra IDs identicos de
+    // tenants diferentes nao compartilharem o mesmo lock.
+    return `crm:col-agent:msg:${input.channel.tenantId}:${input.messageId}`;
   }
   // Fallback: phone + 30s window (granularidade grossa, mas evita
   // qualquer chance de duplicar quando messageId esta ausente).
   const window = Math.floor(Date.now() / 30000);
   return `crm:col-agent:phone:${input.channel.tenantId}:${input.customerPhone}:${window}`;
+}
+
+// ─── Per-card execution lock ─────────────────────────────────────────────
+//
+// O lock por messageId/dispatch deduplica o MESMO evento entre workers, mas
+// nada impedia um fire de inatividade e uma mensagem inbound do MESMO card
+// rodarem o tool loop ao mesmo tempo (promocao dupla, turnsCount corrompido).
+// Este lock serializa execucoes por card.
+
+export function buildCardRunLockKey(tenantId: string, cardId: string): string {
+  return `crm:col-agent:card:${tenantId}:${cardId}`;
+}
+
+/** Tenta adquirir o lock de execucao do card. Devolve release() ou null se
+ *  outro worker segura o lock. Falha de cluster degrada pra "adquirido"
+ *  (mesmo comportamento historico single-worker). */
+async function acquireCardRunLock(tenantId: string, cardId: string): Promise<(() => Promise<void>) | null> {
+  const key = buildCardRunLockKey(tenantId, cardId);
+  try {
+    const cluster = await getCluster();
+    const ok = await cluster.setNxEx(key, '1', CARD_LOCK_TTL_SECONDS);
+    if (!ok) return null;
+    return async () => {
+      try { await cluster.del(key); } catch { /* TTL e o safety net */ }
+    };
+  } catch (err: any) {
+    logger.warn('[col-agent.runner] card lock failed (continuing):', err?.message);
+    return async () => { /* noop */ };
+  }
+}
+
+/** Espera o lock do card ficar livre (mensagem inbound nao pode ser
+ *  descartada). Se apos maxWaitMs continuar ocupado, degrada pro
+ *  comportamento antigo (roda sem lock) em vez de dropar a resposta. */
+async function acquireCardRunLockWithWait(
+  tenantId: string, cardId: string, maxWaitMs = 45_000,
+): Promise<() => Promise<void>> {
+  const deadline = Date.now() + maxWaitMs;
+  for (;;) {
+    const release = await acquireCardRunLock(tenantId, cardId);
+    if (release) return release;
+    if (Date.now() >= deadline) {
+      logger.warn(`[col-agent.runner] card lock busy apos ${maxWaitMs}ms card=${cardId} — prosseguindo sem lock`);
+      return async () => { /* noop */ };
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }

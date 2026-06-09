@@ -333,6 +333,12 @@ async function main(): Promise<void> {
   const ADMIN_PASS_HASH = process.env.CLOW_ADMIN_PASS_HASH;
   const ADMIN_PASS_PLAIN = process.env.CLOW_ADMIN_PASS;
   let _adminPassPlainWarned = false;
+  if (!ADMIN_PASS_HASH && ADMIN_PASS_PLAIN) {
+    // Avisa no boot (nao so na primeira tentativa de login) — vazamento do
+    // .env expoe a senha admin em texto puro. Gerar hash com:
+    //   node scripts/hash-admin-pass.cjs 'SuaSenha'
+    logger.warn('[auth] CLOW_ADMIN_PASS em texto puro no .env — migrar pra CLOW_ADMIN_PASS_HASH (node scripts/hash-admin-pass.cjs)');
+  }
 
   app.post('/auth/login', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
