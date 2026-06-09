@@ -16,8 +16,18 @@
 set -euo pipefail
 
 BRANCH="${1:?Uso: bash scripts/deploy-vps.sh <branch>}"
-APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Usa o diretorio atual se for um repo git (permite rodar o script extraido
+# pra fora do repo, ex: /tmp); senao, assume que o script vive em <repo>/scripts.
+if [ -d .git ]; then
+  APP_DIR="$(pwd)"
+else
+  APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+fi
 cd "$APP_DIR"
+if [ ! -d .git ]; then
+  echo "ERRO: $APP_DIR nao e um repositorio git. Rode de dentro de /opt/system-clow." >&2
+  exit 1
+fi
 
 echo "==> Deploy de '$BRANCH' em $APP_DIR"
 
