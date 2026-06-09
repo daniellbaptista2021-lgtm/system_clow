@@ -287,6 +287,13 @@ async function main(): Promise<void> {
   const mcpRemoteRoutes = buildMCPRemoteRoutes(pool, mcpManager);
   app.route('/', mcpRemoteRoutes);
 
+  // Mount Clow CRM MCP Server (external agents command the CRM via /v1/mcp).
+  // Tools proxy the existing /v1/crm routes; auth is per-tenant API key,
+  // forwarded by the caller (Authorization: Bearer clow_...).
+  const { buildClowMcpRoutes } = await import('./clowMcpServer.js');
+  app.route('/', buildClowMcpRoutes());
+  logger.info('  ✓ Clow CRM MCP: /v1/mcp (external agent control)');
+
   // Mount persistent memory API routes
   const memoryRoutes = buildMemoryRoutes();
   app.route('/v1/memory', memoryRoutes);
