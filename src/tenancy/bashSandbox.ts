@@ -52,6 +52,12 @@ const BLOCKED_PATTERNS = [
   /\bufw\b/,
   /\bnft(ables)?\b/,
 
+  // SSH outbound — tenant nao pode usar o servidor como ponte pra outras
+  // maquinas (pivot de rede com a identidade/IP do servidor).
+  /(^|\s|;|&|\|)ssh\s/,
+  /(^|\s|;|&|\|)scp\s/,
+  /(^|\s|;|&|\|)sftp\s/,
+
   // Dispositivos / filesystem do servidor
   /\bmkfs(\.|\b)/i,
   /\bdd\s+if=/,

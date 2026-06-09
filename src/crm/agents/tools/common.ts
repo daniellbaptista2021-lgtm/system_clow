@@ -616,46 +616,49 @@ export function executePromotion(
   toRole: import('../../types.js').ColumnAgentRole,
   extra?: Record<string, unknown>,
 ): ToolResult {
+  // Move + reset de timestamps + state numa transacao unica: falha em
+  // qualquer passo desfaz tudo. Antes eram 4 writes separados — crash no
+  // meio deixava o card na coluna nova com state apontando pra antiga.
   try {
-    store.moveCard(ctx.tenantId, ctx.card.id, target.id);
+    const db = getCrmDb();
+    const tx = db.transaction(() => {
+      const moved = store.moveCard(ctx.tenantId, ctx.card.id, target.id);
+      if (!moved) throw new Error('card_not_found');
+      // Reset last_bot_message_at na transicao de coluna. last_bot_message_at e
+      // per-coluna na semantica do funil (entry_delay/chase ancoram nele); se o
+      // role anterior emitiu uma despedida apos chamar promover_*, sendOutbound
+      // bumpa esse timestamp pra DEPOIS de column_changed_at e
+      // findEntryDelayCards filtra fora o card pra sempre. Zerar aqui garante
+      // que o entry_delay do role novo dispara, e o chase volta a contar a
+      // partir da primeira msg que o novo role emitir.
+      db.prepare('UPDATE crm_cards SET last_bot_message_at = NULL WHERE id = ? AND tenant_id = ?')
+        .run(ctx.card.id, ctx.tenantId);
+      const fresh = getCardAgentState(ctx.card.id) ?? ctx.state;
+      const log = Array.isArray(fresh.promotionLog) ? [...fresh.promotionLog] : [];
+      log.push({
+        fromColumnId: ctx.column.id,
+        toColumnId: target.id,
+        fromRole: ctx.role,
+        toRole,
+        reason: motivo,
+        at: Date.now(),
+      });
+      upsertCardAgentState({
+        cardId: ctx.card.id,
+        columnId: target.id,
+        currentAgentRole: toRole,
+        tenantId: ctx.tenantId,
+        turnsCount: 0, // reset turns na nova coluna
+        inactivityTimerAt: null, // PR 4: nova coluna re-arma se quiser
+        inactivityFireCount: 0,
+        promotionLog: log,
+        status: 'active',
+      });
+    });
+    tx();
   } catch (err: any) {
     return { ok: false, error: `move_card_failed: ${err?.message || 'unknown'}` };
   }
-  // Reset last_bot_message_at na transicao de coluna. last_bot_message_at e
-  // per-coluna na semantica do funil (entry_delay/chase ancoram nele); se o
-  // role anterior emitiu uma despedida apos chamar promover_*, sendOutbound
-  // bumpa esse timestamp pra DEPOIS de column_changed_at e
-  // findEntryDelayCards filtra fora o card pra sempre. Zerar aqui garante
-  // que o entry_delay do role novo dispara, e o chase volta a contar a
-  // partir da primeira msg que o novo role emitir.
-  try {
-    getCrmDb()
-      .prepare('UPDATE crm_cards SET last_bot_message_at = NULL WHERE id = ? AND tenant_id = ?')
-      .run(ctx.card.id, ctx.tenantId);
-  } catch (err: any) {
-    logger.warn(`[executePromotion] reset last_bot_message_at falhou card=${ctx.card.id}: ${err?.message}`);
-  }
-  const fresh = getCardAgentState(ctx.card.id) ?? ctx.state;
-  const log = Array.isArray(fresh.promotionLog) ? [...fresh.promotionLog] : [];
-  log.push({
-    fromColumnId: ctx.column.id,
-    toColumnId: target.id,
-    fromRole: ctx.role,
-    toRole,
-    reason: motivo,
-    at: Date.now(),
-  });
-  upsertCardAgentState({
-    cardId: ctx.card.id,
-    columnId: target.id,
-    currentAgentRole: toRole,
-    tenantId: ctx.tenantId,
-    turnsCount: 0, // reset turns na nova coluna
-    inactivityTimerAt: null, // PR 4: nova coluna re-arma se quiser
-    inactivityFireCount: 0,
-    promotionLog: log,
-    status: 'active',
-  });
   recordAgentMetric({
     tenantId: ctx.tenantId, columnId: ctx.column.id, cardId: ctx.card.id,
     event: 'promoted',

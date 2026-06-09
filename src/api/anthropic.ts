@@ -105,8 +105,19 @@ function getAnthropicConfig(): AnthropicConfig {
   return config;
 }
 
+const _unknownModelWarned = new Set<string>();
+
 function getPricing(model: string) {
-  return PRICING[model] ?? PRICING[DEFAULT_MODEL];
+  const p = PRICING[model];
+  if (p) return p;
+  // Fallback pro preco do GLM e correto neste deploy (LiteLLM mapeia
+  // qualquer alias claude-* pra openrouter/z-ai/glm-5.1), mas avisa uma
+  // vez por modelo pra erro de configuracao nao passar batido no custo.
+  if (!_unknownModelWarned.has(model)) {
+    _unknownModelWarned.add(model);
+    logger.warn(`[pricing] modelo "${model}" sem entrada na tabela PRICING — usando preco de ${DEFAULT_MODEL} como fallback`);
+  }
+  return PRICING[DEFAULT_MODEL];
 }
 
 function calculateCost(model: string, usage: ModelUsage): CacheMetrics {

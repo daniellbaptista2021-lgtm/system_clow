@@ -85,8 +85,8 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     expect(p).toMatch(/prote[çc][ãa]o\s+funeral/i);
     expect(p).toContain('2️⃣');
     expect(p).toMatch(/seguro de vida.*doen[çc]as graves|doen[çc]as graves.*cirurgia/);
-    // PR 7.0: pergunta final mais natural (era "Qual dos dois faz mais sentido")
-    expect(p).toMatch(/Qual\s+(dos\s+dois|encaixa\s+melhor)/i);
+    // Prompt Lead PV (52305ca): pergunta final encurtou pra "Qual?"
+    expect(p).toMatch(/Qual(\s+(dos\s+dois|encaixa\s+melhor))?\?/i);
   });
 
   // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
@@ -94,15 +94,15 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   it('3. Qualificador prompt instrui NAO citar valor em R$', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     // PR 7.0: regra mais rigida (era "NAO fale valor errado")
-    expect(p).toMatch(/NUNCA\s+cite\s+valor\s+em\s+R\$/i);
+    expect(p).toMatch(/(NUNCA\s+cite|PROIBIDO\s+citar)\s+valor\s+em\s+R\$/i);
   });
 
   // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
 
   it('4. Qualificador prompt instrui NAO pedir CPF/RG/dados sensiveis', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
-    // PR 7.0: phrase mudou de "NAO fale" pra "NUNCA peça"
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+(fale|pe[çc]a)\s+CPF\/?RG/i);
+    // Prompt Lead PV (52305ca): regra virou "PROIBIDO pedir endereço, CPF, RG"
+    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+(fale|pe[çc]a)\s+CPF\/?RG|PROIBIDO\s+pedir[^.\n]*CPF/i);
   });
 
   // ─── 5. Qualificador NAO menciona "corretora oficial SulAmerica" ──

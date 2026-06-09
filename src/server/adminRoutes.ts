@@ -167,13 +167,18 @@ export function buildBillingRoutes(): Hono {
   const app = new Hono();
 
   app.post('/webhooks/asaas', async (c) => {
-    // Validate webhook token
+    // Validate webhook token — fail-closed: sem ASAAS_WEBHOOK_TOKEN setado,
+    // o endpoint rejeita tudo. Antes, env vazia = endpoint publico aceitando
+    // eventos de cobranca forjados. Configure o mesmo token no painel Asaas
+    // (Integracoes → Webhooks → Token de acesso).
     const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
-    if (webhookToken) {
-      const token = c.req.header('asaas-access-token');
-      if (token !== webhookToken) {
-        return c.json({ error: 'invalid_signature' }, 401);
-      }
+    if (!webhookToken) {
+      logger.error('[billing] webhook Asaas rejeitado: ASAAS_WEBHOOK_TOKEN nao configurado no .env');
+      return c.json({ error: 'webhook_not_configured' }, 503);
+    }
+    const token = c.req.header('asaas-access-token');
+    if (token !== webhookToken) {
+      return c.json({ error: 'invalid_signature' }, 401);
     }
 
     const payload = await c.req.json().catch(() => ({}));
