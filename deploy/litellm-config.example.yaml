@@ -1,39 +1,46 @@
-# LiteLLM proxy config — substituir Anthropic por OpenRouter (GLM-5.1 ou outro).
-# Copiar pra /opt/litellm/config.yaml, exportar OPENROUTER_API_KEY e rodar:
+# LiteLLM proxy config — motor de IA do System Clow.
+# Copiar pra /opt/litellm/config.yaml, exportar DEEPSEEK_API_KEY (em /opt/litellm/.env) e rodar:
 #   litellm --config /opt/litellm/config.yaml --port 4000 --host 127.0.0.1
+#
+# Motor atual: DeepSeek (deepseek-chat). Trocado de OpenRouter/GLM-5.1 em 2026-06-10
+# (saldo do OpenRouter esgotou). Os model_name continuam glm-5.1 / claude-* porque o
+# codigo do app referencia esses nomes — so o backend por tras muda aqui.
+#
+# Rollback p/ OpenRouter/GLM: trocar model -> openrouter/z-ai/glm-5.1,
+# api_key -> os.environ/OPENROUTER_API_KEY, api_base -> https://openrouter.ai/api/v1.
 
 model_list:
   # Modelo principal
   - model_name: glm-5.1
     litellm_params:
-      model: openrouter/z-ai/glm-5.1
-      api_key: os.environ/OPENROUTER_API_KEY
-      api_base: https://openrouter.ai/api/v1
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
 
   # Aliases: codigo hardcoded com claude-sonnet-4-* tambem roteia
   - model_name: claude-sonnet-4-20250514
     litellm_params:
-      model: openrouter/z-ai/glm-5.1
-      api_key: os.environ/OPENROUTER_API_KEY
-      api_base: https://openrouter.ai/api/v1
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
 
   - model_name: claude-sonnet-4-5
     litellm_params:
-      model: openrouter/z-ai/glm-5.1
-      api_key: os.environ/OPENROUTER_API_KEY
-      api_base: https://openrouter.ai/api/v1
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
 
   - model_name: claude-sonnet-4-6
     litellm_params:
-      model: openrouter/z-ai/glm-5.1
-      api_key: os.environ/OPENROUTER_API_KEY
-      api_base: https://openrouter.ai/api/v1
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
 
   - model_name: claude-haiku-4-5
     litellm_params:
-      model: openrouter/z-ai/glm-5.1
-      api_key: os.environ/OPENROUTER_API_KEY
-      api_base: https://openrouter.ai/api/v1
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+      api_base: https://api.deepseek.com
 
 litellm_settings:
   drop_params: true
