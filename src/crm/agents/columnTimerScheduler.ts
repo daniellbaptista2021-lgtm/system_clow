@@ -497,19 +497,28 @@ async function executeFinalDeletes(nowMs = Date.now()): Promise<void> {
   try {
     const db = getCrmDb();
     const rows = db.prepare(`
-      SELECT cas.card_id, cas.tenant_id, c.board_id, c.column_id
+      SELECT cas.card_id, cas.tenant_id, c.board_id, c.column_id,
+             col.agent_promote_to_column_id AS promote_to
       FROM crm_card_agent_state cas
       JOIN crm_card_tags t ON t.card_id = cas.card_id AND t.tag = 'final_delete_scheduled'
       JOIN crm_cards c ON c.id = cas.card_id
+      JOIN crm_columns col ON col.id = c.column_id
       WHERE cas.inactivity_timer_at IS NOT NULL AND cas.inactivity_timer_at <= ?
         AND c.deleted_at IS NULL
       LIMIT 50
-    `).all(nowMs) as Array<{ card_id: string; tenant_id: string; board_id: string; column_id: string }>;
+    `).all(nowMs) as Array<{ card_id: string; tenant_id: string; board_id: string; column_id: string; promote_to: string | null }>;
 
     for (const r of rows) {
       try {
         applyTagSystem(r.card_id, 'final_delete_done'); // tag mantida pra histórico
-        await moveToResolvido(r.tenant_id, r.card_id, r.column_id);
+        // Daniel 2026-06-11: se a coluna define agent_promote_to_column_id
+        // (ex: Follow Up → Perdido no PV), move pra LA. Senao mantem o
+        // legado (Resolvido do board de suporte / soft-delete).
+        if (r.promote_to) {
+          await moveToTargetColumn(r.tenant_id, r.card_id, r.column_id, r.promote_to);
+        } else {
+          await moveToResolvido(r.tenant_id, r.card_id, r.column_id);
+        }
       } catch (err: any) {
         logger.warn(`[col-timer final-followup] card=${r.card_id} err: ${err?.message}`);
       }
@@ -577,6 +586,86 @@ async function moveToResolvido(
   }
 
   logger.info(`[move-to-resolvido] card=${cardId} → ${target.board_name}/${target.col_name}`);
+}
+
+/** Move card pra uma coluna alvo explicita (ex: Follow Up final → Perdido).
+ *  Cross-board capable: atualiza board_id + column_id. Se a coluna alvo nao
+ *  existe, faz soft-delete (fail-safe, nao deixa o card preso). */
+async function moveToTargetColumn(
+  tenantId: string,
+  cardId: string,
+  fromColumnId: string,
+  targetColumnId: string,
+): Promise<void> {
+  if (targetColumnId === fromColumnId) return;
+  const db = getCrmDb();
+  const target = db.prepare(
+    `SELECT id, board_id, name FROM crm_columns WHERE id = ?`,
+  ).get(targetColumnId) as { id: string; board_id: string; name: string } | undefined;
+  if (!target) {
+    logger.warn(`[move-final] coluna alvo ${targetColumnId} nao existe — fallback soft-delete`);
+    const t = Date.now();
+    db.prepare(`UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(t, t, cardId);
+    return;
+  }
+  const cluster = await getCluster();
+  const ok = await cluster.setNxEx(`col-timer:final-move:${cardId}`, '1', 600);
+  if (!ok) return;
+  const posRow = db.prepare(
+    `SELECT COALESCE(MAX(position), -1) + 1 as p FROM crm_cards WHERE column_id = ? AND deleted_at IS NULL`,
+  ).get(target.id) as { p: number };
+  const now = Date.now();
+  db.prepare(
+    `UPDATE crm_cards SET board_id = ?, column_id = ?, position = ?, column_changed_at = ?, updated_at = ? WHERE id = ?`,
+  ).run(target.board_id, target.id, posRow.p, now, now, cardId);
+  try {
+    store.logActivity(tenantId, {
+      cardId, type: 'stage_change', channel: 'manual',
+      content: `Follow Up final → ${target.name}`,
+    });
+  } catch (err: any) {
+    logger.warn(`[move-final] logActivity falhou: ${err?.message}`);
+  }
+  logger.info(`[move-final] card=${cardId} → ${target.name}`);
+}
+
+/** Daniel 2026-06-11: limpeza automatica de colunas marcadas com
+ *  auto_rule_json = {trigger:'age_in_column', action:'soft_delete', params:{days:N}}.
+ *  Soft-delete (deleted_at) de cards parados ha mais de N dias na coluna
+ *  (column_changed_at). Usado na coluna "Perdido" do PV (N=3). Config-driven:
+ *  so afeta colunas que tem a regra setada — zero impacto nos outros tenants. */
+function cleanupAutoDeleteColumns(nowMs = Date.now()): void {
+  try {
+    const db = getCrmDb();
+    const cols = db.prepare(`
+      SELECT col.id, b.tenant_id, col.auto_rule_json
+      FROM crm_columns col JOIN crm_boards b ON b.id = col.board_id
+      WHERE col.auto_rule_json IS NOT NULL
+        AND col.auto_rule_json LIKE '%soft_delete%'
+    `).all() as Array<{ id: string; tenant_id: string; auto_rule_json: string }>;
+    for (const col of cols) {
+      let days: number;
+      try {
+        const rule = JSON.parse(col.auto_rule_json);
+        if (rule?.action !== 'soft_delete') continue;
+        days = Number(rule?.params?.days);
+      } catch { continue; }
+      if (!Number.isFinite(days) || days <= 0) continue;
+      const cutoff = nowMs - days * 86_400_000;
+      const res = db.prepare(`
+        UPDATE crm_cards SET deleted_at = ?, updated_at = ?
+        WHERE column_id = ?
+          AND deleted_at IS NULL
+          AND column_changed_at IS NOT NULL
+          AND column_changed_at <= ?
+      `).run(nowMs, nowMs, col.id, cutoff);
+      if (res.changes > 0) {
+        logger.info(`[col-cleanup] coluna=${col.id} tenant=${col.tenant_id.slice(0, 8)}: ${res.changes} card(s) soft-deleted (>${days}d parados)`);
+      }
+    }
+  } catch (err: any) {
+    logger.warn(`[col-cleanup] tick err: ${err?.message}`);
+  }
 }
 
 // ─── Public tick ──────────────────────────────────────────────────────────
@@ -657,6 +746,7 @@ export async function tickColumnTimers(): Promise<void> {
     fuCount = await dispatchAll(findFollowupCards(), dispatchFollowup);
 
     await executeFinalDeletes();
+    cleanupAutoDeleteColumns();
   } catch (err: any) {
     logger.warn(`[columnTimerScheduler.tick] err: ${err?.message}`);
   }
