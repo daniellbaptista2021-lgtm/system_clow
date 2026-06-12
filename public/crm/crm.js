@@ -4502,7 +4502,10 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa estar logado no System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Ir pro System Clow</a></div>';
+  // CRM é a porta de entrada. Sem token → login (mesmo login). Com token mas
+  // sem CRM (ex: sessão admin/não-tenant) → não faz loop; mostra aviso.
+  if (!localStorage.getItem('clow_token')) { try { location.replace('/'); return; } catch (e) {} }
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><p style="color:#9898B8">Esta conta não tem CRM associado. <a href="/" style="color:#9B59FC">Voltar</a></p></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -7716,5 +7719,46 @@ function openExportContactsMenu() {
   else init();
 
   window.__onda61 = { doSearch, placeSearch, openConversation };
+})();
+
+// ─── Assistente IA (slide-over) — agente embutido no CRM ──────────────────
+// O agente da tela inicial (index.html) abre num painel lateral, reusando a
+// sessao do CRM (clow_token, mesma origem) via ?embed=1 (bridge mode).
+(function(){
+  let built = false;
+  function build(){
+    if (built) return; built = true;
+    const css = document.createElement('style');
+    css.textContent =
+      '#aiPanelBackdrop{position:fixed;inset:0;background:rgba(8,8,26,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:9998}'
+      + '#aiPanelBackdrop.open{opacity:1;pointer-events:auto}'
+      + '#aiPanel{position:fixed;top:14px;right:14px;bottom:14px;width:min(500px,94vw);background:#0F0F24;border:1px solid rgba(155,89,252,.28);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.05) inset;overflow:hidden;transform:translateX(calc(100% + 28px));transition:transform .3s cubic-bezier(.32,.72,0,1);z-index:9999;display:flex;flex-direction:column}'
+      + '#aiPanel.open{transform:translateX(0)}'
+      + '#aiPanel .ai-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:linear-gradient(135deg,rgba(155,89,252,.16),rgba(74,158,255,.07));border-bottom:1px solid rgba(155,89,252,.22);flex-shrink:0}'
+      + '#aiPanel .ai-ttl{display:flex;align-items:center;gap:9px;color:#E8E8F0;font-weight:700;font-size:14px;letter-spacing:.2px}'
+      + '#aiPanel .ai-ttl svg{width:17px;height:17px;color:#9B59FC;flex-shrink:0}'
+      + '#aiPanel .ai-close{background:none;border:none;color:#9898B8;cursor:pointer;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:.15s}'
+      + '#aiPanel .ai-close:hover{background:rgba(255,255,255,.08);color:#fff}'
+      + '#aiPanel .ai-close svg{width:16px;height:16px}'
+      + '#aiPanel iframe{flex:1;width:100%;border:0;background:#0F0F24;display:block}';
+    document.head.appendChild(css);
+    const bd = document.createElement('div'); bd.id = 'aiPanelBackdrop'; bd.onclick = window.closeAIAssistant;
+    const p = document.createElement('div'); p.id = 'aiPanel';
+    p.innerHTML = '<div class="ai-head"><span class="ai-ttl"><img src="/assets/logo-official-full-white.png" alt="System Clow" style="height:22px;width:auto;display:block"></span><button class="ai-close" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div><iframe title="Assistente IA"></iframe>';
+    p.querySelector('.ai-close').onclick = window.closeAIAssistant;
+    document.body.appendChild(bd); document.body.appendChild(p);
+  }
+  window.openAIAssistant = function(){
+    build();
+    const p = document.getElementById('aiPanel'); const bd = document.getElementById('aiPanelBackdrop');
+    const f = p.querySelector('iframe');
+    if (!f.getAttribute('src')) f.setAttribute('src', '/?embed=1'); // lazy; bridge mode reusa a sessao (clow_token mesma origem)
+    requestAnimationFrame(function(){ p.classList.add('open'); bd.classList.add('open'); });
+  };
+  window.closeAIAssistant = function(){
+    const p = document.getElementById('aiPanel'); const bd = document.getElementById('aiPanelBackdrop');
+    if (p) p.classList.remove('open'); if (bd) bd.classList.remove('open');
+  };
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && window.closeAIAssistant) window.closeAIAssistant(); });
 })();
 // ═══════════════════════════════════════════════════════════════════════
