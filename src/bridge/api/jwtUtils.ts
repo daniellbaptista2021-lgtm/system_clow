@@ -7,6 +7,7 @@
  */
 
 import { TOKEN_REFRESH_BUFFER_MS } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Decode helpers
@@ -197,7 +198,7 @@ export class JwtRefreshManager {
       this.refreshAttempt++;
       if (this.refreshAttempt > this.maxRetries) {
         // eslint-disable-next-line no-console
-        console.error(
+        logger.error(
           `[JwtRefreshManager] Giving up after ${this.maxRetries} retries`,
           err,
         );

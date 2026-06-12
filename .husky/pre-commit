@@ -1,0 +1,5 @@
+# Pre-commit hook do System Clow — gerado por scripts/setup-husky.cjs
+# Roda lint-staged → que chama gitleaks protect --staged.
+# Pra pular um commit emergencial: git commit --no-verify (NÃO RECOMENDADO).
+
+npx --no-install lint-staged

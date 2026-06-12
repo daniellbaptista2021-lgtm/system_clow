@@ -11,6 +11,7 @@
 
 import { randomUUID } from 'crypto';
 import { AsyncLocalStorage } from 'async_hooks';
+import * as os from 'node:os';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1544,7 +1545,6 @@ export function getPlatformInfo(): {
   homeDir: string;
   isWSL: boolean;
 } {
-  const os = require('os');
   return {
     os: `${process.platform} ${os.release()}`,
     arch: process.arch,

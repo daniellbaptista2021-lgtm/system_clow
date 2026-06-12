@@ -13,6 +13,7 @@
 import { getCrmDb } from './schema.js';
 import * as store from './store.js';
 import type { Card } from './types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Migration v2: line items table ─────────────────────────────────────
 function ensureLineItemsTable(): void {
@@ -148,7 +149,7 @@ export function commitStockForWonCard(tenantId: string, cardId: string): void {
         });
       }
     } catch (e: any) {
-      console.warn('[stock commit] failed', e.message);
+      logger.warn('[stock commit] failed', e.message);
     }
   }
 }

@@ -24,6 +24,7 @@ import * as os from 'os';
 import { PluginLoader } from '../PluginLoader.js';
 import type { LoadedPlugin } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -133,12 +134,12 @@ export class MarketplaceDiscovery {
         if (plugins.length >= MAX_MARKETPLACE_PLUGINS) break;
       }
     } catch (err) {
-      console.warn(`[MarketplaceDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
+      logger.warn(`[MarketplaceDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
     }
 
     const elapsed = Date.now() - startTime;
     if (plugins.length > 0) {
-      console.log(`[MarketplaceDiscovery] Found ${plugins.length} marketplace plugins in ${elapsed}ms`);
+      logger.info(`[MarketplaceDiscovery] Found ${plugins.length} marketplace plugins in ${elapsed}ms`);
     }
 
     this.cachedPlugins = plugins;

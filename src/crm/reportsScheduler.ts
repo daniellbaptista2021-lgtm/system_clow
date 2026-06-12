@@ -12,6 +12,7 @@ import { getCrmDb } from './schema.js';
 import * as reports from './reports.js';
 import { toPDF, toCSV, type ReportKind } from './reportsExport.js';
 import { sendEmail } from '../notifications/mailer.js';
+import { logger } from '../utils/logger.js';
 
 export type SchedInterval = 'daily' | 'weekly' | 'monthly';
 
@@ -52,7 +53,7 @@ export async function tick(): Promise<void> {
         'UPDATE crm_scheduled_reports SET last_run_at = ?, next_run_at = ? WHERE id = ?'
       ).run(now, advanceNextRun(now, sched.interval), sched.id);
     } catch (err: any) {
-      console.warn('[reports-scheduler]', sched.id, err?.message || err);
+      logger.warn('[reports-scheduler]', sched.id, err?.message || err);
       // Still advance to avoid tight-loop on broken schedules
       db.prepare(
         'UPDATE crm_scheduled_reports SET next_run_at = ? WHERE id = ?'

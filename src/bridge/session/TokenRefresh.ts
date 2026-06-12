@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger.js';
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ export class TokenRefreshManager {
         if (this.scheduled) this.scheduled.timer = timer;
       } else {
         this.scheduled = null;
-        console.error(
+        logger.error(
           '[TokenRefreshManager] Failed to refresh after retries:',
           err instanceof Error ? err.message : String(err),
         );

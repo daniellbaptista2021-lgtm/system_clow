@@ -1,4 +1,5 @@
 import type { OutboundMessage } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,7 +63,7 @@ export class FlushGate {
           await this.sender(message);
           sent++;
         } catch (err) {
-          console.error(
+          logger.error(
             '[FlushGate] Failed to flush message:',
             err instanceof Error ? err.message : String(err),
           );

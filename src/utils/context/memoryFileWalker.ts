@@ -5,6 +5,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import type { MemoryFileResult } from './types.js';
+import { logger } from '../logger.js';
 
 const MEMORY_NAMES = ['CLOW.md', '.clow/CLOW.md', 'clow.md'];
 const MAX_DEPTH = 10;
@@ -58,7 +59,7 @@ export class MemoryFileWalker {
     try {
       const st = await fsp.stat(fp);
       if (!st.isFile()) return null;
-      if (st.size > MAX_SIZE) { console.warn(`[MemoryWalker] Skip ${fp}: ${st.size} > ${MAX_SIZE}`); return null; }
+      if (st.size > MAX_SIZE) { logger.warn(`[MemoryWalker] Skip ${fp}: ${st.size} > ${MAX_SIZE}`); return null; }
       return { path: fp, content: await fsp.readFile(fp, 'utf-8'), source, loadedAt: Date.now() };
     } catch { return null; }
   }

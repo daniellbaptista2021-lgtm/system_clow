@@ -24,6 +24,7 @@ import { BridgeUI } from './ui/bridgeUI.js';
 import { displayPairingInfo } from './ui/QRCodeDisplay.js';
 import { BridgeCrashRecovery } from './recovery/CrashRecovery.js';
 import { EnvironmentReconnect } from './recovery/EnvironmentReconnect.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ export class BridgeStandalone {
     await this.crashRecovery.saveState(this.environment, 'standalone');
 
     // 4. Display pairing info
-    console.log(displayPairingInfo({
+    logger.info(displayPairingInfo({
       endpointUrl: this.config.endpointUrl,
       environmentId: this.environment.environmentId,
     }));
@@ -114,7 +115,7 @@ export class BridgeStandalone {
     if (this.shuttingDown) return;
     this.shuttingDown = true;
 
-    console.log(`\n[Bridge] Shutting down: ${reason}`);
+    logger.info(`\n[Bridge] Shutting down: ${reason}`);
 
     // Kill active sessions
     const active = this.sessionRunner.getActiveSessions();
@@ -177,7 +178,7 @@ export class BridgeStandalone {
 
         this.handleWork(work).catch(err => {
           this.errors++;
-          console.error('[Bridge] Work error:', err);
+          logger.error('[Bridge] Work error:', err);
         });
 
       } catch (err) {
@@ -186,7 +187,7 @@ export class BridgeStandalone {
 
         if (errStartedAt === 0) errStartedAt = Date.now();
         if (Date.now() - errStartedAt > giveUpMs) {
-          console.error('[Bridge] Too many errors, giving up');
+          logger.error('[Bridge] Too many errors, giving up');
           await this.shutdown('too_many_errors');
           return;
         }

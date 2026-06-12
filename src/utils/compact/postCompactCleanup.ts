@@ -19,6 +19,7 @@
 import { resetMemoryCache } from '../context/context.js';
 import { clearSuppression } from './compactWarningState.js';
 import type { CompactType } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ export async function runPostCompactCleanup(
     resetMemoryCache();
     cleared.push('memoryCache');
   } catch (err) {
-    console.warn(`[PostCompact] Failed to reset memory cache: ${(err as Error).message}`);
+    logger.warn(`[PostCompact] Failed to reset memory cache: ${(err as Error).message}`);
   }
 
   // Always clear warning suppression
@@ -54,7 +55,7 @@ export async function runPostCompactCleanup(
     clearSuppression(sessionId);
     cleared.push('warningSuppression');
   } catch (err) {
-    console.warn(`[PostCompact] Failed to clear suppression: ${(err as Error).message}`);
+    logger.warn(`[PostCompact] Failed to clear suppression: ${(err as Error).message}`);
   }
 
   return {

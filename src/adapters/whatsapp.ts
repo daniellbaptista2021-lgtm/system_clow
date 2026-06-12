@@ -18,6 +18,8 @@ import { Hono } from 'hono';
 import type { SessionPool } from '../server/sessionPool.js';
 import * as path from 'path';
 import * as fs from 'fs';
+import { logger } from '../utils/logger.js';
+import { maskPhone } from '../utils/redact.js';
 
 // ─── Z-API Config ───────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ function getZApiConfig() {
 async function sendWhatsAppMessage(phone: string, message: string): Promise<void> {
   const config = getZApiConfig();
   if (!config) {
-    console.error('[zapi] No Z-API config — cannot send message');
+    logger.error('[zapi] No Z-API config — cannot send message');
     return;
   }
 
@@ -61,7 +63,7 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<void
         await sleep(500);
       }
     } catch (err: any) {
-      console.error(`[zapi] Send failed to ${phone}: ${err.message}`);
+      logger.error(`[zapi] Send failed to ${maskPhone(phone)}: ${err.message}`);
     }
   }
 }
@@ -109,7 +111,7 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
     const result = await response.json() as { text: string };
     return result.text || '[Audio could not be transcribed]';
   } catch (err: any) {
-    console.error(`[whisper] Transcription failed: ${err.message}`);
+    logger.error(`[whisper] Transcription failed: ${err.message}`);
     return '[Audio transcription failed. Please send text instead.]';
   }
 }
@@ -151,7 +153,7 @@ async function processImage(imageUrl: string, caption?: string): Promise<string>
     const description = result.choices?.[0]?.message?.content || 'Image could not be processed';
     return `[Image received]\n${caption ? `Caption: ${caption}\n` : ''}Content: ${description}`;
   } catch (err: any) {
-    console.error(`[vision] Processing failed: ${err.message}`);
+    logger.error(`[vision] Processing failed: ${err.message}`);
     return caption ? `[Image with caption: "${caption}"]` : '[Image received — processing failed]';
   }
 }
@@ -213,14 +215,17 @@ async function processInBackground(
   sessionId: string,
   phone: string,
   userMessage: string,
+  tenantId?: string,
 ): Promise<void> {
   try {
+    const wsDir = path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', sessionId);
     const engine = await pool.getOrCreate(sessionId, {
-      cwd: path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', phone),
+      cwd: wsDir,
+      workspaceRoot: wsDir,
+      tenantId: tenantId || undefined,
     });
 
     // Ensure workspace dir exists
-    const wsDir = path.join(process.env.CLOW_WORKSPACES || '/tmp/clow-workspaces', phone);
     try { fs.mkdirSync(wsDir, { recursive: true }); } catch {}
 
     let buffer = '';
@@ -270,7 +275,7 @@ async function processInBackground(
     pool.trackMessage(sessionId);
 
   } catch (err: any) {
-    console.error(`[wpp] Error processing message for ${phone}: ${err.message}`);
+    logger.error(`[wpp] Error processing message for ${maskPhone(phone)}: ${err.message}`);
     await sendWhatsAppMessage(phone, `⚠️ Sorry, an error occurred: ${err.message.slice(0, 200)}`);
   }
 }
@@ -284,7 +289,7 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
   app.post('/webhooks/zapi', async (c) => {
     const config = getZApiConfig();
     if (!config) {
-      console.error('[zapi] Webhook hit but no Z-API config — ignoring');
+      // Onda 53i: silenciado — CRM usa /webhooks/crm/zapi/:secret. Este endpoint legacy fica idle.
       return c.json({ ok: true });
     }
 
@@ -329,7 +334,7 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
       return c.json({ ok: true }); // Nothing to process
     }
 
-    console.log(`[wpp] ${phone}: ${userMessage.slice(0, 80)}${userMessage.length > 80 ? '...' : ''}`);
+    logger.info(`[wpp] ${maskPhone(phone)}: ${userMessage.slice(0, 80)}${userMessage.length > 80 ? '...' : ''}`);
 
     // Session ID: 1 phone = 1 persistent session
     const sessionId = `wpp_${phone.replace(/\D/g, '')}`;
@@ -337,8 +342,11 @@ export function buildWhatsAppRoutes(pool: SessionPool): Hono {
     // Send typing immediately for UX
     void sendTypingIndicator(phone);
 
+    // Resolve tenantId from CRM forward header (x-clow-tenant-id)
+    const tenantIdFromHeader = c.req.header('x-clow-tenant-id');
+
     // Process in background (don't block webhook response)
-    void processInBackground(pool, sessionId, phone, userMessage);
+    void processInBackground(pool, sessionId, phone, userMessage, tenantIdFromHeader);
 
     // Respond 200 immediately (Z-API timeout is ~10s)
     return c.json({ ok: true });

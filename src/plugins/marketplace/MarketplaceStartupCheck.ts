@@ -20,6 +20,7 @@ import { MarketplaceCache } from './MarketplaceCache.js';
 import { PluginBlocklist } from './PluginBlocklist.js';
 import { PluginAutoUpdate, type UpdateAvailable } from './PluginAutoUpdate.js';
 import type { LoadedPlugin, MarketplaceCatalog } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ export class MarketplaceStartupCheck {
 
     } catch (err) {
       // Startup check should never crash the application
-      console.warn(`[MarketplaceStartupCheck] Error: ${(err as Error).message}`);
+      logger.warn(`[MarketplaceStartupCheck] Error: ${(err as Error).message}`);
       return this.emptyResult(Date.now() - startTime);
     } finally {
       this.running = false;
@@ -119,7 +120,7 @@ export class MarketplaceStartupCheck {
    */
   runBackground(installed: LoadedPlugin[]): void {
     this.run(installed).catch(err => {
-      console.warn(`[MarketplaceStartupCheck] Background check failed: ${(err as Error).message}`);
+      logger.warn(`[MarketplaceStartupCheck] Background check failed: ${(err as Error).message}`);
     });
   }
 
@@ -141,7 +142,7 @@ export class MarketplaceStartupCheck {
         catalog = await this.client.fetchCatalog();
         await this.cache.set(catalog);
       } catch (err) {
-        console.warn(`[MarketplaceStartupCheck] Failed to fetch catalog: ${(err as Error).message}`);
+        logger.warn(`[MarketplaceStartupCheck] Failed to fetch catalog: ${(err as Error).message}`);
         return this.emptyResult(Date.now() - startTime);
       }
     }
@@ -156,7 +157,7 @@ export class MarketplaceStartupCheck {
         }
       }
     } catch (err) {
-      console.warn(`[MarketplaceStartupCheck] Blocklist refresh failed: ${(err as Error).message}`);
+      logger.warn(`[MarketplaceStartupCheck] Blocklist refresh failed: ${(err as Error).message}`);
     }
 
     // Step 3: Check for updates
@@ -164,7 +165,7 @@ export class MarketplaceStartupCheck {
     try {
       updatesAvailable = this.autoUpdate.checkForUpdates(installed, catalog);
     } catch (err) {
-      console.warn(`[MarketplaceStartupCheck] Update check failed: ${(err as Error).message}`);
+      logger.warn(`[MarketplaceStartupCheck] Update check failed: ${(err as Error).message}`);
     }
 
     // Step 4: Check for flagged plugins
@@ -195,7 +196,7 @@ export class MarketplaceStartupCheck {
   private timeout(): Promise<StartupCheckResult> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        console.warn(`[MarketplaceStartupCheck] Timeout after ${STARTUP_CHECK_TIMEOUT_MS}ms`);
+        logger.warn(`[MarketplaceStartupCheck] Timeout after ${STARTUP_CHECK_TIMEOUT_MS}ms`);
         resolve(this.emptyResult(STARTUP_CHECK_TIMEOUT_MS));
       }, STARTUP_CHECK_TIMEOUT_MS);
     });

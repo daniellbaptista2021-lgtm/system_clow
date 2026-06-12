@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
+import { logger } from './utils/logger.js';
 
 import { initAnthropic, type ClovMessage } from './api/anthropic.js';
 import { QueryEngine } from './query/QueryEngine.js';
@@ -192,8 +193,8 @@ async function main(): Promise<void> {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error(chalk.red('Error: API key not found.'));
-    console.error(chalk.dim('Set ANTHROPIC_API_KEY in .env'));
+    logger.error(chalk.red('Error: API key not found.'));
+    logger.error(chalk.dim('Set ANTHROPIC_API_KEY in .env'));
     process.exit(1);
   }
 
@@ -371,15 +372,15 @@ async function main(): Promise<void> {
   if (opts.listSessions) {
     const sessions = await listSessions(20);
     if (sessions.length === 0) {
-      console.log(chalk.dim('  No sessions found for this directory.'));
+      logger.info(chalk.dim('  No sessions found for this directory.'));
     } else {
-      console.log(chalk.bold('\n  Recent sessions:\n'));
+      logger.info(chalk.bold('\n  Recent sessions:\n'));
       for (let i = 0; i < sessions.length; i++) {
         const session = sessions[i];
         const ago = formatTimeAgo(session.mtime);
-        console.log(`  ${i + 1}. [${ago}] ${session.sessionId.slice(0, 8)} ${chalk.dim(`(${session.cwd})`)}`);
+        logger.info(`  ${i + 1}. [${ago}] ${session.sessionId.slice(0, 8)} ${chalk.dim(`(${session.cwd})`)}`);
       }
-      console.log('');
+      logger.info('');
     }
     await mcpManager.disconnectAll();
     process.exit(0);
@@ -394,7 +395,7 @@ async function main(): Promise<void> {
     if (opts.continue) {
       const match = sessions.find((session) => session.cwd === getCwd());
       if (!match) {
-        console.error(chalk.red('  No previous session found in this directory.'));
+        logger.error(chalk.red('  No previous session found in this directory.'));
         await mcpManager.disconnectAll();
         process.exit(1);
       }
@@ -402,7 +403,7 @@ async function main(): Promise<void> {
     } else if (opts.resume) {
       const match = sessions.find((session) => session.sessionId.startsWith(opts.resume));
       if (!match) {
-        console.error(chalk.red(`  Session not found: ${opts.resume}`));
+        logger.error(chalk.red(`  Session not found: ${opts.resume}`));
         await mcpManager.disconnectAll();
         process.exit(1);
       }
@@ -416,7 +417,7 @@ async function main(): Promise<void> {
     if (resumeSessionId) {
       const lockOk = await acquireSessionLock(resumeSessionId);
       if (!lockOk) {
-        console.error(chalk.red(`  Session ${resumeSessionId.slice(0, 8)} is already open in another terminal.`));
+        logger.error(chalk.red(`  Session ${resumeSessionId.slice(0, 8)} is already open in another terminal.`));
         await mcpManager.disconnectAll();
         process.exit(1);
       }
@@ -541,7 +542,7 @@ async function runBridgeCommand(opts: {
     }, autoExitSeconds * 1000);
   }
 
-  console.log(chalk.cyan(`Starting bridge against ${opts.endpoint}`));
+  logger.info(chalk.cyan(`Starting bridge against ${opts.endpoint}`));
   await bridge.start({ api: apiAdapter, sessionRunner });
 }
 
@@ -597,7 +598,7 @@ async function runSinglePrompt(
   for await (const msg of engine.submitMessage(prompt)) {
     if (msg.type === 'result') {
       if (msg.subtype === 'error_during_execution') {
-        console.error(chalk.red(`\nError: ${msg.content}`));
+        logger.error(chalk.red(`\nError: ${msg.content}`));
         process.exit(1);
       }
       break;
@@ -933,6 +934,6 @@ function buildPluginCommandPrompt(command: PluginCommand, args: string[]): strin
 }
 
 main().catch((err) => {
-  console.error(chalk.red(`Fatal error: ${err.message}`));
+  logger.error(chalk.red(`Fatal error: ${err.message}`));
   process.exit(1);
 });

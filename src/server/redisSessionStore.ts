@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger.js';
 /**
  * redisSessionStore.ts — Redis-backed distributed session store
  *
@@ -39,7 +40,7 @@ export class RedisSessionStore {
   async init(): Promise<void> {
     const url = process.env.CLOW_REDIS_URL || process.env.REDIS_URL;
     if (!url) {
-      console.log('[SessionStore] No Redis URL — using in-memory store');
+      logger.info('[SessionStore] No Redis URL — using in-memory store');
       return;
     }
 
@@ -52,9 +53,9 @@ export class RedisSessionStore {
       });
       await this.client.connect();
       this.isRedis = true;
-      console.log('[SessionStore] Redis connected');
+      logger.info('[SessionStore] Redis connected');
     } catch (err) {
-      console.warn('[SessionStore] Redis connection failed, using in-memory:', (err as Error).message);
+      logger.warn('[SessionStore] Redis connection failed, using in-memory:', (err as Error).message);
     }
   }
 

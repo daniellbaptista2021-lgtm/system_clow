@@ -26,6 +26,7 @@ import type {
   StopWorkRequest,
 } from '../types.js';
 import { BridgeApiError, DEFAULT_BACKOFF } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,9 +51,9 @@ function logRequest(
   durationMs: number,
 ): void {
   const tag = status >= 400 ? '[WARN]' : '[INFO]';
-  // Using console.error so it goes to stderr, keeping stdout clean.
+  // Using logger.error so it goes to stderr, keeping stdout clean.
   // eslint-disable-next-line no-console
-  console.error(
+  logger.error(
     `${tag} BridgeApi ${method} ${url} → ${status} (${durationMs}ms)`,
   );
 }

@@ -13,6 +13,7 @@
 
 import { createHash } from 'crypto';
 import { getMemoryDb } from './MemoryDatabase.js';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -132,7 +133,7 @@ export class RAGEngine {
         VALUES (?, ?, ?, ?, ?)
       `).run(sourceType, sourceId, textHash, JSON.stringify(vector), Date.now());
     } catch (err) {
-      console.warn(`[RAG] Index error: ${(err as Error).message}`);
+      logger.warn(`[RAG] Index error: ${(err as Error).message}`);
     }
   }
 
@@ -186,7 +187,7 @@ export class RAGEngine {
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
     } catch (err) {
-      console.warn(`[RAG] Search error: ${(err as Error).message}`);
+      logger.warn(`[RAG] Search error: ${(err as Error).message}`);
       return [];
     }
   }

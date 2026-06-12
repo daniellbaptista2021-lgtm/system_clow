@@ -28,6 +28,7 @@ import * as path from 'path';
 import { PluginLoader } from '../PluginLoader.js';
 import type { LoadedPlugin } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ export class ProjectDiscovery {
         // Check for nested .clow directories (warn)
         const nestedClow = path.join(resolvedDir, PLUGIN_DIR_NAME);
         if (fs.existsSync(nestedClow)) {
-          console.warn(`[ProjectDiscovery] Nested .clow directory in plugin: ${resolvedDir} (skipping)`);
+          logger.warn(`[ProjectDiscovery] Nested .clow directory in plugin: ${resolvedDir} (skipping)`);
           this.emitEvent({ type: 'plugin_skipped', workspaceRoot, pluginDir: resolvedDir, reason: 'nested .clow', timestamp: Date.now() });
           continue;
         }
@@ -224,12 +225,12 @@ export class ProjectDiscovery {
         if (plugins.length >= MAX_PROJECT_PLUGINS) break;
       }
     } catch (err) {
-      console.warn(`[ProjectDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
+      logger.warn(`[ProjectDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
     }
 
     const elapsed = Date.now() - startTime;
     if (plugins.length > 0) {
-      console.log(`[ProjectDiscovery] Found ${plugins.length} project plugins in ${elapsed}ms`);
+      logger.info(`[ProjectDiscovery] Found ${plugins.length} project plugins in ${elapsed}ms`);
     }
 
     this.emitEvent({ type: 'scan_complete', workspaceRoot, timestamp: Date.now() });

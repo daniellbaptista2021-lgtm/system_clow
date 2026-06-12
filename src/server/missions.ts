@@ -233,7 +233,10 @@ export function buildMissionRoutes(): Hono {
    * GET /v1/missions — list missions for current tenant
    */
   app.get('/', (c) => {
-    const tenantId = (c as any).get?.('tenantId') || 'default';
+    const tenantId = (c as any).get?.('tenantId');
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      return c.json({ error: 'tenant_context_missing' }, 401);
+    }
     return c.json({ missions: listMissionsForTenant(tenantId) });
   });
 

@@ -23,6 +23,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { SessionIndex } from './sessionIndex.js';
 import { SESSION_GC_MAX_AGE_MS, SESSION_GC_MAX_SESSIONS } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -229,7 +230,7 @@ export class SessionGC {
     this.totalRuns++;
 
     if (removed > 0) {
-      console.log(`[SessionGC] Removed ${removed} sessions, freed ${formatBytes(freedBytes)}`);
+      logger.info(`[SessionGC] Removed ${removed} sessions, freed ${formatBytes(freedBytes)}`);
     }
 
     return this.lastResult;
@@ -240,7 +241,7 @@ export class SessionGC {
    */
   gcBackground(opts?: GCOptions): void {
     this.gc(opts).catch(err => {
-      console.warn(`[SessionGC] Background GC failed: ${(err as Error).message}`);
+      logger.warn(`[SessionGC] Background GC failed: ${(err as Error).message}`);
     });
   }
 
@@ -290,7 +291,7 @@ export class SessionGC {
       try {
         const usage = await this.getDiskUsage();
         if (usage.totalBytes > this.sizeTrigger.maxTotalSizeBytes) {
-          console.log(`[SessionGC] Size trigger: ${formatBytes(usage.totalBytes)} exceeds ${formatBytes(this.sizeTrigger.maxTotalSizeBytes)}`);
+          logger.info(`[SessionGC] Size trigger: ${formatBytes(usage.totalBytes)} exceeds ${formatBytes(this.sizeTrigger.maxTotalSizeBytes)}`);
           this.gcBackground();
         }
       } catch { /* ignore */ }

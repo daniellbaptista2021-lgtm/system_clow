@@ -13,6 +13,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { logger } from '../utils/logger.js';
 
 const CONFIG_DIR = process.env.CLOW_ADMIN_CONFIG_DIR || '/root/.clow';
 const CONFIG_FILE = path.join(CONFIG_DIR, 'admin-config.json');
@@ -43,7 +44,7 @@ function load(): AdminConfig {
       return { authorized_phones: list.map(normPhone).filter((p: string) => p.length >= 10) };
     }
   } catch (err: any) {
-    console.error('[admin-config] load failed:', err?.message);
+    logger.error('[admin-config] load failed:', err?.message);
   }
   // Primeira leitura (ou corrupção): seed do env
   return { authorized_phones: seedFromEnv() };
@@ -54,7 +55,7 @@ function save(cfg: AdminConfig): void {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf-8');
   } catch (err: any) {
-    console.error('[admin-config] save failed:', err?.message);
+    logger.error('[admin-config] save failed:', err?.message);
     throw err;
   }
 }

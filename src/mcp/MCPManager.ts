@@ -14,6 +14,7 @@
 
 import * as fs from 'fs/promises';
 import { MCPClient, type MCPTool } from './MCPClient.js';
+import { logger } from '../utils/logger.js';
 
 // ??? Config Types ???????????????????????????????????????????????????????????
 
@@ -59,7 +60,7 @@ export class MCPManager {
 
   registerServer(name: string, serverCfg: MCPServerConfig): void {
     if (!serverCfg.command) {
-      console.error(`[mcp] Server "${name}" has no command ? skipping`);
+      logger.error(`[mcp] Server "${name}" has no command ? skipping`);
       return;
     }
 
@@ -94,12 +95,12 @@ export class MCPManager {
         try {
           await client.connect();
           const info = client.getServerInfo();
-          console.error(
+          logger.error(
             `  [mcp] ? ${name}: ${client.toolCount} tools` +
             (info ? ` (${info.name} ${info.version})` : ''),
           );
         } catch (err: any) {
-          console.error(`  [mcp] ? ${name}: ${err.message}`);
+          logger.error(`  [mcp] ? ${name}: ${err.message}`);
           this.clients.delete(name); // Remove failed server
         }
       }),

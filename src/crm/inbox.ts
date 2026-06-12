@@ -11,12 +11,14 @@
  *   7. Update channel.lastInboundAt
  */
 
+import { logger } from '../utils/logger.js';
 import * as store from './store.js';
 import { getCrmDb } from './schema.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
 import { saveMedia } from './media.js';
 import * as automations from './automations.js';
+import { applyTagSystem, cardHasTag } from './agents/tools/tags.js';
 import type { Channel2, Activity, MediaType } from './types.js';
 
 export interface InboundResult {
@@ -25,6 +27,17 @@ export interface InboundResult {
   cardId?: string;
   activityId?: string;
   error?: string;
+}
+
+/** URLs do WhatsApp (pps.whatsapp.net) tem oe=<hex> no query — timestamp UNIX
+ *  hex de quando a URL expira. Sem refresh, foto some do CRM em ~7 dias.
+ *  Retorna true se URL nao tem oe (formato desconhecido) ou ja venceu. */
+function isAvatarExpired(url: string): boolean {
+  const m = url.match(/[?&]oe=([A-F0-9]+)/i);
+  if (!m) return false; // formato desconhecido — nao mexe
+  const expiresMs = parseInt(m[1]!, 16) * 1000;
+  if (!Number.isFinite(expiresMs)) return false;
+  return expiresMs < Date.now();
 }
 
 /**
@@ -44,6 +57,7 @@ export async function ingestInbound(channel: Channel2, msg: {
   mediaFilename?: string;
   context?: { messageId?: string };
   timestamp: number;
+  fromMe?: boolean; // Onda 61: Z-API ecoa msg que o corretor digitou no app/WA Web do numero conectado
 }): Promise<InboundResult> {
   const tenantId = channel.tenantId;
 
@@ -57,6 +71,22 @@ export async function ingestInbound(channel: Channel2, msg: {
     name: msg.fromName,
     source: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
   });
+
+  // 2.1. Onda 55: se nao tem avatar e o canal eh Z-API, busca foto de perfil em background
+  // (Meta nao expõe foto de contatos arbitrarios via API publica)
+  // 2026-05-05: tambem refaz se a URL atual ja expirou (oe=hex no query string).
+  // URLs do WhatsApp expiram em ~7 dias — sem refresh, fotos somem do CRM.
+  if (channel.type === 'zapi') {
+    const needsRefresh = !contact.avatarUrl || isAvatarExpired(contact.avatarUrl);
+    if (needsRefresh) {
+      void zapi.fetchProfilePicture(channel, msg.fromPhone).then((url) => {
+        if (url) {
+          try { store.updateContact(tenantId, contact.id, { avatarUrl: url }); }
+          catch { /* silent */ }
+        }
+      });
+    }
+  }
 
   // 3. Find or create card on the default sales board
   const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
@@ -87,11 +117,15 @@ export async function ingestInbound(channel: Channel2, msg: {
   }
 
   // 6. Log activity
+  // Onda 61: fromMe=true → corretor enviou direto pelo app/WA Web do numero
+  // conectado. Loga como message_out / direction:'out' pra aparecer no
+  // history do CRM. Idempotencia (passo 1) ja absorve eco de envio via API.
+  const isOutbound = msg.fromMe === true;
   const activity = store.logActivity(tenantId, {
     cardId: card?.id, contactId: contact.id,
-    type: 'message_in',
+    type: isOutbound ? 'message_out' : 'message_in',
     channel: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
-    direction: 'in',
+    direction: isOutbound ? 'out' : 'in',
     content,
     mediaUrl,
     mediaType: msg.type,
@@ -99,26 +133,49 @@ export async function ingestInbound(channel: Channel2, msg: {
     metadata: {
       channelId: channel.id,
       channelName: channel.name,
-      fromPhone: msg.fromPhone,
+      ...(isOutbound ? { toPhone: msg.fromPhone, sentFromDevice: true } : { fromPhone: msg.fromPhone }),
       timestamp: msg.timestamp,
       ...(msg.context ? { replyToMessageId: msg.context.messageId } : {}),
       ...(savedFilename ? { savedFilename } : {}),
     },
   });
 
-  // 7. Update channel last inbound (non-critical)
-  try {
-    store.updateChannel(tenantId, channel.id, { lastInboundAt: Date.now(), status: 'active' });
-  } catch { /* noop */ }
-
-  // 8. Mark as read (best-effort, async)
-  if (channel.type === 'meta') {
-    void meta.markAsRead(channel, msg.messageId);
-  } else if (channel.type === 'zapi') {
-    void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
+  // 6.1. Classifica primeira inbound do card como lead_pago ou lead_aleatorio.
+  //      Lead pago vem do Click-to-Chat com texto "✅ Plano Familia/Individual - Clique Aqui".
+  //      Set-once por card: nao reclassifica se ja tem qualquer das duas tags.
+  if (
+    card &&
+    !isOutbound &&
+    msg.type === 'text' &&
+    (msg.text || '').trim() &&
+    !cardHasTag(card.id, 'lead_pago') &&
+    !cardHasTag(card.id, 'lead_aleatorio')
+  ) {
+    const isLeadPago = /plano\s+(famil[íi]a|individual).*clique\s+aqui/i.test(msg.text!);
+    applyTagSystem(card.id, isLeadPago ? 'lead_pago' : 'lead_aleatorio');
   }
 
-  void automations.emit({ trigger: 'inbound_message', tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id, text: msg.text || msg.caption || '' });
+  // 7. Update channel last inbound (non-critical) — só pra direction=in
+  if (!isOutbound) {
+    try {
+      store.updateChannel(tenantId, channel.id, { lastInboundAt: Date.now(), status: 'active' });
+    } catch { /* noop */ }
+  }
+
+  // 8. Mark as read (best-effort, async) — só pra inbound real
+  if (!isOutbound) {
+    if (channel.type === 'meta') {
+      void meta.markAsRead(channel, msg.messageId);
+    } else if (channel.type === 'zapi') {
+      void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
+    }
+  }
+
+  void automations.emit({
+    trigger: isOutbound ? 'outbound_message' : 'inbound_message',
+    tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id,
+    text: msg.text || msg.caption || '',
+  });
   return { ok: true, contactId: contact.id, cardId: card?.id, activityId: activity.id };
 }
 
@@ -178,8 +235,8 @@ async function findOrCreateOpenCardForContact(tenantId: string, contactId: strin
     if (!board) board = store.seedDefaultBoards(tenantId);
     boardId = board.id;
     const cols = store.listColumns(tenantId, board.id);
-    // Preferir coluna chamada "Lead novo" ou "Novo" ou primeira nao-terminal
-    const leadCol = cols.find(c => /^lead\s*novo/i.test(c.name) || /^novo/i.test(c.name)) || cols.find(c => !c.isTerminal) || cols[0];
+    // Preferir coluna chamada "Lead", "Lead novo", "Novo" ou primeira nao-terminal
+    const leadCol = cols.find(c => /^lead(\s|$)/i.test(c.name) || /^novo/i.test(c.name)) || cols.find(c => !c.isTerminal) || cols[0];
     if (!leadCol) return null;
     columnId = leadCol.id;
   }

@@ -13,6 +13,7 @@
 
 import type { Context, Next } from 'hono';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { logger } from '../../utils/logger.js';
 
 export const CLOW_SONNET_PREFIX = 'clow_sonnet_';
 
@@ -83,7 +84,7 @@ async function callClowCreditCheck(userId: string, backend: string, secret: stri
     const data = await res.json();
     return data as CreditCheck;
   } catch (err: any) {
-    console.error('[clowSonnetGuard] credit check failed:', err?.message || err);
+    logger.error('[clowSonnetGuard] credit check failed:', err?.message || err);
     return { allowed: false, reason: 'credit_service_unreachable' };
   }
 }
@@ -115,7 +116,7 @@ export async function recordClowUsage(params: {
       }),
     });
   } catch (err: any) {
-    console.error('[clowSonnetGuard] record failed:', err?.message || err);
+    logger.error('[clowSonnetGuard] record failed:', err?.message || err);
   }
 }
 

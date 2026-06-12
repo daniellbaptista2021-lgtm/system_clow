@@ -28,6 +28,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { ZIP_CACHE_TTL_MS } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -154,7 +155,7 @@ export class ZipCache {
       // Verify integrity
       const actualHash = this.computeHash(content);
       if (actualHash !== contentHash) {
-        console.warn(`[ZipCache] Integrity check failed for ${contentHash} (actual: ${actualHash})`);
+        logger.warn(`[ZipCache] Integrity check failed for ${contentHash} (actual: ${actualHash})`);
         await this.remove(contentHash);
         this.stats.misses++;
         return null;

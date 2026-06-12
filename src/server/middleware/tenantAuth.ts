@@ -10,6 +10,8 @@ import type { Context, Next } from 'hono';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { hashApiKey, findTenantByApiKeyHash, touchApiKey, type Tenant } from '../../tenancy/tenantStore.js';
 import { verifyUserToken } from '../../auth/authRoutes.js';
+import { isTokenRevoked } from '../../auth/tokenRevocation.js';
+import { logger } from '../../utils/logger.js';
 
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -70,6 +72,8 @@ export function verifyAdminSessionToken(token: string | undefined): { ok: boolea
     if (parsed.type !== 'admin_session') return { ok: false };
     if (typeof parsed.exp !== 'number' || parsed.exp < Date.now()) return { ok: false };
     if (typeof parsed.sub !== 'string' || !parsed.sub) return { ok: false };
+    // Token revogado (logout) — checa blacklist depois de validar tudo
+    if (isTokenRevoked(token)) return { ok: false };
     return { ok: true, username: parsed.sub };
   } catch {
     return { ok: false };
@@ -103,7 +107,6 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   if (!bearerToken) {
     return c.json({ error: 'missing_api_key', message: 'Authorization: Bearer <api_key> required' }, 401);
   }
-    console.log("[tenantAuth-debug] path=" + c.req.path + " len=" + (bearerToken || "").length + " prefix=" + (bearerToken || "").slice(0,30) + " startsClow=" + (bearerToken || "").startsWith("clow_"));
   const adminSession = verifyAdminSessionToken(bearerToken);
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);
@@ -189,7 +192,6 @@ export async function adminAuth(c: Context, next: Next): Promise<Response | void
 
   const auth = c.req.header('Authorization');
   const bearerToken = extractBearerToken(auth);
-    console.log("[tenantAuth-debug] path=" + c.req.path + " len=" + (bearerToken || "").length + " prefix=" + (bearerToken || "").slice(0,30) + " startsClow=" + (bearerToken || "").startsWith("clow_"));
   const adminSession = verifyAdminSessionToken(bearerToken);
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);

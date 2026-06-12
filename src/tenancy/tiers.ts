@@ -1,15 +1,20 @@
 /**
  * tiers.ts — Tier definitions with quotas and features
  *
- * Hardcoded in code — no DB lookup needed for tier rules.
- * Margin analysis:
- *   ONE:          R$129.90 - estimated Claude usage margin
- *   SMART:        R$297   - ~R$100 avg      = ~R$197 margin (66%)
- *   PROFISSIONAL: R$497   - ~R$200 avg      = ~R$297 margin (60%)
- *   BUSINESS:     R$897   - ~R$400 avg      = ~R$497 margin (55%)
+ * Planos publicos vendidos (https://system-clow.pvcorretor01.com.br/pricing):
+ *   STARTER:      R$347/mes
+ *   PROFISSIONAL: R$697/mes  (mais escolhido)
+ *   EMPRESARIAL:  R$1.297/mes
+ *
+ * Tiers legacy (`one`, `smart`, `business`) ficam definidos abaixo so pra
+ * suportar tenants criados antes da padronizacao dos planos publicos. NAO
+ * sao oferecidos no signup nem na pricing page. Nao crie tenant novo neles.
  */
 
-export type TierName = 'one' | 'smart' | 'profissional' | 'business' | 'starter' | 'empresarial';
+export type TierName = 'starter' | 'profissional' | 'empresarial' | 'one' | 'smart' | 'business';
+
+/** Tiers que aparecem no /pricing publico — unicos aceitos pelo /auth/signup. */
+export const PUBLIC_TIERS: TierName[] = ['starter', 'profissional', 'empresarial'];
 
 export interface TierConfig {
   price_brl: number;
@@ -22,6 +27,19 @@ export interface TierConfig {
   max_apps_per_month: number;
   max_spreadsheets_per_month: number;
   max_n8n_flows_active: number;
+  // Onda 53 — WhatsApp limits
+  // included_whatsapp_numbers: numero gratis incluso no plano (sempre 1)
+  // max_whatsapp_numbers: limite total de numeros conectados (1, 5, 10)
+  // Z-API extras alem do incluso = (max - included), cobrados R$100/mes cada via Stripe addon
+  // Meta Cloud API: ilimitada, gratuita, BYO credentials (so conta no max_whatsapp_numbers)
+  included_whatsapp_numbers: number;
+  max_whatsapp_numbers: number;
+  // Telefones autorizados a comandar a IA via WhatsApp pessoal (whitelist).
+  // Diferente de max_whatsapp_numbers (canais conectados pra atender clientes
+  // do tenant). Isso aqui e numero de owners/colaboradores que podem mandar
+  // mensagem PRA o agente do tenant pedindo trabalhos.
+  // Starter:1 / Profissional:3 / Empresarial:5
+  max_authorized_phones: number;
   features: string[];
 }
 
@@ -40,6 +58,9 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 1,
     max_spreadsheets_per_month: 10,
     max_n8n_flows_active: 1,
+    included_whatsapp_numbers: 1,
+    max_whatsapp_numbers: 1,
+    max_authorized_phones: 1,
     features: ['basic_tools', 'whatsapp'],
   },
   smart: {
@@ -52,11 +73,14 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 5,
     max_spreadsheets_per_month: 50,
     max_n8n_flows_active: 2,
+    included_whatsapp_numbers: 3,
+    max_whatsapp_numbers: 3,
+    max_authorized_phones: 3,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_basic'],
   },
   profissional: {
-    price_brl: 497,
-    max_messages_per_month: 25000,       // was 8000, cost ~R$195 max
+    price_brl: 697,
+    max_messages_per_month: 3000,
     max_cost_usd_per_month: 60,
     max_concurrent_sessions: 25,
     max_workspace_size_mb: 5000,
@@ -64,7 +88,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 10,
     max_spreadsheets_per_month: 100,
     max_n8n_flows_active: 4,
-    features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume'],
+    included_whatsapp_numbers: 1,
+    max_whatsapp_numbers: 5,
+    max_authorized_phones: 3,
+    features: ['basic_tools', 'whatsapp', 'crm', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'api', 'webhooks'],
   },
   business: {
     price_brl: 897,
@@ -76,10 +103,13 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 30,
     max_spreadsheets_per_month: 300,
     max_n8n_flows_active: 8,
+    included_whatsapp_numbers: 999,
+    max_whatsapp_numbers: 999,
+    max_authorized_phones: 5,
     features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'priority', 'custom_skills'],
   },
   starter: {
-    price_brl: 197,
+    price_brl: 347,
     max_messages_per_month: 500,
     max_cost_usd_per_month: 6,
     max_concurrent_sessions: 3,
@@ -88,10 +118,13 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 2,
     max_spreadsheets_per_month: 20,
     max_n8n_flows_active: 1,
+    included_whatsapp_numbers: 1,
+    max_whatsapp_numbers: 1,
+    max_authorized_phones: 1,
     features: ['basic_tools', 'whatsapp', 'crm'],
   },
   empresarial: {
-    price_brl: 1197,
+    price_brl: 1297,
     max_messages_per_month: 8000,
     max_cost_usd_per_month: 80,
     max_concurrent_sessions: 50,
@@ -100,7 +133,10 @@ export const TIERS: Record<TierName, TierConfig> = {
     max_apps_per_month: 30,
     max_spreadsheets_per_month: 300,
     max_n8n_flows_active: 8,
-    features: ['basic_tools', 'whatsapp', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'crm', 'whitelabel', 'api'],
+    included_whatsapp_numbers: 1,
+    max_whatsapp_numbers: 10,
+    max_authorized_phones: 5,
+    features: ['basic_tools', 'whatsapp', 'crm', 'agent_tool', 'mcp_full', 'plan_mode', 'session_resume', 'whitelabel', 'api', 'webhooks', 'priority_support', 'custom_integrations'],
   },
 } as const;
 

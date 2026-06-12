@@ -11,8 +11,12 @@
 
 const U = location.origin;
 const SESSION_TTL = 3 * 24 * 60 * 60 * 1000;
-const SESSIONS_KEY = 'clow_web_sessions_v2';
-const ACTIVE_SESSION_KEY = 'clow_web_active_session_v2';
+// Per-tenant session storage keys. _tenantId é setado por
+// applyTenantContext após /auth/me. Antes do login (ou em modo bridge),
+// usa fallback 'default' pra não quebrar boot.
+let _tenantId = null;
+function SESSIONS_KEY() { return _tenantId ? `clow_web_sessions_v3_${_tenantId}` : 'clow_web_sessions_v3_default'; }
+function ACTIVE_SESSION_KEY() { return _tenantId ? `clow_web_active_session_v3_${_tenantId}` : 'clow_web_active_session_v3_default'; }
 const TOKEN_KEY = 'clow_token';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -115,7 +119,21 @@ async function verifySavedLogin() {
 }
 
 function logout() {
+  // Limpa todas as conversas do tenant atual antes de sair pra que
+  // o próximo login (mesmo browser) não veja resíduos. Só remove as
+  // keys do tenant atual, não toca nas de outros tenants já no storage.
+  try {
+    if (_tenantId) {
+      localStorage.removeItem(`clow_web_sessions_v3_${_tenantId}`);
+      localStorage.removeItem(`clow_web_active_session_v3_${_tenantId}`);
+    }
+    localStorage.removeItem('clow_web_sessions_v3_default');
+    localStorage.removeItem('clow_web_active_session_v3_default');
+    localStorage.removeItem('clow_web_sessions_v2');
+    localStorage.removeItem('clow_web_active_session_v2');
+  } catch {}
   localStorage.removeItem(TOKEN_KEY);
+  _tenantId = null;
   location.reload();
 }
 
@@ -123,8 +141,8 @@ function logout() {
 // Session Module
 // ════════════════════════════════════════════════════════════════════════════
 
-function readSessions() { try { return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]') || []; } catch { return []; } }
-function writeSessions(list) { localStorage.setItem(SESSIONS_KEY, JSON.stringify(list)); }
+function readSessions() { try { return JSON.parse(localStorage.getItem(SESSIONS_KEY()) || '[]') || []; } catch { return []; } }
+function writeSessions(list) { localStorage.setItem(SESSIONS_KEY(), JSON.stringify(list)); }
 
 function cleanupSessions() {
   const now = Date.now();
@@ -135,7 +153,7 @@ function cleanupSessions() {
   writeSessions(cleaned);
   if (currentSessionId && !cleaned.some(s => s.id === currentSessionId)) {
     currentSessionId = null;
-    localStorage.removeItem(ACTIVE_SESSION_KEY);
+    localStorage.removeItem(ACTIVE_SESSION_KEY());
   }
   return cleaned;
 }
@@ -162,7 +180,7 @@ function createLocalSession(serverSessionId = '') {
   sessions.unshift(session);
   writeSessions(sessions);
   currentSessionId = session.id;
-  localStorage.setItem(ACTIVE_SESSION_KEY, currentSessionId);
+  localStorage.setItem(ACTIVE_SESSION_KEY(), currentSessionId);
   renderRecent();
   return session;
 }
@@ -176,8 +194,8 @@ function deleteSession(id) {
   writeSessions(sessions);
   if (currentSessionId === id) {
     currentSessionId = sessions[0]?.id || null;
-    if (currentSessionId) localStorage.setItem(ACTIVE_SESSION_KEY, currentSessionId);
-    else localStorage.removeItem(ACTIVE_SESSION_KEY);
+    if (currentSessionId) localStorage.setItem(ACTIVE_SESSION_KEY(), currentSessionId);
+    else localStorage.removeItem(ACTIVE_SESSION_KEY());
   }
   renderRecent();
   renderConversation(getSession());
@@ -481,20 +499,53 @@ async function showApp() {
   LS.classList.add('hide');
   setTimeout(() => { LS.style.display = 'none'; }, 250);
   AP.style.display = 'block';
+  // Atualiza footer (nome + tier) e isola SESSIONS_KEY por tenant.
+  // Sem isso, footer mostrava "Clow Admin / Plano Max" hardcoded e
+  // todos os tenants viam as MESMAS conversas no mesmo browser.
+  await applyTenantContext();
   syncSidebarState(); clearLegacyClientCache(); clearBrowserCaches(); cleanupSessions();
-  currentSessionId = null; localStorage.removeItem(ACTIVE_SESSION_KEY);
+  currentSessionId = null; localStorage.removeItem(ACTIVE_SESSION_KEY());
   const emptySession = getLatestEmptySession();
-  if (emptySession) { currentSessionId = emptySession.id; localStorage.setItem(ACTIVE_SESSION_KEY, currentSessionId); }
+  if (emptySession) { currentSessionId = emptySession.id; localStorage.setItem(ACTIVE_SESSION_KEY(), currentSessionId); }
   else { await ensureCurrentSession(true); }
   renderRecent(); renderConversation(getSession());
   setTimeout(() => focusComposer(), 80);
+}
+
+// Puxa /auth/me, atualiza footer e troca SESSIONS_KEY/ACTIVE_SESSION_KEY
+// pra incluir tenant_id (isola conversas por usuário no mesmo browser).
+async function applyTenantContext() {
+  try {
+    const r = await fetch(`${U}/auth/me`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const u = d?.user;
+    if (!u) return;
+    // Footer
+    const nameEl = document.getElementById('acctName');
+    const tierEl = document.getElementById('acctTier');
+    const avEl = document.getElementById('acctAvatar');
+    if (nameEl) nameEl.textContent = u.name || u.email || (u.is_admin ? 'Clow Admin' : '—');
+    if (tierEl) {
+      const tierLabels = { starter: 'Starter', profissional: 'Profissional', empresarial: 'Empresarial', business: 'Business', smart: 'Smart', one: 'One', admin: 'Admin' };
+      tierEl.textContent = u.is_admin ? 'Admin' : ('Plano ' + (tierLabels[u.tier] || u.tier || '—'));
+    }
+    if (avEl) avEl.textContent = ((u.name || u.email || 'U')[0] || 'U').toUpperCase();
+    // Per-tenant sessions key: troca _tenantId pra que SESSIONS_KEY()
+    // e ACTIVE_SESSION_KEY() (functions) retornem keys com tenant_id.
+    // Isola conversas entre tenants no mesmo browser.
+    _tenantId = u.id || 'default';
+    // Limpa conversas legacy compartilhadas v2 (que vazariam entre tenants)
+    try { localStorage.removeItem('clow_web_sessions_v2'); } catch {}
+    try { localStorage.removeItem('clow_web_active_session_v2'); } catch {}
+  } catch (e) { /* footer fica em "—" se /auth/me falhar */ }
 }
 
 function openSession(id) {
   const session = getSession(id);
   if (!session) return;
   currentSessionId = session.id;
-  localStorage.setItem(ACTIVE_SESSION_KEY, currentSessionId);
+  localStorage.setItem(ACTIVE_SESSION_KEY(), currentSessionId);
   renderRecent(); renderConversation(session); closeSidebar(); focusComposer();
 }
 

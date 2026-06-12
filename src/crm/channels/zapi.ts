@@ -8,6 +8,7 @@
 
 import { decryptJson } from '../crypto.js';
 import type { Channel2, MediaType } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 export interface ZapiCreds {
   instanceId: string;
@@ -75,7 +76,7 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
       bytes = file.bytes;
       mime = mediaMime || file.mime || 'application/octet-stream';
     } catch (err) {
-      console.warn('[zapi] resolveMediaForZapi read failed:', (err as any)?.message);
+      logger.warn('[zapi] resolveMediaForZapi read failed:', (err as any)?.message);
       return mediaUrl;
     }
     // Onda 47: audio webm precisa virar ogg/opus pro WhatsApp tocar.
@@ -108,10 +109,10 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
           bytes = converted;
           mime = 'audio/ogg; codecs=opus';
         } else {
-          console.warn('[zapi] ffmpeg audio conversion failed; sending original');
+          logger.warn('[zapi] ffmpeg audio conversion failed; sending original');
         }
       } catch (err) {
-        console.warn('[zapi] ffmpeg spawn failed:', (err as any)?.message);
+        logger.warn('[zapi] ffmpeg spawn failed:', (err as any)?.message);
       }
     }
     return `data:${mime};base64,${bytes!.toString('base64')}`;
@@ -201,9 +202,19 @@ export interface WebhookValue {
  * Parse Z-API webhook payload.
  * Z-API has multiple webhook formats: messageReceived, statusReceived, etc.
  * We focus on incoming messages (`fromMe: false`).
+ *
+ * @param connectedPhone Z-API tem um modo "receive-all-notifications"
+ *   que ecoa as proprias mensagens enviadas pela API de volta no webhook
+ *   recebido — geralmente com fromMe ausente/false e phone = numero
+ *   conectado da instancia. Se passarmos o numero conectado aqui, a
+ *   gente filtra esses ecos (caso contrario o bot vai responder a
+ *   propria saudacao em looping).
  */
-export function parseWebhook(payload: any): WebhookValue {
+export function parseWebhook(payload: any, connectedPhone?: string, allowSelfChat?: boolean): WebhookValue {
   const out: WebhookValue = { messages: [] };
+
+  // Normalizacao do connected phone — só digitos, pra comparar igual.
+  const connectedNorm = connectedPhone ? String(connectedPhone).replace(/\D/g, '') : '';
 
   // Z-API "DeliveryCallback" / "ReceivedCallback" / "MessageStatusCallback"
   // Single-message payloads: { phone, fromMe, isStatusReply, text:{message}, ... }
@@ -222,7 +233,17 @@ export function parseWebhook(payload: any): WebhookValue {
     const hasContent = !!(item.text?.message || item.image || item.audio ||
       item.video || item.document || item.location || item.contact || item.message);
     if (!hasContent) continue;
-    if (item.fromMe === true) continue; // ja logamos outbound no send
+    // Onda 61: fromMe=true NAO pode ser descartado cegamente.
+    // Existem duas origens de fromMe=true:
+    //  (a) envio via API do proprio System Clow → ja logado em sendOutbound.
+    //      A idempotencia em ingestInbound (providerMessageId) absorve esse
+    //      caso: mesmo id ja gravado, "duplicate_skipped".
+    //  (b) corretor digitou direto no app/WhatsApp Web do numero conectado
+    //      → essa mensagem NUNCA passou pelo nosso send. Se descartarmos,
+    //      o CRM fica cego pra conversas do dia-a-dia (bug grave: history
+    //      so mostrava o lado do cliente). Precisa virar message_out.
+    // Entao: deixa passar, marca fromMe=true, ingestInbound decide.
+    const fromMe = item.fromMe === true;
 
     const phone = item.phone || item.from || '';
     if (!phone) continue;
@@ -231,13 +252,37 @@ export function parseWebhook(payload: any): WebhookValue {
     // mas inbound de contato real sempre vem com phone=numero real.
     if (typeof phone === 'string' && phone.includes('@lid')) continue;
 
+    // Onda 60: filtrar ECO da propria instancia. Z-API as vezes manda
+    // o webhook recebido com fromMe=false mas phone=numero conectado
+    // quando o "receive-all-notifications" esta ativo. Resultado: cada
+    // outbound do bot virava um message_in fake do proprio numero,
+    // criava contato "5521969927641" duplicado e bagunçava o history.
+    //
+    // FIX 2026-05-08 (Daniel/PV): channel.allow_self_chat=1 permite
+    // self-msgs com fromMe=true (sistema externo usa Z-API da PV pra
+    // notificar leads de site no proprio numero). Echoes do receive-all
+    // chegam com fromMe=false e continuam dropados.
+    if (connectedNorm) {
+      const phoneNorm = String(phone).replace(/\D/g, '');
+      if (phoneNorm === connectedNorm) {
+        if (!allowSelfChat || !fromMe) continue;
+      }
+    }
+
+    // Onda 61: pra fromMe=true (corretor enviou), senderName eh o NOME DO
+    // CORRETOR, nao do contato. O nome do contato eh chatName.
+    // Pra fromMe=false (cliente enviou), senderName eh o NOME DO CLIENTE.
+    const fromName = fromMe
+      ? (item.chatName || item.notifyName || item.senderName)
+      : (item.senderName || item.notifyName || item.chatName);
+
     const base: ParsedInbound = {
       fromPhone: phone,
-      fromName: item.senderName || item.notifyName || item.chatName,
+      fromName,
       messageId: item.messageId || item.id || `zapi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       timestamp: (item.momment || item.timestamp || Date.now() / 1000) * (item.momment > 1e12 ? 1 : 1000),
       type: 'text',
-      fromMe: false,
+      fromMe,
       raw: item,
     };
     // Normalize timestamp (Z-API returns seconds OR ms)
@@ -314,4 +359,199 @@ export async function fetchMedia(channel: Channel2, mediaUrl: string): Promise<{
   } catch (err: any) {
     return { ok: false, error: err.message || 'fetch_failed' };
   }
+}
+
+
+// ─── DEVICE INFO (Z-API) ────────────────────────────────────────────────
+// GET /instances/{instance}/token/{token}/device → { phone, lid, imgUrl, ... }
+// Retorna o numero conectado da instancia. Usamos pra filtrar ecos no
+// parseWebhook (Z-API as vezes manda outbound de volta como inbound
+// quando "receive-all-notifications" esta ativo).
+//
+// Cache em memoria (24h) pra evitar 1 GET por webhook recebido. O
+// numero conectado raramente muda; se mudar, basta restart.
+const _connectedPhoneCache = new Map<string, { phone: string; ts: number }>();
+const CONNECTED_PHONE_TTL = 24 * 60 * 60 * 1000;
+
+export async function fetchConnectedPhone(channel: Channel2): Promise<string | null> {
+  const cached = _connectedPhoneCache.get(channel.id);
+  if (cached && (Date.now() - cached.ts) < CONNECTED_PHONE_TTL) return cached.phone;
+  try {
+    const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+    if (!creds.instanceId || !creds.token) return null;
+    const u = url(creds, '/device');
+    const r = await fetch(u, { headers: headers(creds) });
+    if (!r.ok) return null;
+    const j: any = await r.json();
+    const phone = String(j?.phone || '');
+    if (!phone) return null;
+    _connectedPhoneCache.set(channel.id, { phone, ts: Date.now() });
+    return phone;
+  } catch {
+    return null;
+  }
+}
+
+// ─── LID → PHONE RESOLVER (Z-API) ──────────────────────────────────────
+// Onda 61: WhatsApp introduziu LIDs (Linked IDs) — IDs anonimos por chat
+// que escondem o telefone real do destinatario em algumas situacoes.
+// Quando o corretor responde direto pelo celular pra um contato cujo
+// telefone esta protegido pelo LID, o webhook chega com:
+//   { phone: "267628706820335@lid", fromMe: true, chatName: "Sara", ... }
+// Sem resolver pra "556293323087", o parser descartava (filtro @lid) e
+// a mensagem virava invisivel no CRM.
+//
+// Z-API expoe GET /chats/{lid}@lid → { name, phone, lid, ... }
+// Cache 24h em memoria (LIDs sao estaveis por chat).
+const _lidPhoneCache = new Map<string, { phone: string; ts: number }>();
+const LID_PHONE_TTL = 24 * 60 * 60 * 1000;
+
+export async function fetchPhoneFromLid(channel: Channel2, lid: string): Promise<string | null> {
+  const cleanLid = String(lid).replace(/@lid$/, '').trim();
+  if (!cleanLid) return null;
+  const cacheKey = `${channel.id}:${cleanLid}`;
+  const cached = _lidPhoneCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts) < LID_PHONE_TTL) return cached.phone;
+  try {
+    const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+    if (!creds.instanceId || !creds.token) return null;
+    const u = url(creds, `/chats/${encodeURIComponent(cleanLid + '@lid')}`);
+    const r = await fetch(u, { headers: headers(creds), signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const j: any = await r.json().catch(() => ({}));
+    const phone = String(j?.phone || '').replace(/\D/g, '');
+    if (!phone) return null;
+    _lidPhoneCache.set(cacheKey, { phone, ts: Date.now() });
+    return phone;
+  } catch (err: any) {
+    logger.warn('[zapi.fetchPhoneFromLid] failed:', err?.message);
+    return null;
+  }
+}
+
+// ─── PROFILE PICTURE (Z-API) ────────────────────────────────────────────
+// GET /instances/{instance}/token/{token}/profile-picture/{phone}
+// Retorna { link: string } ou {} se a pessoa nao tem foto/foto privada.
+export async function fetchProfilePicture(channel: Channel2, phone: string): Promise<string | null> {
+  try {
+    const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+    if (!creds.instanceId || !creds.token) return null;
+    const cleanPhone = String(phone).replace(/\D/g, '');
+    if (!cleanPhone) return null;
+    const u = url(creds, `/profile-picture?phone=${encodeURIComponent(cleanPhone)}`);
+    const r = await fetch(u, { method: 'GET', headers: headers(creds), signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const j: any = await r.json().catch(() => ({}));
+    return (typeof j?.link === 'string' && j.link.startsWith('http')) ? j.link : null;
+  } catch (err: any) {
+    logger.warn('[zapi.fetchProfilePicture] failed:', err?.message);
+    return null;
+  }
+}
+
+// ─── AUTO-CONFIGURE WEBHOOKS ON Z-API ──────────────────────────────────
+// Sem isso, o user tinha que ir no painel da Z-API e colar manualmente
+// a URL do webhook. Resultado: clientes salvavam o canal achando que tava
+// pronto, mandavam msg pro numero, NADA chegava no CRM (porque a Z-API
+// nao sabia pra onde mandar). Bug silencioso.
+//
+// Z-API tem ~6 endpoints de webhook configuraveis. Setamos TODOS pra
+// apontarem pro System Clow — assim qualquer evento que a Z-API
+// gerar (recebido/entregue/status/desconexao/etc) chega aqui e e
+// processado ou ignorado pelo parseWebhook (que so liberta
+// ReceivedCallback). Por que setar todos:
+//   1. evita que sobrem URLs antigas (n8n, etc) pegando eventos
+//   2. centraliza o ponto unico de processamento
+//   3. system clow ignora eventos que nao precisa
+// Endpoints:
+//   - update-webhook-received                     → msg recebida
+//   - update-webhook-delivery                     → confirmacao entrega
+//   - update-webhook-message-status               → lido/entregue/erro
+//   - update-webhook-connection-status            → connected/disconnected
+//   - update-webhook-presence-chat                → digitando/online
+//   - update-webhook-receive-all-notifications    → eco de outbound (parser filtra)
+async function setZapiWebhook(creds: ZapiCreds, endpoint: string, webhookUrl: string): Promise<{ ok: boolean; status?: number; error?: string }> {
+  try {
+    const u = url(creds, '/' + endpoint);
+    const r = await fetch(u, {
+      method: 'PUT',
+      headers: headers(creds),
+      body: JSON.stringify({ value: webhookUrl }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      return { ok: false, status: r.status, error: txt.slice(0, 200) };
+    }
+    return { ok: true, status: r.status };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'unknown' };
+  }
+}
+
+export interface AutoConfigResult {
+  ok: boolean;
+  configured: string[]; // endpoints que setaram com sucesso
+  failed: { endpoint: string; error: string }[];
+}
+
+/**
+ * Configura todos os webhooks do Z-API pra apontar pra URL canonical
+ * do canal (`/webhooks/crm/zapi/<webhookSecret>`). Idempotente.
+ *
+ * @param channel canal completo (com credentialsEncrypted)
+ * @param baseUrl URL pública do System Clow (ex: https://system-clow.pvcorretor01.com.br)
+ */
+export async function autoConfigureWebhooks(
+  channel: Channel2,
+  baseUrl: string,
+): Promise<AutoConfigResult> {
+  const creds = decryptJson<ZapiCreds>(channel.credentialsEncrypted);
+  const webhookUrl = baseUrl.replace(/\/$/, '') + '/webhooks/crm/zapi/' + channel.webhookSecret;
+  const endpoints = [
+    'update-webhook-received',
+    'update-webhook-delivery',
+    'update-webhook-message-status',
+    'update-webhook-connection-status',
+    'update-webhook-presence-chat',
+    'update-webhook-receive-all-notifications',
+  ];
+  const result: AutoConfigResult = { ok: true, configured: [], failed: [] };
+  for (const ep of endpoints) {
+    const r = await setZapiWebhook(creds, ep, webhookUrl);
+    if (r.ok) {
+      result.configured.push(ep);
+      logger.info(`[zapi.autoConfig] ✓ ${ep} → ${webhookUrl}`);
+    } else {
+      result.failed.push({ endpoint: ep, error: r.error || 'http_' + r.status });
+      result.ok = false;
+      logger.warn(`[zapi.autoConfig] ✗ ${ep}: ${r.error || 'http_' + r.status}`);
+    }
+  }
+
+  // Onda 61: setar URLs nao basta. Z-API tem um TOGGLE separado que precisa
+  // estar ligado pra disparar webhook quando o numero conectado envia
+  // mensagem (seja via API ou via app/celular do corretor). Sem isso,
+  // mensagens fromMe=true NUNCA chegam — o CRM fica cego pra qualquer
+  // resposta que o usuario manda direto pelo celular.
+  try {
+    const u = url(creds, '/update-notify-sent-by-me');
+    const r = await fetch(u, {
+      method: 'PUT', headers: headers(creds),
+      body: JSON.stringify({ value: true }),
+    });
+    const txt = await r.text().catch(() => '');
+    if (r.ok && txt.includes('"value":true')) {
+      result.configured.push('update-notify-sent-by-me');
+      logger.info('[zapi.autoConfig] ✓ update-notify-sent-by-me=true');
+    } else {
+      result.failed.push({ endpoint: 'update-notify-sent-by-me', error: `http_${r.status}: ${txt.slice(0,100)}` });
+      result.ok = false;
+      logger.warn(`[zapi.autoConfig] ✗ update-notify-sent-by-me: ${txt.slice(0,100)}`);
+    }
+  } catch (err: any) {
+    result.failed.push({ endpoint: 'update-notify-sent-by-me', error: err?.message || 'unknown' });
+    result.ok = false;
+  }
+
+  return result;
 }

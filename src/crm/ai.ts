@@ -14,6 +14,7 @@
 
 import { randomBytes } from 'crypto';
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 function nid(): string { return 'crm_ai_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -393,7 +394,7 @@ function gatherCardContext(tenantId: string, cardId: string): any {
     ? (db.prepare('SELECT id, name, email, phone FROM crm_contacts WHERE id = ? AND tenant_id = ?').get(card.contact_id, tenantId) as any)
     : null;
   const recentActivities = db.prepare(
-    'SELECT id, type, channel, direction, content, created_at FROM crm_activities WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC LIMIT 20'
+    'SELECT id, type, channel, direction, content, created_at FROM crm_activities WHERE tenant_id = ? AND card_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 20'
   ).all(tenantId, cardId) as any[];
   const proposals = db.prepare(
     'SELECT id, version, status, viewed_count FROM crm_proposals WHERE tenant_id = ? AND card_id = ? ORDER BY version DESC'
@@ -428,7 +429,7 @@ async function callLLM(system: string, user: string, maxTokens: number): Promise
       signal: AbortSignal.timeout(30_000),
     });
     if (!r.ok) {
-      console.warn('[ai] LLM http', r.status);
+      logger.warn('[ai] LLM http', r.status);
       return null;
     }
     const data = await r.json() as any;
@@ -441,7 +442,7 @@ async function callLLM(system: string, user: string, maxTokens: number): Promise
     }
     return { content: String(content).trim(), model };
   } catch (err: any) {
-    console.warn('[ai] LLM call failed:', err?.message);
+    logger.warn('[ai] LLM call failed:', err?.message);
     return null;
   }
 }
@@ -467,7 +468,7 @@ export async function tickAutoScore(limit = 10): Promise<{ scored: number }> {
       classifyLead(r.tenant_id, r.id);
       sentimentForCard(r.tenant_id, r.id);
       scored++;
-    } catch (err: any) { console.warn('[ai auto-score]', r.id, err.message); }
+    } catch (err: any) { logger.warn('[ai auto-score]', r.id, err.message); }
   }
   return { scored };
 }

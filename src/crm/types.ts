@@ -45,6 +45,221 @@ export interface BoardColumn {
   autoRule?: { trigger: string; action: string; params?: Record<string, unknown> } | null;
   isTerminal?: boolean; // e.g. won/lost — closes the deal
   createdAt: number;
+  // ── Onda 62: Multi-agent funnel (migration 004) ───────────────────
+  // Agente IA por coluna do Kanban. agentEnabled=false por padrão —
+  // nada responde cliente sem ativacao explicita do corretor via UI.
+  // agentName eh override opcional da persona (default: tenant.personaName).
+  agentEnabled?: boolean;
+  agentName?: string;
+  agentSystemPrompt?: string;
+  agentRole?: ColumnAgentRole;
+  agentPromoteToColumnId?: string;
+  agentInactivityTimeoutMinutes?: number;
+  agentMaxTurns?: number;
+  agentActiveHoursStart?: string; // 'HH:MM'
+  agentActiveHoursEnd?: string;   // 'HH:MM'
+  agentPromotionCriteria?: string; // texto livre exibido pro agente
+  // ── PR 7.0: funil v2 timer-driven (migration 011) ─────────────────
+  /** Role do agente no novo enum v2. Mapeado no Hydrate de coluna. */
+  agentRoleType?: ColumnAgentRole;
+  /** Quantos minutos esperar apos card chegar na coluna pra disparar o
+   *  agente (entry trigger). 0 = dispara so quando cliente manda msg.
+   *  Ex: 5 = espera 5min depois que card foi promovido. */
+  agentEntryDelayMinutes?: number;
+  /** Steps de cobranca pra cliente que nao respondeu apos bot mandar msg.
+   *  JSON array de minutos. Ex: [30, 120, 360] = 30min, 2h, 6h. */
+  agentNoResponseChaseStepsJson?: string;
+  /** Steps de followup escalonados quando card esta na coluna Follow Up.
+   *  JSON array de horas. Ex: [24, 48, 72]. */
+  agentFollowupStepsHoursJson?: string;
+  // ── Onda 63: Resposta em audio (TTS) por coluna (migration 014) ──
+  /** Quando true, runner gera audio TTS se cliente mandou audio (mirror).
+   *  Bot mantem texto pra cliente que escreveu em texto. */
+  agentVoiceEnabled?: boolean;
+  /** Voz OpenAI: alloy, echo, fable, onyx, nova, shimmer. Default 'nova'. */
+  agentVoiceId?: string;
+}
+
+// PR 7.0: funil v2 timer-driven. 5 roles:
+//   qualificador  — acolhe + identifica (Lead novo)
+//   cotador       — manda cotação SulAmerica (Qualificado, timer 5min)
+//   vendedor      — fecha venda (Vendedor, timer 4min + chase 30/120/360)
+//   coletor       — coleta 17 campos LGPD (Coletar Dados, chase 30/120/360)
+//   followupper   — recupera lead morno (Follow Up, steps 24/48/72h + delete 96h)
+// Migration 011 renomeia rows existentes (vendedor_funeral → vendedor,
+// coletor_dados → coletor). Roles antigos mantidos @deprecated pra compat
+// com rows ja persistidos antes da migration rodar.
+export type ColumnAgentRole =
+  | 'qualificador'
+  | 'cotador'
+  | 'vendedor'
+  | 'coletor'
+  | 'followupper'
+  | 'custom'
+  /** @deprecated PR 7.0: renomeado pra 'vendedor'. Migration 011 converte. */
+  | 'vendedor_funeral'
+  /** @deprecated PR 7.0: renomeado pra 'coletor'. Migration 011 converte. */
+  | 'coletor_dados'
+  /** @deprecated PR 6.0: renomeado pra 'vendedor_funeral' → 'vendedor' (PR 7.0). */
+  | 'educador'
+  /** @deprecated PR 6.0: renomeado pra 'coletor_dados' → 'coletor' (PR 7.0). */
+  | 'finalizador'
+  /** @deprecated PR 5.2: substituido por 'educador' → 'vendedor'. */
+  | 'closer';
+
+// ── Card agent state (1:1 com card) ────────────────────────────────
+// Persiste estado de funcionamento do agente por card: turnos ja
+// trocados, timestamps pra timer de inatividade, dados estruturados ja
+// coletados pela conversa, e log historico de promocoes entre colunas.
+export type CardAgentStatus =
+  | 'active'      // bot ativo, conversando
+  | 'paused'      // pausado por pausa manual
+  | 'stuck'       // max_turns atingido — preso aguardando intervencao humana
+  | 'escalated'   // escalado pra humano (corretor precisa assumir)
+  | 'done';       // funil concluido (chegou em coluna terminal)
+
+export interface CardAgentPromotionEntry {
+  fromColumnId: string;
+  toColumnId: string;
+  fromRole?: ColumnAgentRole;
+  toRole?: ColumnAgentRole;
+  reason: string;
+  at: number;
+}
+
+export interface CardAgentState {
+  cardId: string;
+  columnId: string;
+  currentAgentRole: ColumnAgentRole;
+  turnsCount: number;
+  lastClientMessageAt?: number;
+  lastAgentMessageAt?: number;
+  inactivityTimerAt?: number;
+  /** Quantas vezes o timer de inatividade disparou desde ultima resposta
+   *  do cliente. Reseta em recordAgentTurn('client') e em executePromotion.
+   *  Acima de 2, scheduler forca marcar_morno (PR 4). */
+  inactivityFireCount?: number;
+  status: CardAgentStatus;
+  collectedData?: Record<string, unknown>;
+  promotionLog?: CardAgentPromotionEntry[];
+  tenantId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Agent metrics (append-only event log) ──────────────────────────
+// Cada evento relevante do funil grava uma linha. Lido pelo dashboard
+// de metricas no PR 7. NAO usado pra logica de runtime — somente
+// analytics.
+export type AgentMetricEvent =
+  | 'executed'           // turno do agente rodou e respondeu cliente
+  | 'blocked'            // turno bloqueado (out_of_hours / max_turns / anti_loop / no_agent)
+  | 'locked_out'         // outro worker ja estava processando esta msg
+  | 'promoted'           // card avancou pra proxima coluna (PR 3)
+  | 'lost'               // marcado como perdido (PR 3)
+  | 'escalated'          // escalado pra humano (PR 3)
+  | 'stuck'              // max_turns atingido sem progresso
+  | 'inactive_timeout'   // timer de inatividade disparou (PR 4)
+  | 'tool_called'        // PR 3: agente chamou uma tool com sucesso
+  | 'tool_failed'        // PR 3: tool falhou (validacao, permissao, erro)
+  | 'tool_loop_max'      // PR 3: bateu o limite de iteracoes LLM↔tool
+  | 'tts_sent'           // Onda 63: resposta enviada como audio TTS
+  | 'tts_failed';        // Onda 63: TTS falhou (api/save) → fallback texto
+
+// ── Tenant plans (PR 5 — gerar_cotacao plugado) ────────────────────
+export type ProductType =
+  | 'funeral' | 'vida' | 'saude' | 'auto' | 'residencial'
+  | 'acidentes_pessoais' // PR 5.1: Plano Funeral SulAmérica
+  | 'outro';
+
+export interface TenantPlan {
+  id: string;
+  tenantId: string;
+  name: string;
+  productType: ProductType;
+  basePriceCents: number;
+  coverageSummary: string;
+  minAge?: number;
+  maxAge?: number;
+  allowsDependents: boolean;
+  additionalPerDependentCents: number;
+  surchargeOutsideRioCents: number;
+  active: boolean;
+  priority: number;
+  createdAt: number;
+  updatedAt: number;
+  metadata?: Record<string, unknown>;
+}
+
+/** Dados que o cotador usa pra calcular o preco. Vem de
+ *  state.collected_data.qualification + extras passados pela tool.
+ *  PR 5.1: estrutura ajustada pra SDR Plano Funeral SulAmérica. */
+export type Modalidade = 'individual' | 'casal' | 'familiar' | 'familiar_ampliado';
+
+export interface QualificationData {
+  /** Nome do titular (primeiro nome ou social — sem PII forte). */
+  nomeTitular?: string;
+  /** Idade do titular. Regra SulAmerica: titular precisa ter <= 74. */
+  idadeTitular?: number;
+  /** Modalidade derivada da composicao familiar. */
+  modalidade?: Modalidade;
+  /** Conjuge (se aplicavel). */
+  conjuge?: { idade?: number };
+  /** Filhos com idade <= 21 (entram no plano Familiar sem custo extra). */
+  filhosMenores21?: Array<{ idade: number }>;
+  /** Filhos com idade > 21 (cada um adiciona R$ 8 ao base). */
+  filhosMaiores21?: Array<{ idade: number }>;
+  /** Tem pais como dependentes? Forca modalidade Familiar Ampliado. */
+  pais?: boolean;
+  /** Tem sogros como dependentes? Forca modalidade Familiar Ampliado. */
+  sogros?: boolean;
+  /** Outros dependentes alem dos categorizados (cada um +R$ 10). */
+  dependentesExtras?: number;
+  /** Cliente demonstrou interesse real (nao "tô só vendo"). */
+  intencaoReal?: boolean;
+  /** Pra SulAmerica eh sempre 'acidentes_pessoais'. Pre-PR-5.1 era 'funeral'. */
+  tipoPlano?: string;
+  /** DEPRECATED — mantido pra back-compat com dados ja salvos no DB. */
+  idade?: number;
+  composicaoFamiliar?: string;
+  numeroDependentes?: number;
+  regiao?: 'rio' | 'fora_do_rio' | 'desconhecida';
+}
+
+/** Resultado do calculo de preco pra um plano. */
+export interface PricedPlan {
+  plan: TenantPlan;
+  basePriceCents: number;          // preco para regiao 'rio'
+  outsideRioPriceCents?: number;   // preco fora do rio (com surcharge), se aplicavel
+  rejectedReason?: string;         // 'max_age_exceeded' | 'min_age_below' | etc
+  eligible: boolean;
+}
+
+/** Snapshot da cotacao salvo em collected_data.last_quotation. */
+export interface QuotationSnapshot {
+  productType: ProductType;
+  region: 'rio' | 'fora_do_rio' | 'desconhecida';
+  customerName?: string;
+  qualification: QualificationData;
+  plans: Array<{
+    name: string;
+    coverageSummary: string;
+    basePriceCents: number;
+    outsideRioPriceCents?: number;
+  }>;
+  calculatedAt: number;
+}
+
+export interface AgentMetric {
+  id: string;
+  tenantId: string;
+  columnId: string;
+  cardId: string;
+  event: AgentMetricEvent;
+  reason?: string;
+  durationInColumnSeconds?: number;
+  turnsInColumn?: number;
+  occurredAt: number;
 }
 
 // ONDA 1 - Contatos Pro: Segments e bulk ops
@@ -152,6 +367,25 @@ export interface Card {
   // Onda 48
   unreadCount?: number;
   lastInboundAt?: number;
+  // PR 7.0: timer-driven funnel (migration 011)
+  /** Timestamp da ultima msg do bot (any role). Reseta a cada bot.send. */
+  lastBotMessageAt?: number;
+  /** Timestamp da ultima msg do cliente. Reseta chase quando cliente responde. */
+  lastClientMessageAt?: number;
+  /** Quando card move pra Follow Up, salva ID da coluna de origem pra
+   *  poder voltar pra Vendedor (sempre voltam pra Vendedor por design). */
+  followupOriginColumnId?: string;
+  /** Timestamp do ultimo column move (pra calcular tempo na coluna). */
+  columnChangedAt?: number;
+}
+
+// PR 7.0: tags estruturadas em crm_card_tags. Usadas pra evitar disparar
+// chase/followup steps duplicados, e pra dashboard de funil.
+export interface CardTag {
+  cardId: string;
+  tag: string;
+  appliedAt: number;
+  appliedBy?: string; // 'system' ou role do agente
 }
 
 export interface Activity {
@@ -196,6 +430,9 @@ export interface Channel2 {
   webhookSecret?: string;
   lastInboundAt?: number;
   createdAt: number;
+  /** Quando true, parseWebhook aceita self-msgs (phone == numero conectado)
+   *  com fromMe=true. Usado pra relay de site externo via Z-API da PV. */
+  allowSelfChat?: boolean;
 }
 
 export interface Subscription {
@@ -211,6 +448,9 @@ export interface Subscription {
   remindersSent: number;
   createdAt: number;
   cancelledAt?: number;
+  /** Timestamp do último markPaid. Permite a UI distinguir
+   *  "sub paga nesse ciclo" de "aguardando pagamento". */
+  lastPaidAt?: number;
 }
 
 export interface Automation {

@@ -23,6 +23,7 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { MarketplaceClient } from './MarketplaceClient.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ export class PluginBlocklist {
 
       return this.blocked.size;
     } catch (err) {
-      console.warn(`[PluginBlocklist] Refresh failed: ${(err as Error).message}`);
+      logger.warn(`[PluginBlocklist] Refresh failed: ${(err as Error).message}`);
       return this.blocked.size;
     }
   }

@@ -14,6 +14,7 @@ import {
   handlePostToolUse,
   handleSessionEnd,
 } from './hooks/MemoryHookHandlers.js';
+import { logger } from '../utils/logger.js';
 
 // Track initialization per tenant
 const initialized = new Set<string>();
@@ -40,9 +41,9 @@ export async function initMemorySystem(
     }
 
     initialized.add(tenantId);
-    console.log(`[Memory] Initialized persistent memory for tenant: ${tenantId}`);
+    logger.info(`[Memory] Initialized persistent memory for tenant: ${tenantId}`);
   } catch (err) {
-    console.warn(`[Memory] Failed to initialize: ${(err as Error).message}`);
+    logger.warn(`[Memory] Failed to initialize: ${(err as Error).message}`);
     // Non-fatal — system works without memory
   }
 }

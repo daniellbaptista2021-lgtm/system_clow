@@ -28,6 +28,7 @@ import { shouldAutoCompact, getTokenWarningState } from '../utils/compact/autoCo
 import { compactConversation } from '../utils/compact/compact.js';
 import { classifyError, type ErrorType } from '../utils/retry/retry.js';
 import type { AggregatedHookResult } from '../hooks/types.js';
+import { logger } from '../utils/logger.js';
 
 // New modular subsystems
 import { MessageState, BoundedUUIDSet } from './messageState.js';
@@ -255,7 +256,7 @@ export class QueryEngine {
         const currentMessages = this.state.snapshot().map(this.toApiMessage);
         const toolsForThisCall = this.forceNoTools ? [] : this.config.tools;
         if (this.forceNoTools) {
-          console.log('[hard-dedupe] forceNoTools=true -> enviando sem tools pra forcar resposta textual');
+          logger.info('[hard-dedupe] forceNoTools=true -> enviando sem tools pra forcar resposta textual');
         }
 
         for await (const chunk of callModel(
@@ -415,21 +416,25 @@ export class QueryEngine {
                 ? (validInput as any).pattern
                 : JSON.stringify(validInput).slice(0, 80);
             this.sessionBlockedTotal++;
-            console.warn('[hard-dedupe] BLOQUEADO ' + tool.name + '(' + inputPreview + ') — ja chamado ' + prevCount + 'x | turno=' + blockedInThisTurn + ' | sessao=' + this.sessionBlockedTotal);
+            logger.warn('[hard-dedupe] BLOQUEADO ' + tool.name + '(' + inputPreview + ') — ja chamado ' + prevCount + 'x | turno=' + blockedInThisTurn + ' | sessao=' + this.sessionBlockedTotal);
             this.pushToolResult(
               toolCall.id,
               '⚠️ VOCE JA LEU ESSE RECURSO NESTA CONVERSA ('+prevCount+'x antes). O conteudo esta no historico acima. PARE de re-ler e RESPONDA agora com base no que voce ja tem. Nao chame mais Read/Glob/Grep — vá direto pra resposta escrita.',
               true,
             );
             blockedInThisTurn++;
-            // KILL SWITCH pt1: se 3+ bloqueios no mesmo turno, proxima API call nao envia tools
-            if (blockedInThisTurn >= 3) {
-              console.warn('[hard-dedupe] KILL SWITCH turno: 3+ bloqueios — proxima call sem tools, forca resposta textual');
+            // Thresholds ajustaveis por env pra workloads diferentes
+            // (defaults preservam o comportamento historico 3/8).
+            const turnKillThreshold = Number(process.env.CLOW_DEDUPE_TURN_KILL || 3);
+            const sessionKillThreshold = Number(process.env.CLOW_DEDUPE_SESSION_KILL || 8);
+            // KILL SWITCH pt1: N+ bloqueios no mesmo turno, proxima API call nao envia tools
+            if (blockedInThisTurn >= turnKillThreshold) {
+              logger.warn(`[hard-dedupe] KILL SWITCH turno: ${blockedInThisTurn} bloqueios (limite ${turnKillThreshold}) — proxima call sem tools, forca resposta textual`);
               this.forceNoTools = true;
             }
-            // KILL SWITCH pt2: sessao inteira com 8+ bloqueios — aborta submitMessage
-            if (this.sessionBlockedTotal >= 8) {
-              console.warn('[hard-dedupe] KILL SWITCH sessao: ' + this.sessionBlockedTotal + ' bloqueios — abortando submitMessage');
+            // KILL SWITCH pt2: sessao inteira com N+ bloqueios — aborta submitMessage
+            if (this.sessionBlockedTotal >= sessionKillThreshold) {
+              logger.warn('[hard-dedupe] KILL SWITCH sessao: ' + this.sessionBlockedTotal + ' bloqueios — abortando submitMessage');
               yield { type: 'result', subtype: 'tool_loop_aborted', content: 'Loop de leituras detectado. Analise interrompida automaticamente pra economizar tokens. Formule a pergunta de forma mais especifica (ex: "analise SO billing.ts") e tente de novo.', cost: this.budget.getTotalCost() } as any;
               return;
             }
@@ -583,7 +588,7 @@ export class QueryEngine {
       }
       for (const tc of toolCalls) {
         if (!resolvedToolIds.has(tc.id)) {
-          console.warn('[safety-net] tool_use ' + tc.id + ' (' + tc.name + ') sem result — pushing error placeholder');
+          logger.warn('[safety-net] tool_use ' + tc.id + ' (' + tc.name + ') sem result — pushing error placeholder');
           this.pushToolResult(tc.id, 'Error: tool execution did not produce a result (safety net)', true);
         }
       }

@@ -22,6 +22,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { hashWorkspace } from './workspaceHash.js';
 import type { SessionMetadata, SessionStatus } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ export class SessionIndex {
         }
       }
     } catch (err) {
-      console.warn(`[SessionIndex] Failed to load: ${(err as Error).message}`);
+      logger.warn(`[SessionIndex] Failed to load: ${(err as Error).message}`);
     }
 
     this.loaded = true;

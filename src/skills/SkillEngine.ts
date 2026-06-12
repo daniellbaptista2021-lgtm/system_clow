@@ -23,6 +23,7 @@ import { SkillRegistry } from './SkillRegistry.js';
 import { SkillContextProvider } from './SkillContextProvider.js';
 import { SkillReferenceLoader } from './SkillReferenceLoader.js';
 import type { ParsedSkill, SkillInjectionResult, SkillReference, SkillContext, SkillMatchResult } from './types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export class SkillEngine {
     this.stats.discoveryTimeMs = Date.now() - startTime;
 
     if (skills.length > 0 && process.env.CLOW_QUIET_BOOTSTRAP !== '1') {
-      console.log(`[SkillEngine] Discovered ${skills.length} skills in ${this.stats.discoveryTimeMs}ms`);
+      logger.info(`[SkillEngine] Discovered ${skills.length} skills in ${this.stats.discoveryTimeMs}ms`);
     }
   }
 

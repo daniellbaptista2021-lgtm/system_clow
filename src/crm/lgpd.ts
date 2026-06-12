@@ -11,6 +11,7 @@
 
 import { randomBytes } from 'crypto';
 import { getCrmDb } from './schema.js';
+import { logger } from '../utils/logger.js';
 
 function nid(prefix: string): string { return prefix + '_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -297,7 +298,7 @@ export function processScheduledDeletions(): number {
       db.prepare("UPDATE crm_deletion_requests SET status = 'completed', completed_at = ? WHERE id = ?").run(now(), req.id);
       if (result.ok) processed++;
     } catch (err: any) {
-      console.warn('[lgpd deletion]', req.id, err.message);
+      logger.warn('[lgpd deletion]', req.id, err.message);
     }
   }
   return processed;
@@ -399,7 +400,7 @@ export function processRetentionPolicies(): { processed: Record<string, number> 
           }
         }
       }
-    } catch (err: any) { console.warn('[lgpd retention]', pol.entity, err.message); }
+    } catch (err: any) { logger.warn('[lgpd retention]', pol.entity, err.message); }
   }
   return { processed };
 }

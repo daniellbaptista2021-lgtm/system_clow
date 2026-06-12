@@ -28,6 +28,7 @@ import { fileURLToPath } from 'url';
 import { PluginLoader } from '../PluginLoader.js';
 import type { LoadedPlugin } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ESM-compat: __dirname/__filename nao existem em ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -209,12 +210,12 @@ export class BuiltinDiscovery {
         if (plugins.length >= MAX_BUILTIN_PLUGINS) break;
       }
     } catch (err) {
-      console.warn(`[BuiltinDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
+      logger.warn(`[BuiltinDiscovery] Failed to scan ${dir}: ${(err as Error).message}`);
     }
 
     const elapsed = Date.now() - startTime;
     if (plugins.length > 0) {
-      console.log(`[BuiltinDiscovery] Found ${plugins.length} built-in plugins in ${elapsed}ms`);
+      logger.info(`[BuiltinDiscovery] Found ${plugins.length} built-in plugins in ${elapsed}ms`);
     }
 
     this.cachedPlugins = plugins;
@@ -300,7 +301,7 @@ export class BuiltinDiscovery {
     this.hotReloadTimer = setInterval(async () => {
       if (this.hotReloadCycles >= MAX_HOT_RELOAD_CYCLES) {
         this.stopHotReload();
-        console.warn('[BuiltinDiscovery] Hot-reload stopped: maximum cycle count reached');
+        logger.warn('[BuiltinDiscovery] Hot-reload stopped: maximum cycle count reached');
         return;
       }
       this.hotReloadCycles++;

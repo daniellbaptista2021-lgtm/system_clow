@@ -20,6 +20,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { SkillReference } from './types.js';
 import { MAX_REFERENCE_FILE_SIZE } from './types.js';
+import { logger } from '../utils/logger.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export class SkillReferenceLoader {
       // Check size
       const stat = await fsp.stat(ref.path);
       if (stat.size > MAX_REFERENCE_FILE_SIZE) {
-        console.warn(`[SkillReferenceLoader] Reference too large: ${ref.path} (${stat.size} bytes)`);
+        logger.warn(`[SkillReferenceLoader] Reference too large: ${ref.path} (${stat.size} bytes)`);
         this.stats.totalSkipped++;
         return ref;
       }
@@ -85,7 +86,7 @@ export class SkillReferenceLoader {
 
       return loaded;
     } catch (err) {
-      console.warn(`[SkillReferenceLoader] Failed to load ${ref.path}: ${(err as Error).message}`);
+      logger.warn(`[SkillReferenceLoader] Failed to load ${ref.path}: ${(err as Error).message}`);
       this.stats.totalSkipped++;
       return ref;
     }

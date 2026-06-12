@@ -15,6 +15,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import { getCrmDb } from './schema.js';
 import { sendEmail } from '../notifications/mailer.js';
 import { sendOutbound } from './inbox.js';
+import { logger } from '../utils/logger.js';
 
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
 export type CalProvider = 'google' | 'outlook' | 'caldav' | 'ics';
@@ -510,7 +511,7 @@ export async function tickReminders(): Promise<void> {
       await sendAppointmentReminder(appt);
       db.prepare('UPDATE crm_appointments SET reminder_fired_at = ? WHERE id = ?').run(now, appt.id);
     } catch (err: any) {
-      console.warn('[cal reminder]', appt.id, err?.message);
+      logger.warn('[cal reminder]', appt.id, err?.message);
       // Still mark fired to avoid tight-loop retries
       db.prepare('UPDATE crm_appointments SET reminder_fired_at = ? WHERE id = ?').run(now, appt.id);
     }

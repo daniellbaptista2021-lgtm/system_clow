@@ -428,7 +428,9 @@ export function bulkCardAction(tenantId: string, op: BulkCardAction): BulkResult
               .run(op.valueCents ?? 0, now(), id, tenantId);
             break;
           case 'delete':
-            db.prepare('DELETE FROM crm_cards WHERE id = ? AND tenant_id = ?').run(id, tenantId);
+            // Soft delete (preserva crm_activities — cascade do FK destruiria histórico)
+            db.prepare('UPDATE crm_cards SET deleted_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL')
+              .run(now(), now(), id, tenantId);
             break;
           case 'archive':
             // archive via custom_fields_json archived=true

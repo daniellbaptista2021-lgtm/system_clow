@@ -27,6 +27,7 @@ import { gitClone, gitPull, gitGetHash, isGitRepo, npmInstall, safeRemoveDir, cr
 import { InstallationState } from './InstallationState.js';
 import type { InstallationResult, PluginValidationError } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export class GitInstaller {
           npmInstall(pluginRoot);
         } catch (err) {
           // npm install failure is a warning, not fatal
-          console.warn(`[GitInstaller] npm install warning: ${(err as Error).message}`);
+          logger.warn(`[GitInstaller] npm install warning: ${(err as Error).message}`);
         }
       }
 

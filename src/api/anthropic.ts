@@ -9,6 +9,7 @@ import { addCost, addAPIDuration, setLastAPIRequestTimestamp, setLastApiCompleti
 import type { Tool } from '../tools/Tool.js';
 import { withRetry } from '../utils/retry/retry.js';
 import stringify from 'json-stable-stringify';
+import { logger } from '../utils/logger.js';
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -104,8 +105,19 @@ function getAnthropicConfig(): AnthropicConfig {
   return config;
 }
 
+const _unknownModelWarned = new Set<string>();
+
 function getPricing(model: string) {
-  return PRICING[model] ?? PRICING[DEFAULT_MODEL];
+  const p = PRICING[model];
+  if (p) return p;
+  // Fallback pro preco do GLM e correto neste deploy (LiteLLM mapeia
+  // qualquer alias claude-* pra openrouter/z-ai/glm-5.1), mas avisa uma
+  // vez por modelo pra erro de configuracao nao passar batido no custo.
+  if (!_unknownModelWarned.has(model)) {
+    _unknownModelWarned.add(model);
+    logger.warn(`[pricing] modelo "${model}" sem entrada na tabela PRICING — usando preco de ${DEFAULT_MODEL} como fallback`);
+  }
+  return PRICING[DEFAULT_MODEL];
 }
 
 function calculateCost(model: string, usage: ModelUsage): CacheMetrics {
@@ -319,7 +331,7 @@ function convertToAnthropicMessages(messages: ClovMessage[]): any[] {
 
   // Validate: no pending tool_use without tool_result
   if (pendingToolUseIds.size > 0) {
-    console.warn(`Warning: ${pendingToolUseIds.size} tool_use(s) without corresponding tool_result: ${Array.from(pendingToolUseIds).join(', ')}`);
+    logger.warn(`Warning: ${pendingToolUseIds.size} tool_use(s) without corresponding tool_result: ${Array.from(pendingToolUseIds).join(', ')}`);
   }
 
   return converted;

@@ -16,7 +16,9 @@
  * Scheduler rotates it on month boundary (or on stripe invoice.paid event).
  */
 
-import { getTenant, updateTenant, listTenants } from '../tenancy/tenantStore.js';
+import { getTenant, updateTenant, listTenants, mutateTenant } from '../tenancy/tenantStore.js';
+import type { Tenant } from '../tenancy/tenantStore.js';
+import { logger } from '../utils/logger.js';
 
 export const PLAN_LIMITS: Record<string, { messages: number; flows: number; contacts: number; boards: number; automations: number; users: number; channels: number; overage_cents_per_msg: number }> = {
   starter:      { messages: 500,    flows: 1, contacts: 500,    boards: 2,  automations: 5,   users: 1,  channels: 1,  overage_cents_per_msg: 20 },
@@ -40,47 +42,55 @@ export interface QuotaCheck {
 }
 
 /**
- * Check quota + increment counter atomically.
- * Returns allowed=true until hard_limit (2× plan limit). After plan limit,
- * each extra message bills overage. Beyond 2× hard limit, blocks.
+ * Check quota + increment counter atomically. Cluster-safe: the entire
+ * read-check-write happens under one tenants.json file lock so two
+ * workers can't both pass the limit check at current=N-1 and both
+ * write current=N (which would under-count, effectively doubling the
+ * plan limit).
+ *
+ * Allowed until hard_limit (2× plan). Between plan and 2× plan each
+ * extra message bills overage. Beyond 2× hard limit, blocks.
  */
 export function checkAndIncrementMessageQuota(tenantId: string): QuotaCheck {
-  const tenant: any = getTenant(tenantId);
-  if (!tenant) {
-    return { allowed: false, reason: 'tenant_not_found', current: 0, limit: 0, remaining: 0, overage_msgs: 0, overage_cost_cents: 0, tier: 'none' };
-  }
-  if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
-    return { allowed: false, reason: 'tenant_suspended', current: 0, limit: 0, remaining: 0, overage_msgs: 0, overage_cost_cents: 0, tier: tenant.tier };
-  }
+  const result = mutateTenant(tenantId, (tenant: Tenant): QuotaCheck => {
+    if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+      return { allowed: false, reason: 'tenant_suspended', current: 0, limit: 0, remaining: 0, overage_msgs: 0, overage_cost_cents: 0, tier: tenant.tier };
+    }
 
-  const tier = String(tenant.tier || 'starter');
-  const planLimits = PLAN_LIMITS[tier] || PLAN_LIMITS.starter;
-  const limit = planLimits.messages;
-  const hardLimit = limit * 2; // allow 100% overage then block
+    const tier = String(tenant.tier || 'starter');
+    const planLimits = PLAN_LIMITS[tier] || PLAN_LIMITS.starter;
+    const limit = planLimits.messages;
+    const hardLimit = limit * 2; // allow 100% overage then block
 
-  const current = tenant.current_month_messages || 0;
-  const next = current + 1;
+    const current = tenant.current_month_messages || 0;
+    const next = current + 1;
 
-  if (next > hardLimit) {
+    if (next > hardLimit) {
+      return {
+        allowed: false, reason: 'over_hard_limit',
+        current, limit, remaining: 0,
+        overage_msgs: current - limit,
+        overage_cost_cents: Math.max(0, current - limit) * planLimits.overage_cents_per_msg,
+        tier,
+      };
+    }
+
+    // Increment in place — mutator reflects to the locked store snapshot.
+    tenant.current_month_messages = next;
+
+    const overage_msgs = Math.max(0, next - limit);
     return {
-      allowed: false, reason: 'over_hard_limit',
-      current, limit, remaining: 0,
-      overage_msgs: current - limit, overage_cost_cents: Math.max(0, (current - limit)) * planLimits.overage_cents_per_msg,
+      allowed: true,
+      current: next, limit, remaining: Math.max(0, limit - next),
+      overage_msgs,
+      overage_cost_cents: overage_msgs * planLimits.overage_cents_per_msg,
       tier,
     };
+  });
+  if (result === null) {
+    return { allowed: false, reason: 'tenant_not_found', current: 0, limit: 0, remaining: 0, overage_msgs: 0, overage_cost_cents: 0, tier: 'none' };
   }
-
-  // Increment
-  updateTenant(tenantId, { current_month_messages: next } as any);
-
-  const overage_msgs = Math.max(0, next - limit);
-  return {
-    allowed: true,
-    current: next, limit, remaining: Math.max(0, limit - next),
-    overage_msgs,
-    overage_cost_cents: overage_msgs * planLimits.overage_cents_per_msg,
-    tier,
-  };
+  return result;
 }
 
 /** Reset counter (called monthly or on Stripe invoice.paid). */
@@ -135,5 +145,5 @@ export function rotateMonthlyAllTenants(): void {
   for (const t of tenants) {
     resetMonthlyUsage(t.id);
   }
-  console.log(`[quota] rotated monthly counters for ${tenants.length} tenants`);
+  logger.info(`[quota] rotated monthly counters for ${tenants.length} tenants`);
 }

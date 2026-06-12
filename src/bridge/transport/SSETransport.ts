@@ -22,6 +22,7 @@ import {
   TransportDisconnectedError,
 } from '../types.js';
 import { CCRClient } from './CCRClient.js';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -208,7 +209,7 @@ export class SSETransport implements Transport {
         return;
       }
       // eslint-disable-next-line no-console
-      console.error('[SSETransport] Stream read error', err);
+      logger.error('[SSETransport] Stream read error', err);
     } finally {
       reader.releaseLock();
       this.connected = false;
@@ -250,7 +251,7 @@ export class SSETransport implements Transport {
 
     if (eventType === 'error') {
       // eslint-disable-next-line no-console
-      console.error('[SSETransport] Server-sent error event:', data);
+      logger.error('[SSETransport] Server-sent error event:', data);
       return;
     }
 
@@ -261,7 +262,7 @@ export class SSETransport implements Transport {
       parsed = JSON.parse(data) as InboundMessage;
     } catch {
       // eslint-disable-next-line no-console
-      console.error('[SSETransport] Failed to parse SSE data');
+      logger.error('[SSETransport] Failed to parse SSE data');
       return;
     }
 
@@ -270,7 +271,7 @@ export class SSETransport implements Transport {
         handler(parsed);
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[SSETransport] Handler threw', err);
+        logger.error('[SSETransport] Handler threw', err);
       }
     }
   }

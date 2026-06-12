@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
 import type { MediaType } from './types.js';
 
 function getMediaRoot(): string {
@@ -76,6 +77,56 @@ export function saveMedia(tenantId: string, bytes: Buffer, opts: {
     bytes: bytes.length,
     publicUrl: `/v1/crm/media/${tenantId}/${date}/${filename}`,
   };
+}
+
+/**
+ * Normaliza um vídeo para mp4 (H.264 + AAC, faststart) usando ffmpeg.
+ *
+ * Por quê: o navegador grava em formatos que variam por plataforma —
+ * Chrome/Firefox desktop gravam webm/VP8, iPhone manda .mov/HEVC. Nem
+ * todos tocam no WhatsApp do destinatário. Padronizar em mp4/H.264
+ * garante reprodução em qualquer aparelho.
+ *
+ * Retorna `null` em qualquer falha (ffmpeg ausente, timeout, exit≠0) —
+ * o chamador deve cair de volta pro arquivo original, nunca perder a mídia.
+ */
+export async function transcodeVideoToMp4(
+  input: Buffer,
+): Promise<{ bytes: Buffer; mime: string } | null> {
+  const base = path.join(os.tmpdir(), `clow-vid-${randomUUID().replace(/-/g, '')}`);
+  const inPath = `${base}.in`; // ffmpeg detecta o formato pelo conteúdo, extensão é irrelevante
+  const outPath = `${base}.mp4`;
+  try {
+    fs.writeFileSync(inPath, input);
+    await new Promise<void>((resolve, reject) => {
+      const ff = spawn('ffmpeg', [
+        '-y',
+        '-i', inPath,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart',
+        outPath,
+      ], { stdio: 'ignore' });
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) { settled = true; try { ff.kill('SIGKILL'); } catch {} reject(new Error('ffmpeg timeout')); }
+      }, 180_000);
+      ff.on('error', (e) => { if (!settled) { settled = true; clearTimeout(timer); reject(e); } });
+      ff.on('close', (code) => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}`));
+      });
+    });
+    const out = fs.readFileSync(outPath);
+    if (!out.length) return null;
+    return { bytes: out, mime: 'video/mp4' };
+  } catch {
+    return null;
+  } finally {
+    try { fs.unlinkSync(inPath); } catch {}
+    try { fs.unlinkSync(outPath); } catch {}
+  }
 }
 
 export function readMedia(tenantId: string, date: string, filename: string): { bytes: Buffer; mime: string } | null {

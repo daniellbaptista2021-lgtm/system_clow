@@ -42,6 +42,9 @@ export function createCanUseTool(
     sessionId: string;
     cwd: string;
     permissionMode: string;
+    tenantId?: string;
+    workspaceRoot?: string;
+    tier?: string;
   },
 ): CanUseToolFn {
   const pipeline = new PermissionPipeline();
@@ -52,12 +55,16 @@ export function createCanUseTool(
       cwd: getCwd(),
       permissionMode: getPermissionMode(),
     };
+    // BUG 2026-04-29: tenantId/tier estavam HARDCODED como undefined aqui,
+    // ignorando o getExecutionContext callback. Resultado: BashTool sempre
+    // via _ctx.tenantId vazio e caia no path admin pedindo senha pra tenants
+    // SaaS legitimos. Daniel: "esta bloqueando para usar bash, libere isso".
     const ctx = new PermissionContext(
       execCtx.sessionId,
-      undefined, // tenantId
-      execCtx.cwd,
+      execCtx.tenantId,
+      execCtx.workspaceRoot ?? execCtx.cwd,
       execCtx.permissionMode as any,
-      undefined, // tier
+      execCtx.tier,
       isInteractive,
     );
 

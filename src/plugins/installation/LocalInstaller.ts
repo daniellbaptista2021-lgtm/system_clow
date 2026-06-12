@@ -30,6 +30,7 @@ import * as os from 'os';
 import type { InstallationResult, PluginValidationError } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
 import { copyDir, npmInstall, safeRemoveDir, getDirectorySize, formatBytes } from './InstallationHelpers.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -197,7 +198,7 @@ export class LocalInstaller {
           try {
             npmInstall(dest);
           } catch (err) {
-            console.warn(`[LocalInstaller] npm install warning: ${(err as Error).message}`);
+            logger.warn(`[LocalInstaller] npm install warning: ${(err as Error).message}`);
           }
         }
       }
@@ -225,7 +226,7 @@ export class LocalInstaller {
         try {
           await hook(dest, manifest);
         } catch (err) {
-          console.warn(`[LocalInstaller] Post-install hook warning: ${(err as Error).message}`);
+          logger.warn(`[LocalInstaller] Post-install hook warning: ${(err as Error).message}`);
         }
       }
 

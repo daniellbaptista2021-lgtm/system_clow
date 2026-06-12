@@ -59,6 +59,32 @@ const el = (tag, attrs = {}, ...children) => {
 function initials(name) {
   return (name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0] || '').join('').toUpperCase();
 }
+
+// Onda 55: avatar helper — usa foto se existe, fallback iniciais
+function avatarEl(person, opts) {
+  opts = opts || {};
+  const cls = opts.class || 'card-avatar';
+  const url = person?.avatarUrl || person?.avatar_url || null;
+  const name = person?.name || '?';
+  if (url) {
+    return el('img', {
+      class: cls,
+      src: url,
+      alt: name,
+      loading: 'lazy',
+      style: 'object-fit:cover;background:transparent',
+      on: {
+        error: (e) => {
+          // Se a foto falhar (link expirou, 404, CORS), troca pelas iniciais
+          const fallback = el('div', { class: cls }, initials(name));
+          e.currentTarget.replaceWith(fallback);
+        }
+      }
+    });
+  }
+  return el('div', { class: cls }, initials(name));
+}
+
 function fmtMoney(cents) {
   return `R$ ${((cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -124,6 +150,7 @@ async function bootstrap() {
     await api('/init', { method: 'POST' });
     await loadBoards();
     await loadChannels();
+    try { await loadAgents(); } catch { state.agents = []; }
     if (state.boards.length) {
       state.currentBoardId = state.boards[0].id;
       await loadPipeline(state.currentBoardId);
@@ -169,10 +196,21 @@ async function loadChannels() {
   state.channels = r.channels || [];
 }
 
-async function loadContacts(q = '') {
-  const path = q ? `/contacts/search?q=${encodeURIComponent(q)}` : '/contacts?limit=100';
-  const r = await api(path);
-  state.contacts = r.contacts || [];
+async function loadContacts(q = '', page = 1) {
+  const PER_PAGE = 50;
+  state.contactsPage = page;
+  state.contactsQuery = q;
+  if (q) {
+    // Busca: backend retorna ate 25, sem paginacao real (pra simplificar)
+    const r = await api('/contacts/search?q=' + encodeURIComponent(q));
+    state.contacts = r.contacts || [];
+    state.contactsTotal = state.contacts.length;
+  } else {
+    const offset = (page - 1) * PER_PAGE;
+    const r = await api('/contacts?limit=' + PER_PAGE + '&offset=' + offset);
+    state.contacts = r.contacts || [];
+    state.contactsTotal = r.total ?? state.contacts.length;
+  }
 }
 
 async function loadAgents() {
@@ -220,12 +258,16 @@ function renderKanban() {
   for (const col of columns) {
     const cards = cardsByColumn[col.id] || [];
     const colEl = el('div', { class: 'kanban-col', data: { columnId: col.id } },
-      el('div', { class: 'col-head' },
+      el('div', { class: 'col-head', style: 'cursor:pointer', title: 'Botão direito (ou clique longo) para opções da coluna',
+        on: { contextmenu: (e) => { e.preventDefault(); showColumnContextMenu(col, e.clientX, e.clientY); } } },
         el('div', { class: 'col-title' },
           el('span', { class: 'col-color-dot', style: `background:${col.color}` }),
           col.name,
         ),
         el('span', { class: 'col-count' }, String(cards.length)),
+        el('button', { class: 'col-menu-btn', title: 'Opções da coluna',
+          style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:4px 8px;border-radius:6px;margin-left:auto;font-size:18px;line-height:1;font-weight:700',
+          on: { click: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); showColumnContextMenu(col, r.right, r.bottom); } } }, '⋯'),
       ),
       el('div', { class: 'col-body', data: { columnId: col.id } }, ...cards.map(cardEl)),
       el('div', { class: 'col-foot' },
@@ -263,9 +305,30 @@ function cardEl(card) {
   const contact = card.contact || {};
   const over = card.dueDate && card.dueDate < Date.now();
   const c = el('div', { class: 'card', draggable: 'true', data: { cardId: card.id, columnId: card.columnId } },
-    el('div', { class: 'card-title' }, card.title),
+    el('div', { class: 'card-title-row', style: 'display:flex;align-items:flex-start;gap:6px;justify-content:space-between' },
+      el('div', { class: 'card-title', style: 'flex:1;min-width:0' }, card.title),
+      (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge card-wa-badge--inline', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
+        el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="14" height="14" fill="#fff"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
+        el('span', { class: 'wa-count' }, String(card.unreadCount)),
+      ) : null,
+      el('button', {
+        class: 'card-menu-btn',
+        title: 'Opções do card',
+        style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:6px;font-size:16px;line-height:1;font-weight:700;flex:0 0 auto;opacity:.7;transition:opacity .15s,background .15s;position:relative;z-index:6',
+        on: {
+          click: (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            const r = e.currentTarget.getBoundingClientRect();
+            showCardContextMenu(card, r.right, r.bottom + 4);
+          },
+          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(155,89,252,0.12)'; },
+          mouseleave: (e) => { e.currentTarget.style.opacity = '.7'; e.currentTarget.style.background = 'transparent'; },
+        }
+      }, '⋯'),
+    ),
     contact.name ? el('div', { class: 'card-contact' },
-      el('div', { class: 'card-avatar' }, initials(contact.name)),
+      avatarEl(contact, { class: 'card-avatar' }),
       contact.name,
     ) : null,
     el('div', { class: 'card-meta' },
@@ -279,18 +342,49 @@ function cardEl(card) {
       over ? '⚠ ' : '📅 ',
       new Date(card.dueDate).toLocaleDateString('pt-BR'),
     ) : null,
-    // Onda 48: badge WhatsApp — aparece quando tem mensagens nao respondidas
-    (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
-      el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="16" height="16" fill="#25D366"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
-      el('span', { class: 'wa-count' }, String(card.unreadCount)),
-    ) : null,
   );
   c.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/card-id', card.id);
     e.dataTransfer.setData('text/from-col', card.columnId);
     c.classList.add('dragging');
   });
-  c.addEventListener('dragend', () => c.classList.remove('dragging'));
+  c.addEventListener('dragend', () => {
+    c.classList.remove('dragging');
+    document.querySelectorAll('.card.drop-before, .card.drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+  });
+  // Onda 59: drop target entre cards (reorder na mesma coluna ou inserir em posicao especifica)
+  c.addEventListener('dragover', (e) => {
+    const draggedId = (e.dataTransfer && e.dataTransfer.types.includes('text/card-id')) ? null : null;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = c.getBoundingClientRect();
+    const beforeHalf = (e.clientY - rect.top) < rect.height / 2;
+    c.classList.toggle('drop-before', beforeHalf);
+    c.classList.toggle('drop-after', !beforeHalf);
+  });
+  c.addEventListener('dragleave', () => c.classList.remove('drop-before', 'drop-after'));
+  c.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cardId = e.dataTransfer.getData('text/card-id');
+    if (!cardId || cardId === card.id) { c.classList.remove('drop-before', 'drop-after'); return; }
+    const rect = c.getBoundingClientRect();
+    const beforeHalf = (e.clientY - rect.top) < rect.height / 2;
+    c.classList.remove('drop-before', 'drop-after');
+    try {
+      const body = { toColumnId: card.columnId, beforeCardId: beforeHalf ? card.id : null };
+      // Se after, precisa do proximo card
+      if (!beforeHalf) {
+        const cardsHere = (state.pipeline?.cardsByColumn?.[card.columnId] || []);
+        const idx = cardsHere.findIndex(c2 => c2.id === card.id);
+        const next = cardsHere[idx + 1];
+        body.beforeCardId = next ? next.id : null; // null = vai pro fim
+      }
+      await api('/cards/' + cardId + '/reorder', { method: 'POST', body });
+      await loadPipeline(state.currentBoardId);
+      renderKanban();
+    } catch (err) { toast('Erro ao reordenar: ' + err.message, 'error'); }
+  });
   c.addEventListener('click', () => openCardPanel(card.id));
   // Right-click: menu de contexto com acoes
   c.addEventListener('contextmenu', (e) => {
@@ -351,10 +445,16 @@ window.addEventListener('scroll', closeCtxMenus, true);
 
 function ctxItem(icon, label, onClick, opts = {}) {
   const span = el('span', { class: 'ctx-ico', html: icon });
-  const item = el('div', { class: 'ctx-item' + (opts.danger ? ' ctx-danger' : '') }, span, label);
+  const cls = 'ctx-item' + (opts.danger ? ' ctx-danger' : '') + (opts.disabled ? ' ctx-disabled' : '');
+  const item = el('div', { class: cls }, span, label);
   if (opts.submenu) item.append(el('span', { class: 'ctx-arrow' }, '›'));
+  if (opts.disabled) {
+    item.style.opacity = '.45';
+    item.style.cursor = 'not-allowed';
+  }
   item.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (opts.disabled) return;
     closeCtxMenus();
     onClick?.();
   });
@@ -441,6 +541,232 @@ function showCardContextMenu(card, x, y) {
   );
 
   showMenu(menu, x, y);
+}
+
+
+// ─── Onda 54: Context menu da COLUNA (kanban) ───────────────────────────
+async function showColumnContextMenu(col, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+
+  const ICO_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const ICO_COLOR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/></svg>';
+  const ICO_LEFT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="15 18 9 12 15 6"/></svg>';
+  const ICO_RIGHT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="9 18 15 12 9 6"/></svg>';
+  const ICO_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const ICO_EMPTY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+  const ICO_CHART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>';
+  const ICO_WIP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+  const ICO_WIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="20 6 9 17 4 12"/></svg>';
+  const ICO_LOSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const ICO_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  const cols = (state.pipeline?.columns || []);
+  const idx = cols.findIndex(c => c.id === col.id);
+  const cardsHere = (state.pipeline?.cardsByColumn?.[col.id] || []);
+  const cardCount = cardsHere.length;
+  const stageType = col.stageType || col.stage_type || 'open';
+
+  const menu = el('div', { class: 'ctx-menu' });
+  menu.append(
+    ctxHeader(truncate(col.name || 'Coluna', 28) + ' (' + cardCount + ' card' + (cardCount === 1 ? '' : 's') + ')'),
+
+    ctxItem(ICO_EDIT, 'Renomear coluna', async () => {
+      const v = await clowPrompt('Novo nome:', col.name || '', { title: 'Renomear coluna' });
+      if (v == null || v.trim() === col.name) return;
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { name: v.trim() } });
+        toast('Coluna renomeada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxItem(ICO_COLOR, 'Mudar cor', async () => {
+      const palette = ['#9B59FC', '#4A9EFF', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const v = await pickFromPalette(palette, col.color || '#9B59FC', 'Mudar cor da coluna');
+      if (!v) return;
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { color: v } });
+        toast('Cor atualizada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxSep(),
+
+    ctxItem(ICO_LEFT, 'Mover coluna para esquerda', async () => {
+      if (idx <= 0) return toast('Já é a primeira', 'warning');
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { position: idx - 1 } });
+        await api('/columns/' + cols[idx - 1].id, { method: 'PATCH', body: { position: idx } });
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: idx <= 0 }),
+
+    ctxItem(ICO_RIGHT, 'Mover coluna para direita', async () => {
+      if (idx >= cols.length - 1) return toast('Já é a última', 'warning');
+      try {
+        await api('/columns/' + col.id, { method: 'PATCH', body: { position: idx + 1 } });
+        await api('/columns/' + cols[idx + 1].id, { method: 'PATCH', body: { position: idx } });
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: idx >= cols.length - 1 }),
+
+    ctxSep(),
+
+    ctxItem(ICO_PLUS, 'Adicionar card aqui', () => openNewCardModal(col.id)),
+
+    ctxItem(ICO_EMPTY, 'Mover todos os cards para...', () => showMoveAllSubmenu(col, x, y)),
+
+    ctxSep(),
+
+    ctxItem(ICO_WIN, stageType === 'won' ? '✓ Marcada como Ganho' : 'Marcar como "Ganho" (terminal)', async () => {
+      try {
+        await api('/columns/' + col.id + '/stage-type', { method: 'PATCH', body: { stageType: 'won' } });
+        toast('Coluna marcada como Ganho', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: stageType === 'won' }),
+
+    ctxItem(ICO_LOSS, stageType === 'lost' ? '✓ Marcada como Perdido' : 'Marcar como "Perdido" (terminal)', async () => {
+      try {
+        await api('/columns/' + col.id + '/stage-type', { method: 'PATCH', body: { stageType: 'lost' } });
+        toast('Coluna marcada como Perdido', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { disabled: stageType === 'lost' }),
+
+    ctxItem(ICO_WIP, 'Definir limite WIP', async () => {
+      const cur = col.wipLimit || col.wip_limit || '';
+      const v = await clowPrompt('Limite máximo de cards (deixe vazio para ilimitado):', String(cur), { title: 'Limite WIP', type: 'number' });
+      if (v == null) return;
+      const n = v.trim() === '' ? null : parseInt(v, 10);
+      if (n !== null && (!Number.isFinite(n) || n < 0)) return toast('Valor inválido', 'error');
+      try {
+        await api('/columns/' + col.id + '/wip-limit', { method: 'PATCH', body: { wipLimit: n } });
+        toast('Limite atualizado', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }),
+
+    ctxSep(),
+
+    ctxItem(ICO_CHART, 'Relatório da coluna', () => showColumnReport(col, cardsHere)),
+
+    ctxSep(),
+
+    ctxItem(ICO_TRASH, 'Apagar coluna', async () => {
+      const msg = cardCount > 0
+        ? 'Apagar a coluna "' + col.name + '" e os ' + cardCount + ' card(s) dentro? Esta ação é PERMANENTE.'
+        : 'Apagar a coluna "' + col.name + '"?';
+      if (!(await clowConfirm(msg, { title: 'Apagar coluna', danger: true, confirmLabel: 'Apagar tudo' }))) return;
+      try {
+        await api('/columns/' + col.id, { method: 'DELETE' });
+        toast('Coluna apagada', 'success');
+        await refreshBoard();
+      } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    }, { danger: true }),
+  );
+
+  showMenu(menu, x, y);
+}
+
+function showMoveAllSubmenu(col, x, y) {
+  closeCtxMenus();
+  ensureCtxMenuStyles();
+  const menu = el('div', { class: 'ctx-menu' });
+  const cardsHere = (state.pipeline?.cardsByColumn?.[col.id] || []);
+  menu.append(ctxHeader('Mover ' + cardsHere.length + ' card(s) para...'));
+  const others = (state.pipeline?.columns || []).filter(c => c.id !== col.id);
+  if (!others.length) {
+    menu.append(el('div', { style: 'padding:12px;color:var(--text-dim);font-size:12px' }, 'Nenhuma outra coluna disponível.'));
+  } else {
+    for (const c of others) {
+      menu.append(ctxItem(
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#9B59FC') + '"></span>',
+        c.name,
+        async () => {
+          if (!cardsHere.length) return toast('Coluna já está vazia', 'info');
+          if (!(await clowConfirm('Mover ' + cardsHere.length + ' card(s) para "' + c.name + '"?', { title: 'Confirmar movimentação' }))) return;
+          let ok = 0, err = 0;
+          for (const card of cardsHere) {
+            try { await api('/cards/' + card.id + '/move', { method: 'POST', body: { toColumnId: c.id } }); ok++; }
+            catch { err++; }
+          }
+          toast(ok + ' movido(s)' + (err ? ' / ' + err + ' falha(s)' : ''), err ? 'error' : 'success');
+          await refreshBoard();
+        }
+      ));
+    }
+  }
+  showMenu(menu, x, y);
+}
+
+function showColumnReport(col, cards) {
+  closeCtxMenus();
+  const totalCards = cards.length;
+  const totalValueCents = cards.reduce((a, c) => a + (c.valueCents || 0), 0);
+  const weightedCents = cards.reduce((a, c) => a + (c.valueCents || 0) * (c.probability || 0) / 100, 0);
+  const overdue = cards.filter(c => c.dueDate && c.dueDate < Date.now()).length;
+  const noValue = cards.filter(c => !c.valueCents).length;
+  const contacts = new Set(cards.map(c => c.contact?.id).filter(Boolean)).size;
+  const labelCount = {};
+  for (const c of cards) for (const l of (c.labels || [])) labelCount[l] = (labelCount[l] || 0) + 1;
+  const topLabels = Object.entries(labelCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const avgProb = totalCards ? Math.round(cards.reduce((a, c) => a + (c.probability || 0), 0) / totalCards) : 0;
+
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const stat = (label, value, color) => el('div', { style: 'background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px;border-radius:10px' },
+    el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
+    el('div', { style: 'font-size:22px;font-weight:800;color:' + (color || 'var(--text)') }, value),
+  );
+  const modal = el('div', { class: 'modal', style: 'max-width:560px' },
+    el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:18px' },
+      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#9B59FC') }),
+      el('h3', { style: 'margin:0' }, 'Relatório · ' + col.name),
+    ),
+    el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
+      stat('Total de cards', String(totalCards)),
+      stat('Contatos únicos', String(contacts)),
+      stat('Valor total', fmtMoney(totalValueCents), '#22C55E'),
+      stat('Valor ponderado', fmtMoney(weightedCents), '#9B59FC'),
+      stat('Probabilidade média', avgProb + '%'),
+      stat('Vencidos', String(overdue), overdue > 0 ? '#EF4444' : 'var(--text)'),
+    ),
+    noValue > 0 ? el('p', { style: 'font-size:12px;color:var(--text-dim);margin:8px 0' }, '⚠ ' + noValue + ' card(s) sem valor definido') : null,
+    topLabels.length ? el('div', { style: 'margin-top:12px' },
+      el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px' }, 'Etiquetas mais usadas'),
+      el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' },
+        ...topLabels.map(([l, n]) => el('span', { class: 'card-label', style: 'padding:4px 10px' }, l + ' · ' + n)),
+      ),
+    ) : null,
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
+
+async function pickFromPalette(palette, current, title) {
+  return new Promise((resolve) => {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const modal = el('div', { class: 'modal', style: 'max-width:380px' },
+      el('h3', {}, title || 'Escolher cor'),
+      el('div', { style: 'display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:14px 0' },
+        ...palette.map(c => el('button', {
+          type: 'button',
+          style: 'width:42px;height:42px;border-radius:10px;border:' + (c === current ? '3px solid #fff' : '2px solid rgba(255,255,255,0.1)') + ';background:' + c + ';cursor:pointer',
+          on: { click: () => { dialog.remove(); resolve(c); } },
+        }))
+      ),
+      el('div', { class: 'modal-actions' },
+        el('button', { class: 'cancel', on: { click: () => { dialog.remove(); resolve(null); } } }, 'Cancelar'),
+      ),
+    );
+    dialog.append(modal);
+    document.body.append(dialog);
+  });
 }
 
 function showAssignSubmenu(card, x, y) {
@@ -551,9 +877,32 @@ async function patchCardSafe(cardId, patch) {
 }
 
 function positionMenu(menu, x, y) {
-  // Estima 280x400 antes de medir; ajusta se sair da viewport
-  menu.style.left = Math.min(x, window.innerWidth - 260) + 'px';
-  menu.style.top = Math.min(y, window.innerHeight - 420) + 'px';
+  // Posiciona invisivel pra medir altura real, depois decide flip vertical
+  menu.style.visibility = 'hidden';
+  menu.style.position = 'fixed';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  const w = rect.width || 260;
+  const h = rect.height || 420;
+  const margin = 8;
+  let left = x;
+  let top = y;
+  // Horizontal: se passa da direita, alinha pela esquerda do click
+  if (left + w > window.innerWidth - margin) left = Math.max(margin, x - w);
+  // Vertical: se passa do fim, abre pra cima do click
+  if (top + h > window.innerHeight - margin) {
+    const flipped = y - h - 4;
+    top = flipped >= margin ? flipped : Math.max(margin, window.innerHeight - h - margin);
+  }
+  if (left < margin) left = margin;
+  if (top < margin) top = margin;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = '';
+  // Remove pra reanexar pelo showMenu (evita duplicacao)
+  menu.remove();
 }
 
 function truncate(s, n) {
@@ -815,9 +1164,26 @@ function closeCardPanel() {
   state.currentCard = null;
 }
 
-function renderPanel() {
+async function renderPanel() {
   const { card, contact, activities } = state.currentCard;
-  $('#pAvatar').textContent = initials(contact?.name || card.title);
+  // Onda 55: foto WA no painel
+  const pa = $('#pAvatar');
+  if (pa) {
+    pa.innerHTML = '';
+    pa.textContent = '';
+    const url = contact?.avatarUrl || contact?.avatar_url || null;
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = contact?.name || card.title || '';
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+      img.loading = 'lazy';
+      img.onerror = () => { pa.removeChild(img); pa.textContent = initials(contact?.name || card.title); };
+      pa.appendChild(img);
+    } else {
+      pa.textContent = initials(contact?.name || card.title);
+    }
+  }
   $('#pName').textContent = contact?.name || card.title;
   $('#pPhone').textContent = contact?.phone || '—';
   // Populate channel select
@@ -829,9 +1195,41 @@ function renderPanel() {
   if (state.channels.length === 0) {
     sel.append(el('option', { value: '' }, 'Nenhum canal configurado'));
   }
+
+  // Onda 59: select de agente atribuido ao card
+  const agSel = $('#ownerAgentSelect');
+  if (agSel) {
+    // Lazy-load agentes se ainda nao foram carregados
+    if (!state.agents || !state.agents.length) {
+      try { await loadAgents(); } catch { state.agents = state.agents || []; }
+    }
+    agSel.innerHTML = '';
+    agSel.append(el('option', { value: '' }, '— Nenhum —'));
+    for (const a of (state.agents || [])) {
+      agSel.append(el('option', { value: a.id }, a.name + (a.role ? ' (' + a.role + ')' : '')));
+    }
+    agSel.value = card.ownerAgentId || '';
+    if (!agSel._wired) {
+      agSel._wired = true;
+      agSel.addEventListener('change', async () => {
+        const newOwner = agSel.value || null;
+        if (!state.currentCard?.card) return;
+        const cId = state.currentCard.card.id;
+        try {
+          await api('/cards/' + cId, { method: 'PATCH', body: { ownerAgentId: newOwner } });
+          await refreshCurrentCard();
+          renderInfoTab();
+          renderMessages();
+          toast('Atendente atualizado', 'success');
+        } catch (e) { toast('Erro: ' + e.message, 'error'); }
+      });
+    }
+  }
+
   renderMessages();
   renderInfoTab();
-  renderEditTab();
+  // renderEditTab() removida — aba "Editar" foi tirada do painel.
+  // Edição do card via menu contextual (...) no kanban ou via Vínculos.
 }
 
 
@@ -958,8 +1356,11 @@ function renderInfoTab() {
 }
 
 function renderEditTab() {
-  const { card } = state.currentCard;
+  // Aba "Editar" foi removida do painel. Função preservada como no-op
+  // pra não quebrar referências externas (chamadas legacy do tab switcher).
   const sec = $('#editSection');
+  if (!sec) return;
+  const { card } = state.currentCard;
   sec.innerHTML = '';
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
@@ -1038,6 +1439,278 @@ async function uploadAndSendFile(file) {
   } catch (e) {
     toast('Upload falhou: ' + e.message, 'error');
   }
+}
+
+// ─── Quick messages (mensagens prontas) ────────────────────────────────
+// CRUD via /v1/crm/quick-messages. Popover ancorado no botão #quickMsgBtn.
+// Envio reaproveita sendCurrentMessage(text, mediaUrl, mediaType, filename).
+const qmState = { items: null, loading: false, q: '' };
+
+function qmMediaIcon(type) {
+  if (type === 'image') return '🖼️';
+  if (type === 'video') return '🎬';
+  if (type === 'audio') return '🎙️';
+  if (type === 'document') return '📄';
+  return '';
+}
+
+async function qmLoad(force) {
+  if (qmState.items && !force) return qmState.items;
+  if (qmState.loading) return qmState.items || [];
+  qmState.loading = true;
+  try {
+    const r = await api('/quick-messages');
+    qmState.items = Array.isArray(r?.items) ? r.items : [];
+  } catch (e) {
+    qmState.items = [];
+    toast('Falha ao carregar mensagens prontas: ' + e.message, 'error');
+  } finally {
+    qmState.loading = false;
+  }
+  return qmState.items;
+}
+
+function qmPreview(item) {
+  if (item.body) return item.body.slice(0, 120);
+  if (item.mediaFilename) return '[' + (item.mediaType || 'mídia') + '] ' + item.mediaFilename;
+  if (item.mediaUrl) return '[' + (item.mediaType || 'mídia') + ']';
+  return '—';
+}
+
+function qmRenderPopover() {
+  const pop = document.getElementById('quickMsgPopover');
+  if (!pop) return;
+  const items = (qmState.items || []).filter((it) => {
+    if (!qmState.q) return true;
+    const q = qmState.q.toLowerCase();
+    return (it.title || '').toLowerCase().includes(q) || (it.body || '').toLowerCase().includes(q);
+  });
+  pop.innerHTML = '';
+  const head = el('div', { class: 'qm-popover-head' });
+  const search = el('input', {
+    type: 'search',
+    placeholder: 'Buscar...',
+    value: qmState.q,
+  });
+  search.addEventListener('input', (e) => {
+    qmState.q = e.target.value || '';
+    qmRenderPopover();
+  });
+  const newBtn = el('button', { class: 'qm-new', type: 'button' }, '+ Nova');
+  newBtn.addEventListener('click', () => qmOpenEditor(null));
+  head.append(search, newBtn);
+  pop.append(head);
+
+  const list = el('div', { class: 'qm-list' });
+  if (!items.length) {
+    list.append(el('div', { class: 'qm-empty' }, qmState.q
+      ? 'Nenhum resultado.'
+      : 'Nenhuma mensagem pronta. Clique em "+ Nova" pra criar.'));
+  } else {
+    for (const it of items) {
+      const row = el('div', { class: 'qm-item' });
+      const top = el('div', { class: 'qm-item-row' });
+      top.append(el('div', { class: 'qm-item-title' },
+        (it.mediaType ? qmMediaIcon(it.mediaType) + ' ' : '') + (it.title || 'Sem título')));
+      const actions = el('div', { class: 'qm-item-actions' });
+      const sendBtn = el('button', { type: 'button', class: 'qm-send', title: 'Enviar' }, '➤ Enviar');
+      sendBtn.addEventListener('click', async () => {
+        sendBtn.disabled = true;
+        try { await qmSend(it); } finally { sendBtn.disabled = false; }
+      });
+      const editBtn = el('button', { type: 'button', class: 'qm-edit', title: 'Editar' }, '✏');
+      editBtn.addEventListener('click', () => qmOpenEditor(it));
+      const delBtn = el('button', { type: 'button', class: 'qm-del', title: 'Apagar' }, '🗑');
+      delBtn.addEventListener('click', () => qmDelete(it));
+      actions.append(sendBtn, editBtn, delBtn);
+      top.append(actions);
+      row.append(top);
+      row.append(el('div', { class: 'qm-item-preview' }, qmPreview(it)));
+      list.append(row);
+    }
+  }
+  pop.append(list);
+}
+
+async function qmTogglePopover(force) {
+  const pop = document.getElementById('quickMsgPopover');
+  if (!pop) return;
+  const willShow = force === true || (force === undefined && pop.hidden);
+  if (!willShow) { pop.hidden = true; return; }
+  await qmLoad(false);
+  qmRenderPopover();
+  pop.hidden = false;
+  setTimeout(() => {
+    const ev = (e) => {
+      if (!pop.contains(e.target) && !e.target.closest('#quickMsgBtn')) {
+        pop.hidden = true;
+        document.removeEventListener('click', ev, true);
+      }
+    };
+    document.addEventListener('click', ev, true);
+  }, 0);
+}
+
+async function qmSend(item) {
+  if (!state.currentCard?.card) {
+    return toast('Abra um card antes de enviar a mensagem pronta', 'info');
+  }
+  try {
+    await sendCurrentMessage(
+      item.body || undefined,
+      item.mediaUrl || undefined,
+      item.mediaType || undefined,
+      item.mediaFilename || undefined,
+    );
+    document.getElementById('quickMsgPopover').hidden = true;
+    toast('Mensagem enviada', 'success');
+  } catch (e) {
+    toast('Erro ao enviar: ' + e.message, 'error');
+  }
+}
+
+async function qmDelete(item) {
+  const ok = await clowConfirm('Apagar a mensagem pronta "' + (item.title || '') + '"?', {
+    title: 'Apagar mensagem pronta', confirmLabel: 'Apagar',
+  });
+  if (!ok) return;
+  try {
+    await api('/quick-messages/' + encodeURIComponent(item.id), { method: 'DELETE' });
+    qmState.items = (qmState.items || []).filter((x) => x.id !== item.id);
+    qmRenderPopover();
+    toast('Apagada', 'success');
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  }
+}
+
+function qmOpenEditor(existing) {
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const state = {
+    mediaUrl: existing?.mediaUrl || '',
+    mediaType: existing?.mediaType || '',
+    mediaFilename: existing?.mediaFilename || '',
+  };
+  const mediaInfo = el('div', { style: 'font-size:12px;color:var(--text-dim);margin-top:4px' });
+  function refreshMedia() {
+    if (state.mediaUrl) {
+      mediaInfo.innerHTML = '';
+      mediaInfo.append(
+        el('span', { class: 'qm-media-chip' },
+          qmMediaIcon(state.mediaType) + ' ' + (state.mediaType || 'mídia') +
+          (state.mediaFilename ? ' · ' + state.mediaFilename : '')),
+        el('button', {
+          type: 'button',
+          style: 'margin-left:8px;background:transparent;border:0;color:var(--red);cursor:pointer',
+          on: { click: () => {
+            state.mediaUrl = ''; state.mediaType = ''; state.mediaFilename = '';
+            refreshMedia();
+          } },
+        }, 'remover'),
+      );
+    } else {
+      mediaInfo.textContent = 'Sem mídia anexada.';
+    }
+  }
+  refreshMedia();
+
+  const fileInput = el('input', { type: 'file', hidden: '',
+    accept: 'image/*,audio/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt' });
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await api('/media/upload', { method: 'POST', body: fd });
+      state.mediaUrl = r.url;
+      state.mediaType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('audio/') ? 'audio'
+        : file.type.startsWith('video/') ? 'video' : 'document';
+      state.mediaFilename = file.name;
+      refreshMedia();
+      toast('Mídia anexada', 'success');
+    } catch (err) {
+      toast('Upload falhou: ' + err.message, 'error');
+    } finally { fileInput.value = ''; }
+  });
+
+  const urlInput = el('input', { type: 'url', placeholder: 'https://...', value: state.mediaUrl });
+  urlInput.addEventListener('change', () => {
+    const v = (urlInput.value || '').trim();
+    if (!v) return;
+    state.mediaUrl = v;
+    if (!state.mediaType) state.mediaType = 'document';
+    if (!state.mediaFilename) state.mediaFilename = v.split('/').pop() || '';
+    refreshMedia();
+  });
+
+  const mediaTypeSel = el('select', { name: '__mediaType' });
+  for (const [v, label] of [['', '— Auto —'], ['image', '🖼 Imagem'], ['video', '🎬 Vídeo'], ['audio', '🎙 Áudio'], ['document', '📄 Documento']]) {
+    const opt = el('option', { value: v }, label);
+    if (v === state.mediaType) opt.selected = true;
+    mediaTypeSel.append(opt);
+  }
+  mediaTypeSel.addEventListener('change', () => {
+    state.mediaType = mediaTypeSel.value || '';
+    refreshMedia();
+  });
+
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const payload = {
+      title: (fd.get('title') || '').toString().trim(),
+      body: (fd.get('body') || '').toString(),
+      mediaUrl: state.mediaUrl || null,
+      mediaType: state.mediaType || null,
+      mediaFilename: state.mediaFilename || null,
+    };
+    if (!payload.title) return toast('Dê um título', 'error');
+    if (!payload.body.trim() && !payload.mediaUrl) return toast('Adicione texto ou mídia', 'error');
+    try {
+      if (existing) {
+        await api('/quick-messages/' + encodeURIComponent(existing.id), { method: 'PATCH', body: payload });
+      } else {
+        await api('/quick-messages', { method: 'POST', body: payload });
+      }
+      backdrop.remove();
+      await qmLoad(true);
+      qmRenderPopover();
+      toast(existing ? 'Atualizada' : 'Criada', 'success');
+    } catch (err) {
+      toast('Erro: ' + err.message, 'error');
+    }
+  } } });
+
+  form.append(
+    field('Título (apelido)', 'title', 'text', existing?.title || '',
+      { required: '', placeholder: 'Ex.: Saudação inicial' }),
+    fieldTextarea('Mensagem (pode conter link, emoji, *negrito*)', 'body', existing?.body || ''),
+    el('div', { class: 'field' },
+      el('label', {}, 'Mídia (opcional — imagem, vídeo, áudio, documento)'),
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' },
+        el('button', { type: 'button',
+          style: 'padding:6px 10px;border-radius:6px;border:1px solid var(--border-2);background:var(--bg-3);color:var(--text);cursor:pointer',
+          on: { click: () => fileInput.click() } }, '📎 Anexar arquivo'),
+        mediaTypeSel,
+        fileInput,
+      ),
+      el('div', { style: 'margin-top:6px' },
+        el('label', { style: 'font-size:12px;color:var(--text-dim)' }, 'ou cole uma URL de mídia:'),
+        urlInput,
+      ),
+      mediaInfo,
+    ),
+    el('div', { class: 'modal-actions' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, existing ? 'Salvar' : 'Criar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal' },
+    el('h3', {}, existing ? 'Editar mensagem pronta' : 'Nova mensagem pronta'), form));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
 }
 
 // Audio recording via MediaRecorder
@@ -1122,8 +1795,8 @@ async function toggleRecording() {
       const blob = new Blob(recordedChunks, { type: finalMime });
       const ext = finalMime.includes('ogg') ? 'ogg' : finalMime.includes('mp4') ? 'm4a' : 'webm';
       const file = new File([blob], 'audio-' + Date.now() + '.' + ext, { type: finalMime });
-      await uploadAndSendFile(file);
-      toast('Áudio enviado', 'success');
+      // Mostra preview antes de enviar — usuário decide se manda ou descarta.
+      openAudioPreview(file);
     } catch (e) {
       toast('Erro ao processar áudio: ' + (e.message || ''), 'error');
     }
@@ -1139,7 +1812,396 @@ async function toggleRecording() {
   }
 }
 
+// ─── Audio preview (antes de enviar) ────────────────────────────────
+// Substitui o "envio direto após gravar" — usuário ouve o áudio e
+// decide enviar ou descartar. Inline no composer (style WhatsApp).
+let __pendingAudioUrl = null;
+function openAudioPreview(file) {
+  const box = document.getElementById('audioPreview');
+  const composerRow = document.querySelector('.composer-row');
+  if (!box || !composerRow) {
+    // fallback — sem UI de preview, envia direto
+    return uploadAndSendFile(file);
+  }
+  // Cleanup de URL antiga, se ainda existir
+  if (__pendingAudioUrl) {
+    try { URL.revokeObjectURL(__pendingAudioUrl); } catch (e) {}
+    __pendingAudioUrl = null;
+  }
+  __pendingAudioUrl = URL.createObjectURL(file);
+  box.innerHTML = '';
+  const discard = document.createElement('button');
+  discard.type = 'button';
+  discard.className = 'audio-discard';
+  discard.title = 'Descartar';
+  discard.textContent = '🗑';
+  const audioEl = document.createElement('audio');
+  audioEl.controls = true;
+  audioEl.src = __pendingAudioUrl;
+  const send = document.createElement('button');
+  send.type = 'button';
+  send.className = 'audio-send';
+  send.title = 'Enviar';
+  send.textContent = '➤';
+  box.append(discard, audioEl, send);
+  // Esconde o composer-row enquanto o preview tá aberto
+  composerRow.style.display = 'none';
+  box.hidden = false;
+
+  const close = () => {
+    box.hidden = true;
+    box.innerHTML = '';
+    composerRow.style.display = '';
+    if (__pendingAudioUrl) {
+      try { URL.revokeObjectURL(__pendingAudioUrl); } catch (e) {}
+      __pendingAudioUrl = null;
+    }
+  };
+  discard.addEventListener('click', () => {
+    close();
+    toast('Áudio descartado', '');
+  });
+  send.addEventListener('click', async () => {
+    send.disabled = true;
+    discard.disabled = true;
+    try {
+      await uploadAndSendFile(file);
+      toast('Áudio enviado', 'success');
+      close();
+    } catch (e) {
+      send.disabled = false;
+      discard.disabled = false;
+      toast('Erro: ' + (e.message || e.name || ''), 'error');
+    }
+  });
+}
+
+// ─── Câmera: foto + vídeo (multiplataforma) ─────────────────────────
+// Estratégia híbrida pra funcionar em TODO lugar:
+//  • Celular (Android/iOS): <input capture> abre a câmera NATIVA do
+//    sistema — robusto e contorna o getUserMedia instável do iOS dentro
+//    de webviews. O próprio app de câmera dá o passo de revisão.
+//  • Desktop (PC/notebook): getUserMedia + MediaRecorder num modal, com
+//    preview antes de enviar (desktop ignora o atributo capture).
+// Em ambos o arquivo final cai no uploadAndSendFile() que já existe; o
+// backend (/media/upload) normaliza vídeo pra mp4/H.264 via ffmpeg.
+
+function isMobileDevice() {
+  const ua = navigator.userAgent || '';
+  if (/android|iphone|ipod|ipad|mobile/i.test(ua)) return true;
+  // iPad em "modo desktop" se identifica como Mac mas tem touch
+  if (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+let camStream = null;
+let camRecorder = null;
+let camChunks = [];
+let camPendingFile = null;
+let camPreviewUrl = null;
+
+function pickVideoMime() {
+  if (!window.MediaRecorder) return '';
+  const candidates = [
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  for (const m of candidates) {
+    try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {}
+  }
+  return ''; // navegador escolhe o default
+}
+
+// Envio direto (usado no fluxo nativo do celular — a câmera do SO já
+// revisou). uploadAndSendFile trata seu próprio erro internamente.
+async function sendCapturedFile(file) {
+  await uploadAndSendFile(file);
+  toast(file.type.startsWith('video/') ? 'Vídeo enviado' : 'Foto enviada', 'success');
+}
+
+function handleNativeCapture(file) {
+  if (!file) return;
+  sendCapturedFile(file).catch((e) => toast('Erro ao enviar: ' + (e.message || e.name || ''), 'error'));
+}
+
+// Action sheet simples no celular pra escolher Foto x Vídeo (cada um
+// dispara o input capture correspondente).
+function showMobileCaptureChoice() {
+  const close = () => { try { sheet.remove(); } catch (e) {} };
+  const photoBtn = el('button', { type: 'button', class: 'cam-sheet-btn' }, '📸 Tirar foto');
+  const videoBtn = el('button', { type: 'button', class: 'cam-sheet-btn' }, '🎥 Gravar vídeo');
+  const cancelBtn = el('button', { type: 'button', class: 'cam-sheet-btn cam-sheet-cancel' }, 'Cancelar');
+  photoBtn.addEventListener('click', () => { close(); const i = $('#cameraPhotoInput'); if (i) i.click(); });
+  videoBtn.addEventListener('click', () => { close(); const i = $('#cameraVideoInput'); if (i) i.click(); });
+  cancelBtn.addEventListener('click', close);
+  const panel = el('div', { class: 'cam-sheet-panel' }, photoBtn, videoBtn, cancelBtn);
+  const sheet = el('div', { class: 'cam-sheet' }, panel);
+  sheet.addEventListener('click', (ev) => { if (ev.target === sheet) close(); });
+  document.body.appendChild(sheet);
+}
+
+function openCamera() {
+  if (isMobileDevice()) { showMobileCaptureChoice(); return; }
+  openDesktopCamera();
+}
+
+function resetCameraModalToLive() {
+  const preview = $('#cameraPreview');
+  const playback = $('#cameraPlayback');
+  const photo = $('#cameraPhotoPreview');
+  if (preview) preview.hidden = false;
+  if (playback) { playback.hidden = true; playback.removeAttribute('src'); }
+  if (photo) { photo.hidden = true; photo.removeAttribute('src'); }
+  const live = $('#cameraControls');
+  const review = $('#cameraReviewControls');
+  if (live) live.hidden = false;
+  if (review) review.hidden = true;
+  if (camPreviewUrl) { try { URL.revokeObjectURL(camPreviewUrl); } catch (e) {} camPreviewUrl = null; }
+  camPendingFile = null;
+}
+
+async function openDesktopCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return toast('Navegador não suporta câmera', 'error');
+  }
+  if (!window.isSecureContext) {
+    return toast('Câmera só funciona via HTTPS', 'error');
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true,
+    });
+  } catch (e) {
+    let msg = 'Câmera bloqueada';
+    if (e.name === 'NotAllowedError') msg = 'Você precisa permitir a câmera no navegador (cadeado na barra de endereço → Site settings → Câmera)';
+    else if (e.name === 'NotFoundError') msg = 'Nenhuma câmera detectada no dispositivo';
+    else if (e.name === 'NotReadableError') msg = 'Câmera está em uso por outro app';
+    else if (e.message) msg = msg + ': ' + e.message;
+    return toast(msg, 'error');
+  }
+  const modal = $('#cameraModal');
+  const preview = $('#cameraPreview');
+  resetCameraModalToLive();
+  if (preview) preview.srcObject = camStream;
+  if (modal) modal.hidden = false;
+}
+
+function capturePhoto() {
+  const preview = $('#cameraPreview');
+  if (!preview || !preview.videoWidth) return toast('Câmera ainda carregando...', 'error');
+  const canvas = document.createElement('canvas');
+  canvas.width = preview.videoWidth;
+  canvas.height = preview.videoHeight;
+  canvas.getContext('2d').drawImage(preview, 0, 0);
+  canvas.toBlob((blob) => {
+    if (!blob) return toast('Falha ao capturar foto', 'error');
+    camPendingFile = new File([blob], 'foto-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+    showCameraReview(URL.createObjectURL(blob), 'image');
+  }, 'image/jpeg', 0.92);
+}
+
+function toggleCameraRecording() {
+  const btn = $('#camRecordBtn');
+  if (camRecorder && camRecorder.state === 'recording') {
+    try { camRecorder.stop(); } catch (e) {}
+    if (btn) { btn.classList.remove('recording'); btn.textContent = '⏺ Vídeo'; }
+    return;
+  }
+  if (!window.MediaRecorder || !camStream) return toast('Navegador não tem MediaRecorder', 'error');
+  const mime = pickVideoMime();
+  try {
+    camRecorder = mime ? new MediaRecorder(camStream, { mimeType: mime }) : new MediaRecorder(camStream);
+  } catch (e) {
+    return toast('Erro ao iniciar gravador: ' + (e.message || e.name), 'error');
+  }
+  camChunks = [];
+  camRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) camChunks.push(e.data); };
+  camRecorder.onerror = (e) => {
+    toast('Erro na gravação: ' + (e.error?.name || 'desconhecido'), 'error');
+    if (btn) { btn.classList.remove('recording'); btn.textContent = '⏺ Vídeo'; }
+  };
+  camRecorder.onstop = () => {
+    if (camChunks.length === 0) return toast('Gravação vazia', 'error');
+    const finalMime = camRecorder.mimeType || mime || 'video/webm';
+    const ext = finalMime.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(camChunks, { type: finalMime });
+    camPendingFile = new File([blob], 'video-' + Date.now() + '.' + ext, { type: finalMime });
+    showCameraReview(URL.createObjectURL(blob), 'video');
+  };
+  try {
+    camRecorder.start();
+    if (btn) { btn.classList.add('recording'); btn.textContent = '⏹ Parar'; }
+    toast('Gravando... clique em Parar pra finalizar', '');
+  } catch (e) {
+    toast('Não pude iniciar: ' + (e.message || e.name), 'error');
+  }
+}
+
+function showCameraReview(url, kind) {
+  if (camPreviewUrl) { try { URL.revokeObjectURL(camPreviewUrl); } catch (e) {} }
+  camPreviewUrl = url;
+  const preview = $('#cameraPreview');
+  const playback = $('#cameraPlayback');
+  const photo = $('#cameraPhotoPreview');
+  if (preview) preview.hidden = true;
+  if (kind === 'video') {
+    if (playback) { playback.src = url; playback.hidden = false; }
+    if (photo) photo.hidden = true;
+  } else {
+    if (photo) { photo.src = url; photo.hidden = false; }
+    if (playback) playback.hidden = true;
+  }
+  const live = $('#cameraControls');
+  const review = $('#cameraReviewControls');
+  if (live) live.hidden = true;
+  if (review) review.hidden = false;
+}
+
+function closeCamera() {
+  if (camRecorder && camRecorder.state === 'recording') { try { camRecorder.stop(); } catch (e) {} }
+  camRecorder = null;
+  camChunks = [];
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  const preview = $('#cameraPreview');
+  if (preview) preview.srcObject = null;
+  resetCameraModalToLive();
+  const modal = $('#cameraModal');
+  if (modal) modal.hidden = true;
+}
+
+async function sendCameraCapture() {
+  if (!camPendingFile) return;
+  const file = camPendingFile;
+  const sendBtn = $('#camSendBtn');
+  const retake = $('#camRetakeBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  if (retake) retake.disabled = true;
+  try {
+    await sendCapturedFile(file);
+    closeCamera();
+  } catch (e) {
+    toast('Erro: ' + (e.message || e.name || ''), 'error');
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    if (retake) retake.disabled = false;
+  }
+}
+
+// ─── Emoji picker (estilo WhatsApp) ─────────────────────────────────
+// Lista curada de emojis comuns separados em 6 categorias. Insere no
+// #composerText na posição do cursor. Sem dependência externa.
+const EMOJI_CATEGORIES = [
+  { id: 'smileys', icon: '😀', name: 'Smileys',
+    emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { id: 'people', icon: '👋', name: 'Pessoas',
+    emojis: ['👋','🤚','✋','🖐️','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄','💋','🩸'] },
+  { id: 'hearts', icon: '❤️', name: 'Coração',
+    emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤','🌟','✨','⭐','🌠','☀️','🌈','🔥','💧','🌊'] },
+  { id: 'animals', icon: '🐶', name: 'Animais',
+    emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐽','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢'] },
+  { id: 'food', icon: '🍎', name: 'Comida',
+    emojis: ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🥪','🥙','🧆','🌮','🌯','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','☕','🫖','🍵','🧃','🥤','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊'] },
+  { id: 'objects', icon: '⚽', name: 'Objetos',
+    emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥊','🥋','🥅','🎯','⛳','🎮','🎲','🧩','🎰','🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🚚','🚛','🚜','🛴','🚲','🛵','🏍️','🛺','🚨','🚍','🚔','🚖','🚘','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⌚','📱','💻','⌨️','🖥️','🖨️','🖱️','💾','💿','📀','📸','📷','🎥','📹','📺','📻','🎙️','🎚️','🎛️','📞','☎️','📟','📠','🔋','🔌','💡','🔦','🕯️','🛒','🎁','🎈','🎉','🎊','🎏','🎀','🎗️','🛍️','💰','💳','💎','📚','📖','📝','✏️','✒️','📅','📆','📈','📉','📊','📋','📌','📍','🔖','🔗','🔒','🔑','🛠️','⚙️','🔧','🔨','⛏️','🔩','⚖️','🔬','🔭','📡','💉','💊','🚪','🛏️','🛋️','🚽','🚿','🛁','🧴','🧷','🧹','🧺','🧻','🧼','🧽'] },
+];
+function buildEmojiPicker() {
+  const box = document.getElementById('emojiPicker');
+  if (!box || box.dataset.built === '1') return;
+  box.dataset.built = '1';
+
+  const tabs = document.createElement('div');
+  tabs.className = 'emoji-tabs';
+  const grid = document.createElement('div');
+  grid.className = 'emoji-grid';
+
+  const renderGrid = (cat) => {
+    grid.innerHTML = '';
+    for (const e of cat.emojis) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = e;
+      b.title = e;
+      b.addEventListener('click', () => insertEmojiAtCursor(e));
+      grid.append(b);
+    }
+  };
+
+  EMOJI_CATEGORIES.forEach((cat, i) => {
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'emoji-tab' + (i === 0 ? ' active' : '');
+    t.textContent = cat.icon;
+    t.title = cat.name;
+    t.addEventListener('click', () => {
+      tabs.querySelectorAll('.emoji-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      renderGrid(cat);
+    });
+    tabs.append(t);
+  });
+  box.append(tabs, grid);
+  renderGrid(EMOJI_CATEGORIES[0]);
+}
+function insertEmojiAtCursor(emoji) {
+  const ta = document.getElementById('composerText');
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? ta.value.length;
+  const before = ta.value.slice(0, start);
+  const after = ta.value.slice(end);
+  ta.value = before + emoji + after;
+  const pos = start + emoji.length;
+  ta.focus();
+  try { ta.setSelectionRange(pos, pos); } catch (e) {}
+}
+function toggleEmojiPicker() {
+  const box = document.getElementById('emojiPicker');
+  if (!box) return;
+  buildEmojiPicker();
+  box.hidden = !box.hidden;
+}
+// Fecha o picker ao clicar fora (sem fechar quando clica no próprio picker
+// ou no botão emoji que controla ele).
+document.addEventListener('click', (ev) => {
+  const box = document.getElementById('emojiPicker');
+  if (!box || box.hidden) return;
+  const btn = document.getElementById('emojiBtn');
+  if (box.contains(ev.target) || (btn && btn.contains(ev.target))) return;
+  box.hidden = true;
+});
+
 // ─── New card modal ────────────────────────────────────────────────────
+// Modal pra criar nova coluna no board atual.
+// Bate em POST /boards/:id/columns com { name, color, isTerminal }
+// Recarrega o pipeline ao final pra mostrar a coluna nova no kanban.
+async function openNewColumnModal() {
+  const boardId = state.currentBoardId;
+  if (!boardId) { toast('Selecione um board primeiro', 'error'); return; }
+  await buildModal('Nova coluna', [
+    { name: 'name', label: 'Nome da coluna', required: true, placeholder: 'Ex: Aguardando aprovação' },
+    { name: 'color', label: 'Cor (hex)', value: '#9B59FC', attrs: { type: 'color' } },
+    { name: 'isTerminal', label: 'É coluna terminal? (Ganho/Perdido)', type: 'select', value: 'no', options: [
+      { value: 'no', label: 'Não — coluna intermediária' },
+      { value: 'yes', label: 'Sim — finaliza o card aqui' },
+    ]},
+  ], async (v) => {
+    if (!v.name?.trim()) { toast('Nome obrigatório', 'error'); return false; }
+    try {
+      await api(`/boards/${boardId}/columns`, { method: 'POST', body: {
+        name: v.name.trim(),
+        color: v.color || '#9B59FC',
+        isTerminal: v.isTerminal === 'yes',
+      }});
+      toast('Coluna criada', 'success');
+      await loadPipeline(boardId);
+      renderKanban();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  });
+}
+
 async function openNewCardModal(columnId = null) {
   const contacts = state.contacts.length ? state.contacts : (await loadContacts(), state.contacts);
   const backdrop = el('div', { class: 'modal-backdrop' });
@@ -1233,6 +2295,7 @@ async function showView(viewName) {
   else if (viewName === 'inventory') { await loadInventory(); renderInventoryList(); }
   else if (viewName === 'stats') renderStats();
   else if (viewName === 'tasks') { await renderTasksView(); }
+  else if (viewName === 'notifications') { if (typeof window.__renderNotificationsView === 'function') await window.__renderNotificationsView(); }
   else if (viewName === 'agenda') { await renderAgendaView(); }
   else if (viewName === 'documents') { await renderDocumentsView(); }
   else if (viewName === 'forms') { await renderFormsView(); }
@@ -1374,14 +2437,15 @@ async function renderTasksView() {
     const l = $('#tasksList');
     l.innerHTML = '';
     if (!data.tasks || data.tasks.length === 0) {
-      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim)' }, 'Nenhuma tarefa'));
+      l.append(el('div', { style: 'padding:40px;text-align:center;color:var(--text-dim);line-height:1.6' }, 'Nenhuma tarefa ainda. Abra um card do cliente no Pipeline → aba Vínculos → "+ Adicionar" em Tarefas pra criar.'));
       return;
     }
     for (const t of data.tasks) {
       const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#F59E0B', low: '#64748B' }[t.priority] || '#64748B';
       const typeIcon = { call: '📞', email: '✉️', meeting: '👥', followup: '🔄', other: '📌' }[t.type] || '📌';
-      const dueStr = t.dueAt ? new Date(t.dueAt).toLocaleString('pt-BR') : 'Sem prazo';
-      const overdue = t.dueAt && t.dueAt < Date.now() && t.status === 'open';
+      const dueMs = t.dueAt ? (typeof t.dueAt === 'number' ? t.dueAt : Date.parse(t.dueAt)) : null;
+      const dueStr = dueMs ? new Date(dueMs).toLocaleString('pt-BR') : 'Sem prazo';
+      const overdue = dueMs && dueMs < Date.now() && t.status === 'open';
       const row = el('div', {
         style: `background:var(--bg-2);border:1px solid var(--border);border-left:4px solid ${priorityColor};border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center;cursor:pointer` + (t.status === 'completed' ? ';opacity:.5' : ''),
         on: {
@@ -1424,9 +2488,16 @@ async function renderTasksView() {
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
-function openTaskEditModal(task) {
+async function openTaskEditModal(task) {
   const isNew = !task;
   task = task || {};
+  // Carrega contatos pra dropdown "Cliente". Sem isso, tarefa criada
+  // pelo menu Tarefas fica orfã e nao aparece nos Vinculos do card de
+  // ninguem. User: "tarefa atribida ao cliente automaticamente".
+  let contacts = [];
+  try { contacts = (await api('/contacts?limit=500')).contacts || []; }
+  catch (e) { /* segue sem dropdown se falhar */ }
+
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
@@ -1436,6 +2507,27 @@ function openTaskEditModal(task) {
       dueAt: due, description: fd.get('description'),
       alertMinutesBefore: fd.get('alert') ? Number(fd.get('alert')) : null,
     };
+    const contactId = fd.get('contactId');
+    if (contactId) {
+      body.contactId = contactId;
+      // Auto-resolve cardId do contato: se contato tem ao menos 1 card,
+      // vincula a tarefa ao primeiro card ativo encontrado. Sem isso, a
+      // tarefa fica vinculada ao contato mas nao aparece nos Vinculos
+      // do card no panel.
+      try {
+        // Helper: busca cards via boards/pipeline e filtra por contactId
+        const boards = (await api('/boards').catch(() => ({ boards: [] }))).boards || [];
+        for (const b of boards) {
+          const pl = await api('/boards/' + b.id + '/pipeline').catch(() => null);
+          if (!pl?.columns) continue;
+          for (const col of pl.columns) {
+            const match = (col.cards || []).find(c => c.contactId === contactId || c.contact_id === contactId);
+            if (match) { body.cardId = match.id; break; }
+          }
+          if (body.cardId) break;
+        }
+      } catch {}
+    }
     try {
       if (isNew) await api('/tasks', { method: 'POST', body });
       else await api(`/tasks/${task.id}`, { method: 'PATCH', body });
@@ -1444,9 +2536,26 @@ function openTaskEditModal(task) {
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
 
-  const dueDateLocal = task.dueAt ? new Date(task.dueAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+  const dueAtMs = task.dueAt ? (typeof task.dueAt === 'number' ? task.dueAt : Date.parse(task.dueAt)) : null;
+  const dueDateLocal = (dueAtMs && Number.isFinite(dueAtMs)) ? new Date(dueAtMs - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+
+  // Monta dropdown de contato — primeiro lugar do form pra deixar claro
+  // que toda tarefa precisa de cliente (auto-vincula ao card depois).
+  const contactSel = el('select', { name: 'contactId', style: 'width:100%;padding:10px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px' });
+  contactSel.append(el('option', { value: '' }, '— Selecione o cliente —'));
+  for (const c of contacts) {
+    const opt = el('option', { value: c.id }, `${c.name || '(sem nome)'}${c.phone ? ' (' + c.phone + ')' : ''}`);
+    if (task.contactId === c.id) opt.selected = true;
+    contactSel.append(opt);
+  }
+  const contactWrap = el('div', { style: 'margin-bottom:12px' },
+    el('label', { style: 'display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px' }, 'Cliente'),
+    contactSel,
+    el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px' }, 'Vincula a tarefa ao cliente e ao card dele automaticamente'),
+  );
 
   form.append(
+    contactWrap,
     inputField('title', 'Título *', { required: true, value: task.title || '' }),
     selectField('type', 'Tipo', [
       { value: 'call', label: '📞 Ligação' },
@@ -2136,7 +3245,30 @@ if (document.readyState !== 'loading') wireOnda35Buttons();
 function renderContactsList() {
   const l = $('#contactsList');
   l.innerHTML = '';
-  if (!state.contacts.length) { l.append(el('div', { class: 'empty' }, 'Nenhum contato ainda.')); return; }
+  const PER_PAGE = 50;
+  const total = state.contactsTotal ?? state.contacts.length;
+  const page = state.contactsPage ?? 1;
+  const query = state.contactsQuery ?? '';
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  // Counter no topo: "Mostrando X-Y de Z contatos"
+  const fromIdx = (page - 1) * PER_PAGE + 1;
+  const toIdx = Math.min(page * PER_PAGE, total);
+  const counterText = query
+    ? state.contacts.length + ' resultado(s) para "' + query + '"'
+    : (total > 0 ? 'Mostrando ' + fromIdx + '–' + toIdx + ' de ' + total + ' contatos' : 'Nenhum contato');
+  l.append(el('div', {
+    style: 'padding:6px 4px 12px;font-size:12px;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center'
+  },
+    el('span', {}, counterText),
+    query ? el('button', {
+      style: 'background:transparent;border:1px solid var(--border);color:var(--text-dim);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px',
+      on: { click: async () => { document.getElementById('contactSearchInput').value = ''; await loadContacts('', 1); renderContactsList(); } }
+    }, '× limpar busca') : null,
+  ));
+
+  if (!state.contacts.length) { l.append(el('div', { class: 'empty' }, query ? 'Nenhum resultado.' : 'Nenhum contato ainda.')); return; }
+
   for (const c of state.contacts) {
     const item = el('div', { class: 'list-item', on: { click: async () => {
       const detail = await api(`/contacts/${c.id}`);
@@ -2145,7 +3277,7 @@ function renderContactsList() {
       else toast('Esse contato ainda não tem card', '');
     } } },
       el('div', { class: 'list-item-left' },
-        el('div', { class: 'contact-avatar' }, initials(c.name)),
+        avatarEl(c, { class: 'contact-avatar' }),
         el('div', {},
           el('div', { class: 'list-item-title' }, c.name),
           el('div', { class: 'list-item-sub' }, [c.phone, c.email].filter(Boolean).join(' · ') || '—'),
@@ -2156,6 +3288,59 @@ function renderContactsList() {
     attachListItemContextMenu(item, (x, y) => showContactContextMenu(c, x, y));
     l.append(item);
   }
+
+  // Paginador no rodape (só mostra se tiver mais de 1 pagina e nao está em busca)
+  if (!query && totalPages > 1) {
+    l.append(renderPagination(page, totalPages, async (newPage) => {
+      await loadContacts('', newPage);
+      renderContactsList();
+      // Scroll pro topo
+      l.scrollTop = 0;
+      l.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+    }));
+  }
+}
+
+function renderPagination(currentPage, totalPages, onPageChange) {
+  const wrap = el('div', {
+    style: 'display:flex;justify-content:center;align-items:center;gap:6px;padding:18px 8px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px'
+  });
+  const btn = (label, page, disabled, active) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (disabled || active) b.disabled = true;
+    b.style.cssText = 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;' +
+      'cursor:' + (disabled || active ? 'default' : 'pointer') + ';' +
+      'background:' + (active ? 'linear-gradient(135deg,#9B59FC,#4A9EFF)' : 'transparent') + ';' +
+      'color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') + ';' +
+      'border:1px solid ' + (active ? 'transparent' : 'var(--border)') + ';' +
+      'opacity:' + (disabled && !active ? '.5' : '1');
+    b.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!disabled && !active) onPageChange(page);
+    });
+    return b;
+  };
+
+  // Estratégia: «  1 2 ... N-1 N  »  com janela de 5 ao redor da pagina atual
+  const pages = new Set([1, totalPages, currentPage]);
+  for (let i = -2; i <= 2; i++) {
+    const p = currentPage + i;
+    if (p > 1 && p < totalPages) pages.add(p);
+  }
+  const sortedPages = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+
+  wrap.append(btn('«', currentPage - 1, currentPage <= 1, false));
+  let prev = 0;
+  for (const p of sortedPages) {
+    if (prev && p > prev + 1) wrap.append(el('span', { style: 'color:var(--text-dim);padding:0 4px' }, '...'));
+    wrap.append(btn(String(p), p, false, p === currentPage));
+    prev = p;
+  }
+  wrap.append(btn('»', currentPage + 1, currentPage >= totalPages, false));
+  return wrap;
 }
 
 function renderChannelsList() {
@@ -2182,10 +3367,13 @@ function renderChannelsList() {
         el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
-      el('div', { style: 'margin-top:10px;display:flex;gap:6px' },
-        el('button', { class: 'save-btn', style: 'flex:1;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px',
-          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Ver webhook URL & instruções'),
-        el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 16px;font-size:12px',
+      el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center' },
+        renderAIToggleButton(ch),
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px;font-weight:700',
+          on: { click: () => openAIAgentModal(ch) } }, '⚙️ Configurar IA'),
+        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:rgba(74,158,255,.12);color:#4A9EFF;border:1px solid rgba(74,158,255,.35);font-size:12px;padding:9px 12px',
+          on: { click: () => showWebhookSetup(ch, false) } }, '📡 Webhook'),
+        el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 14px;font-size:12px',
           on: { click: async () => {
             if (!await confirmDialog('Remover canal', `Apagar canal "${ch.name}"? Atividades antigas permanecem.`, 'Apagar')) return;
             await api(`/channels/${ch.id}`, { method: 'DELETE' });
@@ -2200,6 +3388,126 @@ function renderChannelsList() {
   }
 }
 
+// ─── Toggle ON/OFF rapido do agente IA por canal ────────────────────────
+// Renderiza um botao pill que mostra estado atual e flipa em 1 clique.
+// PATCH /ai-config com so o campo enabled — nao precisa modal completo
+// (caso o user precise pausar o bot rapido pra atender ele mesmo).
+function renderAIToggleButton(ch) {
+  // Estado in-memory: lemos sob demanda o ai-config, cacheamos no state.
+  state.aiConfigCache = state.aiConfigCache || {};
+  const cached = state.aiConfigCache[ch.id];
+  const enabled = cached?.enabled === true;
+  // Se ainda nao temos dado, marca como "carregando" e busca
+  if (cached === undefined) {
+    api(`/channels/${ch.id}/ai-config`).then((cfg) => {
+      state.aiConfigCache[ch.id] = { enabled: !!cfg.enabled };
+      renderChannelsList();
+    }).catch(() => { state.aiConfigCache[ch.id] = { enabled: false }; });
+  }
+  const bg = enabled
+    ? 'linear-gradient(135deg,#22C55E,#16A34A)'
+    : 'linear-gradient(135deg,#525252,#404040)';
+  const label = enabled ? '🤖 IA: ON' : '🤖 IA: OFF';
+  return el('button', {
+    class: 'save-btn',
+    style: `flex:0 1 auto;min-width:110px;background:${bg};color:#fff;font-size:12px;padding:9px 14px;font-weight:700`,
+    title: enabled ? 'Clique pra DESLIGAR o agente IA' : 'Clique pra LIGAR o agente IA',
+    on: { click: async () => {
+      try {
+        const next = !enabled;
+        await api(`/channels/${ch.id}/ai-config`, { method: 'PATCH', body: { enabled: next } });
+        state.aiConfigCache[ch.id] = { enabled: next };
+        toast(next ? '🤖 Agente IA LIGADO' : '🤖 Agente IA DESLIGADO', 'success');
+        renderChannelsList();
+      } catch (err) {
+        toast('Erro: ' + (err.message || err), 'error');
+      }
+    } },
+  }, label);
+}
+
+
+// ─── Agente IA por canal — config inline (replica n8n bot nativamente) ─
+async function openAIAgentModal(channel) {
+  // Carrega config atual do backend
+  let cfg;
+  try { cfg = await api(`/channels/${channel.id}/ai-config`); }
+  catch (e) { toast('Erro ao carregar config: ' + e.message, 'error'); return; }
+  const presets = [
+    { name: '— Selecione um preset opcional —', prompt: '' },
+    { name: 'Corretor de Seguros (Funeral/Vida)', prompt: 'Você é um vendedor virtual da corretora de seguros.\n\nFLUXO: saudação → coletar nome → idade do titular + tipo de plano (individual/familiar) → dependentes (se familiar) → cotação → fechamento.\n\nREGRAS:\n- Respostas curtas (3-4 frases máx)\n- Nunca inventar valores\n- Linguagem simples, emojis com moderação\n- Se não souber, encaminha pro corretor humano\n- Se cliente já respondeu, NÃO repita pergunta\n- Se cliente mandar várias infos juntas, processa tudo de uma vez\n\nPLANO: Funeral + seguro morte acidental. Não é plano de saúde.' },
+    { name: 'Imobiliária (Locação/Venda)', prompt: 'Você é um(a) consultor(a) virtual da imobiliária.\n\nFLUXO: saudação → coletar tipo de imóvel desejado (casa/apto, comprar/alugar) → bairros de interesse → faixa de preço → quantidade de quartos → enviar 3 opções da carteira → marcar visita.\n\nREGRAS:\n- Tom amigável e profissional\n- Se cliente quer agendar visita, transfere pra corretor humano\n- Sempre confirma cidade antes de mostrar imóveis\n- Não promete valores específicos sem confirmar com humano' },
+    { name: 'E-commerce (Atendimento)', prompt: 'Você é o atendente virtual da loja.\n\nFLUXO: saudação → identificar dúvida (rastreio, troca, defeito, info de produto) → resolver ou encaminhar pra humano.\n\nREGRAS:\n- Para rastreio, peça código do pedido\n- Para devolução, peça motivo + foto se for defeito\n- Nunca prometa estorno sem aprovação humana\n- Tom solicito e claro' },
+    { name: 'SDR Geral (Pré-vendas)', prompt: 'Você é um SDR (pré-vendedor) da empresa.\n\nMISSÃO: qualificar leads. Coletar nome, empresa, cargo, dor principal e budget aproximado. Depois agenda call com closer humano.\n\nREGRAS:\n- Não vende, qualifica\n- Pergunta no máximo 2 coisas por mensagem\n- Se lead frio, encerra educadamente\n- Se quente, agenda imediatamente' },
+  ];
+  const backdrop = el('div', { class: 'modal-backdrop' });
+  const promptArea = el('textarea', {
+    rows: '14', placeholder: 'Cole ou escreva o system prompt do seu agente...',
+    style: 'width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:"SF Mono",Consolas,monospace;font-size:12px;padding:12px;resize:vertical;line-height:1.5',
+  }, cfg.systemPrompt || '');
+  const enabledChk = el('input', { type: 'checkbox' });
+  if (cfg.enabled) enabledChk.checked = true;
+  const audioChk = el('input', { type: 'checkbox' });
+  if (cfg.audioEnabled) audioChk.checked = true;
+  const presetSel = el('select', { style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%;margin-bottom:10px' });
+  for (const p of presets) presetSel.append(el('option', { value: p.prompt }, p.name));
+  presetSel.addEventListener('change', () => {
+    if (presetSel.value && (!promptArea.value.trim() || confirm('Substituir o prompt atual pelo preset selecionado?'))) {
+      promptArea.value = presetSel.value;
+    }
+  });
+  const debounceInput = el('input', {
+    type: 'number', min: '0', max: '60', value: String(cfg.debounceSeconds ?? 8),
+    style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%',
+  });
+  const historyInput = el('input', {
+    type: 'number', min: '1', max: '100', value: String(cfg.maxHistory ?? 20),
+    style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:inherit;width:100%',
+  });
+  const form = el('form', { on: { submit: async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/channels/${channel.id}/ai-config`, { method: 'PATCH', body: {
+        enabled: enabledChk.checked,
+        systemPrompt: promptArea.value.trim(),
+        audioEnabled: audioChk.checked,
+        maxHistory: parseInt(historyInput.value, 10) || 20,
+        debounceSeconds: parseInt(debounceInput.value, 10) || 8,
+      }});
+      toast(enabledChk.checked ? '🤖 Agente IA ativado' : 'Configuração salva', 'success');
+      backdrop.remove();
+    } catch (err) { toast('Erro: ' + err.message, 'error'); }
+  } } });
+  form.append(
+    el('div', { style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
+      'Ativa um agente de IA que atende automaticamente clientes neste canal WhatsApp. Cliente manda mensagem → agente responde com base no system prompt. Suporta texto e áudio (transcrito via Whisper). Use ',
+      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
+      ' e ',
+      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
+      ' no prompt pra personalizar.',
+    ),
+    el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer' },
+      enabledChk, el('span', { style: 'font-weight:600' }, 'Ativar agente IA neste canal')),
+    el('div', { class: 'field' }, el('label', {}, 'Preset (opcional)'), presetSel),
+    el('div', { class: 'field' }, el('label', {}, 'System prompt *'), promptArea),
+    el('div', { style: 'display:flex;gap:10px;margin-top:10px' },
+      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Histórico (msgs)'), historyInput),
+      el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Debounce (s)'), debounceInput),
+    ),
+    el('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer' },
+      audioChk, el('span', {}, 'Transcrever áudio (Whisper) antes de processar')),
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { type: 'button', class: 'cancel', on: { click: () => backdrop.remove() } }, 'Cancelar'),
+      el('button', { type: 'submit', class: 'confirm' }, 'Salvar'),
+    ),
+  );
+  backdrop.append(el('div', { class: 'modal', style: 'max-width:760px' },
+    el('h3', { style: 'margin:0 0 8px' }, '🤖 Agente IA — ' + channel.name),
+    form,
+  ));
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  document.body.append(backdrop);
+}
 
 // ─── Webhook helpers ───────────────────────────────────────────────────
 function copyToClipboard(text) {
@@ -2276,10 +3584,10 @@ function showWebhookSetup(channel, isNew) {
 }
 
 
-async function openNewChannelModal() {
+async function openNewChannelModal(presetType) {
   // Pre-generate webhook secret so we can show the URL inside the form
   const presetSecret = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
-  let currentType = 'zapi';
+  let currentType = presetType || 'zapi';
 
   const backdrop = el('div', { class: 'modal-backdrop' });
 
@@ -3063,8 +4371,28 @@ function wireEvents() {
     toast('Atualizado', 'success');
   });
   wire('#newCardBtn', 'click', () => openNewCardModal());
+  wire('#newColumnBtn', 'click', () => openNewColumnModal());
   wire('#newChannelBtn', 'click', openNewChannelModal);
   wire('#newContactBtn', 'click', openNewContactModal);
+  wire('#importContactsBtn', 'click', () => openImportContactsModal());
+  wire('#exportContactsBtn', 'click', () => openExportContactsMenu());
+  wire('#refreshPhotosBtn', 'click', async () => {
+    const btn = document.getElementById('refreshPhotosBtn');
+    if (!btn || btn.disabled) return;
+    const force = await clowConfirm(
+      'Buscar foto de perfil dos contatos via Z-API. Pode levar alguns segundos. Forçar refresh de TODOS (mesmo dos que já têm foto)?',
+      { title: 'Atualizar fotos WhatsApp', confirmLabel: 'Sim, todos' }
+    );
+    btn.disabled = true;
+    const orig = btn.textContent; btn.textContent = '📷 Buscando...';
+    try {
+      const r = await api('/contacts/refresh-photos', { method: 'POST', body: { force: !!force } });
+      toast(`✓ ${r.updated} foto(s) baixada(s) · ${r.noPhoto} sem foto pública · ${r.errors} erros (de ${r.total})`, 'success');
+      await loadContacts(); renderContactsList();
+      if (state.currentBoardId) { await loadPipeline(state.currentBoardId); renderKanban(); }
+    } catch (e) { toast('Erro: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+  });
   wire('#newAgentBtn', 'click', openNewAgentModal);
   wire('#newInventoryBtn', 'click', openNewInventoryModal);
 
@@ -3108,6 +4436,25 @@ function wireEvents() {
     if (e.target) e.target.value = '';
   });
   wire('#recordBtn', 'click', toggleRecording);
+  // Câmera (foto + vídeo) — mobile usa input capture, desktop usa modal getUserMedia
+  wire('#cameraBtn', 'click', openCamera);
+  wire('#cameraPhotoInput', 'change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) handleNativeCapture(file);
+    if (e.target) e.target.value = '';
+  });
+  wire('#cameraVideoInput', 'change', (e) => {
+    const file = e.target?.files?.[0];
+    if (file) handleNativeCapture(file);
+    if (e.target) e.target.value = '';
+  });
+  wire('#camPhotoBtn', 'click', capturePhoto);
+  wire('#camRecordBtn', 'click', toggleCameraRecording);
+  wire('#camCloseBtn', 'click', closeCamera);
+  wire('#camRetakeBtn', 'click', resetCameraModalToLive);
+  wire('#camSendBtn', 'click', sendCameraCapture);
+  wire('#emojiBtn', 'click', toggleEmojiPicker);
+  wire('#quickMsgBtn', 'click', (e) => { e.stopPropagation(); qmTogglePopover(); });
 
   // Contact search
   wire('#contactSearchInput', 'input', async (e) => {
@@ -3155,7 +4502,10 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa estar logado no System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Ir pro System Clow</a></div>';
+  // CRM é a porta de entrada. Sem token → login (mesmo login). Com token mas
+  // sem CRM (ex: sessão admin/não-tenant) → não faz loop; mostra aviso.
+  if (!localStorage.getItem('clow_token')) { try { location.replace('/'); return; } catch (e) {} }
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><p style="color:#9898B8">Esta conta não tem CRM associado. <a href="/" style="color:#9B59FC">Voltar</a></p></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -3284,10 +4634,20 @@ async function openCardById(id) {
 // ═════════ INSIGHTS AI ═══════════════════════════════════════════════════
 async function renderInsightsView() {
   const container = $('#insightsContent');
-  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
   try {
-    const forecast = await api('/ai/forecast').catch(() => ({}));
+    let forecast = await api('/ai/forecast').catch(() => ({}));
     const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
+    const noScore = !forecast.weightedCents && (cards.cards || []).length > 0;
+    // Auto-score sincrono na primeira visita: garante dados antes de renderizar
+    if (noScore && !window._insightsAutoScored) {
+      window._insightsAutoScored = true;
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
+      try {
+        await api('/ai/batch-score', { method: 'POST', body: { limit: 20 } });
+        forecast = await api('/ai/forecast').catch(() => ({}));
+      } catch { /* silent — usa o forecast vazio mesmo */ }
+    }
 
     container.innerHTML = '';
     // Forecast hero
@@ -3414,7 +4774,14 @@ async function renderPerformanceView() {
   try {
     const dashboard = await api(`/gamification/dashboard?period=${period}`).catch(() => ({ rows: [], leaderboards: {} }));
     const goals = await api('/goals').catch(() => ({ goals: [] }));
-    const badges = await api('/badges').catch(() => ({ badges: [] }));
+    let badges = await api('/badges').catch(() => ({ badges: [] }));
+    // Auto-seed: se nenhum badge existe, cria defaults silenciosamente
+    if (!badges.badges?.length) {
+      try {
+        await api('/badges/seed-defaults', { method: 'POST', body: {} });
+        badges = await api('/badges').catch(() => ({ badges: [] }));
+      } catch { /* silent */ }
+    }
 
     container.innerHTML = '';
 
@@ -3537,7 +4904,14 @@ async function renderSecurityView() {
   const container = $('#securityContent');
   container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Carregando...</div>';
   try {
-    const roles = await api('/security/roles').catch(() => ({ roles: [] }));
+    let roles = await api('/security/roles').catch(() => ({ roles: [] }));
+    // Auto-seed: se nenhuma role existe, cria defaults (owner/admin/agent/viewer)
+    if (!roles.roles?.length) {
+      try {
+        await api('/security/roles/seed-defaults', { method: 'POST', body: {} });
+        roles = await api('/security/roles').catch(() => ({ roles: [] }));
+      } catch { /* silent */ }
+    }
     const ipList = await api('/security/ip-whitelist').catch(() => ({ entries: [] }));
 
     container.innerHTML = '';
@@ -3929,41 +5303,442 @@ async function renderLinksTab(card) {
   const sec = $('#linksSection');
   if (!sec) return;
   sec.innerHTML = '<div style="padding:20px;color:var(--text-dim);text-align:center">Carregando...</div>';
+
+  // Refs no escopo do tab pra refresh seletivo
+  const refresh = () => renderLinksTab(card);
+
+  let tasks = { tasks: [] }, docs = { documents: [] }, props = { proposals: [] }, subs = { subscriptions: [] };
   try {
-    const tasks = await api(`/cards/${card.id}/tasks`).catch(() => ({ tasks: [] }));
-    const docs = await api(`/cards/${card.id}/documents`).catch(() => ({ documents: [] }));
-    const props = await api(`/cards/${card.id}/proposals`).catch(() => ({ proposals: [] }));
-    sec.innerHTML = '';
-    const wrap = el('div', { style: 'padding:14px' });
-    wrap.append(el('h4', { style: 'margin:0 0 8px;font-size:13px' }, '✅ Tarefas (' + (tasks.tasks?.length || 0) + ')'));
-    if (tasks.tasks?.length) {
-      for (const t of tasks.tasks) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, t.title),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, `${t.priority} • ${t.status}`),
-        ));
-      }
+    const [t1, d1, p1, s1] = await Promise.all([
+      api('/cards/' + card.id + '/tasks').catch(() => ({ tasks: [] })),
+      api('/cards/' + card.id + '/documents').catch(() => ({ documents: [] })),
+      api('/cards/' + card.id + '/proposals').catch(() => ({ proposals: [] })),
+      api('/cards/' + card.id + '/subscriptions').catch(() => ({ subscriptions: [] })),
+    ]);
+    tasks = t1; docs = d1; props = p1; subs = s1;
+  } catch (e) {
+    sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>';
+    return;
+  }
+
+  sec.innerHTML = '';
+  const wrap = el('div', { style: 'padding:14px;display:flex;flex-direction:column;gap:18px' });
+
+  // Helpers de UI
+  const sectionHead = (icon, title, count, onAdd) => el('div', {
+    style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px'
+  },
+    el('h4', { style: 'margin:0;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px' },
+      el('span', { style: 'font-size:14px' }, icon),
+      title,
+      el('span', { style: 'color:var(--text-dim);font-weight:500' }, '(' + count + ')'),
+    ),
+    el('button', {
+      type: 'button',
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer',
+      on: { click: onAdd }
+    }, '+ Adicionar')
+  );
+
+  const emptyHint = (msg) => el('div', { style: 'color:var(--text-dim);font-size:12px;font-style:italic;padding:8px;background:rgba(155,89,252,0.04);border-radius:6px;text-align:center' }, msg);
+
+  const itemCard = (children, opts) => el('div', {
+    style: 'background:var(--bg-3,rgba(255,255,255,0.03));border:1px solid rgba(155,89,252,0.12);padding:10px;border-radius:8px;margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
+  }, ...children);
+
+  const inlineBtn = (label, onClick, danger) => el('button', {
+    type: 'button',
+    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(239,68,68,0.4)' : 'rgba(155,89,252,0.3)') + ';color:' + (danger ? '#fca5a5' : 'var(--text)') + ';padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer',
+    on: { click: onClick }
+  }, label);
+
+  const PRIO_COLOR = { urgent: '#EF4444', high: '#F59E0B', med: '#9B59FC', low: '#64748B' };
+  const PRIO_LABEL = { urgent: 'Urgente', high: 'Alta', med: 'Média', low: 'Baixa' };
+
+  // ─── TAREFAS ─────────────────────────────────────────────────────────
+  const tasksSec = el('section', {});
+  tasksSec.append(sectionHead('✅', 'Tarefas', tasks.tasks?.length || 0, () => openNewTaskModal(card, refresh)));
+  if (!tasks.tasks?.length) tasksSec.append(emptyHint('Nenhuma tarefa. Use "+ Adicionar" pra criar (cobrar mensalidade, marcar reunião, etc)'));
+  else {
+    for (const t of tasks.tasks) {
+      const due = t.due_at || t.dueAt;
+      const dueDate = due ? new Date(due) : null;
+      const overdue = dueDate && dueDate.getTime() < Date.now() && t.status === 'open';
+      const done = t.status === 'done' || t.status === 'completed';
+      tasksSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap' },
+            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + (PRIO_COLOR[t.priority] || '#9B59FC') }),
+            el('span', { style: 'text-decoration:' + (done ? 'line-through' : 'none') }, t.title || '(sem título)'),
+            t.type ? el('span', { style: 'font-size:10px;padding:2px 6px;background:rgba(155,89,252,0.15);border-radius:5px;color:var(--text-dim);text-transform:uppercase' }, t.type) : null,
+          ),
+          el('div', { style: 'color:' + (overdue ? '#fca5a5' : 'var(--text-dim)') + ';font-size:11px;margin-top:4px' },
+            (PRIO_LABEL[t.priority] || t.priority || '') + ' · ' + (t.status || '') +
+            (dueDate ? ' · ' + (overdue ? '⚠ vencida ' : '📅 ') + dueDate.toLocaleDateString('pt-BR') + (due.toString().includes('T') ? ' ' + dueDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '') : '')
+          ),
+          t.description ? el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px;white-space:pre-wrap' }, t.description) : null,
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          !done ? inlineBtn('✓', async () => {
+            try { await api('/tasks/' + t.id + '/complete', { method: 'POST', body: {} }); toast('Concluída', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }) : null,
+          inlineBtn('✎', () => openEditTaskModal(t, refresh)),
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar tarefa "' + (t.title || '') + '"?', { title: 'Apagar tarefa', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/tasks/' + t.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ], { dimmed: done }));
     }
-    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '📄 Documentos (' + (docs.documents?.length || 0) + ')'));
-    if (docs.documents?.length) {
-      for (const d of docs.documents) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, d.title + ' v' + d.version),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, d.status),
-        ));
-      }
+  }
+  wrap.append(tasksSec);
+
+  // ─── DOCUMENTOS ──────────────────────────────────────────────────────
+  const docsSec = el('section', {});
+  docsSec.append(sectionHead('📄', 'Documentos', docs.documents?.length || 0, () => openUploadDocModal(card, refresh)));
+  if (!docs.documents?.length) docsSec.append(emptyHint('Nenhum documento. Use "+ Adicionar" pra anexar contratos, comprovantes, fotos, PDFs'));
+  else {
+    for (const d of docs.documents) {
+      const fileLink = extractFileLink(d.bodyHtml || d.body_html || '');
+      docsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600' }, d.title + ' · v' + (d.version || 1)),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            (d.status || 'draft') + (d.created_at || d.createdAt ? ' · ' + new Date(d.created_at || d.createdAt).toLocaleDateString('pt-BR') : '')
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          fileLink ? inlineBtn('⬇', () => window.open(fileLink, '_blank')) : null,
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar documento "' + d.title + '"?', { title: 'Apagar documento', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/documents/' + d.id, { method: 'DELETE' }); toast('Apagado', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ]));
     }
-    wrap.append(el('h4', { style: 'margin:16px 0 8px;font-size:13px' }, '💼 Propostas (' + (props.proposals?.length || 0) + ')'));
-    if (props.proposals?.length) {
-      for (const p of props.proposals) {
-        wrap.append(el('div', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;margin-bottom:4px;font-size:12px' },
-          el('div', { style: 'font-weight:600' }, 'v' + p.version + ' — ' + fmtMoney(p.totalCents || 0)),
-          el('div', { style: 'color:var(--text-dim);font-size:11px' }, p.status),
-        ));
-      }
+  }
+  wrap.append(docsSec);
+
+  // ─── PROPOSTAS ───────────────────────────────────────────────────────
+  const propsSec = el('section', {});
+  propsSec.append(sectionHead('💼', 'Propostas', props.proposals?.length || 0, () => openNewProposalModal(card, refresh)));
+  if (!props.proposals?.length) propsSec.append(emptyHint('Nenhuma proposta. Use "+ Adicionar" pra criar uma proposta comercial pro cliente'));
+  else {
+    for (const pr of props.proposals) {
+      propsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600' }, (pr.title || 'Proposta') + ' · v' + (pr.version || 1)),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            (pr.status || 'draft') + ' · ' + fmtMoney(pr.totalCents || pr.total_cents || 0)
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          inlineBtn('×', async () => {
+            if (!(await clowConfirm('Apagar proposta?', { title: 'Apagar', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/proposals/' + pr.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
+            catch (e) { toast('Erro: ' + e.message, 'error'); }
+          }, true),
+        ),
+      ]));
     }
-    sec.append(wrap);
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+  }
+  wrap.append(propsSec);
+
+  // ─── MENSALIDADES ────────────────────────────────────────────────────
+  const subsSec = el('section', {});
+  subsSec.append(sectionHead('💳', 'Mensalidades', subs.subscriptions?.length || 0, () => openNewSubscriptionForCard(card, refresh)));
+  if (!subs.subscriptions?.length) subsSec.append(emptyHint('Nenhuma mensalidade. Use "+ Adicionar" pra criar cobrança recorrente (vai aparecer no menu Mensalidades também)'));
+  else {
+    for (const sb of subs.subscriptions) {
+      const dueMs = sb.nextChargeAt - Date.now();
+      const overdue = dueMs < 0 && sb.status === 'active';
+      const paidThisCycle = !!sb.lastPaidAt && sb.nextChargeAt > Date.now();
+      const statusLabel = sb.status === 'cancelled' ? 'Cancelada'
+        : paidThisCycle ? 'Paga'
+        : overdue ? 'Atrasada'
+        : 'Aguardando';
+      const statusColor = sb.status === 'cancelled' ? '#94A3B8'
+        : paidThisCycle ? '#22C55E'
+        : overdue ? '#F87171'
+        : '#F59E0B';
+      const cycleLabel = ({ monthly:'/mês', weekly:'/semana', quarterly:'/trim', yearly:'/ano', one_time:' (única)' })[sb.cycle] || ` /${sb.cycle}`;
+      subsSec.append(itemCard([
+        el('div', { style: 'flex:1;min-width:0' },
+          el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
+            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + statusColor }),
+            el('span', {}, sb.planName),
+            el('span', { style: 'font-size:10px;padding:2px 7px;background:rgba(' + (paidThisCycle ? '34,197,94' : overdue ? '239,68,68' : sb.status === 'cancelled' ? '148,163,184' : '245,158,11') + ',.15);color:' + statusColor + ';border-radius:5px;text-transform:uppercase;font-weight:700;letter-spacing:.3px' }, statusLabel),
+          ),
+          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+            fmtMoney(sb.amountCents) + cycleLabel + ' · próxima ' + new Date(sb.nextChargeAt).toLocaleDateString('pt-BR'),
+          ),
+        ),
+        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
+          (sb.status === 'active' || sb.status === 'past_due') && !paidThisCycle
+            ? inlineBtn('✓', async () => {
+                try { await api('/subscriptions/' + sb.id + '/mark-paid', { method: 'POST' }); toast('Marcada como paga', 'success'); refresh(); }
+                catch (e) { toast('Erro: ' + e.message, 'error'); }
+              })
+            : null,
+          sb.status !== 'cancelled'
+            ? inlineBtn('×', async () => {
+                if (!(await clowConfirm('Cancelar mensalidade "' + sb.planName + '"?', { title: 'Cancelar', danger: true, confirmLabel: 'Cancelar' }))) return;
+                try { await api('/subscriptions/' + sb.id, { method: 'PATCH', body: { status: 'cancelled', cancelledAt: Date.now() } }); toast('Cancelada', 'success'); refresh(); }
+                catch (e) { toast('Erro: ' + e.message, 'error'); }
+              }, true)
+            : null,
+        ),
+      ], { dimmed: sb.status === 'cancelled' }));
+    }
+  }
+  wrap.append(subsSec);
+
+  sec.append(wrap);
+}
+
+// Modal "Nova mensalidade" pre-preenchido com contato + cardId do card atual.
+// Aparece tanto no menu Mensalidades (lista global) quanto no painel Vinculos
+// do card — contato e card sao auto-vinculados, sem opcao de mudar.
+async function openNewSubscriptionForCard(card, onDone) {
+  const contactId = card?.contactId;
+  if (!contactId) { toast('Card sem contato vinculado — adicione um contato primeiro', 'error'); return; }
+  await buildModal('Nova mensalidade', [
+    { name: 'planName', label: 'Plano', required: true, placeholder: 'Ex: Sulamerica Vida, MAG, etc' },
+    { name: 'amount', label: 'Valor (R$)', type: 'number', required: true, attrs: { step: '0.01' } },
+    { name: 'cycle', label: 'Ciclo', type: 'select', value: 'monthly', options: [
+      { value: 'monthly', label: 'Mensal' }, { value: 'weekly', label: 'Semanal' },
+      { value: 'quarterly', label: 'Trimestral' }, { value: 'yearly', label: 'Anual' },
+      { value: 'one_time', label: 'Única vez' },
+    ]},
+    { name: 'nextCharge', label: 'Primeira/próxima cobrança', type: 'datetime-local', required: true },
+  ], async (v) => {
+    if (!v.planName?.trim()) { toast('Plano obrigatório', 'error'); return false; }
+    if (!v.amount || parseFloat(v.amount) <= 0) { toast('Valor inválido', 'error'); return false; }
+    if (!v.nextCharge) { toast('Data obrigatória', 'error'); return false; }
+    await api('/subscriptions', { method: 'POST', body: {
+      contactId,
+      cardId: card.id,
+      planName: v.planName.trim(),
+      amountCents: Math.round(parseFloat(v.amount) * 100),
+      cycle: v.cycle || 'monthly',
+      nextChargeAt: new Date(v.nextCharge).getTime(),
+    }});
+    toast('Mensalidade criada e vinculada ao card', 'success');
+    onDone?.();
+  });
+}
+
+// ─── Helpers da aba Vínculos ────────────────────────────────────────────
+function extractFileLink(html) {
+  if (!html) return null;
+  const m = String(html).match(/href=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+function buildModal(title, fields, onSubmit) {
+  return new Promise((resolve) => {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const inputs = {};
+    const formChildren = [el('h3', { style: 'margin:0 0 14px' }, title)];
+    for (const f of fields) {
+      const wrap = el('div', { style: 'margin-bottom:12px' });
+      wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600' }, f.label + (f.required ? ' *' : '')));
+      let input;
+      if (f.type === 'textarea') {
+        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
+        if (f.value != null) input.value = f.value;
+      } else if (f.type === 'select') {
+        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        for (const opt of f.options) input.append(el('option', { value: opt.value }, opt.label));
+        if (f.value != null) input.value = f.value;
+      } else if (f.type === 'file') {
+        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
+      } else {
+        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        if (f.value != null) input.value = f.value;
+      }
+      inputs[f.name] = input;
+      wrap.append(input);
+      if (f.hint) wrap.append(el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px' }, f.hint));
+      formChildren.push(wrap);
+    }
+    const submitBtn = el('button', {
+      type: 'button',
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
+      on: { click: async () => {
+        const values = {};
+        for (const f of fields) {
+          const inp = inputs[f.name];
+          if (f.type === 'file') values[f.name] = inp.files?.[0] || null;
+          else values[f.name] = inp.value;
+        }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Salvando...';
+        try {
+          const ok = await onSubmit(values);
+          if (ok !== false) { dialog.remove(); resolve(true); }
+          else { submitBtn.disabled = false; submitBtn.textContent = 'Salvar'; }
+        } catch (e) {
+          toast('Erro: ' + e.message, 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Salvar';
+        }
+      } }
+    }, 'Salvar');
+    formChildren.push(el('div', { class: 'modal-actions', style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px' },
+      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
+      submitBtn,
+    ));
+    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:20px' }, ...formChildren);
+    dialog.append(modal);
+    document.body.append(dialog);
+  });
+}
+
+async function openNewTaskModal(card, onDone) {
+  await buildModal('Nova tarefa', [
+    { name: 'title', label: 'Título', required: true, placeholder: 'Ex: Cobrar mensalidade, Ligar pro cliente, Mandar contrato' },
+    { name: 'type', label: 'Tipo', type: 'select', value: 'followup', options: [
+      { value: 'followup', label: 'Follow-up' }, { value: 'call', label: 'Ligação' },
+      { value: 'meeting', label: 'Reunião' }, { value: 'email', label: 'E-mail' },
+      { value: 'other', label: 'Outro' },
+    ] },
+    { name: 'priority', label: 'Prioridade', type: 'select', value: 'med', options: [
+      { value: 'low', label: 'Baixa' }, { value: 'med', label: 'Média' },
+      { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
+    ] },
+    { name: 'dueAt', label: 'Vencimento (data e hora)', type: 'datetime-local', hint: 'Opcional. Vai aparecer na Agenda e em Tarefas vencidas.' },
+    { name: 'description', label: 'Descrição', type: 'textarea', placeholder: 'Detalhes da tarefa...', rows: 3 },
+  ], async (v) => {
+    if (!v.title?.trim()) { toast('Título obrigatório', 'error'); return false; }
+    const body = {
+      title: v.title.trim(),
+      type: v.type || 'followup',
+      priority: v.priority || 'med',
+      cardId: card.id,
+    };
+    if (card.contactId) body.contactId = card.contactId;
+    if (v.dueAt) body.dueAt = new Date(v.dueAt).getTime();
+    if (v.description?.trim()) body.description = v.description.trim();
+    await api('/tasks', { method: 'POST', body });
+    toast('Tarefa criada', 'success');
+    onDone?.();
+  });
+}
+
+async function openEditTaskModal(t, onDone) {
+  const dueLocal = (t.due_at || t.dueAt) ? new Date(t.due_at || t.dueAt).toISOString().slice(0, 16) : '';
+  await buildModal('Editar tarefa', [
+    { name: 'title', label: 'Título', required: true, value: t.title },
+    { name: 'priority', label: 'Prioridade', type: 'select', value: t.priority || 'med', options: [
+      { value: 'low', label: 'Baixa' }, { value: 'med', label: 'Média' },
+      { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
+    ] },
+    { name: 'dueAt', label: 'Vencimento', type: 'datetime-local', value: dueLocal },
+    { name: 'description', label: 'Descrição', type: 'textarea', value: t.description || '', rows: 3 },
+  ], async (v) => {
+    const body = {
+      title: v.title.trim(),
+      priority: v.priority,
+      description: v.description?.trim() || null,
+      dueAt: v.dueAt ? new Date(v.dueAt).getTime() : null,
+    };
+    await api('/tasks/' + t.id, { method: 'PATCH', body });
+    toast('Tarefa atualizada', 'success');
+    onDone?.();
+  });
+}
+
+async function openUploadDocModal(card, onDone) {
+  await buildModal('Anexar documento', [
+    { name: 'file', label: 'Arquivo (PDF, imagem, doc, etc)', type: 'file', required: true, accept: '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt' },
+    { name: 'title', label: 'Título', placeholder: 'Ex: Contrato assinado, RG do cliente, Comprovante de renda', hint: 'Se vazio, usa o nome do arquivo' },
+    { name: 'extract', label: 'Extrair texto do arquivo (OCR/Whisper)', type: 'select', value: 'no', options: [
+      { value: 'no', label: 'Não — só anexar' },
+      { value: 'yes', label: 'Sim — gera texto pesquisável (custa centavos OpenAI)' },
+    ], hint: 'Útil pra contratos PDF: o texto vira pesquisável e fica salvo junto.' },
+  ], async (v) => {
+    if (!v.file) { toast('Selecione um arquivo', 'error'); return false; }
+    // 1) Upload do arquivo
+    const fd = new FormData();
+    fd.append('file', v.file);
+    let uploaded;
+    try {
+      const r = await fetch('/v1/crm/media/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + state.apiKey },
+        body: fd,
+      });
+      uploaded = await r.json();
+      if (!r.ok || !uploaded.url) throw new Error(uploaded.message || uploaded.error || 'upload falhou');
+    } catch (e) { toast('Erro upload: ' + e.message, 'error'); return false; }
+
+    // 2) Opcional: extrair texto
+    let extractedText = '';
+    if (v.extract === 'yes') {
+      try {
+        const fd2 = new FormData();
+        fd2.append('file', v.file);
+        const r2 = await fetch('/v1/crm/media/process', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + state.apiKey },
+          body: fd2,
+        });
+        const j = await r2.json();
+        if (r2.ok && j.content) extractedText = j.content;
+      } catch (e) { /* silent */ }
+    }
+
+    // 3) Cria documento ligado ao card com link e texto
+    const title = v.title?.trim() || v.file.name;
+    const sizeKb = Math.round((v.file.size || 0) / 1024);
+    const bodyHtml =
+      '<p><strong>📎 ' + escapeHtml(v.file.name) + '</strong> (' + sizeKb + ' KB · ' + escapeHtml(v.file.type || 'file') + ')</p>' +
+      '<p><a href="' + uploaded.url + '" target="_blank">⬇ Baixar arquivo</a></p>' +
+      (extractedText ? '<hr/><h4>Conteúdo extraído</h4><pre style="white-space:pre-wrap">' + escapeHtml(extractedText) + '</pre>' : '');
+
+    await api('/documents', {
+      method: 'POST',
+      body: {
+        title,
+        bodyHtml,
+        cardId: card.id,
+        contactId: card.contactId || undefined,
+        status: 'draft',
+      },
+    });
+    toast('Documento anexado', 'success');
+    onDone?.();
+  });
+}
+
+async function openNewProposalModal(card, onDone) {
+  await buildModal('Nova proposta', [
+    { name: 'title', label: 'Título', required: true, value: card.title ? 'Proposta · ' + card.title : '', placeholder: 'Ex: Plano Profissional + Z-API' },
+    { name: 'totalBrl', label: 'Valor total (R$)', type: 'text', placeholder: '697.00', hint: 'Use ponto ou vírgula como separador decimal' },
+    { name: 'description', label: 'Descrição / itens da proposta', type: 'textarea', rows: 4, placeholder: 'Ex: 1x Plano Profissional R$ 697/mês\n1x Setup inicial R$ 0\n...' },
+  ], async (v) => {
+    if (!v.title?.trim()) { toast('Título obrigatório', 'error'); return false; }
+    const cents = v.totalBrl ? Math.round(parseFloat(String(v.totalBrl).replace(',', '.')) * 100) : 0;
+    if (v.totalBrl && (!Number.isFinite(cents) || cents < 0)) { toast('Valor inválido', 'error'); return false; }
+    await api('/cards/' + card.id + '/proposals', {
+      method: 'POST',
+      body: {
+        title: v.title.trim(),
+        totalCents: cents,
+        bodyHtml: v.description ? '<pre style="white-space:pre-wrap">' + escapeHtml(v.description) + '</pre>' : '',
+      },
+    });
+    toast('Proposta criada', 'success');
+    onDone?.();
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
 async function renderCommentsTab(card) {
@@ -4306,7 +6081,7 @@ async function openChannelInboxConfig(channel) {
         autoCreateCheckbox,
         el('div', {},
           el('div', { style: 'font-weight:600' }, '🤖 Criar card automaticamente para novo lead'),
-          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'Toda mensagem nova de contato sem card aberto vira um card na coluna "Lead novo"'),
+          el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'Toda mensagem nova de contato sem card aberto vira um card na coluna "Lead"'),
         ),
       ),
     ));
@@ -4459,8 +6234,8 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
     try {
       const n = new Notification(title, {
         body: bodyPreview,
-        icon: '/crm/icon-192.png',
-        badge: '/crm/icon-192.png',
+        icon: '/assets/icon-192.png',
+        badge: '/assets/icon-192.png',
         tag: 'wa-' + (data.cardId || ''),
         renotify: true,
       });
@@ -4813,5 +6588,1177 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   // Replace as chamadas dos blocos onda48/onda49 que fazem renderKanban
   // direto — proximo evento, vao usar __smartRefresh em vez disso.
   window.__onda52 = { snapshotScrolls, restoreScrolls, isInteracting, markInteracting, pipelineHash };
+})();
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══ ONDA 53: WhatsApp limits + pre-modal de escolha ═══════════════════
+async function loadMyInfo() {
+  try {
+    const r = await api('/me');
+    window.state.me = r;
+    return r;
+  } catch (e) {
+    console.warn('[onda53] loadMyInfo failed:', e && e.message || e);
+    // Fallback resiliente: nunca derrubar fluxo do front
+    const fb = {
+      _fallback: true,
+      tenant: { id: null, tier: 'unknown', status: 'unknown', hasStripe: false },
+      whatsapp: { included: 1, max: 999, zapiCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
+    };
+    window.state.me = fb;
+    return fb;
+  }
+}
+
+function renderChannelsLimitsBadge() {
+  const me = window.state.me;
+  if (!me?.whatsapp || me._fallback) return null; // Onda 53j: nao renderizar badge se /me falhou
+  const wa = me.whatsapp;
+  const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
+  const tierLabel = (me.tenant?.tier || '').toUpperCase();
+  const color = wa.available === 0 ? '#EF4444' : (wa.available <= 1 ? '#F59E0B' : '#22C55E');
+  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
+    el('div', { style: 'display:flex;align-items:center;gap:6px' },
+      el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
+      el('span', { style: 'color:var(--text)' }, fullLabel),
+    ),
+    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(155,89,252,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
+    me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Z-API ativo(s)') : null,
+  );
+}
+
+// Pre-modal de escolha Z-API vs Meta
+async function openChannelTypePicker() {
+  console.log('[picker] openChannelTypePicker chamado');
+  let me;
+  try {
+    me = await loadMyInfo();
+  } catch (e) {
+    console.error('[picker] loadMyInfo throw:', e);
+    me = null;
+  }
+  if (!me || typeof me !== 'object') {
+    me = { _fallback: true, tenant: { id: null, tier: 'unknown', status: 'unknown', hasStripe: false }, whatsapp: null };
+  }
+  if (!me.tenant) me.tenant = { id: null, tier: 'unknown', status: 'unknown', hasStripe: false };
+  if (me._fallback) console.warn('[onda53] picker em modo fallback');
+  const wa = me.whatsapp || { included: 1, max: 999, totalUsed: 0, available: 999, extraPaid: 0, pricePerExtraBrl: 100 };
+
+  // Limite atingido?
+  if (wa.available <= 0) {
+    const dialog = el('div', { class: 'modal-backdrop' });
+    const modal = el('div', { class: 'modal', style: 'max-width:460px' },
+      el('h3', {}, 'Limite de numeros atingido'),
+      el('p', { style: 'color:var(--text-dim);line-height:1.6;font-size:13.5px' },
+        'Seu plano ', el('b', {}, (me?.tenant?.tier || 'desconhecido').toUpperCase()),
+        ' permite no maximo ', el('b', {}, String(wa.max)),
+        ' numero(s) WhatsApp. Voce ja tem ', el('b', {}, String(wa.totalUsed)),
+        ' conectado(s).'
+      ),
+      wa.max < 10 ? el('p', { style: 'color:var(--text-dim);font-size:13px;margin-top:10px' },
+        'Pra conectar mais numeros, faca upgrade pro plano superior:'
+      ) : null,
+      el('div', { class: 'modal-actions', style: 'gap:8px;flex-direction:column' },
+        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
+        el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
+      ),
+    );
+    dialog.append(modal);
+    document.body.append(dialog);
+    return;
+  }
+
+  // Mostrar picker (Z-API vs Meta)
+  const isFirstNumber = wa.totalUsed === 0;
+  const willCharge = !isFirstNumber; // primeiro numero e gratis (incluso); seguintes via Z-API custam R$100
+
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const modal = el('div', { class: 'modal', style: 'max-width:560px' },
+    el('h3', {}, 'Adicionar numero WhatsApp'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 18px' },
+      'Voce tem ', el('b', { style: 'color:var(--text)' }, String(wa.available)),
+      ' vaga(s) disponivel(is) no plano ', el('b', { style: 'color:var(--text)' }, (me?.tenant?.tier || 'desconhecido').toUpperCase()),
+      '. Escolha o tipo de conexao:'
+    ),
+
+    // OPÇÃO Z-API
+    el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(37,211,102,0.08),rgba(18,140,126,0.04));border:2px solid rgba(37,211,102,0.3);padding:18px;border-radius:14px;margin-bottom:12px;cursor:pointer;color:inherit;font-family:inherit',
+      on: { click: async () => {
+        if (willCharge) {
+          // Onda 53h: ABRIR STRIPE CHECKOUT em nova aba; polling
+          // ate cliente pagar; depois libera modal de cadastro.
+          dialog.remove();
+          await openZapiCheckoutFlow(me);
+          return;
+        }
+        // Primeiro numero (free) — abre modal direto
+        dialog.remove();
+        await openNewChannelModal('zapi');
+      } } },
+      el('div', { style: 'display:flex;align-items:center;gap:14px' },
+        el('div', { style: 'width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#25D366,#128C7E);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;flex:0 0 auto' }, 'Z'),
+        el('div', { style: 'flex:1' },
+          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Z-API ' + (isFirstNumber ? '(incluso no plano)' : '— adicional R$ 100/mes')),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
+            isFirstNumber
+              ? 'Seu numero incluso no plano. Conecta via QR Code, sem cobranca extra.'
+              : 'Numero adicional gerenciado por nos. Cobranca recorrente R$ 100/mes via Stripe Checkout.'
+          ),
+        ),
+      ),
+    ),
+
+    // OPÇÃO Meta Cloud API
+    el('button', { type: 'button', class: 'channel-type-btn-NEW', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(24,119,242,0.08),rgba(13,86,184,0.04));border:2px solid rgba(24,119,242,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
+      on: { click: async () => {
+        dialog.remove();
+        await openNewChannelModal('meta');
+      } } },
+      el('div', { style: 'display:flex;align-items:center;gap:14px' },
+        el('div', { style: 'width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1877F2,#0d56b8);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px;flex:0 0 auto' }, 'M'),
+        el('div', { style: 'flex:1' },
+          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Meta Cloud API oficial — gratis'),
+          el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
+            'Voce traz suas credenciais da Meta. Sem custo nosso (paga so as taxas da Meta direto, ~R$ 0,30/conversa iniciada).'
+          ),
+        ),
+      ),
+    ),
+
+    el('div', { class: 'modal-actions', style: 'margin-top:18px' },
+      el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Cancelar'),
+    ),
+  );
+  try {
+    dialog.append(modal);
+    document.body.append(dialog);
+  } catch (e) {
+    console.error('[picker] erro ao montar modal:', e);
+    toast('Erro ao abrir picker. Veja o console.', 'error');
+  }
+}
+
+// Onda 53h: fluxo Stripe Checkout pra Z-API adicional
+async function openZapiCheckoutFlow(me) {
+  if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
+
+  // Caso admin/sem-subscription: cobra direto sem checkout (modo legacy)
+  if (!me.tenant.hasStripe) {
+    const confirmed = await confirmDialog(
+      'Adicionar numero (modo admin)',
+      'Sua conta nao tem assinatura Stripe ativa. Adicionando direto sem cobranca.',
+      'Adicionar'
+    );
+    if (!confirmed) return;
+    await openNewChannelModal('zapi');
+    return;
+  }
+
+  // Mostrar overlay de carregamento
+  const loadingDialog = el('div', { class: 'modal-backdrop' });
+  const loadingModal = el('div', { class: 'modal', style: 'max-width:420px;text-align:center' },
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('h3', {}, 'Abrindo pagamento...'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px' }, 'Voce sera redirecionado pro Stripe Checkout.'),
+  );
+  loadingDialog.append(loadingModal);
+  document.body.append(loadingDialog);
+
+  let sessionId;
+  try {
+    const r = await fetch('/api/billing/whatsapp-addon/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      body: JSON.stringify({ tenantId: me.tenant.id, currentTotal: me.whatsapp.totalUsed }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.url) {
+      loadingDialog.remove();
+      toast('Erro ao criar checkout: ' + (data.message || data.error || 'desconhecido'), 'error');
+      return;
+    }
+    sessionId = data.session_id;
+    // Abrir Stripe em nova aba
+    window.open(data.url, '_blank', 'noopener,noreferrer');
+  } catch (e) {
+    loadingDialog.remove();
+    toast('Erro de rede: ' + e.message, 'error');
+    return;
+  }
+
+  loadingDialog.remove();
+
+  // Modal de "aguardando pagamento" com polling
+  const waitDialog = el('div', { class: 'modal-backdrop' });
+  let cancelled = false;
+  const waitModal = el('div', { class: 'modal', style: 'max-width:480px;text-align:center' },
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:#22C55E;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('h3', {}, 'Aguardando pagamento...'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;line-height:1.6' },
+      'Complete o pagamento na aba do Stripe que acabou de abrir.',
+      el('br', {}),
+      'Apos confirmacao, esta tela libera o cadastro do numero automaticamente.'
+    ),
+    el('div', { class: 'modal-actions', style: 'margin-top:20px' },
+      el('button', { class: 'cancel', on: { click: () => { cancelled = true; waitDialog.remove(); } } }, 'Cancelar'),
+    ),
+  );
+  waitDialog.append(waitModal);
+  document.body.append(waitDialog);
+
+  // Polling: a cada 3s checa se o pagamento foi confirmado
+  let attempts = 0;
+  const maxAttempts = 200; // 10 minutos
+  const poll = setInterval(async () => {
+    if (cancelled) { clearInterval(poll); return; }
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(poll);
+      waitDialog.remove();
+      toast('Tempo esgotado. Recarregue a pagina e tente de novo.', 'error');
+      return;
+    }
+    try {
+      const r = await fetch('/api/billing/whatsapp-addon/checkout-status?session_id=' + encodeURIComponent(sessionId), {
+        headers: { 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      });
+      const data = await r.json();
+      if (data.paid) {
+        clearInterval(poll);
+        waitDialog.remove();
+        toast('Pagamento confirmado! Configure agora seu numero.', 'success');
+        await openNewChannelModal('zapi');
+      }
+    } catch {}
+  }, 3000);
+}
+
+async function openBillingPortal() {
+  try {
+    const me = window.state.me || await loadMyInfo();
+    if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
+    const r = await fetch('/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.apiKey, 'x-clow-tenant-id': me.tenant.id },
+      body: JSON.stringify({ tenantId: me.tenant.id }),
+    });
+    const data = await r.json();
+    if (data.url) {
+      window.open(data.url, '_blank');
+    } else {
+      toast('Erro ao abrir portal: ' + (data.message || data.error), 'error');
+    }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// Wrap renderChannelsList pra adicionar badge no topo
+const _originalRenderChannelsList_o53 = window.renderChannelsList;
+window.renderChannelsList = function() {
+  if (typeof _originalRenderChannelsList_o53 === 'function') _originalRenderChannelsList_o53();
+  // Inserir badge no topo da view Channels (acima do #channelsList)
+  const list = document.getElementById('channelsList');
+  if (!list) return;
+  const existing = document.getElementById('chLimitsBadge');
+  if (existing) existing.remove();
+  const badge = renderChannelsLimitsBadge();
+  if (badge) {
+    badge.id = 'chLimitsBadge';
+    list.parentNode.insertBefore(badge, list);
+  }
+};
+
+// Hook: quando entrar na view channels, recarregar /me primeiro
+const _originalShowView_o53 = window.showView;
+if (typeof _originalShowView_o53 === 'function') {
+  window.showView = async function(name) {
+    if (name === 'channels') {
+      await loadMyInfo();
+    }
+    return _originalShowView_o53.apply(this, arguments);
+  };
+}
+
+window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, renderChannelsLimitsBadge };
+// ═══════════════════════════════════════════════════════════════════════
+
+// Onda 53g: interceptar click do #newChannelBtn no capture phase pra
+// abrir picker ANTES do handler antigo. openNewChannelModal eh funcao
+// local do modulo (nao exposta em window) entao monkey-patch nao
+// funciona; event delegation com capture eh a forma robusta.
+(function interceptNewChannelClick() {
+  if (window.__newChannelIntercepted_o53g) return;
+  window.__newChannelIntercepted_o53g = true;
+  document.addEventListener('click', function(ev) {
+    const btn = ev.target.closest('#newChannelBtn');
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (typeof openChannelTypePicker === 'function') {
+      openChannelTypePicker();
+    } else {
+      console.warn('[onda53g] openChannelTypePicker indisponivel');
+    }
+  }, true); // capture = roda antes do handler bubble do wire(...)
+  console.log('[onda53g] click #newChannelBtn interceptado em capture');
+})();
+
+
+
+
+
+// ─── Onda 56: Importar/Exportar contatos ────────────────────────────────
+function openImportContactsModal() {
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' });
+  dialog.append(modal);
+  document.body.append(dialog);
+
+  // Tela 1: formulário de upload
+  function renderForm() {
+    modal.innerHTML = '';
+    const fileInput = el('input', {
+      type: 'file', accept: '.csv,.xlsx,.xls',
+      style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
+    });
+    const errorBox = el('div', { style: 'margin-top:14px' });
+    const submitBtn = el('button', {
+      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
+      on: { click: async () => {
+        const file = fileInput.files?.[0];
+        if (!file) { toast('Selecione um arquivo', 'error'); return; }
+        submitBtn.disabled = true; submitBtn.textContent = 'Importando...';
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+          const r = await fetch('/v1/crm/contacts/import', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + state.apiKey },
+            body: fd,
+          });
+          const ct = (r.headers.get('content-type') || '').toLowerCase();
+          let data;
+          if (ct.includes('application/json')) data = await r.json();
+          else {
+            const text = await r.text();
+            if (r.status === 413) throw new Error('Arquivo muito grande (limite: 50MB). Divida em partes menores.');
+            if (r.status === 502 || r.status === 504) throw new Error('Servidor demorou. Tenta de novo ou divide o arquivo.');
+            throw new Error('HTTP ' + r.status + ': ' + text.replace(/<[^>]+>/g, '').slice(0, 200));
+          }
+          if (!r.ok) throw new Error(data.message || data.error || 'falha');
+          // Sucesso → renderiza tela de confirmação
+          if (typeof loadContacts === 'function') { try { await loadContacts(); renderContactsList(); } catch {} }
+          renderSuccess(data, file.name);
+        } catch (e) {
+          errorBox.innerHTML = '';
+          errorBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:#fca5a5' }, '⚠ Erro: ' + e.message));
+          submitBtn.disabled = false; submitBtn.textContent = 'Importar';
+        }
+      } }
+    }, 'Importar');
+
+    modal.append(
+      el('h3', { style: 'margin:0 0 8px' }, '⬆ Importar contatos'),
+      el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 14px' }, 'Aceita CSV (UTF-8) ou Excel (XLSX). A primeira linha deve ser o cabeçalho.'),
+      el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
+        el('summary', { style: 'font-size:12px;color:var(--text-dim);font-weight:600' }, '📋 Colunas reconhecidas (clique pra ver)'),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6' },
+          el('div', {}, '• ', el('b', {}, 'name'), ' / nome / nome completo / cliente / contato / razão social — obrigatório'),
+          el('div', {}, '• ', el('b', {}, 'phone'), ' / telefone / whatsapp / celular / telefone celular — recomendado'),
+          el('div', {}, '• ', el('b', {}, 'email'), ' / e-mail — fallback de upsert se não tiver phone'),
+          el('div', {}, '• company / empresa, title / cargo, website / site'),
+          el('div', {}, '• address / endereço, cpf / cnpj / cnpj/cpf'),
+          el('div', {}, '• tags (separadas por ; ou |), notes / observações'),
+          el('div', {}, '• source / origem (default: "import")'),
+          el('div', { style: 'margin-top:6px;color:#fbbf24' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
+        ),
+      ),
+      el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600' }, 'Arquivo (.csv, .xlsx)'),
+      fileInput,
+      errorBox,
+      el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:18px' },
+        el('button', {
+          style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;cursor:pointer',
+          on: { click: () => dialog.remove() }
+        }, 'Fechar'),
+        submitBtn,
+      ),
+    );
+  }
+
+  // Tela 2: confirmação pós-import (substitui modal inteiro)
+  function renderSuccess(data, filename) {
+    modal.innerHTML = '';
+    const noneCreated = (data.created === 0 && data.updated === 0);
+    const totalSaved = (data.created || 0) + (data.updated || 0);
+    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px 8px;border-radius:10px' },
+      el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
+      el('div', { style: 'font-size:28px;font-weight:800;color:' + (color || 'var(--text)') }, String(value)),
+    );
+
+    modal.append(
+      // Cabeçalho com check grande
+      el('div', { style: 'text-align:center;padding:10px 0 18px' },
+        el('div', { style: 'width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:' + (noneCreated ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:36px' }, noneCreated ? '⚠' : '✓'),
+        el('h3', { style: 'margin:0;font-size:20px;color:' + (noneCreated ? '#fca5a5' : '#86efac') }, noneCreated ? 'Nada foi importado' : 'Importação concluída!'),
+        el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 0' }, noneCreated ? 'Nenhum contato foi criado nem atualizado. Veja o mapeamento abaixo.' : totalSaved + ' contato(s) salvos no CRM com sucesso.'),
+        el('p', { style: 'color:var(--text-dim);font-size:11px;margin:6px 0 0;font-family:monospace' }, '📄 ' + filename),
+      ),
+      // Stats em cards grandes
+      el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
+        stat('Total processado', data.total || 0),
+        stat('Criados', data.created || 0, '#22C55E'),
+        stat('Atualizados', data.updated || 0, '#9B59FC'),
+      ),
+      // Header mapping (collapsed por padrão se sucesso)
+      (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
+        el('summary', { style: 'font-size:12px;color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
+        el('div', { style: 'background:rgba(155,89,252,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
+          ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),
+        ),
+      ) : null,
+      // Errors (se houver)
+      (data.errors && data.errors.length) ? el('details', { style: 'background:rgba(239,68,68,0.05);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer' },
+        el('summary', { style: 'font-size:12px;color:#fca5a5;font-weight:600' }, '⚠ ' + data.errors.length + ' linha(s) com erro'),
+        el('div', { style: 'background:rgba(239,68,68,0.05);padding:10px;border-radius:6px;margin-top:8px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace' },
+          ...data.errors.slice(0, 100).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error)),
+          data.errors.length > 100 ? el('div', { style: 'margin-top:6px;font-style:italic' }, '...e mais ' + (data.errors.length - 100) + ' erros') : null,
+        ),
+      ) : null,
+      // Botões (NÃO tem mais "Importar" — só "Pronto" e "Importar outra")
+      el('div', { style: 'display:flex;gap:10px;justify-content:flex-end;margin-top:18px' },
+        el('button', {
+          style: 'background:transparent;border:1px solid var(--border);color:var(--text-dim);padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13px',
+          on: { click: () => renderForm() }
+        }, '⬆ Importar outra'),
+        el('button', {
+          style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
+          on: { click: () => dialog.remove() }
+        }, '✓ Pronto, fechar'),
+      ),
+    );
+  }
+
+  renderForm();
+  document.body.append(dialog);
+}
+
+function openExportContactsMenu() {
+  const dialog = el('div', { class: 'modal-backdrop' });
+  const dl = (format) => {
+    const a = document.createElement('a');
+    const url = '/v1/crm/contacts/export?format=' + format;
+    // fetch com auth header e download via blob
+    fetch(url, { headers: { 'Authorization': 'Bearer ' + state.apiKey } })
+      .then(r => r.blob())
+      .then(b => {
+        const u = URL.createObjectURL(b);
+        a.href = u;
+        a.download = format === 'xlsx' ? 'contatos.xlsx' : 'contatos.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(u);
+        toast('Download iniciado', 'success');
+        dialog.remove();
+      })
+      .catch(e => { toast('Erro: ' + e.message, 'error'); });
+  };
+  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' },
+    el('h3', { style: 'margin:0 0 14px' }, '⬇ Exportar contatos'),
+    el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 18px' }, 'Escolha o formato:'),
+    el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+      el('button', {
+        style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        on: { click: () => dl('xlsx') }
+      },
+        el('div', {}, '📊 Excel (.xlsx)'),
+        el('div', { style: 'font-size:11px;opacity:.85;margin-top:2px' }, 'Recomendado — abre direto no Excel/Google Sheets'),
+      ),
+      el('button', {
+        style: 'background:rgba(155,89,252,0.1);border:1px solid rgba(155,89,252,0.3);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        on: { click: () => dl('csv') }
+      },
+        el('div', {}, '📄 CSV (.csv)'),
+        el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:2px' }, 'UTF-8 com BOM, compatível com Excel'),
+      ),
+    ),
+    el('div', { style: 'display:flex;justify-content:flex-end;margin-top:14px' },
+      el('button', {
+        style: 'background:transparent;border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer',
+        on: { click: () => dialog.remove() }
+      }, 'Cancelar'),
+    ),
+  );
+  dialog.append(modal);
+  document.body.append(dialog);
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ ONDA 60: CENTRAL DE ALERTAS (sino + aba + som + visual + push) ═════
+// Unifica alertas standing (tarefas/mensalidades/vencimentos) + conversas
+// não-lidas num só lugar. NÃO duplica o beep de nova mensagem (Onda 48 já
+// trata message.in). EventSource dedicado p/ o evento 'alert' — isolado:
+// se falhar, não afeta o realtime de mensagens.
+// ═══════════════════════════════════════════════════════════════════════
+(function onda60Alerts() {
+  const S = {
+    es: null,
+    alerts: [],
+    conversations: [],
+    unread: 0,
+    filter: 'all',
+    muted: localStorage.getItem('clow_alerts_muted') === '1',
+    refreshTimer: null,
+    ac: null,
+  };
+
+  function token() {
+    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+  }
+  async function jget(path) {
+    const r = await fetch('/v1/crm' + path, { headers: { Authorization: 'Bearer ' + token() } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+  async function jpost(path) {
+    return fetch('/v1/crm' + path, { method: 'POST', headers: { Authorization: 'Bearer ' + token() } });
+  }
+
+  // ─── Estilos (injetados, sem tocar crm.css) ───────────────────────────
+  function injectStyles() {
+    if (document.getElementById('onda60-styles')) return;
+    const css = `
+    .nav-badge{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;line-height:1}
+    .nav-item{position:relative}
+    #alertsBell{position:relative;flex:0 0 auto;width:36px;height:36px;min-width:36px;padding:0;box-sizing:border-box;border-radius:10px;background:var(--bg-3,#1f1f1f)!important;border:1px solid var(--border,#333);color:var(--text,#eee)!important;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;vertical-align:middle}
+    #alertsBell:hover{background:var(--bg-2,#161616);border-color:var(--accent,#3b82f6)}
+    #alertsBell .a60-bell-ico{display:flex;transform-origin:50% 0}
+    #alertsBell.ring .a60-bell-ico{animation:bellRing .6s ease}
+    @keyframes bellRing{0%,100%{transform:rotate(0)}20%{transform:rotate(14deg)}40%{transform:rotate(-12deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-6deg)}}
+    #alertsBellBadge{position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px}
+    #alertsDropdown{position:fixed;top:62px;left:14px;z-index:9001;width:340px;max-width:calc(100vw - 28px);max-height:70vh;overflow:hidden;background:var(--bg-2,#161616);border:1px solid var(--border,#333);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none;flex-direction:column}
+    #alertsDropdown.open{display:flex}
+    .a60-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border,#2a2a2a)}
+    .a60-head b{font-size:14px}
+    .a60-head .a60-actions{display:flex;gap:6px}
+    .a60-mini{background:transparent;border:1px solid var(--border,#333);color:var(--text-dim,#aaa);font-size:11px;padding:4px 8px;border-radius:8px;cursor:pointer}
+    .a60-mini:hover{color:var(--text,#fff)}
+    .a60-list{overflow-y:auto;max-height:60vh}
+    .a60-item{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border,#222);cursor:pointer;align-items:flex-start}
+    .a60-item:hover{background:var(--bg-3,#1f1f1f)}
+    .a60-item.unread{background:rgba(59,130,246,.07)}
+    .a60-ico{font-size:18px;flex:0 0 auto;line-height:1.2}
+    .a60-body{min-width:0;flex:1}
+    .a60-title{font-size:13px;font-weight:600;margin-bottom:1px}
+    .a60-sub{font-size:12px;color:var(--text-dim,#9aa);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .a60-time{font-size:10px;color:var(--text-dim,#777);margin-top:3px}
+    .a60-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:6px}
+    .a60-dot.urgent{background:#ef4444}.a60-dot.warning{background:#f59e0b}.a60-dot.info{background:#3b82f6}
+    .a60-empty{padding:30px 14px;text-align:center;color:var(--text-dim,#888);font-size:13px}
+    .a60-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+    .a60-chip{background:var(--bg-2,#1a1a1a);border:1px solid var(--border,#333);color:var(--text-dim,#aaa);font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer}
+    .a60-chip.active{background:var(--accent,#3b82f6);border-color:var(--accent,#3b82f6);color:#fff}
+    .toast.a60-toast{cursor:pointer;border-left:3px solid var(--accent,#3b82f6)}
+    .toast.a60-toast.urgent{border-left-color:#ef4444}.toast.a60-toast.warning{border-left-color:#f59e0b}
+    `;
+    const s = document.createElement('style');
+    s.id = 'onda60-styles';
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  // ─── Som / vibração / notificação nativa ──────────────────────────────
+  function playTone(sev) {
+    if (S.muted) return;
+    try {
+      S.ac = S.ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (S.ac.state === 'suspended') S.ac.resume();
+      const seq = sev === 'urgent' ? [880, 660, 880] : sev === 'warning' ? [660, 880] : [780];
+      seq.forEach((f, i) => {
+        const o = S.ac.createOscillator(), g = S.ac.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        const t0 = S.ac.currentTime + i * 0.14;
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.13, t0 + 0.02);
+        g.gain.linearRampToValueAtTime(0, t0 + 0.12);
+        o.connect(g).connect(S.ac.destination);
+        o.start(t0); o.stop(t0 + 0.13);
+      });
+    } catch {}
+  }
+  function vibrate(sev) {
+    if (S.muted) return;
+    try { navigator.vibrate?.(sev === 'urgent' ? [60, 40, 60] : 30); } catch {}
+  }
+  function nativeNotif(a) {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const n = new Notification(a.title || 'Clow', {
+        body: a.body || '', icon: '/assets/icon-192.png', badge: '/assets/icon-192.png',
+        tag: 'a60-' + (a.id || ''), renotify: false,
+      });
+      n.onclick = () => { window.focus(); openFromAlert(a); n.close(); };
+    } catch {}
+  }
+  function a60Toast(a) {
+    try {
+      const root = document.getElementById('toastRoot');
+      if (!root) return;
+      const t = el('div', { class: 'toast a60-toast ' + (a.severity || 'info') },
+        el('div', { style: 'font-weight:600;font-size:13px' }, (iconFor(a.type) + ' ' + (a.title || ''))),
+        a.body ? el('div', { style: 'font-size:12px;color:var(--text-dim,#9aa);margin-top:2px' }, a.body) : null,
+      );
+      t.addEventListener('click', () => { openFromAlert(a); t.remove(); });
+      root.append(t);
+      setTimeout(() => t.remove(), 5000);
+    } catch {}
+  }
+
+  function iconFor(type) {
+    return ({
+      task_due: '📋', task_overdue: '⏰',
+      billing_due: '💰', billing_overdue: '💰',
+      due_date: '📅', reminder: '🔔', message: '💬', system: 'ℹ️',
+    })[type] || '🔔';
+  }
+
+  // Abre o card pelo MESMO caminho do kanban: openCardPanel(cardIdString)
+  // — a função local (não a wrapped que repassa objeto). Em contexto fresco
+  // (clique em push abre o PWA antes do login terminar), espera o token.
+  let _pendingCard = null, _pendingTimer = null;
+  function doOpenCard(cardId) {
+    const fn = (typeof openCardPanel === 'function') ? openCardPanel
+             : (typeof window !== 'undefined' && window.openCardPanel) ? window.openCardPanel : null;
+    if (!fn) return false;
+    try { Promise.resolve(fn(cardId)).catch(() => {}); } catch { return false; }
+    return true;
+  }
+  function openCardSafe(cardId) {
+    if (!cardId) return;
+    if (token() && doOpenCard(cardId)) return; // logado → abre já
+    _pendingCard = cardId;                     // senão guarda e tenta quando o token chegar
+    clearInterval(_pendingTimer);
+    let tries = 0;
+    _pendingTimer = setInterval(() => {
+      if (++tries > 40) { clearInterval(_pendingTimer); return; } // ~20s e desiste
+      if (_pendingCard && token() && doOpenCard(_pendingCard)) { _pendingCard = null; clearInterval(_pendingTimer); }
+    }, 500);
+  }
+  function openFromAlert(a) {
+    try {
+      if (a && a.cardId) { openCardSafe(a.cardId); return; }
+      if (a && a.url) { const h = a.url.split('#')[1]; if (h && !h.startsWith('card=')) location.hash = h; }
+    } catch (e) { console.warn('[onda60] openFromAlert', e); }
+  }
+  // Trata #card=<id> (clique em push/notification nativa abre /crm/#card=ID).
+  function handleCardHash() {
+    const m = (location.hash || '').match(/card=([A-Za-z0-9_-]+)/);
+    if (m) openCardSafe(m[1]);
+  }
+
+  // ─── Badges ───────────────────────────────────────────────────────────
+  function totalCount() {
+    const conv = S.conversations.reduce((n, c) => n + (c.count || 0), 0);
+    return (S.unread || 0) + conv;
+  }
+  function updateBadges() {
+    const total = totalCount();
+    const bb = document.getElementById('alertsBellBadge');
+    if (bb) { bb.textContent = total > 99 ? '99+' : String(total); bb.style.display = total > 0 ? 'flex' : 'none'; }
+    const nb = document.getElementById('navAlertsBadge');
+    if (nb) { nb.textContent = total > 99 ? '99+' : String(total); nb.style.display = total > 0 ? 'flex' : 'none'; }
+    try {
+      if ('setAppBadge' in navigator) { total > 0 ? navigator.setAppBadge(total).catch(() => {}) : navigator.clearAppBadge?.().catch(() => {}); }
+    } catch {}
+  }
+  function ringBell() {
+    const b = document.getElementById('alertsBell');
+    if (!b) return;
+    b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring');
+  }
+
+  // ─── Recebe um alerta novo (SSE) ──────────────────────────────────────
+  function onAlert(a) {
+    if (!a || !a.id) return;
+    if (!S.alerts.some(x => x.id === a.id)) S.alerts.unshift(a);
+    if (!a.read) S.unread++;
+    updateBadges(); ringBell();
+    playTone(a.severity); vibrate(a.severity); nativeNotif(a); a60Toast(a);
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  function scheduleRefresh() {
+    clearTimeout(S.refreshTimer);
+    S.refreshTimer = setTimeout(() => { refresh().catch(() => {}); }, 1200);
+  }
+
+  async function refresh() {
+    if (!token()) return;
+    const d = await jget('/alerts?limit=80');
+    S.alerts = d.alerts || [];
+    S.conversations = d.conversations || [];
+    S.unread = d.unread || 0;
+    updateBadges();
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  // ─── Lista combinada (alertas + conversas) com filtro ─────────────────
+  function combinedItems() {
+    const conv = S.conversations.map(c => ({
+      id: 'conv-' + c.cardId, type: 'message', severity: 'info',
+      title: c.contactName || 'Nova mensagem', body: (c.count || 1) + ' não lida(s)',
+      cardId: c.cardId, url: '/crm/#card=' + c.cardId, read: false, createdAt: c.lastInboundAt || Date.now(),
+      _conv: true, count: c.count,
+    }));
+    let items = [...conv, ...S.alerts];
+    const f = S.filter;
+    if (f === 'messages') items = items.filter(i => i.type === 'message');
+    else if (f === 'tasks') items = items.filter(i => i.type === 'task_due' || i.type === 'task_overdue');
+    else if (f === 'billing') items = items.filter(i => i.type === 'billing_due' || i.type === 'billing_overdue');
+    else if (f === 'duedate') items = items.filter(i => i.type === 'due_date' || i.type === 'reminder');
+    items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return items;
+  }
+
+  function itemEl(a) {
+    const node = el('div', { class: 'a60-item' + (a.read ? '' : ' unread') },
+      el('div', { class: 'a60-ico' }, iconFor(a.type)),
+      el('div', { class: 'a60-body' },
+        el('div', { class: 'a60-title' }, a.title || ''),
+        a.body ? el('div', { class: 'a60-sub' }, a.body) : null,
+        el('div', { class: 'a60-time' }, (typeof fmtDate === 'function' ? fmtDate(a.createdAt) : '')),
+      ),
+      el('div', { class: 'a60-dot ' + (a.severity || 'info') }),
+    );
+    node.addEventListener('click', async () => {
+      openFromAlert(a);
+      if (!a._conv && !a.read && a.id) {
+        try { await jpost('/alerts/' + a.id + '/read'); a.read = true; if (S.unread > 0) S.unread--; updateBadges(); } catch {}
+      }
+      closeDropdown();
+    });
+    return node;
+  }
+
+  // ─── Dropdown do sino ─────────────────────────────────────────────────
+  function renderDropdown() {
+    const dd = document.getElementById('alertsDropdown');
+    if (!dd) return;
+    dd.innerHTML = '';
+    const head = el('div', { class: 'a60-head' },
+      el('b', {}, 'Notificações'),
+      el('div', { class: 'a60-actions' },
+        el('button', { class: 'a60-mini', title: S.muted ? 'Ativar som' : 'Silenciar', on: { click: toggleMute } }, S.muted ? '🔕' : '🔔'),
+        el('button', { class: 'a60-mini', on: { click: markAllRead } }, 'Marcar lidas'),
+        el('button', { class: 'a60-mini', on: { click: () => { closeDropdown(); (window.showView || showView)('notifications'); } } }, 'Ver todas'),
+      ),
+    );
+    const list = el('div', { class: 'a60-list' });
+    const items = combinedItems().slice(0, 20);
+    if (!items.length) list.append(el('div', { class: 'a60-empty' }, '✓ Tudo em dia, nenhum alerta.'));
+    else items.forEach(a => list.append(itemEl(a)));
+    dd.append(head, list);
+  }
+  function openDropdown() {
+    injectStyles();
+    const dd = ensureBell() && document.getElementById('alertsDropdown');
+    if (!dd) return;
+    renderDropdown();
+    // Posiciona o painel logo abaixo do sino, mantendo na tela.
+    const bell = document.getElementById('alertsBell');
+    if (bell) {
+      const r = bell.getBoundingClientRect();
+      const w = Math.min(340, window.innerWidth - 16);
+      let left = r.right - w; // alinha borda direita do painel com o sino
+      left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+      dd.style.left = left + 'px';
+      dd.style.right = 'auto';
+      dd.style.top = (r.bottom + 8) + 'px';
+    }
+    dd.classList.add('open');
+  }
+  function closeDropdown() { document.getElementById('alertsDropdown')?.classList.remove('open'); }
+  function toggleDropdown() { const dd = document.getElementById('alertsDropdown'); if (dd && dd.classList.contains('open')) closeDropdown(); else openDropdown(); }
+
+  async function markAllRead() {
+    try { await jpost('/alerts/read-all'); } catch {}
+    S.alerts.forEach(a => a.read = true);
+    S.unread = 0; updateBadges();
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+  function toggleMute() {
+    S.muted = !S.muted;
+    localStorage.setItem('clow_alerts_muted', S.muted ? '1' : '0');
+    if (typeof toast === 'function') toast(S.muted ? 'Alertas silenciados' : 'Alertas com som', '');
+    if (document.getElementById('alertsDropdown')?.classList.contains('open')) renderDropdown();
+    if (document.querySelector('.view[data-view="notifications"]')?.classList.contains('active')) renderNotificationsView();
+  }
+
+  // ─── Aba completa (sidebar → Notificações) ────────────────────────────
+  function renderNotificationsView() {
+    const root = document.getElementById('notificationsContent');
+    if (!root) return;
+    const actions = document.getElementById('notifTopActions');
+    if (actions) {
+      actions.innerHTML = '';
+      actions.append(
+        el('button', { class: 'a60-mini', style: 'margin-right:6px', on: { click: toggleMute } }, S.muted ? '🔕 Silenciado' : '🔔 Som ligado'),
+        el('button', { class: 'a60-mini', on: { click: markAllRead } }, 'Marcar todas como lidas'),
+      );
+    }
+    root.innerHTML = '';
+    const filters = [
+      ['all', 'Todas'], ['messages', '💬 Mensagens'], ['tasks', '📋 Tarefas'],
+      ['billing', '💰 Mensalidades'], ['duedate', '📅 Vencimentos'],
+    ];
+    const fbar = el('div', { class: 'a60-filters' });
+    filters.forEach(([k, label]) => {
+      fbar.append(el('button', { class: 'a60-chip' + (S.filter === k ? ' active' : ''), on: { click: () => { S.filter = k; renderNotificationsView(); } } }, label));
+    });
+    root.append(fbar);
+    const items = combinedItems();
+    if (!items.length) { root.append(el('div', { class: 'a60-empty' }, '✓ Nenhum alerta neste filtro.')); return; }
+    const list = el('div', { style: 'border:1px solid var(--border,#2a2a2a);border-radius:12px;overflow:hidden' });
+    items.forEach(a => list.append(itemEl(a)));
+    root.append(list);
+  }
+  window.__renderNotificationsView = async function () { try { await refresh(); } catch {} renderNotificationsView(); };
+
+  // ─── Posiciona o sino na barra de ação da view ativa, à direita do
+  //     botão "Atualizar" (#refreshBtn). Sem #refreshBtn, vai pro fim do
+  //     grupo esquerdo do top-bar da view ativa. Segue a troca de views.
+  function placeBell() {
+    const bell = document.getElementById('alertsBell');
+    if (!bell) return;
+    const activeView = document.querySelector('.view.active') || document;
+    const refreshBtn = activeView.querySelector('#refreshBtn');
+    if (refreshBtn) { refreshBtn.insertAdjacentElement('afterend', bell); return; }
+    const tb = activeView.querySelector('.top-bar');
+    const host = tb ? (tb.querySelector('.top-bar-left') || tb) : null;
+    if (host) host.appendChild(bell);
+    else document.body.appendChild(bell);
+  }
+
+  function ensureBell() {
+    injectStyles();
+    if (document.getElementById('alertsBell')) { placeBell(); return true; }
+    const bell = el('button', { id: 'alertsBell', class: 'secondary', title: 'Notificações', html:
+      '<span class="a60-bell-ico"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>' });
+    const badge = el('span', { id: 'alertsBellBadge' });
+    bell.append(badge);
+    bell.addEventListener('click', (e) => { e.stopPropagation(); try { S.ac?.resume?.(); } catch {} toggleDropdown(); });
+    document.body.append(bell);
+    placeBell();
+    const dd = el('div', { id: 'alertsDropdown' });
+    document.body.append(dd);
+    document.addEventListener('click', (e) => {
+      const dd2 = document.getElementById('alertsDropdown');
+      if (dd2?.classList.contains('open') && !dd2.contains(e.target) && e.target.id !== 'alertsBell' && !document.getElementById('alertsBell')?.contains(e.target)) closeDropdown();
+    });
+    // Reposiciona quando o usuário troca de view (nav-item) — o sino
+    // acompanha o top-bar da view ativa.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.nav-item')) setTimeout(placeBell, 60);
+    });
+    return true;
+  }
+
+  // ─── EventSource dedicado (evento 'alert') ────────────────────────────
+  function connect() {
+    const t = token();
+    if (!t) { setTimeout(connect, 3000); return; }
+    try {
+      if (S.es) try { S.es.close(); } catch {}
+      S.es = new EventSource('/v1/crm/events?token=' + encodeURIComponent(t));
+      S.es.addEventListener('alert', (ev) => { try { onAlert(JSON.parse(ev.data)); } catch {} });
+      S.es.addEventListener('message.in', () => scheduleRefresh());   // só atualiza badge, sem beep (Onda 48 já beepa)
+      S.es.addEventListener('message.read', () => scheduleRefresh());
+      S.es.onerror = () => { try { S.es.close(); } catch {} setTimeout(connect, 6000); };
+    } catch { setTimeout(connect, 6000); }
+  }
+
+  // ─── Init ─────────────────────────────────────────────────────────────
+  function init() {
+    ensureBell();
+    // espera login (apiKey) pra seed + conexão
+    const wait = setInterval(() => {
+      if (token()) {
+        clearInterval(wait);
+        refresh().catch(() => {});
+        connect();
+      }
+    }, 600);
+    // re-seed ao voltar pro app (mobile suspende abas)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && token()) refresh().catch(() => {});
+    });
+    // abre card se a URL veio com #card=ID (clique em push/notificação nativa)
+    handleCardHash();
+    window.addEventListener('hashchange', handleCardHash);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.__onda60 = { refresh, onAlert, toggleMute, connect };
+})();
+// ═══════════════════════════════════════════════════════════════════════
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══ ONDA 61: BUSCA RÁPIDA DE CLIENTE (nome / telefone / CPF) ═══════════
+// Card de pesquisa ao lado do sino. Digita nome, telefone ou CPF →
+// /contacts/search (já cobre os 3, ignorando formatação) → abre a conversa
+// (card vinculado; cria um se o contato ainda não tiver).
+// ═══════════════════════════════════════════════════════════════════════
+(function onda61QuickSearch() {
+  let _t = null, _lastQ = '', _results = [], _sel = -1;
+
+  function token() {
+    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+  }
+
+  function injectStyles() {
+    if (document.getElementById('onda61-styles')) return;
+    const css = `
+    #quickSearchBox{position:relative;flex:0 1 240px;min-width:170px;max-width:300px;display:flex;align-items:center}
+    #quickSearchBox .qs-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-dim,#888);pointer-events:none;display:flex}
+    #quickSearchInput{width:100%;height:36px;box-sizing:border-box;padding:0 30px 0 32px;background:var(--bg-3,#1f1f1f)!important;border:1px solid var(--border,#333);border-radius:10px;color:var(--text,#eee)!important;font-family:inherit;font-size:13px;outline:none}
+    #quickSearchInput:focus{border-color:var(--accent,#3b82f6)}
+    #quickSearchInput::placeholder{color:var(--text-dim,#888)}
+    #quickSearchClear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-dim,#888);cursor:pointer;font-size:16px;line-height:1;display:none;padding:2px}
+    #quickSearchResults{position:fixed;z-index:9002;width:340px;max-width:calc(100vw - 28px);max-height:60vh;overflow-y:auto;background:var(--bg-2,#161616);border:1px solid var(--border,#333);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none}
+    #quickSearchResults.open{display:block}
+    .qs-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border,#222)}
+    .qs-item:last-child{border-bottom:0}
+    .qs-item:hover,.qs-item.sel{background:var(--bg-3,#1f1f1f)}
+    .qs-av{flex:0 0 auto;width:32px;height:32px;border-radius:50%;background:var(--grad,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;overflow:hidden}
+    .qs-av img{width:100%;height:100%;object-fit:cover}
+    .qs-meta{min-width:0;flex:1}
+    .qs-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .qs-sub{font-size:11px;color:var(--text-dim,#9aa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .qs-empty{padding:18px 12px;text-align:center;color:var(--text-dim,#888);font-size:12px}
+    @media (max-width:768px){#quickSearchBox{flex:1 1 140px;max-width:none}}
+    `;
+    const s = document.createElement('style'); s.id = 'onda61-styles'; s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  function fmtSub(ct) {
+    const bits = [];
+    if (ct.phone) bits.push(ct.phone);
+    if (ct.cpfCnpj || ct.cpf_cnpj) bits.push('CPF ' + (ct.cpfCnpj || ct.cpf_cnpj));
+    if (!bits.length && ct.email) bits.push(ct.email);
+    return bits.join(' · ');
+  }
+
+  function resultsEl() { return document.getElementById('quickSearchResults'); }
+
+  function closeResults() { const r = resultsEl(); if (r) r.classList.remove('open'); _sel = -1; }
+
+  function positionResults() {
+    const inp = document.getElementById('quickSearchInput'); const r = resultsEl();
+    if (!inp || !r) return;
+    const b = inp.getBoundingClientRect();
+    const w = Math.min(340, window.innerWidth - 16);
+    let left = Math.max(8, Math.min(b.left, window.innerWidth - w - 8));
+    r.style.width = w + 'px';
+    r.style.left = left + 'px';
+    r.style.top = (b.bottom + 6) + 'px';
+  }
+
+  function renderResults() {
+    const r = resultsEl(); if (!r) return;
+    r.innerHTML = '';
+    if (!_results.length) {
+      r.append(el('div', { class: 'qs-empty' }, _lastQ.length < 2 ? 'Digite ao menos 2 caracteres' : 'Nenhum cliente encontrado'));
+    } else {
+      _results.forEach((ct, i) => {
+        const av = el('div', { class: 'qs-av' });
+        const url = ct.avatarUrl || ct.avatar_url;
+        if (url) av.append(el('img', { src: url, alt: '' }));
+        else av.textContent = (typeof initials === 'function' ? initials(ct.name) : (ct.name || '?').slice(0, 2).toUpperCase());
+        const item = el('div', { class: 'qs-item' + (i === _sel ? ' sel' : '') },
+          av,
+          el('div', { class: 'qs-meta' },
+            el('div', { class: 'qs-name' }, ct.name || ct.phone || 'Sem nome'),
+            el('div', { class: 'qs-sub' }, fmtSub(ct) || '—'),
+          ),
+        );
+        item.addEventListener('mousedown', (e) => { e.preventDefault(); choose(ct); });
+        r.append(item);
+      });
+    }
+    positionResults();
+    r.classList.add('open');
+  }
+
+  async function doSearch(q) {
+    _lastQ = q;
+    if (q.length < 2) { _results = []; renderResults(); return; }
+    try {
+      const data = await api('/contacts/search?q=' + encodeURIComponent(q));
+      // só re-renderiza se ainda é a query atual (evita corrida)
+      if (q !== _lastQ) return;
+      _results = (data.contacts || []).slice(0, 8);
+      _sel = _results.length ? 0 : -1;
+      renderResults();
+    } catch (e) {
+      _results = []; renderResults();
+    }
+  }
+
+  async function choose(ct) {
+    closeResults();
+    const inp = document.getElementById('quickSearchInput');
+    if (inp) { inp.value = ''; toggleClear(); }
+    await openConversation(ct);
+  }
+
+  async function openConversation(ct) {
+    try {
+      const detail = await api('/contacts/' + ct.id);
+      const card = detail.cards && detail.cards[0];
+      if (card) { openCardPanel(card.id); return; }
+      // Sem card vinculado → cria um no 1º board/coluna não-terminal e abre.
+      const boards = (window.state && window.state.boards) || [];
+      const board = boards[0];
+      if (!board) { toast('Nenhum board configurado', 'error'); return; }
+      const cols = (window.state?.pipeline?.columns?.length ? window.state.pipeline.columns
+        : (await api('/boards/' + board.id + '/columns')).columns) || [];
+      const firstCol = cols.find(c => !c.isTerminal) || cols[0];
+      if (!firstCol) { toast('Board sem colunas', 'error'); return; }
+      const created = await api('/cards', { method: 'POST', body: {
+        boardId: board.id, columnId: firstCol.id, title: ct.name || ct.phone || 'Cliente', contactId: ct.id,
+      } });
+      const newId = (created && (created.card?.id || created.id)) || null;
+      if (newId) openCardPanel(newId);
+      else toast('Card criado', 'success');
+    } catch (e) { toast('Erro ao abrir conversa: ' + e.message, 'error'); }
+  }
+
+  // ─── Monta o card de busca e ancora ao lado do sino ───────────────────
+  function ensureBox() {
+    injectStyles();
+    if (document.getElementById('quickSearchBox')) { placeSearch(); return true; }
+    const box = el('div', { id: 'quickSearchBox' });
+    box.append(el('span', { class: 'qs-ico', html:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' }));
+    const inp = el('input', { id: 'quickSearchInput', type: 'text', autocomplete: 'off', placeholder: 'Buscar cliente (nome, telefone, CPF)' });
+    const clear = el('button', { id: 'quickSearchClear', title: 'Limpar', html: '×' });
+    box.append(inp, clear);
+    const res = el('div', { id: 'quickSearchResults' });
+    document.body.append(res);
+
+    let typeTimer = null;
+    inp.addEventListener('input', () => {
+      toggleClear();
+      const q = inp.value.trim();
+      clearTimeout(typeTimer);
+      typeTimer = setTimeout(() => doSearch(q), 250);
+    });
+    inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2) renderResults(); });
+    inp.addEventListener('keydown', (e) => {
+      const open = resultsEl()?.classList.contains('open');
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (_results.length) { _sel = (_sel + 1) % _results.length; renderResults(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (_results.length) { _sel = (_sel - 1 + _results.length) % _results.length; renderResults(); } }
+      else if (e.key === 'Enter') { if (_results[_sel]) { e.preventDefault(); choose(_results[_sel]); } }
+      else if (e.key === 'Escape') { inp.value = ''; toggleClear(); closeResults(); inp.blur(); }
+    });
+    clear.addEventListener('click', () => { inp.value = ''; toggleClear(); closeResults(); inp.focus(); });
+    document.addEventListener('click', (e) => {
+      if (!box.contains(e.target) && !resultsEl()?.contains(e.target)) closeResults();
+    });
+    window.addEventListener('resize', () => { if (resultsEl()?.classList.contains('open')) positionResults(); });
+
+    // Insere no DOM ANTES de posicionar — placeSearch() localiza o box via
+    // getElementById, então ele precisa já estar anexado em algum lugar.
+    document.body.append(box);
+    placeSearch();
+    return true;
+  }
+
+  function toggleClear() {
+    const inp = document.getElementById('quickSearchInput'); const clr = document.getElementById('quickSearchClear');
+    if (inp && clr) clr.style.display = inp.value ? 'block' : 'none';
+  }
+
+  // Mantém o card de busca imediatamente à esquerda do sino, na barra
+  // de ação da view ativa (o sino é reposicionado pela Onda 60).
+  function placeSearch() {
+    const bell = document.getElementById('alertsBell');
+    const box = document.getElementById('quickSearchBox');
+    if (!box) return;
+    if (bell && bell.parentNode) {
+      if (bell.previousElementSibling !== box) bell.parentNode.insertBefore(box, bell);
+    } else {
+      // sem sino: cai no top-bar da view ativa
+      const av = document.querySelector('.view.active');
+      const host = av?.querySelector('#refreshBtn')?.parentNode || av?.querySelector('.top-bar-left') || av?.querySelector('.top-bar');
+      if (host && box.parentNode !== host) host.appendChild(box);
+    }
+  }
+
+  function init() {
+    ensureBox();
+    // garante posicionamento depois que a Onda 60 cria/realoca o sino
+    let n = 0;
+    const t = setInterval(() => { placeSearch(); if (++n > 12) clearInterval(t); }, 400);
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.nav-item')) setTimeout(placeSearch, 130);
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  window.__onda61 = { doSearch, placeSearch, openConversation };
+})();
+
+// ─── Assistente IA (slide-over) — agente embutido no CRM ──────────────────
+// O agente da tela inicial (index.html) abre num painel lateral, reusando a
+// sessao do CRM (clow_token, mesma origem) via ?embed=1 (bridge mode).
+(function(){
+  let built = false;
+  function build(){
+    if (built) return; built = true;
+    const css = document.createElement('style');
+    css.textContent =
+      '#aiPanelBackdrop{position:fixed;inset:0;background:rgba(8,8,26,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:9998}'
+      + '#aiPanelBackdrop.open{opacity:1;pointer-events:auto}'
+      + '#aiPanel{position:fixed;top:14px;right:14px;bottom:14px;width:min(500px,94vw);background:#0F0F24;border:1px solid rgba(155,89,252,.28);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.05) inset;overflow:hidden;transform:translateX(calc(100% + 28px));transition:transform .3s cubic-bezier(.32,.72,0,1);z-index:9999;display:flex;flex-direction:column}'
+      + '#aiPanel.open{transform:translateX(0)}'
+      + '#aiPanel .ai-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:linear-gradient(135deg,rgba(155,89,252,.16),rgba(74,158,255,.07));border-bottom:1px solid rgba(155,89,252,.22);flex-shrink:0}'
+      + '#aiPanel .ai-ttl{display:flex;align-items:center;gap:9px;color:#E8E8F0;font-weight:700;font-size:14px;letter-spacing:.2px}'
+      + '#aiPanel .ai-ttl svg{width:17px;height:17px;color:#9B59FC;flex-shrink:0}'
+      + '#aiPanel .ai-close{background:none;border:none;color:#9898B8;cursor:pointer;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:.15s}'
+      + '#aiPanel .ai-close:hover{background:rgba(255,255,255,.08);color:#fff}'
+      + '#aiPanel .ai-close svg{width:16px;height:16px}'
+      + '#aiPanel iframe{flex:1;width:100%;border:0;background:#0F0F24;display:block}';
+    document.head.appendChild(css);
+    const bd = document.createElement('div'); bd.id = 'aiPanelBackdrop'; bd.onclick = window.closeAIAssistant;
+    const p = document.createElement('div'); p.id = 'aiPanel';
+    p.innerHTML = '<div class="ai-head"><span class="ai-ttl"><img src="/assets/logo-official-full-white.png" alt="System Clow" style="height:22px;width:auto;display:block"></span><button class="ai-close" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div><iframe title="Assistente IA"></iframe>';
+    p.querySelector('.ai-close').onclick = window.closeAIAssistant;
+    document.body.appendChild(bd); document.body.appendChild(p);
+  }
+  window.openAIAssistant = function(){
+    build();
+    const p = document.getElementById('aiPanel'); const bd = document.getElementById('aiPanelBackdrop');
+    const f = p.querySelector('iframe');
+    if (!f.getAttribute('src')) f.setAttribute('src', '/?embed=1'); // lazy; bridge mode reusa a sessao (clow_token mesma origem)
+    requestAnimationFrame(function(){ p.classList.add('open'); bd.classList.add('open'); });
+  };
+  window.closeAIAssistant = function(){
+    const p = document.getElementById('aiPanel'); const bd = document.getElementById('aiPanelBackdrop');
+    if (p) p.classList.remove('open'); if (bd) bd.classList.remove('open');
+  };
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && window.closeAIAssistant) window.closeAIAssistant(); });
 })();
 // ═══════════════════════════════════════════════════════════════════════

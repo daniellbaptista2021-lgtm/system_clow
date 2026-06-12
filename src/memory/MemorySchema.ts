@@ -7,6 +7,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import { logger } from '../utils/logger.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Migration Definitions
@@ -133,7 +134,7 @@ export function runMigrations(db: Database.Database): void {
         } catch (err) {
           // FTS5 might not be available — skip silently
           if (String(err).includes('fts5') || String(err).includes('virtual table')) {
-            console.warn(`[Memory] FTS5 not available, skipping: ${migration.description}`);
+            logger.warn(`[Memory] FTS5 not available, skipping: ${migration.description}`);
             return;
           }
           throw err;

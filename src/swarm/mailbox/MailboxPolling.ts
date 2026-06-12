@@ -10,6 +10,7 @@ import type {
   MailboxMessage,
   MailboxMessageType,
 } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 import { MAILBOX_POLL_INTERVAL_MS } from '../constants.js';
 import type { TeammateMailbox } from './TeammateMailbox.js';
@@ -251,7 +252,7 @@ export class MailboxPoller {
 
 function defaultErrorHandler(error: unknown, message: MailboxMessage): void {
   const errMsg = error instanceof Error ? error.message : String(error);
-  console.error(
+  logger.error(
     `[MailboxPoller] Error handling message ${message.id} (type=${message.type}): ${errMsg}`
   );
 }

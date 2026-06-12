@@ -27,6 +27,7 @@ import { InstallationState } from './InstallationState.js';
 import { npmInstall, safeRemoveDir, createTempDir, retryWithBackoff } from './InstallationHelpers.js';
 import type { InstallationResult } from '../types.js';
 import { PLUGIN_MANIFEST_DIR, PLUGIN_MANIFEST_FILE } from '../types.js';
+import { logger } from '../../utils/logger.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export class ZipInstaller {
         try {
           npmInstall(pluginRoot);
         } catch (err) {
-          console.warn(`[ZipInstaller] npm install warning: ${(err as Error).message}`);
+          logger.warn(`[ZipInstaller] npm install warning: ${(err as Error).message}`);
         }
       }
 

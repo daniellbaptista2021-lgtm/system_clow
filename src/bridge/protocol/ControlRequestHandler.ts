@@ -1,6 +1,7 @@
 import type { InboundMessage, Transport } from '../types.js';
 import { ControlRequestType } from '../types.js';
 import * as crypto from 'crypto';
+import { logger } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,7 +47,7 @@ export class ControlRequestHandler {
 
     const handler = this.handlers.get(controlType);
     if (!handler) {
-      console.warn('[ControlRequestHandler] No handler for: ' + controlType);
+      logger.warn('[ControlRequestHandler] No handler for: ' + controlType);
       await this.replyError(msg, 'Unknown control type: ' + controlType);
       return;
     }
