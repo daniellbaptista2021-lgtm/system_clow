@@ -346,8 +346,8 @@ export function registerChannelsRoutes(app: Hono): void {
   app.post('/channels', async (c) => {
     const tid = tenantOf(c);
     const body = await c.req.json().catch(() => ({}));
-    if (!body.type || !['meta', 'zapi'].includes(body.type)) {
-      return badRequest(c, 'type required (meta | zapi)');
+    if (!body.type || !['meta', 'zapi', 'evolution'].includes(body.type)) {
+      return badRequest(c, 'type required (meta | zapi | evolution)');
     }
     if (!body.name || !body.credentials) return badRequest(c, 'name and credentials required');
 
@@ -356,6 +356,27 @@ export function registerChannelsRoutes(app: Hono): void {
       const c2: MetaCreds = body.credentials;
       if (!c2.accessToken || !c2.phoneNumberId) {
         return badRequest(c, 'meta credentials need accessToken + phoneNumberId');
+      }
+    } else if (body.type === 'evolution') {
+      const c2: any = body.credentials;
+      // O servidor Evolution é NOSSO. Um corretor não tem como saber a URL, a
+      // chave nem o nome da instância — pedir isso na tela seria devolver o
+      // atrito que a Evolution existe para eliminar. Quando a tela manda
+      // `usarServidorDoSistema`, preenchemos daqui.
+      if (c2.usarServidorDoSistema) {
+        const baseUrl = process.env.EVOLUTION_BASE_URL;
+        const apiKey = process.env.EVOLUTION_API_KEY;
+        if (!baseUrl || !apiKey) {
+          return badRequest(c, 'O servidor de WhatsApp não está configurado neste sistema ' +
+            '(EVOLUTION_BASE_URL e EVOLUTION_API_KEY).');
+        }
+        // Nome da instância derivado do canal: único, estável e sem depender
+        // de o cliente inventar um. O prefixo do tenant evita que dois
+        // clientes colidam num servidor compartilhado.
+        const sufixo = `${tid}-${Date.now().toString(36)}`.replace(/[^a-zA-Z0-9-]/g, '').slice(-40);
+        body.credentials = { baseUrl, apiKey, instance: `clow-${sufixo}` };
+      } else if (!c2.baseUrl || !c2.apiKey || !c2.instance) {
+        return badRequest(c, 'evolution precisa de baseUrl + apiKey + instance');
       }
     } else {
       const c2: ZapiCreds = body.credentials;
@@ -430,6 +451,75 @@ export function registerChannelsRoutes(app: Hono): void {
       }
     }
     return ok(c, { channel: maskedChannel(upd), zapiAutoConfig });
+  });
+
+  // ─── EVOLUTION: pareamento por QR ──────────────────────────────────────
+  //
+  // O QR da Evolution **expira em cerca de 40 segundos** e é reemitido. Por
+  // isso ele é um endpoint que a tela chama de novo, e não algo guardado no
+  // banco: um QR salvo e mostrado depois é um QR que não lê, e o cliente
+  // conclui que o produto está quebrado.
+  app.post('/channels/:id/evolution-parear', async (c) => {
+    const tid = tenantOf(c);
+    const ch = store.getChannel(tid, c.req.param('id'));
+    if (!ch) return notFound(c, 'channel');
+    if (ch.type !== 'evolution') return badRequest(c, 'canal nao e evolution');
+    const evolution = await import('../channels/evolution.js');
+    const creds = decryptJson<any>(ch.credentialsEncrypted);
+    // O webhook é apontado para nós já na criação da instância. O
+    // `webhookSecret` é o que autentica a entrega — mesmo esquema dos outros
+    // canais.
+    const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || '';
+    const webhookUrl = baseUrl && ch.webhookSecret
+      ? `${baseUrl.replace(/\/+$/, '')}/webhooks/crm/evolution/${ch.webhookSecret}`
+      : undefined;
+    const r = await evolution.criarOuParear(creds, { webhookUrl });
+    if (!r.ok) return badRequest(c, r.erro || 'falha ao parear');
+    if (r.jaConectado) {
+      const numero = await evolution.fetchConnectedPhone(ch);
+      try {
+        store.updateChannel(tid, ch.id, {
+          status: 'active',
+          ...(numero ? { phoneNumber: numero } : {}),
+        });
+      } catch { /* noop */ }
+      return ok(c, { jaConectado: true, numero });
+    }
+    return ok(c, { qr: r.qr, codigoDeParear: r.codigoDeParear });
+  });
+
+  /** Estado da conexão. A tela consulta enquanto o QR está na frente do cliente. */
+  app.get('/channels/:id/evolution-estado', async (c) => {
+    const tid = tenantOf(c);
+    const ch = store.getChannel(tid, c.req.param('id'));
+    if (!ch) return notFound(c, 'channel');
+    if (ch.type !== 'evolution') return badRequest(c, 'canal nao e evolution');
+    const evolution = await import('../channels/evolution.js');
+    const creds = decryptJson<any>(ch.credentialsEncrypted);
+    const estado = await evolution.estadoDaInstancia(creds);
+    // Espelha no canal: a lista de canais mostra esse status, e um canal
+    // marcado "ativo" que na verdade caiu é pior do que status nenhum.
+    try {
+      store.updateChannel(tid, ch.id, {
+        status: estado.conectado ? 'active' : 'pending',
+      });
+    } catch { /* noop */ }
+    return ok(c, estado);
+  });
+
+  /** Desconecta o número, sem apagar a instância nem o histórico do CRM. */
+  app.post('/channels/:id/evolution-desconectar', async (c) => {
+    const tid = tenantOf(c);
+    const ch = store.getChannel(tid, c.req.param('id'));
+    if (!ch) return notFound(c, 'channel');
+    if (ch.type !== 'evolution') return badRequest(c, 'canal nao e evolution');
+    const evolution = await import('../channels/evolution.js');
+    const creds = decryptJson<any>(ch.credentialsEncrypted);
+    const desconectou = await evolution.desconectar(creds);
+    try {
+      store.updateChannel(tid, ch.id, { status: 'pending' });
+    } catch { /* noop */ }
+    return ok(c, { desconectado: desconectou });
   });
   // Endpoint pra forcar reconfigure dos webhooks de um canal Z-API
   // existente. Util pra canais antigos criados antes da auto-config OU

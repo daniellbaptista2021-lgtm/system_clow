@@ -14,6 +14,7 @@
  * 200 OK que volta pra Z-API.
  */
 import { logger } from '../../utils/logger.js';
+import { obterCredencial, SemCredencialIa } from '../../tenancy/aiCredentials.js';
 import { getCrmDb } from '../schema.js';
 import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
@@ -54,9 +55,15 @@ export function readChannelAIConfig(channelId: string): ChannelAIConfig | null {
   return {
     enabled: true,
     systemPrompt: String(r.ai_system_prompt),
-    // Modelo FIXO em deepseek-chat — regra absoluta. Coluna ai_model
-    // do schema fica vestigial pra retrocompat, mas e ignorada.
-    model: 'deepseek-chat',
+    // Modelo do canal. Vazio = usa o que o CLIENTE escolheu na credencial
+    // dele (crmModel, com queda pro modelo principal).
+    //
+    // Ate 10/08/2026 isto era `'deepseek-chat'` fixo, com o comentario "regra
+    // absoluta, coluna ai_model ignorada" — fazia sentido quando havia uma
+    // conta DeepSeek unica do dono pagando por todos. Com BYOK cada cliente
+    // traz a propria chave, e fixar um modelo aqui obrigaria todo mundo a ter
+    // conta DeepSeek. Ver src/tenancy/aiCredentials.ts.
+    model: r.ai_model ? String(r.ai_model) : '',
     audioEnabled: r.ai_audio_enabled !== 0,
     maxHistory: Number(r.ai_max_history || 20),
     debounceSeconds: Number(r.ai_debounce_seconds || 8),
@@ -160,19 +167,53 @@ async function recordTenantUsage(tenantId: string | undefined, usage: any): Prom
   }
 }
 
+/**
+ * Resolve para onde a chamada vai: URL, cabecalhos e modelo, tudo vindo da
+ * credencial DO TENANT.
+ *
+ * Antes daqui a chave saia de `process.env.DEEPSEEK_API_KEY` e o modelo era
+ * fixo em `deepseek-chat` — uma conta so pagando por todos os clientes. Hoje
+ * cada cliente traz a propria (decisao do Daniel, 10/08/2026), e por isso a
+ * ausencia de credencial e um erro de verdade: sem fallback, sem chave do
+ * dono, sem "roda mesmo assim".
+ *
+ * O `modeloPedido` (coluna `ai_model` do CRM) tem precedencia; caindo pro
+ * `crmModel` do cliente e, por fim, pro modelo principal dele.
+ */
+function resolverDestino(tenantId?: string, modeloPedido?: string): { url: string; headers: Record<string, string>; model: string } {
+  if (!tenantId) throw new SemCredencialIa('');
+  const cred = obterCredencial(tenantId);
+  if (!cred) throw new SemCredencialIa(tenantId);
+  const base = cred.baseUrl.replace(/\/+$/, '');
+  // Os agentes de coluna falam OpenAI-compatible. Um cliente que conectou a
+  // Anthropic usa o protocolo nativo dela no agente principal, mas aqui o
+  // caminho e o /chat/completions — e a Anthropic nao o oferece.
+  if (cred.wire !== 'openai') {
+    throw new Error(`provedor_incompativel_no_crm: ${cred.provider}. Os agentes de coluna do CRM ` +
+      'precisam de um provedor compatível com OpenAI (OpenRouter, DeepSeek, OpenAI).');
+  }
+  return {
+    url: `${base}/chat/completions`,
+    headers: {
+      Authorization: `Bearer ${cred.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    model: modeloPedido?.trim() || cred.crmModel,
+  };
+}
+
 export async function callDeepSeekWithTools(
   messages: DeepSeekToolMessage[],
   tools: unknown[],
-  model = 'deepseek-chat',
+  model?: string,
   tenantId?: string,
 ): Promise<DeepSeekToolMessage> {
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) throw new Error('DEEPSEEK_API_KEY not configured');
-  const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const destino = resolverDestino(tenantId, model);
+  const r = await fetch(destino.url, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    headers: destino.headers,
     body: JSON.stringify({
-      model: model || 'deepseek-chat',
+      model: destino.model,
       messages,
       tools,
       tool_choice: 'auto',
@@ -182,11 +223,11 @@ export async function callDeepSeekWithTools(
   });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
-    throw new Error(`deepseek http_${r.status}: ${body.slice(0, 200)}`);
+    throw new Error(`ia http_${r.status}: ${body.slice(0, 200)}`);
   }
   const d: any = await r.json();
   const msg = d?.choices?.[0]?.message;
-  if (!msg) throw new Error('deepseek: empty message in response');
+  if (!msg) throw new Error('ia: resposta sem mensagem');
   // Tracking de custo real por tenant — alimenta quotaGuard / billing
   void recordTenantUsage(tenantId, d?.usage);
   return msg as DeepSeekToolMessage;
@@ -200,18 +241,17 @@ export async function callDeepSeek(
   model: string,
   tenantId?: string,
 ): Promise<string> {
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) throw new Error('DEEPSEEK_API_KEY not configured');
+  const destino = resolverDestino(tenantId, model);
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: userMessage },
   ];
-  const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const r = await fetch(destino.url, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    headers: destino.headers,
     body: JSON.stringify({
-      model: model || 'deepseek-chat',
+      model: destino.model,
       messages,
       temperature: 0.6,
       max_tokens: 1200,
@@ -219,11 +259,11 @@ export async function callDeepSeek(
   });
   if (!r.ok) {
     const body = await r.text().catch(() => '');
-    throw new Error(`deepseek http_${r.status}: ${body.slice(0, 200)}`);
+    throw new Error(`ia http_${r.status}: ${body.slice(0, 200)}`);
   }
   const d: any = await r.json();
   const content = d?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('deepseek: empty content in response');
+  if (!content) throw new Error('ia: resposta sem conteudo');
   void recordTenantUsage(tenantId, d?.usage);
   return String(content).trim();
 }

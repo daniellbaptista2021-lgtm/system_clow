@@ -13,6 +13,7 @@ import { findChannelByWebhookSecret } from './store.js';
 import { decryptJson } from './crypto.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
+import * as evolution from './channels/evolution.js';
 import { ingestInbound } from './inbox.js';
 import { logger } from '../utils/logger.js';
 
@@ -204,6 +205,69 @@ app.post('/zapi/:secret', async (c) => {
     }
   } catch (err: any) {
     logger.warn('[zapi-webhook] AI agent dispatch failed:', err?.message);
+  }
+  return c.json({ ok: true, processed: parsed.messages.length });
+});
+
+// ─── EVOLUTION: POST ──────────────────────────────────────────────────────
+//
+// A Evolution manda TODOS os eventos configurados para o MESMO endereço:
+// mensagem recebida, mudança de conexão, confirmação de entrega, presença.
+// `parseWebhook` devolve lista vazia para o que não é mensagem — e responder
+// 200 mesmo assim importa: erro faz a Evolution reentregar, e reentrega de um
+// evento que ignoramos de propósito vira laço.
+app.post('/evolution/:secret', async (c) => {
+  const { incWebhookReceived } = await import('../server/metrics.js');
+  incWebhookReceived('evolution');
+  const secret = c.req.param('secret');
+  const channel = findChannelByWebhookSecret(secret);
+  if (!channel || channel.type !== 'evolution') return c.text('not_found', 404);
+  let payload: any;
+  try {
+    payload = await c.req.json();
+  } catch {
+    return c.text('bad_json', 400);
+  }
+  // Conexão caiu ou voltou: mantém o status do canal honesto na tela, em vez
+  // de o corretor descobrir que o WhatsApp desconectou quando um lead reclama
+  // que ninguém respondeu.
+  const evento = String(payload?.event || '').toLowerCase();
+  if (evento.startsWith('connection.update')) {
+    const estado = payload?.data?.state || payload?.data?.connection;
+    try {
+      const { updateChannel } = await import('./store.js');
+      updateChannel(channel.tenantId, channel.id, {
+        status: estado === 'open' ? 'active' : 'disconnected',
+      });
+      logger.info(`[evolution-webhook] canal ${channel.id} -> ${estado}`);
+    } catch (err: any) {
+      logger.warn('[evolution-webhook] falha ao atualizar status:', err?.message);
+    }
+    return c.json({ ok: true, processed: 0 });
+  }
+  const parsed = evolution.parseWebhook(payload);
+  for (const msg of parsed.messages) {
+    void ingestInbound(channel, msg);
+  }
+  // Dispara o agente de IA. Só para mensagem do CLIENTE: `fromMe` é o próprio
+  // corretor escrevendo pelo celular dele, e responder a isso faria o agente
+  // conversar sozinho.
+  try {
+    for (const msg of parsed.messages) {
+      if (msg.fromMe) continue;
+      const aiAgent = await import('./ai/agent.js');
+      aiAgent.handleInboundForAI({
+        channel,
+        customerPhone: msg.fromPhone,
+        text: msg.text || msg.caption,
+        audioUrl: msg.type === 'audio' ? msg.mediaUrl : undefined,
+        imageUrl: msg.type === 'image' ? msg.mediaUrl : undefined,
+        senderName: msg.fromName,
+        messageId: msg.messageId,
+      });
+    }
+  } catch (err: any) {
+    logger.warn('[evolution-webhook] disparo do agente falhou:', err?.message);
   }
   return c.json({ ok: true, processed: parsed.messages.length });
 });
