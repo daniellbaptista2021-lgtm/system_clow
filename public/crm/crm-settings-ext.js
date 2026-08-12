@@ -237,9 +237,9 @@
           el('input', { name: 'logo_url', type: 'url', value: d.logo_url || '', placeholder: 'https://seudominio.com/logo.png' })),
         el('div', { style: 'display:flex;gap:12px' },
           el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Cor primária'),
-            el('input', { name: 'primary_color', type: 'text', value: d.primary_color || '#9B59FC', placeholder: '#9B59FC' })),
+            el('input', { name: 'primary_color', type: 'text', value: d.primary_color || '#E10600', placeholder: '#E10600' })),
           el('div', { class: 'field', style: 'flex:1' }, el('label', {}, 'Cor secundária'),
-            el('input', { name: 'secondary_color', type: 'text', value: d.secondary_color || '#4A9EFF', placeholder: '#4A9EFF' })),
+            el('input', { name: 'secondary_color', type: 'text', value: d.secondary_color || '#FF1F18', placeholder: '#FF1F18' })),
         ),
         el('div', { class: 'field' }, el('label', {}, 'Domínio customizado (CNAME apontado pra gente)'),
           el('input', { name: 'custom_domain', type: 'text', value: d.custom_domain || '', placeholder: 'crm.suaempresa.com.br' }),
@@ -287,7 +287,7 @@
         body.append(el('div', { class: 'empty', style: 'text-align:center;padding:40px' },
           el('div', { style: 'font-size:14px;color:var(--text-dim);margin-bottom:14px' }, 'Não foi possível carregar suas configurações.'),
           el('button', {
-            style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600',
+            style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600',
             on: { click: () => location.reload() }
           }, 'Recarregar página'),
         ));
@@ -308,6 +308,19 @@
         infoRow('Status', el('span', { class: `pill ${me.user.status === 'active' ? 'green' : 'amber'}` }, me.user.status)),
       ),
     ));
+
+    // === Inteligência Artificial (chave do próprio cliente) ===
+    // Logo abaixo da conta e ACIMA de tudo o mais: sem chave conectada o
+    // agente não responde ninguém, então é a primeira coisa que o cliente
+    // precisa resolver ao entrar aqui.
+    if (window.CartaoIA) {
+      try {
+        await window.CartaoIA.montar(body, { el, toast });
+      } catch (e) {
+        // Um erro aqui não pode derrubar o resto das configurações.
+        console.error('[ia] falha ao montar o cartão:', e);
+      }
+    }
 
     // === Usage card ===
     if (usage) {

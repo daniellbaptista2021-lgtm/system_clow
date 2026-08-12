@@ -44,14 +44,14 @@
 .cot-sa-trigger{
   display:inline-flex;align-items:center;gap:6px;
   padding:7px 12px;border-radius:10px;
-  background:linear-gradient(135deg,#9B59FC,#4A9EFF);
+  background:linear-gradient(135deg,#E10600,#FF1F18);
   color:#fff;border:none;cursor:pointer;
   font-family:inherit;font-size:12px;font-weight:700;letter-spacing:-.005em;
-  box-shadow:0 6px 16px rgba(155,89,252,.28);
+  box-shadow:0 6px 16px rgba(225,6,0,.28);
   transition:transform .14s ease, box-shadow .14s ease;
   white-space:nowrap;flex-shrink:0;
 }
-.cot-sa-trigger:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(155,89,252,.4)}
+.cot-sa-trigger:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(225,6,0,.4)}
 .cot-sa-trigger .lbl{display:inline}
 @media(max-width:560px){
   .cot-sa-trigger{padding:7px 9px}
@@ -65,7 +65,7 @@
   height:min(940px, calc(100vh - 32px));
   right:${CHAT_WIDTH + GAP}px;top:50%;transform:translateY(-50%);
   background:#0a0a18;border-radius:22px;
-  border:1px solid rgba(155,89,252,.35);
+  border:1px solid rgba(225,6,0,.35);
   box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 4px #1a1a2e,0 0 0 5px rgba(255,255,255,.04);
   display:flex;flex-direction:column;
   overflow:hidden;
@@ -90,7 +90,7 @@
 .cot-sa-title{
   flex:1;min-width:0;
   font-size:13px;font-weight:700;letter-spacing:-.005em;
-  background:linear-gradient(135deg,#9B59FC,#4A9EFF);
+  background:linear-gradient(135deg,#E10600,#FF1F18);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
@@ -101,7 +101,7 @@
   display:flex;align-items:center;justify-content:center;
   transition:background .14s, color .14s;
 }
-.cot-sa-icon:hover{background:rgba(155,89,252,.14);color:#E8E8F0}
+.cot-sa-icon:hover{background:rgba(225,6,0,.14);color:#E8E8F0}
 
 .cot-sa-body{
   flex:1;min-height:0;position:relative;background:#fff;
@@ -113,7 +113,7 @@
 .cot-sa-resize{
   position:absolute;width:18px;height:18px;right:4px;bottom:4px;
   cursor:nwse-resize;z-index:2;opacity:.7;
-  background:linear-gradient(135deg,transparent 50%,rgba(155,89,252,.55) 50%);
+  background:linear-gradient(135deg,transparent 50%,rgba(225,6,0,.55) 50%);
   border-bottom-right-radius:30px;
 }
 .cot-sa-resize:hover{opacity:1}
@@ -133,7 +133,7 @@
   .cot-sa-resize{display:none}
   .cot-sa-win.minimized{
     inset:auto 12px 12px auto!important;width:200px!important;height:44px!important;
-    border-radius:12px;border:1px solid rgba(155,89,252,.35);
+    border-radius:12px;border:1px solid rgba(225,6,0,.35);
   }
 }
 `;

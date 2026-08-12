@@ -322,7 +322,7 @@ function cardEl(card) {
             const r = e.currentTarget.getBoundingClientRect();
             showCardContextMenu(card, r.right, r.bottom + 4);
           },
-          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(155,89,252,0.12)'; },
+          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(225,6,0,0.12)'; },
           mouseleave: (e) => { e.currentTarget.style.opacity = '.7'; e.currentTarget.style.background = 'transparent'; },
         }
       }, '⋯'),
@@ -417,10 +417,10 @@ function ensureCtxMenuStyles() {
   const st = document.createElement('style');
   st.id = 'ctx-menu-style';
   st.textContent = `
-.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,rgba(155,89,252,.3));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
+.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,rgba(225,6,0,.3));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
 @keyframes ctxIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .ctx-menu .ctx-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--text,#E8E8F0);user-select:none;white-space:nowrap;position:relative}
-.ctx-menu .ctx-item:hover{background:linear-gradient(135deg,rgba(155,89,252,.14),rgba(74,158,255,.08))}
+.ctx-menu .ctx-item:hover{background:linear-gradient(135deg,rgba(225,6,0,.14),rgba(255,31,24,.08))}
 .ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#9898B8);display:inline-flex;align-items:center;justify-content:center}
 .ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#9898B8);font-size:11px}
 .ctx-menu .ctx-item.ctx-danger{color:var(--red,#EF4444)}
@@ -582,8 +582,8 @@ async function showColumnContextMenu(col, x, y) {
     }),
 
     ctxItem(ICO_COLOR, 'Mudar cor', async () => {
-      const palette = ['#9B59FC', '#4A9EFF', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
-      const v = await pickFromPalette(palette, col.color || '#9B59FC', 'Mudar cor da coluna');
+      const palette = ['#E10600', '#FF1F18', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const v = await pickFromPalette(palette, col.color || '#E10600', 'Mudar cor da coluna');
       if (!v) return;
       try {
         await api('/columns/' + col.id, { method: 'PATCH', body: { color: v } });
@@ -683,7 +683,7 @@ function showMoveAllSubmenu(col, x, y) {
   } else {
     for (const c of others) {
       menu.append(ctxItem(
-        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#9B59FC') + '"></span>',
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#E10600') + '"></span>',
         c.name,
         async () => {
           if (!cardsHere.length) return toast('Coluna já está vazia', 'info');
@@ -716,20 +716,20 @@ function showColumnReport(col, cards) {
   const avgProb = totalCards ? Math.round(cards.reduce((a, c) => a + (c.probability || 0), 0) / totalCards) : 0;
 
   const dialog = el('div', { class: 'modal-backdrop' });
-  const stat = (label, value, color) => el('div', { style: 'background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px;border-radius:10px' },
+  const stat = (label, value, color) => el('div', { style: 'background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);padding:14px;border-radius:10px' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
     el('div', { style: 'font-size:22px;font-weight:800;color:' + (color || 'var(--text)') }, value),
   );
   const modal = el('div', { class: 'modal', style: 'max-width:560px' },
     el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:18px' },
-      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#9B59FC') }),
+      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#E10600') }),
       el('h3', { style: 'margin:0' }, 'Relatório · ' + col.name),
     ),
     el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
       stat('Total de cards', String(totalCards)),
       stat('Contatos únicos', String(contacts)),
       stat('Valor total', fmtMoney(totalValueCents), '#22C55E'),
-      stat('Valor ponderado', fmtMoney(weightedCents), '#9B59FC'),
+      stat('Valor ponderado', fmtMoney(weightedCents), '#E10600'),
       stat('Probabilidade média', avgProb + '%'),
       stat('Vencidos', String(overdue), overdue > 0 ? '#EF4444' : 'var(--text)'),
     ),
@@ -1696,7 +1696,7 @@ async function openNewColumnModal() {
   if (!boardId) { toast('Selecione um board primeiro', 'error'); return; }
   await buildModal('Nova coluna', [
     { name: 'name', label: 'Nome da coluna', required: true, placeholder: 'Ex: Aguardando aprovação' },
-    { name: 'color', label: 'Cor (hex)', value: '#9B59FC', attrs: { type: 'color' } },
+    { name: 'color', label: 'Cor (hex)', value: '#E10600', attrs: { type: 'color' } },
     { name: 'isTerminal', label: 'É coluna terminal? (Ganho/Perdido)', type: 'select', value: 'no', options: [
       { value: 'no', label: 'Não — coluna intermediária' },
       { value: 'yes', label: 'Sim — finaliza o card aqui' },
@@ -1706,7 +1706,7 @@ async function openNewColumnModal() {
     try {
       await api(`/boards/${boardId}/columns`, { method: 'POST', body: {
         name: v.name.trim(),
-        color: v.color || '#9B59FC',
+        color: v.color || '#E10600',
         isTerminal: v.isTerminal === 'yes',
       }});
       toast('Coluna criada', 'success');
@@ -2825,7 +2825,7 @@ function renderPagination(currentPage, totalPages, onPageChange) {
     if (disabled || active) b.disabled = true;
     b.style.cssText = 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;' +
       'cursor:' + (disabled || active ? 'default' : 'pointer') + ';' +
-      'background:' + (active ? 'linear-gradient(135deg,#9B59FC,#4A9EFF)' : 'transparent') + ';' +
+      'background:' + (active ? 'linear-gradient(135deg,#E10600,#FF1F18)' : 'transparent') + ';' +
       'color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') + ';' +
       'border:1px solid ' + (active ? 'transparent' : 'var(--border)') + ';' +
       'opacity:' + (disabled && !active ? '.5' : '1');
@@ -2868,7 +2868,7 @@ function renderChannelsList() {
     const chRow = el('div', { class: 'list-item', style: 'cursor:pointer;flex-direction:column;align-items:stretch', on: { click: (e) => { if (e.target.closest('button') || e.target.closest('input') || e.target.closest('code')) return; openEditChannelModal(ch); } } },
       el('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:10px' },
         el('div', { class: 'list-item-left' },
-          el('div', { class: 'contact-avatar' }, ch.type === 'meta' ? 'M' : 'Z'),
+          el('div', { class: 'contact-avatar' }, ch.type === 'meta' ? 'M' : ch.type === 'evolution' ? 'W' : 'Z'),
           el('div', {},
             el('div', { class: 'list-item-title' }, ch.name),
             el('div', { class: 'list-item-sub' }, `${ch.type.toUpperCase()} · ${ch.phoneNumber || ch.phoneNumberId || '—'}`),
@@ -2876,15 +2876,36 @@ function renderChannelsList() {
         ),
         el('span', { class: `pill ${ch.status === 'active' ? 'green' : ch.status === 'error' ? 'red' : 'amber'}` }, ch.status),
       ),
-      el('div', { style: 'margin-top:10px;font-size:11px;color:var(--text-dim)' },
+      // Na Evolution nós configuramos o webhook sozinhos no pareamento —
+      // mostrar uma URL "para colar no painel" seria instruir um passo que
+      // não existe e que o cliente não teria onde executar.
+      ch.type === 'evolution' ? null : el('div', { style: 'margin-top:10px;font-size:11px;color:var(--text-dim)' },
         el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
       el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center' },
+        // Conectar o número vem antes de tudo: sem WhatsApp ligado, configurar
+        // a IA é ajustar um agente que não tem com quem falar.
+        ch.type === 'evolution'
+          ? el('button', {
+              class: 'save-btn',
+              style: 'flex:1;min-width:170px;font-size:12px;padding:9px;font-weight:700;' +
+                (ch.status === 'active'
+                  ? 'background:rgba(34,197,94,.12);color:#22C55E;border:1px solid rgba(34,197,94,.35)'
+                  : 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;border:none'),
+              on: { click: () => {
+                if (!window.PareamentoWhatsApp) { toast('Tela de conexão não carregou', 'error'); return; }
+                window.PareamentoWhatsApp.abrir(ch, {
+                  el, api, toast,
+                  aoConectar: async () => { await loadChannels(); renderChannelsList(); },
+                });
+              } },
+            }, ch.status === 'active' ? '✅ WhatsApp conectado' : '📲 Conectar WhatsApp')
+          : null,
         renderAIToggleButton(ch),
-        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;font-size:12px;padding:9px;font-weight:700',
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;font-size:12px;padding:9px;font-weight:700',
           on: { click: () => openAIAgentModal(ch) } }, '⚙️ Configurar IA'),
-        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:rgba(74,158,255,.12);color:#4A9EFF;border:1px solid rgba(74,158,255,.35);font-size:12px;padding:9px 12px',
+        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:rgba(255,31,24,.12);color:#FF1F18;border:1px solid rgba(255,31,24,.35);font-size:12px;padding:9px 12px',
           on: { click: () => showWebhookSetup(ch, false) } }, '📡 Webhook'),
         el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 14px;font-size:12px',
           on: { click: async () => {
@@ -2994,9 +3015,9 @@ async function openAIAgentModal(channel) {
   form.append(
     el('div', { style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
       'Ativa um agente de IA que atende automaticamente clientes neste canal WhatsApp. Cliente manda mensagem → agente responde com base no system prompt. Suporta texto e áudio (transcrito via Whisper). Use ',
-      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
+      el('code', { style: 'background:rgba(225,6,0,.15);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
       ' e ',
-      el('code', { style: 'background:rgba(155,89,252,.15);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
+      el('code', { style: 'background:rgba(225,6,0,.15);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
       ' no prompt pra personalizar.',
     ),
     el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer' },
@@ -3051,7 +3072,7 @@ function copyableField(label, value) {
   });
   const btn = el('button', {
     type: 'button',
-    style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
     on: { click: () => copyToClipboard(value) },
   }, 'Copiar');
   wrap.append(
@@ -3071,7 +3092,7 @@ function showWebhookSetup(channel, isNew) {
   const title = isNew ? '✓ Canal criado — agora configure no provedor' : 'Webhook do canal ' + channel.name;
 
   const metaInstr = el('div', {
-    style: 'background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
+    style: 'background:rgba(255,31,24,.08);border:1px solid rgba(255,31,24,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
     html: '<div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Como configurar no Meta</div>1. Acesse <strong>Meta for Developers</strong> → seu app → <strong>WhatsApp → Configuração</strong><br>2. No bloco <strong>Webhook</strong>, clique <strong>Editar</strong><br>3. Cole a <strong>Webhook URL</strong> abaixo no campo <em>"URL de retorno de chamada"</em><br>4. Cole o <strong>Verify Token</strong> abaixo no campo <em>"Verificar token"</em><br>5. Clique <strong>Verificar e salvar</strong> (deve ficar verde)<br>6. Em <strong>Campos do webhook</strong>, marque <code>messages</code> e <strong>Inscrever</strong>',
   });
   const zapiInstr = el('div', {
@@ -3100,23 +3121,23 @@ function showWebhookSetup(channel, isNew) {
 async function openNewChannelModal(presetType) {
   // Pre-generate webhook secret so we can show the URL inside the form
   const presetSecret = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
-  let currentType = presetType || 'zapi';
+  let currentType = presetType || 'evolution';
 
   const backdrop = el('div', { class: 'modal-backdrop' });
 
   // Live webhook URL display — updates when provider changes
   const whUrlInput = el('input', {
     type: 'text', readonly: '',
-    value: location.origin + '/webhooks/crm/zapi/' + presetSecret,
+    value: location.origin + '/webhooks/crm/evolution/' + presetSecret,
     style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;user-select:all',
     on: { focus: (e) => e.target.select() },
   });
   const whCopyBtn = el('button', {
     type: 'button',
-    style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
     on: { click: () => copyToClipboard(whUrlInput.value) },
   }, 'Copiar');
-  const whBlock = el('div', { style: 'background:rgba(155,89,252,.06);border:1px solid rgba(155,89,252,.18);padding:12px;border-radius:10px;margin-bottom:14px' },
+  const whBlock = el('div', { style: 'background:rgba(225,6,0,.06);border:1px solid rgba(225,6,0,.18);padding:12px;border-radius:10px;margin-bottom:14px' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔗 WEBHOOK URL (cole no painel do provedor)'),
     el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, whUrlInput, whCopyBtn),
     el('div', { id: 'whInstr', style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5' }),
@@ -3129,34 +3150,47 @@ async function openNewChannelModal(presetType) {
     style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;user-select:all',
     on: { focus: (e) => e.target.select() },
   });
-  const verifyTokBlock = el('div', { style: 'background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.18);padding:12px;border-radius:10px;margin-bottom:14px;display:none' },
+  const verifyTokBlock = el('div', { style: 'background:rgba(255,31,24,.06);border:1px solid rgba(255,31,24,.18);padding:12px;border-radius:10px;margin-bottom:14px;display:none' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔑 VERIFY TOKEN (cole no campo "Verificar token" do Meta)'),
     el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, verifyTokInput,
-      el('button', { type: 'button', style: 'padding:0 14px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit', on: { click: () => copyToClipboard(verifyTokInput.value) } }, 'Copiar'),
+      el('button', { type: 'button', style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit', on: { click: () => copyToClipboard(verifyTokInput.value) } }, 'Copiar'),
     ),
   );
 
   function refreshWebhookUI(type) {
-    currentType = type || 'zapi';
+    currentType = type || 'evolution';
     whUrlInput.value = location.origin + '/webhooks/crm/' + currentType + '/' + presetSecret;
     const instr = document.getElementById('whInstr');
     if (instr) {
+      // Na Evolution o webhook é configurado por nós, automaticamente, no
+      // momento do pareamento — o cliente não copia URL nenhuma. Mostrar um
+      // campo "cole no painel do provedor" ali seria pedir um passo que não
+      // existe, e que o cliente não teria onde executar.
       instr.innerHTML = currentType === 'meta'
         ? '<strong>Meta:</strong> Configuração → Webhook → Editar → cole acima na <em>URL de retorno</em> + <em>Verificar token</em> abaixo → Verificar e salvar.'
+        : currentType === 'evolution'
+        ? '<strong>Nada a fazer aqui:</strong> configuramos isto sozinhos quando você conectar o WhatsApp pelo QR.'
         : '<strong>Z-API:</strong> Painel da instância → Webhooks → cole acima no campo <em>"Ao receber"</em>.';
     }
     verifyTokBlock.style.display = currentType === 'meta' ? '' : 'none';
+    whBlock.style.display = currentType === 'evolution' ? 'none' : '';
   }
 
   const form = el('form', { on: { submit: async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const type = currentType;
+    // Na Evolution o servidor é nosso: baseUrl, apiKey e nome da instância
+    // saem da configuração do sistema, não do cliente. Pedir isso a um
+    // corretor seria pedir o que ele não tem como saber — e é justamente o
+    // atrito que a Evolution existe para eliminar.
     const credentials = type === 'meta' ? {
       accessToken: fd.get('metaToken'),
       phoneNumberId: fd.get('metaPhoneId'),
       verifyToken: verifyTokInput.value,
       apiVersion: 'v22.0',
+    } : type === 'evolution' ? {
+      usarServidorDoSistema: true,
     } : {
       instanceId: fd.get('zapiInstance'),
       token: fd.get('zapiToken'),
@@ -3197,8 +3231,9 @@ async function openNewChannelModal(presetType) {
           fieldsZapi.style.display = v === 'zapi' ? '' : 'none';
           refreshWebhookUI(v);
         } } },
-          el('option', { value: 'zapi' }, 'Z-API'),
-          el('option', { value: 'meta' }, 'Meta Cloud API (oficial)'),
+          el('option', { value: 'evolution' }, 'WhatsApp por QR Code (grátis, recomendado)'),
+          el('option', { value: 'zapi' }, 'Z-API (pago, por número)'),
+          el('option', { value: 'meta' }, 'Meta Cloud API (oficial, exige aprovação)'),
         );
         return sel;
       })(),
@@ -3217,10 +3252,11 @@ async function openNewChannelModal(presetType) {
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
   document.body.append(backdrop);
 
-  // Initialize: default to Z-API since it's first option
+  // Começa na Evolution: é a primeira opção e a única sem custo para o cliente.
   setTimeout(() => {
-    fieldsZapi.style.display = '';
-    refreshWebhookUI('zapi');
+    fieldsZapi.style.display = 'none';
+    fieldsMeta.style.display = 'none';
+    refreshWebhookUI('evolution');
   }, 0);
 }
 
@@ -3354,7 +3390,7 @@ function plotSales(canvasId, rows) {
     data: {
       labels: rows.map(r => r.bucket),
       datasets: [
-        { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#9B59FC', backgroundColor: 'rgba(155,89,252,.2)', yAxisID: 'y' },
+        { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#E10600', backgroundColor: 'rgba(225,6,0,.2)', yAxisID: 'y' },
         { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#22C55E', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
       ],
     },
@@ -3368,7 +3404,7 @@ function plotAgents(canvasId, rows) {
   if (!ctx) return;
   if (rows.length === 0) { emptyMsg(ctx); return; }
   const types = [...new Set(rows.flatMap(r => Object.keys(r.byType)))];
-  const palette = ['#9B59FC', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899'];
+  const palette = ['#E10600', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899'];
   window._rptCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -3394,7 +3430,7 @@ function plotSources(canvasId, rows) {
       labels: rows.map(r => r.source),
       datasets: [{
         data: rows.map(r => r.contactCount),
-        backgroundColor: ['#9B59FC', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899', '#64748B'],
+        backgroundColor: ['#E10600', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899', '#64748B'],
       }],
     },
     options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } } },
@@ -3962,7 +3998,7 @@ function wireEvents() {
 }
 
 
-// ─── Auto-login via System Clow session ───────────────────────────────
+// ─── Auto-login via Território Próprio session ───────────────────────────────
 async function tryExchange() {
   const sessionToken = localStorage.getItem('clow_token');
   if (!sessionToken) return null;
@@ -3983,7 +4019,7 @@ async function tryAutoLogin() {
     try { await attemptLogin(state.apiKey); return true; }
     catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
   }
-  // 2. Try exchange via System Clow session
+  // 2. Try exchange via Território Próprio session
   const fresh = await tryExchange();
   if (fresh) {
     state.apiKey = fresh;
@@ -3997,7 +4033,7 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa estar logado no System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Ir pro System Clow</a></div>';
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do Território Próprio para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -4020,7 +4056,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro Território Próprio</a></div>';
     }
   }
 })();
@@ -4126,7 +4162,7 @@ async function openCardById(id) {
 // ═════════ INSIGHTS AI ═══════════════════════════════════════════════════
 async function renderInsightsView() {
   const container = $('#insightsContent');
-  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(225,6,0,.3);border-top-color:#E10600;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
   try {
     let forecast = await api('/ai/forecast').catch(() => ({}));
     const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
@@ -4134,7 +4170,7 @@ async function renderInsightsView() {
     // Auto-score sincrono na primeira visita: garante dados antes de renderizar
     if (noScore && !window._insightsAutoScored) {
       window._insightsAutoScored = true;
-      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(155,89,252,.3);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(225,6,0,.3);border-top-color:#E10600;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
       try {
         await api('/ai/batch-score', { method: 'POST', body: { limit: 20 } });
         forecast = await api('/ai/forecast').catch(() => ({}));
@@ -4827,24 +4863,24 @@ async function renderLinksTab(card) {
     ),
     el('button', {
       type: 'button',
-      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer',
+      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer',
       on: { click: onAdd }
     }, '+ Adicionar')
   );
 
-  const emptyHint = (msg) => el('div', { style: 'color:var(--text-dim);font-size:12px;font-style:italic;padding:8px;background:rgba(155,89,252,0.04);border-radius:6px;text-align:center' }, msg);
+  const emptyHint = (msg) => el('div', { style: 'color:var(--text-dim);font-size:12px;font-style:italic;padding:8px;background:rgba(225,6,0,0.04);border-radius:6px;text-align:center' }, msg);
 
   const itemCard = (children, opts) => el('div', {
-    style: 'background:var(--bg-3,rgba(255,255,255,0.03));border:1px solid rgba(155,89,252,0.12);padding:10px;border-radius:8px;margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
+    style: 'background:var(--bg-3,rgba(255,255,255,0.03));border:1px solid rgba(225,6,0,0.12);padding:10px;border-radius:8px;margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
   }, ...children);
 
   const inlineBtn = (label, onClick, danger) => el('button', {
     type: 'button',
-    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(239,68,68,0.4)' : 'rgba(155,89,252,0.3)') + ';color:' + (danger ? '#fca5a5' : 'var(--text)') + ';padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer',
+    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(239,68,68,0.4)' : 'rgba(225,6,0,0.3)') + ';color:' + (danger ? '#fca5a5' : 'var(--text)') + ';padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer',
     on: { click: onClick }
   }, label);
 
-  const PRIO_COLOR = { urgent: '#EF4444', high: '#F59E0B', med: '#9B59FC', low: '#64748B' };
+  const PRIO_COLOR = { urgent: '#EF4444', high: '#F59E0B', med: '#E10600', low: '#64748B' };
   const PRIO_LABEL = { urgent: 'Urgente', high: 'Alta', med: 'Média', low: 'Baixa' };
 
   // ─── TAREFAS ─────────────────────────────────────────────────────────
@@ -4860,9 +4896,9 @@ async function renderLinksTab(card) {
       tasksSec.append(itemCard([
         el('div', { style: 'flex:1;min-width:0' },
           el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap' },
-            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + (PRIO_COLOR[t.priority] || '#9B59FC') }),
+            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + (PRIO_COLOR[t.priority] || '#E10600') }),
             el('span', { style: 'text-decoration:' + (done ? 'line-through' : 'none') }, t.title || '(sem título)'),
-            t.type ? el('span', { style: 'font-size:10px;padding:2px 6px;background:rgba(155,89,252,0.15);border-radius:5px;color:var(--text-dim);text-transform:uppercase' }, t.type) : null,
+            t.type ? el('span', { style: 'font-size:10px;padding:2px 6px;background:rgba(225,6,0,0.15);border-radius:5px;color:var(--text-dim);text-transform:uppercase' }, t.type) : null,
           ),
           el('div', { style: 'color:' + (overdue ? '#fca5a5' : 'var(--text-dim)') + ';font-size:11px;margin-top:4px' },
             (PRIO_LABEL[t.priority] || t.priority || '') + ' · ' + (t.status || '') +
@@ -5040,16 +5076,16 @@ function buildModal(title, fields, onSubmit) {
       wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600' }, f.label + (f.required ? ' *' : '')));
       let input;
       if (f.type === 'textarea') {
-        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
+        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'select') {
-        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         for (const opt of f.options) input.append(el('option', { value: opt.value }, opt.label));
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'file') {
-        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
+        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
       } else {
-        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         if (f.value != null) input.value = f.value;
       }
       inputs[f.name] = input;
@@ -5059,7 +5095,7 @@ function buildModal(title, fields, onSubmit) {
     }
     const submitBtn = el('button', {
       type: 'button',
-      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
+      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
       on: { click: async () => {
         const values = {};
         for (const f of fields) {
@@ -5081,10 +5117,10 @@ function buildModal(title, fields, onSubmit) {
       } }
     }, 'Salvar');
     formChildren.push(el('div', { class: 'modal-actions', style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px' },
-      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,rgba(155,89,252,0.2));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
+      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
       submitBtn,
     ));
-    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:20px' }, ...formChildren);
+    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:20px' }, ...formChildren);
     dialog.append(modal);
     document.body.append(dialog);
   });
@@ -6110,12 +6146,12 @@ function renderChannelsLimitsBadge() {
   const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
   const tierLabel = (me.tenant?.tier || '').toUpperCase();
   const color = wa.available === 0 ? '#EF4444' : (wa.available <= 1 ? '#F59E0B' : '#22C55E');
-  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
+  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
     el('div', { style: 'display:flex;align-items:center;gap:6px' },
       el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
       el('span', { style: 'color:var(--text)' }, fullLabel),
     ),
-    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(155,89,252,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
+    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(225,6,0,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
     me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Z-API ativo(s)') : null,
   );
 }
@@ -6152,7 +6188,7 @@ async function openChannelTypePicker() {
         'Pra conectar mais numeros, faca upgrade pro plano superior:'
       ) : null,
       el('div', { class: 'modal-actions', style: 'gap:8px;flex-direction:column' },
-        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
+        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
         el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
       ),
     );
@@ -6250,7 +6286,7 @@ async function openZapiCheckoutFlow(me) {
   // Mostrar overlay de carregamento
   const loadingDialog = el('div', { class: 'modal-backdrop' });
   const loadingModal = el('div', { class: 'modal', style: 'max-width:420px;text-align:center' },
-    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(155,89,252,.25);border-top-color:#9B59FC;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(225,6,0,.25);border-top-color:#E10600;border-radius:50%;animation:bootspin .9s linear infinite' }),
     el('h3', {}, 'Abrindo pagamento...'),
     el('p', { style: 'color:var(--text-dim);font-size:13px' }, 'Voce sera redirecionado pro Stripe Checkout.'),
   );
@@ -6402,7 +6438,7 @@ window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, render
 // ─── Onda 56: Importar/Exportar contatos ────────────────────────────────
 function openImportContactsModal() {
   const dialog = el('div', { class: 'modal-backdrop' });
-  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' });
+  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:24px' });
   dialog.append(modal);
   document.body.append(dialog);
 
@@ -6415,7 +6451,7 @@ function openImportContactsModal() {
     });
     const errorBox = el('div', { style: 'margin-top:14px' });
     const submitBtn = el('button', {
-      style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
+      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
       on: { click: async () => {
         const file = fileInput.files?.[0];
         if (!file) { toast('Selecione um arquivo', 'error'); return; }
@@ -6483,7 +6519,7 @@ function openImportContactsModal() {
     modal.innerHTML = '';
     const noneCreated = (data.created === 0 && data.updated === 0);
     const totalSaved = (data.created || 0) + (data.updated || 0);
-    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:rgba(155,89,252,0.06);border:1px solid rgba(155,89,252,0.18);padding:14px 8px;border-radius:10px' },
+    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);padding:14px 8px;border-radius:10px' },
       el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
       el('div', { style: 'font-size:28px;font-weight:800;color:' + (color || 'var(--text)') }, String(value)),
     );
@@ -6500,12 +6536,12 @@ function openImportContactsModal() {
       el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
         stat('Total processado', data.total || 0),
         stat('Criados', data.created || 0, '#22C55E'),
-        stat('Atualizados', data.updated || 0, '#9B59FC'),
+        stat('Atualizados', data.updated || 0, '#E10600'),
       ),
       // Header mapping (collapsed por padrão se sucesso)
       (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
         el('summary', { style: 'font-size:12px;color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
-        el('div', { style: 'background:rgba(155,89,252,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
+        el('div', { style: 'background:rgba(225,6,0,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
           ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),
         ),
       ) : null,
@@ -6524,7 +6560,7 @@ function openImportContactsModal() {
           on: { click: () => renderForm() }
         }, '⬆ Importar outra'),
         el('button', {
-          style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
+          style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
           on: { click: () => dialog.remove() }
         }, '✓ Pronto, fechar'),
       ),
@@ -6556,19 +6592,19 @@ function openExportContactsMenu() {
       })
       .catch(e => { toast('Erro: ' + e.message, 'error'); });
   };
-  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid rgba(155,89,252,0.2);border-radius:12px;padding:24px' },
+  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:24px' },
     el('h3', { style: 'margin:0 0 14px' }, '⬇ Exportar contatos'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 18px' }, 'Escolha o formato:'),
     el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
       el('button', {
-        style: 'background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
         on: { click: () => dl('xlsx') }
       },
         el('div', {}, '📊 Excel (.xlsx)'),
         el('div', { style: 'font-size:11px;opacity:.85;margin-top:2px' }, 'Recomendado — abre direto no Excel/Google Sheets'),
       ),
       el('button', {
-        style: 'background:rgba(155,89,252,0.1);border:1px solid rgba(155,89,252,0.3);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        style: 'background:rgba(225,6,0,0.1);border:1px solid rgba(225,6,0,0.3);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
         on: { click: () => dl('csv') }
       },
         el('div', {}, '📄 CSV (.csv)'),

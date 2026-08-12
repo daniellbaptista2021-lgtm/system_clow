@@ -359,8 +359,8 @@
             ),
           ),
           // Bloco do cliente: avatar + nome + telefone + tags
-          contact ? el('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(155,89,252,.04);border:1px solid rgba(155,89,252,.10);border-radius:10px' },
-            el('div', { style: 'width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12.5px;flex-shrink:0' }, initials),
+          contact ? el('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(225,6,0,.04);border:1px solid rgba(225,6,0,.10);border-radius:10px' },
+            el('div', { style: 'width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#E10600,#FF1F18);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12.5px;flex-shrink:0' }, initials),
             el('div', { style: 'min-width:0;flex:1' },
               el('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' },
                 el('span', { style: 'font-weight:600;color:var(--text);font-size:13.5px;overflow:hidden;text-overflow:ellipsis' }, contact.name || 'Sem nome'),
@@ -368,7 +368,7 @@
               ),
               tags.length > 0 ? el('div', { style: 'display:flex;gap:5px;margin-top:5px;flex-wrap:wrap' },
                 ...tags.slice(0, 4).map(t => el('span', {
-                  style: 'background:rgba(155,89,252,.16);border:1px solid rgba(155,89,252,.28);color:#C5A4FF;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
+                  style: 'background:rgba(225,6,0,.16);border:1px solid rgba(225,6,0,.28);color:#C5A4FF;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
                 }, t)),
                 tags.length > 4 ? el('span', { style: 'color:var(--text-dim);font-size:10.5px;align-self:center' }, `+${tags.length - 4}`) : null,
               ) : null,

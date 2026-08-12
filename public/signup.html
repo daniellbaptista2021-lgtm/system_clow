@@ -10,10 +10,10 @@
 :root {
   --bg:#08081a; --bg-2:#0F0F24; --bg-3:#14142A; --bg-4:#1E1E3C;
   --text:#E8E8F0; --text-2:#B8B8D0; --text-dim:#9898B8; --text-faint:#6E6E8C;
-  --purple:#9B59FC; --blue:#4A9EFF; --green:#22C55E; --amber:#F59E0B; --red:#EF4444;
-  --border:rgba(255,255,255,.08); --border-2:rgba(155,89,252,.2);
-  --grad:linear-gradient(135deg,#9B59FC,#4A9EFF);
-  --grad-soft:linear-gradient(135deg,rgba(155,89,252,.15),rgba(74,158,255,.15));
+  --purple:#E10600; --blue:#FF1F18; --green:#22C55E; --amber:#F59E0B; --red:#EF4444;
+  --border:rgba(255,255,255,.08); --border-2:rgba(225,6,0,.2);
+  --grad:linear-gradient(135deg,#E10600,#FF1F18);
+  --grad-soft:linear-gradient(135deg,rgba(225,6,0,.15),rgba(255,31,24,.15));
   --shadow-lg:0 20px 60px rgba(0,0,0,.5);
   --radius:12px;
 }
@@ -26,25 +26,25 @@ a{color:inherit;text-decoration:none}
 nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .nav-inner{max-width:1200px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:12px}
-.brand svg{height:32px;width:auto;filter:drop-shadow(0 2px 6px rgba(155,89,252,.35))}
+.brand svg{height:32px;width:auto;filter:drop-shadow(0 2px 6px rgba(225,6,0,.35))}
 .brand-name{font-weight:700;font-size:16px;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .nav-cta{display:flex;gap:10px;align-items:center}
 .nav-cta a{padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600}
 .nav-cta .link{color:var(--text-dim)}
 .nav-cta .link:hover{color:var(--text)}
-.nav-cta .btn-primary{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(155,89,252,.28)}
+.nav-cta .btn-primary{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(225,6,0,.28)}
 
 /* ─── HERO ─── */
 .hero{max-width:1100px;margin:0 auto;padding:80px 24px 40px;text-align:center;position:relative}
-.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 50% 30%,rgba(155,89,252,.12),transparent);pointer-events:none;z-index:-1}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 50% 30%,rgba(225,6,0,.12),transparent);pointer-events:none;z-index:-1}
 .hero-badge{display:inline-block;padding:7px 14px;background:var(--grad-soft);border:1px solid var(--border-2);border-radius:999px;font-size:12px;font-weight:600;color:var(--purple);letter-spacing:.3px;margin-bottom:24px}
 .hero h1{font-size:clamp(36px,5vw,56px);font-weight:800;margin:0 0 20px;line-height:1.1;letter-spacing:-.02em}
 .hero h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hero p{font-size:18px;color:var(--text-dim);max-width:700px;margin:0 auto 40px;line-height:1.6}
 .hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 26px;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;border:none;font-family:inherit;transition:transform .15s ease,box-shadow .15s ease}
-.btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 24px rgba(155,89,252,.35)}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(155,89,252,.45)}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 8px 24px rgba(225,6,0,.35)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(225,6,0,.45)}
 .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{border-color:var(--purple)}
 
@@ -65,9 +65,9 @@ nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.85);backdrop-f
 .plans-title p{color:var(--text-dim);font-size:16px}
 .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;max-width:1100px;margin:0 auto}
 .plan{position:relative;background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:28px;cursor:pointer;transition:all .22s ease;display:flex;flex-direction:column;gap:14px}
-.plan:hover{border-color:rgba(155,89,252,.4);transform:translateY(-4px);box-shadow:0 20px 50px rgba(0,0,0,.35)}
-.plan.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(155,89,252,.08),rgba(15,15,36,.95));box-shadow:0 0 0 3px rgba(155,89,252,.15),0 20px 60px rgba(155,89,252,.18)}
-.plan.featured::before{content:"MAIS POPULAR";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;padding:4px 14px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:1px;box-shadow:0 4px 12px rgba(155,89,252,.35)}
+.plan:hover{border-color:rgba(225,6,0,.4);transform:translateY(-4px);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.plan.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(225,6,0,.08),rgba(15,15,36,.95));box-shadow:0 0 0 3px rgba(225,6,0,.15),0 20px 60px rgba(225,6,0,.18)}
+.plan.featured::before{content:"MAIS POPULAR";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad);color:#fff;padding:4px 14px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:1px;box-shadow:0 4px 12px rgba(225,6,0,.35)}
 .plan-name{font-size:12px;font-weight:700;letter-spacing:2px;color:var(--purple);text-transform:uppercase}
 .plan-price{display:flex;align-items:baseline;gap:6px}
 .plan-price .val{font-size:42px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.02em}
@@ -79,7 +79,7 @@ nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.85);backdrop-f
 .plan-features li.strong{color:var(--text);font-weight:600}
 .plan-pick{width:100%;padding:13px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;border:1px solid var(--border);background:transparent;color:var(--text);transition:all .18s ease}
 .plan-pick:hover{border-color:var(--purple);color:var(--purple)}
-.plan.selected .plan-pick{background:var(--grad);color:#fff;border:none;box-shadow:0 6px 20px rgba(155,89,252,.3)}
+.plan.selected .plan-pick{background:var(--grad);color:#fff;border:none;box-shadow:0 6px 20px rgba(225,6,0,.3)}
 
 /* ─── SIGNUP FORM ─── */
 .signup-section{max-width:720px;margin:0 auto;padding:40px 24px 100px;scroll-margin-top:80px}
@@ -96,15 +96,15 @@ nav.nav{position:sticky;top:0;z-index:100;background:rgba(8,8,26,.85);backdrop-f
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
 .field input{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;transition:border-color .15s ease,box-shadow .15s ease}
-.field input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(155,89,252,.15)}
+.field input:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(225,6,0,.15)}
 .field .hint{font-size:11px;color:var(--text-faint)}
 .field.error input{border-color:var(--red)}
 .field .err{font-size:11px;color:var(--red);margin-top:2px}
 .form-footer{margin-top:26px}
 .terms{font-size:12px;color:var(--text-dim);margin-bottom:16px;line-height:1.6}
 .terms a{color:var(--purple)}
-.submit-btn{width:100%;padding:15px;background:var(--grad);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;box-shadow:0 8px 24px rgba(155,89,252,.3);transition:transform .15s ease,box-shadow .15s ease}
-.submit-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 30px rgba(155,89,252,.4)}
+.submit-btn{width:100%;padding:15px;background:var(--grad);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;box-shadow:0 8px 24px rgba(225,6,0,.3);transition:transform .15s ease,box-shadow .15s ease}
+.submit-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 30px rgba(225,6,0,.4)}
 .submit-btn:disabled{opacity:.55;cursor:wait}
 .form-error{color:var(--red);font-size:13px;margin-top:14px;padding:12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;display:none}
 .form-error.show{display:block}
@@ -129,7 +129,7 @@ footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;co
   <div class="nav-inner">
     <div class="brand">
       <svg viewBox="0 0 240 120" fill="none" aria-label="System Clow">
-        <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs>
+        <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#E10600"/><stop offset="100%" stop-color="#FF1F18"/></linearGradient></defs>
         <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z" stroke="url(#bg)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <span class="brand-name">System Clow</span>

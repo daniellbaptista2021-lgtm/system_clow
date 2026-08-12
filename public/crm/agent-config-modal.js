@@ -82,7 +82,7 @@
       .agent-config-modal .toggle input:checked + .slider { background:#22c55e; }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
-      /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
+      /* Botão integrado ao tema do Território Próprio — vai dentro de .col-head */
       .col-agent-btn {
         display: inline-flex; align-items: center; gap: 4px;
         background: var(--bg-3); border: 1px solid var(--border);
@@ -96,9 +96,9 @@
       }
       .col-agent-btn.active {
         color: var(--purple); border-color: var(--border-2);
-        background: rgba(155, 89, 252, 0.08);
+        background: rgba(225, 6, 0, 0.08);
       }
-      .col-agent-btn.active:hover { background: rgba(155, 89, 252, 0.15); }
+      .col-agent-btn.active:hover { background: rgba(225, 6, 0, 0.15); }
       .col-agent-btn.paused { color: #f59e0b; }
 
       /* Layout consistente da .col-head com 4 elementos: title | count | agent-btn | menu-btn */

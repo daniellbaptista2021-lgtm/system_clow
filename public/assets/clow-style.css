@@ -5,8 +5,8 @@
    ═════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --p: #9B59FC;
-  --bl: #4A9EFF;
+  --p: #E10600;
+  --bl: #FF1F18;
   --g: #4ADE80;
   --am: #FBBF24;
   --r: #F87171;
@@ -17,7 +17,7 @@
   --bg-1: #0A0A1A;
   --bg-2: #0F0F24;
   --bg-3: #14142E;
-  --gp: linear-gradient(135deg, #9B59FC 0%, #4A9EFF 100%);
+  --gp: linear-gradient(135deg, #E10600 0%, #FF1F18 100%);
   --sans: 'DM Sans', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
 }
@@ -90,7 +90,7 @@
 .rp h3, .rp h4 { font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--p); margin: 10px 0 6px; }
 .rp a { color: var(--bl); text-decoration: underline; text-underline-offset: 3px; }
 .rp :not(pre) > code {
-  background: rgba(155, 89, 252, .14);
+  background: rgba(225, 6, 0, .14);
   color: #C4B5FD;
   border: none;
   border-radius: 6px;
@@ -118,7 +118,7 @@
 }
 .rp hr {
   height: 1px; border: none;
-  background: linear-gradient(90deg, transparent, rgba(155,89,252,.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(225,6,0,.3), transparent);
   margin: 14px 0;
 }
 .rp table {
@@ -129,12 +129,12 @@
   width: 100%;
 }
 .rp table thead th {
-  background: rgba(155,89,252,.12);
+  background: rgba(225,6,0,.12);
   color: var(--p);
   font-weight: 700;
   text-align: left;
   padding: 8px 10px;
-  border: 1px solid rgba(155,89,252,.18);
+  border: 1px solid rgba(225,6,0,.18);
 }
 .rp table tbody td {
   padding: 6px 10px;
@@ -145,7 +145,7 @@
 /* ─── User bubble ──────────────────────────────────────────────────── */
 .u-block {
   background: var(--bg-3) !important;
-  border: 1px solid rgba(155, 89, 252, .12) !important;
+  border: 1px solid rgba(225, 6, 0, .12) !important;
   border-radius: 12px 12px 4px 12px !important;
   padding: 12px 16px !important;
   box-shadow: none !important;
@@ -173,7 +173,7 @@
   background: var(--p);
   border-radius: 50%;
   animation: pulse-think 1.2s ease-in-out infinite;
-  box-shadow: 0 0 12px rgba(155,89,252,.5);
+  box-shadow: 0 0 12px rgba(225,6,0,.5);
 }
 .think-t { color: var(--t2); font-weight: 500; }
 @keyframes pulse-think {
@@ -227,7 +227,7 @@
   flex: 0 0 auto;
   background: var(--tm);
 }
-.tblk.act .tdot { background: var(--p); animation: pulse-tool 1.5s ease-in-out infinite; box-shadow: 0 0 8px rgba(155,89,252,.5); }
+.tblk.act .tdot { background: var(--p); animation: pulse-tool 1.5s ease-in-out infinite; box-shadow: 0 0 8px rgba(225,6,0,.5); }
 .tblk.done .tdot { background: var(--g); }
 .tblk.err .tdot { background: var(--r); }
 @keyframes pulse-tool {
@@ -260,7 +260,7 @@
   padding: 6px 12px;
   color: var(--p);
   font-size: 11px;
-  background: rgba(155,89,252,.04);
+  background: rgba(225,6,0,.04);
   cursor: pointer;
   border-top: 1px solid rgba(255,255,255,.04);
 }
@@ -272,7 +272,7 @@
   gap: 14px;
   padding: 14px 16px;
   background: var(--bg-2);
-  border: 1px solid rgba(155,89,252,.18);
+  border: 1px solid rgba(225,6,0,.18);
   border-radius: 10px;
   margin: 10px 0;
 }
@@ -282,9 +282,9 @@
 .file-size { font-family: var(--sans); font-size: 11px; color: var(--t2); margin-top: 2px; }
 .file-actions { display: flex; gap: 6px; }
 .file-btn {
-  background: rgba(155,89,252,.14);
+  background: rgba(225,6,0,.14);
   color: var(--p);
-  border: 1px solid rgba(155,89,252,.22);
+  border: 1px solid rgba(225,6,0,.22);
   border-radius: 7px;
   padding: 6px 12px;
   font-family: var(--sans);
@@ -294,7 +294,7 @@
   text-decoration: none;
   transition: background .15s;
 }
-.file-btn:hover { background: rgba(155,89,252,.22); }
+.file-btn:hover { background: rgba(225,6,0,.22); }
 
 /* ─── Error card ──────────────────────────────────────────────────── */
 .err-card {
@@ -314,7 +314,7 @@
   margin: 12px 0;
   padding: 14px 16px;
   background: var(--bg-2);
-  border: 1px solid rgba(155,89,252,.22);
+  border: 1px solid rgba(225,6,0,.22);
   border-radius: 10px;
 }
 .mcard.done { border-color: rgba(74,222,128,.3); background: rgba(74,222,128,.04); }

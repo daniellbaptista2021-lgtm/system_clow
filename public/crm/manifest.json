@@ -1,16 +1,18 @@
 {
-  "name": "System Clow CRM",
-  "short_name": "Clow CRM",
-  "description": "CRM System Clow — WhatsApp, pipeline e automacoes.",
+  "name": "CRM — Território Próprio de IA",
+  "short_name": "CRM",
+  "description": "Seu CRM com agentes de IA: WhatsApp, funil e automações.",
   "start_url": "/crm/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#17141F",
-  "theme_color": "#9B59FC",
+  "background_color": "#0a0a0a",
+  "theme_color": "#e10600",
   "icons": [
-    { "src": "/assets/logo-new.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/logo-new.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/logo-new.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+    { "src": "/assets/territorio/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/territorio/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/territorio/icone-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/territorio/icone-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/territorio/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ]
 }

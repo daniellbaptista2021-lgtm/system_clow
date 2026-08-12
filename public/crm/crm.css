@@ -1,27 +1,38 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * CRM CLOW — stylesheet
- * Dark theme, gradientes System Clow (purple → blue)
+ * CRM — stylesheet
+ * Identidade do Território Próprio de IA: preto, vermelho (#e10600), branco.
+ *
+ * Os tokens de cor antigos (--purple, --blue e o gradiente roxo→azul)
+ * continuam existindo, com valores novos, de propósito: os NOMES estão
+ * espalhados por milhares de linhas de CSS e por JS que monta estilo inline.
+ * Trocar o VALOR num lugar só repinta o sistema inteiro; trocar o NOME
+ * exigiria caçar cada uso — e o que escapasse ficaria roxo no meio do
+ * vermelho, que é pior que o nome envelhecido.
+ *
+ * Paleta oficial em "MD FINAL/src/app/globals.css". Se mudar lá, muda aqui.
  * ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg: #08081a;
-  --bg-2: #0F0F24;
-  --bg-3: #14142A;
-  --bg-4: #1E1E3C;
-  --border: rgba(255,255,255,.08);
-  --border-2: rgba(155,89,252,.2);
-  --text: #E8E8F0;
-  --text-2: #B8B8D0;
-  --text-dim: #9898B8;
-  --text-faint: #6E6E8C;
-  --purple: #9B59FC;
-  --blue: #4A9EFF;
+  --bg: #0a0a0a;
+  --bg-2: #141414;
+  --bg-3: #1d1d1d;
+  --bg-4: #262626;
+  --border: rgba(255,255,255,.09);
+  --border-2: rgba(225,6,0,.28);
+  --text: #fafafa;
+  --text-2: #d4d4d8;
+  --text-dim: #a1a1aa;
+  --text-faint: #71717a;
+  /* Eram o roxo e o azul da marca antiga. Hoje são os dois tons do vermelho
+   * oficial, pra que todo componente que pede "roxo" nasça na cor certa. */
+  --purple: #e10600;
+  --blue: #ff1f18;
   --green: #22C55E;
   --amber: #F59E0B;
   --red: #EF4444;
-  --gray: #94A3B8;
-  --grad: linear-gradient(135deg, #9B59FC, #4A9EFF);
-  --grad-soft: linear-gradient(135deg, rgba(155,89,252,.15), rgba(74,158,255,.15));
+  --gray: #a1a1aa;
+  --grad: linear-gradient(135deg, #e10600, #ff1f18);
+  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.16), rgba(255,31,24,.10));
   --shadow-md: 0 6px 20px rgba(0,0,0,.35);
   --shadow-lg: 0 20px 60px rgba(0,0,0,.5);
   --radius: 12px;
@@ -108,12 +119,13 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { justify-content: center; padding: 18px 12px 24px !important; }
-.brand-infinite {
-  width: 90px; height: 45px;
-  filter: drop-shadow(0 4px 12px rgba(155,89,252,.55)) drop-shadow(0 0 24px rgba(74,158,255,.25));
+.brand-logo {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  filter: drop-shadow(0 4px 12px rgba(225,6,0,.55)) drop-shadow(0 0 24px rgba(255,31,24,.25));
   transition: transform .25s ease, filter .25s ease;
 }
-.brand:hover .brand-infinite { transform: scale(1.05); filter: drop-shadow(0 6px 18px rgba(155,89,252,.7)) drop-shadow(0 0 32px rgba(74,158,255,.4)); }
+.brand:hover .brand-logo { transform: scale(1.05); filter: drop-shadow(0 6px 18px rgba(225,6,0,.7)) drop-shadow(0 0 32px rgba(255,31,24,.4)); }
 /* ─── Cards 3D do menu lateral ─── */
 .sidebar nav { display: flex; flex-direction: column; gap: 8px; }
 .nav-item {
@@ -148,11 +160,11 @@ body {
 }
 .nav-item:hover {
   color: var(--text);
-  border-color: rgba(155,89,252,.25);
+  border-color: rgba(225,6,0,.25);
   transform: translateY(-2px);
   box-shadow:
     0 6px 16px rgba(0,0,0,.5),
-    0 2px 6px rgba(155,89,252,.18),
+    0 2px 6px rgba(225,6,0,.18),
     0 1px 0 rgba(255,255,255,.06) inset,
     0 -1px 0 rgba(0,0,0,.4) inset;
   background: linear-gradient(145deg, #1a1a36, #11112a);
@@ -163,10 +175,10 @@ body {
 }
 .nav-item.active {
   color: var(--text);
-  border-color: rgba(155,89,252,.45);
-  background: linear-gradient(145deg, rgba(155,89,252,.18), rgba(74,158,255,.10) 60%, rgba(20,20,46,.95));
+  border-color: rgba(225,6,0,.45);
+  background: linear-gradient(145deg, rgba(225,6,0,.18), rgba(255,31,24,.10) 60%, rgba(20,20,46,.95));
   box-shadow:
-    0 4px 14px rgba(155,89,252,.22),
+    0 4px 14px rgba(225,6,0,.22),
     0 1px 0 rgba(255,255,255,.08) inset,
     0 -1px 0 rgba(0,0,0,.5) inset;
 }
@@ -309,7 +321,7 @@ body {
 }
 .card-label {
   font-size: 10px; padding: 2px 7px;
-  background: rgba(155,89,252,.15); color: var(--purple);
+  background: rgba(225,6,0,.15); color: var(--purple);
   border-radius: 10px;
 }
 .card-due {
@@ -596,7 +608,7 @@ select option { background: #14142A; color: #E8E8F0; }
 .pill.amber { background: rgba(245,158,11,.15); color: var(--amber); }
 .pill.red { background: rgba(239,68,68,.15); color: var(--red); }
 .pill.gray { background: rgba(148,163,184,.15); color: var(--gray); }
-.pill.purple { background: rgba(155,89,252,.15); color: var(--purple); }
+.pill.purple { background: rgba(225,6,0,.15); color: var(--purple); }
 
 /* ─── Modal ──────────────────────────────────────────────────────────── */
 .modal-backdrop {
@@ -747,7 +759,7 @@ select option { background: #14142A; color: #E8E8F0; }
     color: #fff;
     border: 0;
     font-size: 22px;
-    box-shadow: 0 4px 12px rgba(155,89,252,.4);
+    box-shadow: 0 4px 12px rgba(225,6,0,.4);
     cursor: pointer;
   }
 
@@ -960,9 +972,9 @@ select option { background: #14142A; color: #E8E8F0; }
     padding: 16px 12px !important;
     text-align: center !important;
   }
-  .sidebar .brand-infinite {
-    width: 80px !important;
-    height: 40px !important;
+  .sidebar .brand-logo {
+    width: 48px !important;
+    height: 48px !important;
   }
 }
 
@@ -974,7 +986,7 @@ select option { background: #14142A; color: #E8E8F0; }
   text-decoration: underline;
   font-weight: 500;
 }
-.msg.in a { color: #4A9EFF; }
+.msg.in a { color: #FF1F18; }
 .msg.out a { color: #fff; text-decoration: underline; }
 .msg b { font-weight: 700; }
 .msg i { font-style: italic; }
@@ -1013,11 +1025,11 @@ img.card-avatar, img.contact-avatar {
 
 /* Onda 59: drop indicator entre cards (reorder via drag-drop) */
 .kanban-col .card.drop-before {
-  box-shadow: inset 0 3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  box-shadow: inset 0 3px 0 0 #E10600, 0 0 0 1px rgba(225,6,0,.5);
   transition: box-shadow .12s;
 }
 .kanban-col .card.drop-after {
-  box-shadow: inset 0 -3px 0 0 #9B59FC, 0 0 0 1px rgba(155,89,252,.5);
+  box-shadow: inset 0 -3px 0 0 #E10600, 0 0 0 1px rgba(225,6,0,.5);
   transition: box-shadow .12s;
 }
 .kanban-col .card.dragging {

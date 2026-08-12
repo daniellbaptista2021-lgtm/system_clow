@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>System Clow — Configuração inicial</title>
+<title>Território Próprio — Configuração inicial</title>
 <style>
-:root{--bg:#08081a;--bg-2:#0F0F24;--bg-3:#14142A;--text:#E8E8F0;--text-dim:#9898B8;--text-faint:#6E6E8C;--purple:#9B59FC;--blue:#4A9EFF;--green:#22C55E;--red:#EF4444;--border:rgba(255,255,255,.08);--border-2:rgba(155,89,252,.22);--grad:linear-gradient(135deg,#9B59FC,#4A9EFF)}
+:root{--bg:#08081a;--bg-2:#0F0F24;--bg-3:#14142A;--text:#E8E8F0;--text-dim:#9898B8;--text-faint:#6E6E8C;--purple:#E10600;--blue:#FF1F18;--green:#22C55E;--red:#EF4444;--border:rgba(255,255,255,.08);--border-2:rgba(225,6,0,.22);--grad:linear-gradient(135deg,#E10600,#FF1F18)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
 .wrap{max-width:640px;margin:0 auto;min-height:100vh;padding:40px 20px;display:flex;flex-direction:column}
 .brand{text-align:center;margin-bottom:32px}
-.brand svg{height:38px;filter:drop-shadow(0 2px 8px rgba(155,89,252,.4))}
+.brand svg{height:38px;filter:drop-shadow(0 2px 8px rgba(225,6,0,.4))}
 .progress{display:flex;gap:6px;margin-bottom:32px}
 .step-dot{flex:1;height:5px;border-radius:99px;background:var(--bg-3);transition:background .3s ease}
 .step-dot.done{background:var(--grad)}
-.step-dot.current{background:var(--grad);box-shadow:0 0 12px rgba(155,89,252,.5)}
+.step-dot.current{background:var(--grad);box-shadow:0 0 12px rgba(225,6,0,.5)}
 .card{background:var(--bg-2);border:1px solid var(--border);border-radius:18px;padding:36px;flex:1}
 .step{display:none}
 .step.active{display:block}
@@ -24,19 +24,19 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .field label{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
 .field input,.field select,.field textarea{padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;transition:border-color .15s ease,box-shadow .15s ease}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(155,89,252,.15)}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--purple);box-shadow:0 0 0 3px rgba(225,6,0,.15)}
 .field .hint{font-size:11px;color:var(--text-faint)}
 .btn-row{display:flex;gap:10px;margin-top:26px;justify-content:space-between;align-items:center}
 .btn{padding:13px 24px;border-radius:11px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;border:none;transition:transform .15s ease,box-shadow .15s ease}
-.btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 20px rgba(155,89,252,.3)}
-.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 28px rgba(155,89,252,.42)}
+.btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 20px rgba(225,6,0,.3)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 28px rgba(225,6,0,.42)}
 .btn-primary:disabled{opacity:.5;cursor:wait}
 .btn-skip{background:transparent;color:var(--text-dim);padding:13px 16px}
 .btn-skip:hover{color:var(--text)}
 .choice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
 .choice-card{background:var(--bg);border:2px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;text-align:center;transition:all .18s ease}
 .choice-card:hover{border-color:var(--border-2)}
-.choice-card.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(155,89,252,.1),var(--bg))}
+.choice-card.selected{border-color:var(--purple);background:linear-gradient(180deg,rgba(225,6,0,.1),var(--bg))}
 .choice-card .ico{font-size:30px;margin-bottom:8px}
 .choice-card .name{font-weight:700;font-size:14px;margin-bottom:4px}
 .choice-card .desc{font-size:11px;color:var(--text-dim);line-height:1.4}
@@ -45,7 +45,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 .template-card input{flex-shrink:0;margin-top:3px;accent-color:var(--purple)}
 .template-card .t-name{font-weight:600;font-size:13px;color:var(--text)}
 .template-card .t-desc{font-size:11px;color:var(--text-dim);margin-top:3px;line-height:1.4}
-.webhook-box{background:rgba(155,89,252,.06);border:1px solid var(--border-2);border-radius:10px;padding:14px;margin:14px 0;font-size:12px}
+.webhook-box{background:rgba(225,6,0,.06);border:1px solid var(--border-2);border-radius:10px;padding:14px;margin:14px 0;font-size:12px}
 .webhook-box .lbl{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600}
 .webhook-box .url{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:monospace;font-size:11px;word-break:break-all;user-select:all}
 .copy-btn{margin-top:6px;padding:6px 12px;background:var(--grad);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
@@ -63,7 +63,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 <div class="wrap">
   <div class="brand">
     <svg viewBox="0 0 240 120" fill="none">
-      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9B59FC"/><stop offset="100%" stop-color="#4A9EFF"/></linearGradient></defs>
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#E10600"/><stop offset="100%" stop-color="#FF1F18"/></linearGradient></defs>
       <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z" stroke="url(#g)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   </div>
@@ -78,7 +78,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
   <div class="card">
     <!-- STEP 1: Welcome -->
     <div class="step active" data-step="1">
-      <h1>Bem-vindo ao <span class="grad">System Clow</span>, <span id="firstName">amigo</span>!</h1>
+      <h1>Bem-vindo ao <span class="grad">Território Próprio</span>, <span id="firstName">amigo</span>!</h1>
       <p class="sub">Vamos configurar seu workspace em 3 minutos. Você vai sair com CRM + WhatsApp + automações rodando.</p>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;margin:20px 0">
         <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:10px">O que vamos fazer:</div>
@@ -318,7 +318,7 @@ function copyVerify() {
 }
 
 async function connectChannel() {
-  // First exchange System Clow token → CRM api_key
+  // First exchange Território Próprio token → CRM api_key
   const btn = document.getElementById('connectBtn');
   btn.disabled = true; btn.textContent = 'Conectando...';
   const errEl = document.getElementById('err3');

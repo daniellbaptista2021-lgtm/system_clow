@@ -1,6 +1,6 @@
 /**
  * clow-dialog.js — substitui prompt/confirm/alert nativos do browser por
- * modais com a paleta e estilo oficiais do System Clow.
+ * modais com a paleta e estilo oficiais do Território Próprio.
  *
  * Uso (sempre async):
  *   const nome = await clowPrompt('Nome do plano:', 'Padrão');
@@ -28,20 +28,20 @@
     st.textContent = `
 .cdlg-back{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(8,8,26,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);animation:cdlgIn .18s ease}
 @keyframes cdlgIn{from{opacity:0}to{opacity:1}}
-.cdlg{background:linear-gradient(180deg,var(--bg-2,#0F0F24),var(--bg,#08081a));border:1px solid rgba(155,89,252,.3);border-radius:18px;padding:28px 26px;max-width:440px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;animation:cdlgPop .22s cubic-bezier(.2,.7,.2,1);font-family:inherit;color:var(--text,#E8E8F0)}
+.cdlg{background:linear-gradient(180deg,var(--bg-2,#0F0F24),var(--bg,#08081a));border:1px solid rgba(225,6,0,.3);border-radius:18px;padding:28px 26px;max-width:440px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;animation:cdlgPop .22s cubic-bezier(.2,.7,.2,1);font-family:inherit;color:var(--text,#E8E8F0)}
 @keyframes cdlgPop{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
-.cdlg h3{margin:0 0 6px;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--text,#E8E8F0);background:linear-gradient(135deg,#9B59FC,#4A9EFF);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;display:inline-block}
+.cdlg h3{margin:0 0 6px;font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--text,#E8E8F0);background:linear-gradient(135deg,#E10600,#FF1F18);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;display:inline-block}
 .cdlg .cdlg-msg{color:var(--text-dim,#9898B8);font-size:13.5px;line-height:1.55;margin:0 0 18px;white-space:pre-wrap}
 .cdlg input,.cdlg select,.cdlg textarea{width:100%;padding:12px 14px;background:var(--bg,#08081a);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;color:var(--text,#E8E8F0);font-family:inherit;font-size:14px;outline:none;transition:border-color .15s,background .15s,box-shadow .15s;box-sizing:border-box}
-.cdlg input:focus,.cdlg select:focus,.cdlg textarea:focus{border-color:#9B59FC;background:var(--bg-2,#0F0F24);box-shadow:0 0 0 3px rgba(155,89,252,.18)}
+.cdlg input:focus,.cdlg select:focus,.cdlg textarea:focus{border-color:#E10600;background:var(--bg-2,#0F0F24);box-shadow:0 0 0 3px rgba(225,6,0,.18)}
 .cdlg textarea{min-height:90px;resize:vertical;font-family:inherit}
 .cdlg .cdlg-actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
 .cdlg-btn{padding:11px 20px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:700;letter-spacing:-.005em;transition:transform .14s ease,box-shadow .14s ease,background .14s ease;min-width:96px}
 .cdlg-btn:hover:not(:disabled){transform:translateY(-1px)}
-.cdlg-btn-primary{background:linear-gradient(135deg,#9B59FC,#4A9EFF);color:#fff;box-shadow:0 8px 22px rgba(155,89,252,.32)}
-.cdlg-btn-primary:hover:not(:disabled){box-shadow:0 10px 28px rgba(155,89,252,.42)}
+.cdlg-btn-primary{background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;box-shadow:0 8px 22px rgba(225,6,0,.32)}
+.cdlg-btn-primary:hover:not(:disabled){box-shadow:0 10px 28px rgba(225,6,0,.42)}
 .cdlg-btn-ghost{background:transparent;color:var(--text-dim,#9898B8);border:1px solid var(--border,rgba(255,255,255,.1))}
-.cdlg-btn-ghost:hover{color:var(--text,#E8E8F0);border-color:rgba(155,89,252,.4);background:rgba(155,89,252,.06)}
+.cdlg-btn-ghost:hover{color:var(--text,#E8E8F0);border-color:rgba(225,6,0,.4);background:rgba(225,6,0,.06)}
 .cdlg-btn-danger{background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.32)}
 .cdlg-btn-danger:hover:not(:disabled){box-shadow:0 10px 28px rgba(239,68,68,.42)}
 .cdlg-hint{font-size:11.5px;color:var(--text-faint,#6E6E8C);margin-top:10px;line-height:1.5}
