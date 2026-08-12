@@ -5,11 +5,15 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { tenantAtual } from './contextoTenant.js';
+import { obterCredencial, SemCredencialIa } from '../tenancy/aiCredentials.js';
+import { chamarModeloOpenAI, chamarModeloOpenAISync } from './motorOpenAI.js';
 import { addCost, addAPIDuration, setLastAPIRequestTimestamp, setLastApiCompletionTimestamp, setLastMainRequestId } from '../bootstrap/state.js';
 import type { Tool } from '../tools/Tool.js';
 import { withRetry } from '../utils/retry/retry.js';
 import stringify from 'json-stable-stringify';
 import { logger } from '../utils/logger.js';
+import type { DestinoOpenAI } from './motorOpenAI.js';
 
 export interface AnthropicConfig {
   apiKey: string;
@@ -84,25 +88,72 @@ let sessionCacheMetrics = {
 
 export function initAnthropic(cfg: AnthropicConfig): void {
   config = cfg;
-  // Suporta ANTHROPIC_BASE_URL pra LiteLLM proxy (rotear pra OpenRouter/outros).
+  // Suporta ANTHROPIC_BASE_URL pra apontar pra um endpoint compativel.
   const baseURL = process.env.ANTHROPIC_BASE_URL;
   const clientConfig: any = { apiKey: cfg.apiKey, maxRetries: 0 };
   if (baseURL && baseURL.trim()) clientConfig.baseURL = baseURL.trim();
   client = new Anthropic(clientConfig);
 }
 
-function getAnthropicClient(): Anthropic {
-  if (!client) {
-    throw new Error('Anthropic client not initialized. Call initAnthropic() first.');
+type MotorIa =
+  | { wire: 'anthropic'; model: string; maxOutputTokens?: number; cliente: Anthropic }
+  | { wire: 'openai'; model: string; destino: DestinoOpenAI };
+
+// ─── Resolucao por cliente (BYOK) ─────────────────────────────────────────
+//
+// Cada cliente traz a propria chave e o proprio modelo (decisao do Daniel,
+// 10/08/2026): o dono nao assume custo de IA de ninguem. Quando ha tenant no
+// contexto, a credencial DELE manda — e a falta dela e erro, nunca queda pra
+// uma chave global. O `config` de modulo so atende o caso sem tenant: a CLI
+// rodando na maquina do proprio dono, com a chave dele.
+/** Cache de clientes Anthropic por chave — abrir um por chamada e desperdicio. */
+const clientesPorChave = new Map<string, Anthropic>();
+
+function clienteAnthropicPara(apiKey: string, baseUrl: string): Anthropic {
+  const cacheKey = `${baseUrl}|${apiKey}`;
+  let c = clientesPorChave.get(cacheKey);
+  if (!c) {
+    const cfg: any = { apiKey, maxRetries: 0 };
+    if (baseUrl) cfg.baseURL = baseUrl;
+    c = new Anthropic(cfg);
+    // Um cliente por credencial. Sem teto porque o numero de tenants ativos
+    // e a ordem de grandeza aqui, nao o numero de requisicoes.
+    clientesPorChave.set(cacheKey, c);
   }
-  return client;
+  return c;
 }
 
-function getAnthropicConfig(): AnthropicConfig {
-  if (!config) {
-    throw new Error('Anthropic config not initialized.');
+function resolverMotor(): MotorIa {
+  const ctx = tenantAtual();
+  if (ctx?.tenantId) {
+    const cred = obterCredencial(ctx.tenantId);
+    if (!cred) throw new SemCredencialIa(ctx.tenantId);
+    if (cred.wire === 'anthropic') {
+      return {
+        wire: 'anthropic',
+        model: cred.model,
+        cliente: clienteAnthropicPara(cred.apiKey, cred.baseUrl),
+      };
+    }
+    return {
+      wire: 'openai',
+      model: cred.model,
+      destino: { baseUrl: cred.baseUrl, apiKey: cred.apiKey, model: cred.model },
+    };
   }
-  return config;
+  // Sem tenant: CLI local do dono, com a chave que ele mesmo configurou.
+  if (!client || !config) {
+    throw new Error(
+      'Nenhuma credencial de IA disponível. Numa sessão de cliente, conecte a chave ' +
+        'em Configurações → Inteligência Artificial.',
+    );
+  }
+  return {
+    wire: 'anthropic',
+    model: config.model,
+    maxOutputTokens: config.maxOutputTokens,
+    cliente: client,
+  };
 }
 
 function getPricing(model: string) {
@@ -161,7 +212,7 @@ export function resetSessionCacheMetrics(): void {
   };
 }
 
-function zodToJsonSchema(schema: any): Record<string, unknown> {
+export function zodParaJsonSchema(schema: any): Record<string, unknown> {
   if (!schema || !schema._def) {
     return { type: 'object', properties: {} };
   }
@@ -223,7 +274,7 @@ function zodFieldToJsonSchema(field: any): Record<string, unknown> {
 
 function toolsToAnthropicFormat(tools: Tool[]): Array<{ name: string; description: string; input_schema: any }> {
   return tools.map((tool) => {
-    const jsonSchema = zodToJsonSchema(tool.inputSchema);
+    const jsonSchema = zodParaJsonSchema(tool.inputSchema);
     const stableSchema = JSON.parse(stringify(jsonSchema) || '{}');
 
     return {
@@ -352,8 +403,16 @@ export async function* callModel(
   systemPrompt: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamChunk> {
-  const cfg = getAnthropicConfig();
-  const api = getAnthropicClient();
+  const motor = resolverMotor();
+  // Provedor no padrao OpenAI (OpenRouter, DeepSeek, OpenAI, compativeis):
+  // o caminho e outro, mas os pedacos que saem daqui sao os mesmos — quem
+  // consome nao sabe qual provedor esta do outro lado, e nao deve saber.
+  if (motor.wire === 'openai') {
+    yield* chamarModeloOpenAI(motor.destino, messages, tools, systemPrompt, signal);
+    return;
+  }
+  const cfg = { model: motor.model, maxOutputTokens: motor.maxOutputTokens };
+  const api = motor.cliente;
   const anthropicMessages = convertToAnthropicMessages(messages);
   const anthropicTools = tools.length > 0 ? toolsToAnthropicFormat(tools) : undefined;
 
@@ -511,8 +570,12 @@ export async function callModelSync(
   systemPrompt: string,
   maxTokens?: number,
 ): Promise<{ content: string; usage: { inputTokens: number; outputTokens: number } }> {
-  const api = getAnthropicClient();
-  const cfg = getAnthropicConfig();
+  const motor = resolverMotor();
+  if (motor.wire === 'openai') {
+    return chamarModeloOpenAISync(motor.destino, messages, systemPrompt, maxTokens);
+  }
+  const api = motor.cliente;
+  const cfg = { model: motor.model, maxOutputTokens: motor.maxOutputTokens };
   const anthropicMessages = convertToAnthropicMessages(messages);
 
   const response = await withRetry(
