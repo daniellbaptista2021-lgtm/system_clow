@@ -15,10 +15,11 @@ import * as store from './store.js';
 import { getCrmDb } from './schema.js';
 import * as meta from './channels/meta.js';
 import * as zapi from './channels/zapi.js';
+import * as evolution from './channels/evolution.js';
 import { saveMedia } from './media.js';
 import * as automations from './automations.js';
 import { applyTagSystem, cardHasTag } from './agents/tools/tags.js';
-import type { Channel2, Activity, MediaType } from './types.js';
+import type { Channel2, Activity, MediaType, Channel, ChannelType } from './types.js';
 
 export interface InboundResult {
   ok: boolean;
@@ -43,6 +44,19 @@ function isAvatarExpired(url: string): boolean {
  * Process a single inbound message from any channel.
  * Idempotent on providerMessageId — if same message arrives twice, we skip.
  */
+/**
+ * Rotulo de origem gravado na timeline.
+ *
+ * Era um ternario `meta ? 'whatsapp_meta' : 'whatsapp_zapi'`, que com a
+ * chegada da Evolution passou a MENTIR: toda mensagem dela seria registrada
+ * como Z-API, e um relatorio por canal ficaria errado sem ninguem perceber.
+ */
+function rotuloDoCanal(tipo: ChannelType): Channel {
+  if (tipo === 'meta') return 'whatsapp_meta';
+  if (tipo === 'evolution') return 'whatsapp_evolution';
+  return 'whatsapp_zapi';
+}
+
 export async function ingestInbound(channel: Channel2, msg: {
   fromPhone: string;
   fromName?: string;
@@ -68,7 +82,7 @@ export async function ingestInbound(channel: Channel2, msg: {
   // 2. Upsert contact
   const contact = store.upsertContactByPhone(tenantId, msg.fromPhone, {
     name: msg.fromName,
-    source: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
+    source: rotuloDoCanal(channel.type),
   });
 
   // 2.1. Onda 55: se nao tem avatar e o canal eh Z-API, busca foto de perfil em background
@@ -123,7 +137,7 @@ export async function ingestInbound(channel: Channel2, msg: {
   const activity = store.logActivity(tenantId, {
     cardId: card?.id, contactId: contact.id,
     type: isOutbound ? 'message_out' : 'message_in',
-    channel: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
+    channel: rotuloDoCanal(channel.type),
     direction: isOutbound ? 'out' : 'in',
     content,
     mediaUrl,
@@ -167,6 +181,8 @@ export async function ingestInbound(channel: Channel2, msg: {
       void meta.markAsRead(channel, msg.messageId);
     } else if (channel.type === 'zapi') {
       void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
+    } else if (channel.type === 'evolution') {
+      void evolution.markAsRead(channel, msg.messageId, msg.fromPhone);
     }
   }
 
@@ -265,6 +281,11 @@ async function downloadAndSave(channel: Channel2, msg: any, tenantId: string) {
       if (!res.ok) return null;
       bytes = res.bytes;
       mime = res.mime || mime;
+    } else if (channel.type === 'evolution' && msg.mediaUrl) {
+      const res = await evolution.fetchMedia(channel, msg.mediaUrl);
+      if (!res.ok) return null;
+      bytes = res.bytes;
+      mime = res.mime || mime;
     }
   } catch { return null; }
   if (!bytes) return null;
@@ -297,10 +318,18 @@ export interface SendInboxResult {
 export async function sendOutbound(channel: Channel2, opts: SendInbox): Promise<SendInboxResult> {
   const tenantId = channel.tenantId;
   let result: { ok: boolean; messageId?: string; error?: any };
+  // Despacho explicito por tipo. Antes era `meta ? meta : zapi`, e um `else`
+  // que engole todo tipo novo e uma bomba-relogio: a Evolution seria enviada
+  // pelo cliente do Z-API, com credenciais de formato completamente diferente,
+  // e o erro apareceria como uma falha de envio sem explicacao.
   if (channel.type === 'meta') {
     result = await meta.sendMessage(channel, opts);
-  } else {
+  } else if (channel.type === 'evolution') {
+    result = await evolution.sendMessage(channel, opts);
+  } else if (channel.type === 'zapi') {
     result = await zapi.sendMessage(channel, opts);
+  } else {
+    return { ok: false, error: `canal_desconhecido: ${channel.type}` };
   }
   if (!result.ok) {
     return { ok: false, error: result.error?.message || 'send_failed' };
@@ -326,7 +355,7 @@ export async function sendOutbound(channel: Channel2, opts: SendInbox): Promise<
   const activity = store.logActivity(tenantId, {
     cardId: opts.cardId, contactId,
     type: 'message_out',
-    channel: channel.type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi',
+    channel: rotuloDoCanal(channel.type),
     direction: 'out',
     content,
     mediaUrl: opts.mediaUrl,

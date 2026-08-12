@@ -19,6 +19,7 @@
 import { getTenant, updateTenant, listTenants, mutateTenant } from '../tenancy/tenantStore.js';
 import type { Tenant } from '../tenancy/tenantStore.js';
 import { logger } from '../utils/logger.js';
+import { modoBonus } from '../tenancy/modoBonus.js';
 
 export const PLAN_LIMITS: Record<string, { messages: number; flows: number; contacts: number; boards: number; automations: number; users: number; channels: number; overage_cents_per_msg: number }> = {
   starter:      { messages: 500,    flows: 1, contacts: 500,    boards: 2,  automations: 5,   users: 1,  channels: 1,  overage_cents_per_msg: 20 },
@@ -52,6 +53,53 @@ export interface QuotaCheck {
  * extra message bills overage. Beyond 2× hard limit, blocks.
  */
 export function checkAndIncrementMessageQuota(tenantId: string): QuotaCheck {
+  // Modo bônus: sem plano, sem teto de mensagens, sem cobrança de excedente —
+  // a IA roda na chave do próprio cliente. Ver src/tenancy/modoBonus.ts.
+  //
+  // Ainda assim CONTAMOS: o número alimenta o painel de uso, que continua
+  // sendo informação útil pro cliente mesmo sem ninguém cobrar por ela. O que
+  // muda é que nada bloqueia.
+  if (modoBonus()) {
+    const contado = mutateTenant(tenantId, (tenant: Tenant): QuotaCheck => {
+      // Suspensão continua valendo. No modo bônus ela deixa de significar
+      // "não pagou" e passa a ser a única forma de barrar abuso — e barrar
+      // só na porta da frente (tenantAuth) deixaria de fora todo caminho que
+      // não passa por HTTP, como o webhook de WhatsApp.
+      if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+        return {
+          allowed: false,
+          reason: 'tenant_suspended',
+          current: 0,
+          limit: 0,
+          remaining: 0,
+          overage_msgs: 0,
+          overage_cost_cents: 0,
+          tier: tenant.tier,
+        };
+      }
+      tenant.current_month_messages = (tenant.current_month_messages || 0) + 1;
+      return {
+        allowed: true,
+        current: tenant.current_month_messages,
+        limit: Number.POSITIVE_INFINITY,
+        remaining: Number.POSITIVE_INFINITY,
+        overage_msgs: 0,
+        overage_cost_cents: 0,
+        tier: String(tenant.tier || 'bonus'),
+      };
+    });
+    // Tenant inexistente não pode virar bloqueio silencioso num produto que
+    // não cobra de ninguém: liberar é o comportamento certo.
+    return (contado ?? {
+      allowed: true,
+      current: 0,
+      limit: Number.POSITIVE_INFINITY,
+      remaining: Number.POSITIVE_INFINITY,
+      overage_msgs: 0,
+      overage_cost_cents: 0,
+      tier: 'bonus',
+    });
+  }
   const result = mutateTenant(tenantId, (tenant: Tenant): QuotaCheck => {
     if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
       return { allowed: false, reason: 'tenant_suspended', current: 0, limit: 0, remaining: 0, overage_msgs: 0, overage_cost_cents: 0, tier: tenant.tier };

@@ -49,6 +49,7 @@ import { createAdminSessionToken, tenantAuth, verifyAdminSessionToken } from './
 import publicProposals from '../crm/publicRoutes.js';
 import v2Routes from './v2Routes.js';
 import { clowSonnetGuard } from './middleware/clowSonnetGuard.js';
+import { marcarTenant } from './middleware/marcarTenant.js';
 import { initSessionStorage } from '../utils/session/sessionStorage.js';
 import { getGitStatus } from '../utils/context/context.js';
 import { initMemorySystem, buildMemoryRoutes } from '../memory/index.js';
@@ -146,20 +147,33 @@ async function main(): Promise<void> {
   const allowedCorsOrigins = getAllowedCorsOrigins();
   const downloadRoots = resolveDownloadRootCandidates();
 
-  // Init API
+  // ─── Motor de IA ────────────────────────────────────────────────────────
+  //
+  // Não existe mais chave global obrigatória. Cada cliente traz a própria
+  // (BYOK — ver src/tenancy/aiCredentials.ts), e o motor resolve a credencial
+  // por tenant a cada chamada.
+  //
+  // Até 10/08/2026 a ausência de ANTHROPIC_API_KEY era `process.exit(1)` no
+  // boot. Isso contradiz o BYOK de frente: num servidor onde o dono não põe
+  // chave nenhuma — que é o desenho — o processo simplesmente não subia, e o
+  // PM2 ficava em laço de reinício reportando "online" entre as quedas.
+  //
+  // A chave global, quando existe, atende só a CLI local do dono. Faltando,
+  // seguimos em frente: quem tentar usar o modelo sem credencial de tenant
+  // recebe "conecte sua chave", que é a mensagem correta e acionável.
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    logger.error('FATAL: Set ANTHROPIC_API_KEY in .env');
-    process.exit(1);
-  }
 
   const selectedModel = process.env.CLOW_MODEL || 'glm-5.1';
 
-  initAnthropic({
-    apiKey,
-    model: selectedModel,
-    maxOutputTokens: 16384,
-  });
+  if (apiKey) {
+    initAnthropic({
+      apiKey,
+      model: selectedModel,
+      maxOutputTokens: 16384,
+    });
+  } else {
+    logger.info('  ✓ IA: sem chave global — cada cliente usa a própria (BYOK)');
+  }
 
   // Init session storage
   await initSessionStorage();
@@ -242,6 +256,16 @@ async function main(): Promise<void> {
   app.use('/v2/crm', tenantAuth);
   app.route('/v2/crm', v2Routes);
   app.use('/v1/crm', tenantAuth);
+  // BYOK: leva o tenant resolvido acima pro AsyncLocalStorage, pra que o motor
+  // de IA (fundo na pilha, sem acesso ao `c` do Hono) saiba de quem e a chave.
+  // Tem de vir DEPOIS de todo `tenantAuth`, senao le um tenant que ainda nao
+  // foi resolvido e a sessao roda sem credencial.
+  app.use('/v1/sessions/*', marcarTenant);
+  app.use('/v1/sessions', marcarTenant);
+  app.use('/v1/crm/*', marcarTenant);
+  app.use('/v1/crm', marcarTenant);
+  app.use('/v2/crm/*', marcarTenant);
+  app.use('/v2/crm', marcarTenant);
   logger.info('  ✓ Auth: Multi-tenant API key enabled');
 
   // Public health/readiness endpoints (no auth, IP-rate-limited).
@@ -322,6 +346,16 @@ async function main(): Promise<void> {
   // Mission runner
   const missionRoutes = buildMissionRoutes();
   app.route('/v1/missions', missionRoutes);
+
+  // BYOK — chave de IA do proprio cliente. Fica atras do tenantAuth (montado
+  // acima em /v1/*) porque o tenant sai do contexto autenticado, nunca do corpo.
+  const { buildIaCredenciaisRoutes } = await import('./routes/iaCredenciais.js');
+  app.use('/v1/ia-credenciais/*', tenantAuth);
+  app.use('/v1/ia-credenciais', tenantAuth);
+  app.use('/v1/ia-credenciais/*', marcarTenant);
+  app.use('/v1/ia-credenciais', marcarTenant);
+  app.route('/v1/ia-credenciais', buildIaCredenciaisRoutes());
+  logger.info('  ✓ IA do cliente: /v1/ia-credenciais');
   app.route('/v1/crm', crmRoutes);
   app.route('/webhooks/crm', crmWebhooks);
   // ─── Login Auth UNIFIED (registered BEFORE /auth mount pra ter precedência) ───
@@ -596,6 +630,12 @@ async function main(): Promise<void> {
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
+
+  // Em que modo o servidor subiu. Vai pro log de boot porque a diferença entre
+  // cobrar e não cobrar é invisível até alguém bater numa parede de pagamento —
+  // e aí já é tarde, foi na cara de um cliente.
+  const { descricaoDoModo } = await import('../tenancy/modoBonus.js');
+  logger.info(`  ✓ Modo: ${descricaoDoModo()}`);
 
   // Start
   logger.info(`\n  ╔═══════════════════════════════════════╗`);

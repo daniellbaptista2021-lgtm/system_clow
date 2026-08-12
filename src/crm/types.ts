@@ -16,10 +16,10 @@ export type ActivityType =
   | 'system'
   | 'ai_action'
   | 'billing';
-export type Channel = 'whatsapp_meta' | 'whatsapp_zapi' | 'email' | 'manual' | 'ai';
+export type Channel = 'whatsapp_meta' | 'whatsapp_zapi' | 'whatsapp_evolution' | 'email' | 'manual' | 'ai';
 export type MediaType = 'text' | 'image' | 'audio' | 'video' | 'document' | 'location' | 'interactive';
-export type ChannelType = 'meta' | 'zapi';
-export type ChannelStatus = 'active' | 'disabled' | 'error' | 'pending';
+export type ChannelType = 'meta' | 'zapi' | 'evolution';
+export type ChannelStatus = 'active' | 'disabled' | 'error' | 'pending' | 'disconnected';
 export type BillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'one_time';
 export type SubscriptionStatus = 'active' | 'paused' | 'past_due' | 'cancelled' | 'pending';
 export type AgentRole = 'owner' | 'admin' | 'agent' | 'viewer';
