@@ -14,7 +14,13 @@ export function initCrm(): void {
   if (_initialized) return;
   // Touching getCrmDb() runs migrations.
   const db = getCrmDb();
-  const meta = db.prepare('SELECT COUNT(*) as n FROM crm_migrations').get() as { n: number };
+  // State table is `schema_migrations`. `crm_migrations` is the pre-migrator
+  // legacy table and only exists on databases old enough to predate it — a
+  // fresh install has no such table, and reading it unconditionally used to
+  // kill boot on every brand-new deploy.
+  const meta = db
+    .prepare('SELECT COUNT(*) as n FROM schema_migrations')
+    .get() as { n: number };
   logger.info(`[CRM] Schema ready (${meta.n} migration(s) applied)`);
   _initialized = true;
 }

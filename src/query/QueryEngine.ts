@@ -27,6 +27,7 @@ import {
 import { shouldAutoCompact, getTokenWarningState } from '../utils/compact/autoCompact.js';
 import { compactConversation } from '../utils/compact/compact.js';
 import { classifyError, type ErrorType } from '../utils/retry/retry.js';
+import { comTenant } from '../api/contextoTenant.js';
 import type { AggregatedHookResult } from '../hooks/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -123,7 +124,35 @@ export class QueryEngine {
   // submitMessage — Main entry point per user message
   // ════════════════════════════════════════════════════════════════════
 
+  /**
+   * Entrada publica. Existe so pra amarrar o tenant da sessao ao motor de IA
+   * (BYOK — cada cliente com a propria chave, ver src/tenancy/aiCredentials.ts).
+   *
+   * O detalhe que faz isto funcionar: num gerador, `run()` do AsyncLocalStorage
+   * devolveria o objeto gerador na hora e o corpo rodaria DEPOIS, ja fora do
+   * armazenamento — a marca se perderia e o motor cairia em "sem credencial".
+   * Por isso envolvemos cada `next()`, que e quando o corpo de fato executa e
+   * quando a chamada ao modelo acontece.
+   *
+   * Cobre o caminho que o middleware HTTP nao alcanca: webhook de WhatsApp que
+   * responde 200 na hora e processa a conversa em segundo plano, fora do escopo
+   * da requisicao.
+   */
   async *submitMessage(prompt: string): AsyncGenerator<SDKMessage> {
+    const tenantId = this.getExecutionContext().tenantId;
+    const interno = this.submitMessageInterno(prompt);
+    if (!tenantId) {
+      yield* interno;
+      return;
+    }
+    while (true) {
+      const passo = await comTenant({ tenantId }, () => interno.next());
+      if (passo.done) return;
+      yield passo.value;
+    }
+  }
+
+  async *submitMessageInterno(prompt: string): AsyncGenerator<SDKMessage> {
     this.seenToolCalls.clear(); // reset hard-dedupe tracker a cada nova msg do user
     this.forceNoTools = false; // nova msg -> reabilita tools
     // sessionBlockedTotal NAO reseta — contador acumula pra detectar sessao tox

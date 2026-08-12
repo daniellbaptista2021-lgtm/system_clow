@@ -18,7 +18,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface ContextoTenant {
   tenantId: string;
-  ehAdmin: boolean;
+  ehAdmin?: boolean;
 }
 
 const armazenamento = new AsyncLocalStorage<ContextoTenant>();

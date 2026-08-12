@@ -11,6 +11,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { hashApiKey, findTenantByApiKeyHash, touchApiKey, type Tenant } from '../../tenancy/tenantStore.js';
 import { verifyUserToken } from '../../auth/authRoutes.js';
 import { isTokenRevoked } from '../../auth/tokenRevocation.js';
+import { modoBonus } from '../../tenancy/modoBonus.js';
 import { logger } from '../../utils/logger.js';
 
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -138,6 +139,27 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
 
   if (!tenant) {
     return c.json({ error: 'invalid_api_key', message: 'API key not found or revoked' }, 401);
+  }
+
+  // Modo bônus: sem assinatura, não existe inadimplência — e o aluno já pagou
+  // pelo Território Próprio, que é onde este produto virou um bônus.
+  // Ver src/tenancy/modoBonus.ts.
+  //
+  // 'suspended' continua barrando de propósito: no modo bônus ele deixa de ser
+  // "não pagou" e passa a ser a única forma de você tirar alguém do ar por
+  // abuso. Sem isso não sobraria nenhum botão de suspender ninguém.
+  const bonus = modoBonus();
+  if (bonus) {
+    if (tenant.status === 'suspended') {
+      return c.json({
+        error: 'tenant_suspended',
+        message: 'Sua conta está suspensa. Fale com o suporte.',
+      }, 403);
+    }
+    void Promise.resolve().then(() => touchApiKey(keyHash));
+    c.set('tenant', tenant);
+    c.set('tenantId', tenant.id);
+    return next();
   }
 
   // Check tenant status

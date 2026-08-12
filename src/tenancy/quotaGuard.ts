@@ -12,6 +12,7 @@ import {
   type Tenant,
 } from './tenantStore.js';
 import { tierHasFeature } from './tiers.js';
+import { modoBonus } from './modoBonus.js';
 
 export interface QuotaError {
   code: string;
@@ -27,6 +28,16 @@ export interface QuotaError {
  * clusterStore (Redis SCARD round-trip when REDIS_URL is set).
  */
 export async function checkQuota(tenant: Tenant): Promise<QuotaError | null> {
+  // Modo bônus: cota de mensagem e de custo existia pra proteger a conta de IA
+  // do dono, que pagava por todo mundo. Com a chave sendo do próprio cliente
+  // (ver aiCredentials.ts), o teto de gasto dele é da conta dele — limitar aqui
+  // seria racionar um recurso que não é nosso.
+  //
+  // O limite de sessões simultâneas cai junto, e isso é consciente: ele
+  // protegia CPU do servidor, não dinheiro. Se um dia o servidor sofrer com
+  // isso, a resposta é um limite por servidor, não uma cota por plano de um
+  // produto que não tem mais planos.
+  if (modoBonus()) return null;
   // Message quota
   if (tenant.current_month_messages >= tenant.max_messages_per_month) {
     return {
