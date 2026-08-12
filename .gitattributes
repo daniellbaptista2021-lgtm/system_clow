@@ -1,0 +1,7 @@
+# A igualdade byte a byte com o build de producao depende do terminador de
+# linha de CADA arquivo: a arvore original tinha LF e CRLF misturados, e
+# template literal carrega o terminador pro JS emitido.
+#
+# Sem isto o git normaliza no checkout e uma clonagem nova gera um build
+# diferente do que roda em producao — silenciosamente.
+* -text
