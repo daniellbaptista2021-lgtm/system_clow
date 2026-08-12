@@ -36,3 +36,7 @@ prompt_*.md
 
 # Coverage artifacts
 coverage/
+
+# Ambiente local de testes
+.senha-local.txt
+.dados-locais/
