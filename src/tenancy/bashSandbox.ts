@@ -47,6 +47,12 @@ const BLOCKED_PATTERNS = [
   /\bkillall\s+(node|clow|pm2)\b/,
   /\bpkill\s+(node|clow|pm2)\b/,
 
+  // Saida por shell remoto — o bwrap isola o filesystem, mas nao impede o
+  // tenant de sair da maquina e agir a partir dela (movimento lateral, uso do
+  // IP do servidor). Bloqueia so o cliente propriamente dito: `ssh-keygen`,
+  // `ssh-add` e afins continuam liberados dentro do workspace.
+  /(^|[\s;&|(])(ssh|scp|sftp)(?![-\w])/,
+
   // Firewall / rede de baixo nivel — afeta o servidor todo
   /\biptables\b/,
   /\bufw\b/,
