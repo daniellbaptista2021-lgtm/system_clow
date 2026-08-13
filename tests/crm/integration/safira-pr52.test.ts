@@ -86,7 +86,9 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
     expect(p).toContain('2️⃣');
     expect(p).toMatch(/seguro de vida.*doen[çc]as graves|doen[çc]as graves.*cirurgia/);
     // PR 7.0: pergunta final mais natural (era "Qual dos dois faz mais sentido")
-    expect(p).toMatch(/Qual\s+(dos\s+dois|encaixa\s+melhor)/i);
+    // 6b629a0: encurtada pra so "Qual?" — tom direto, no maximo 4 linhas.
+    // A escolha em si esta provada pelos marcadores 1️⃣/2️⃣ acima.
+    expect(p).toMatch(/Qual(\s+(dos\s+dois|encaixa\s+melhor))?\?/i);
   });
 
   // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
@@ -94,7 +96,8 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   it('3. Qualificador prompt instrui NAO citar valor em R$', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     // PR 7.0: regra mais rigida (era "NAO fale valor errado")
-    expect(p).toMatch(/NUNCA\s+cite\s+valor\s+em\s+R\$/i);
+    // 6b629a0: bloco "NUNCA X" virou "REGRAS RIGIDAS — PROIBIDO / PROIBIDO X".
+    expect(p).toMatch(/(NUNCA|PROIBIDO)\s+cit(e|ar)\s+valor\s+em\s+R\$/i);
   });
 
   // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
@@ -102,7 +105,9 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
   it('4. Qualificador prompt instrui NAO pedir CPF/RG/dados sensiveis', () => {
     const p = prompts.PROMPT_QUALIFICADOR;
     // PR 7.0: phrase mudou de "NAO fale" pra "NUNCA peça"
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+(fale|pe[çc]a)\s+CPF\/?RG/i);
+    // 6b629a0: virou "PROIBIDO pedir endereco, CPF, RG, estado civil, ..." —
+    // CPF deixou de ser adjacente ao verbo, dai o [^\n]* no meio.
+    expect(p).toMatch(/(NUNCA\s+pe[çc]a|PROIBIDO\s+pedir)\b[^\n]*\bCPF\b/i);
   });
 
   // ─── 5. Qualificador NAO menciona "corretora oficial SulAmerica" ──

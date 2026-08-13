@@ -291,7 +291,8 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
     expect(p).not.toContain('49,90');
     expect(p).not.toContain('89,90');
     // Regra explicita esta no prompt
-    expect(p).toMatch(/NUNCA\s+cite\s+valor\s+em\s+R\$/i);
+    // 6b629a0: bloco "NUNCA X" virou "REGRAS RIGIDAS — PROIBIDO / PROIBIDO X".
+    expect(p).toMatch(/(NUNCA|PROIBIDO)\s+cit(e|ar)\s+valor\s+em\s+R\$/i);
   });
 
   it('14. Qualificador prompt instrui PASSO 2 com escolha funeral/completo', () => {
