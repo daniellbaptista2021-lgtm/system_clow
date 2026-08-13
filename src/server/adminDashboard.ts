@@ -118,7 +118,9 @@ export function buildDashboardRoutes(pool: any): Hono {
 
     try {
       const { verifyAdminSessionToken } = await import('./middleware/tenantAuth.js');
-      if (!verifyAdminSessionToken(token)) {
+      // .ok e obrigatorio: a funcao devolve { ok, username }, e objeto e sempre
+      // truthy — sem o .ok o 401 nunca dispara e o dashboard fica aberto.
+      if (!verifyAdminSessionToken(token).ok) {
         return c.html('<h1>401 — Acesso negado</h1><p><a href="/">Voltar ao login</a></p>', 401);
       }
     } catch {
