@@ -16,9 +16,9 @@ export type ActivityType =
   | 'system'
   | 'ai_action'
   | 'billing';
-export type Channel = 'whatsapp_meta' | 'whatsapp_zapi' | 'whatsapp_evolution' | 'email' | 'manual' | 'ai';
+export type Channel = 'whatsapp_meta' | 'whatsapp_evolution' | 'email' | 'manual' | 'ai';
 export type MediaType = 'text' | 'image' | 'audio' | 'video' | 'document' | 'location' | 'interactive';
-export type ChannelType = 'meta' | 'zapi' | 'evolution';
+export type ChannelType = 'meta' | 'evolution';
 export type ChannelStatus = 'active' | 'disabled' | 'error' | 'pending' | 'disconnected';
 export type BillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'one_time';
 export type SubscriptionStatus = 'active' | 'paused' | 'past_due' | 'cancelled' | 'pending';
@@ -679,4 +679,43 @@ export interface ChannelHealth {
 export interface ChannelMetrics {
   channelId: string; messagesSent: number; messagesReceived: number;
   lastInboundAt?: number; lastError?: string; deliveryRate?: number;
+}
+
+// ─── Shared channel interfaces ──────────────────────────────────────────────
+// Used by all WhatsApp channel adapters (evolution, meta).
+
+export interface SendOptions {
+  to: string;
+  text?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'audio' | 'document' | 'video';
+  mediaFilename?: string;
+  mediaMime?: string;
+  caption?: string;
+  replyToMessageId?: string;
+}
+
+export interface SendResult {
+  ok: boolean;
+  messageId?: string;
+  error?: { code?: number; message: string; raw?: unknown };
+}
+
+export interface ParsedInbound {
+  fromPhone: string;
+  fromName?: string;
+  messageId: string;
+  timestamp: number;
+  type: MediaType;
+  text?: string;
+  caption?: string;
+  mediaUrl?: string;
+  mediaMime?: string;
+  mediaFilename?: string;
+  fromMe: boolean;
+  raw: unknown;
+}
+
+export interface WebhookValue {
+  messages: ParsedInbound[];
 }

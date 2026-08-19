@@ -83,7 +83,7 @@ export function incAiMessage(tenantId: string, plan: string): void {
   aiMessagesTotal.inc({ tenant_id: tenantId, plan });
 }
 
-export function incWebhookReceived(channel: 'meta' | 'zapi' | 'stripe' | 'n8n' | string): void {
+export function incWebhookReceived(channel: 'meta' | 'evolution' | 'stripe' | 'n8n' | string): void {
   webhooksReceivedTotal.inc({ channel });
 }
 

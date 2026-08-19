@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Território Próprio</title>
+<title>System Clow</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="shortcut icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -191,7 +191,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-<div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/territorio/icone-192.png" alt="Território Próprio de IA" style="height:64px;width:64px;border-radius:16px"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM, os agentes e as conversas.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>
+<div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/territorio/icone-192.png" alt="System Clow de IA" style="height:64px;width:64px;border-radius:16px"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM, os agentes e as conversas.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>
 <div style="margin-top:24px;padding-top:22px;border-top:1px solid rgba(255,255,255,.06);text-align:center">
 </div>
 </div></div></div>
@@ -217,12 +217,12 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 </aside>
 <main class="main">
   <div class="topbar">
-    <div class="top-left"><button class="chrome-btn mobile-only" onclick="openSidebar()" aria-label="Abrir menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button><div class="brand-top"><img src="/assets/territorio/icone-192.png" alt="Território Próprio de IA" style="height:64px;width:64px;border-radius:16px"></div></div>
+    <div class="top-left"><button class="chrome-btn mobile-only" onclick="openSidebar()" aria-label="Abrir menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button><div class="brand-top"><img src="/assets/territorio/icone-192.png" alt="System Clow de IA" style="height:64px;width:64px;border-radius:16px"></div></div>
     <div class="top-right"><button class="outline-btn" onclick="logout()">Sair</button></div>
   </div>
   <div class="content"><div id="chat"><div class="feed" id="feed"><section class="welcome" id="wel"><div class="hero"><div class="hero-badge"><div class="welc-tagline">INTELIGENCIA INFINITA &bull; POSSIBILIDADES PREMIUM</div><h1>Como posso <span class="gp">ajudar</span>?</h1></div><div class="hero-sub"></div></div></section></div></div></div>
 </main></div>
-<div class="dock"><div class="dock-inner"><div class="composer-card"><textarea id="msg" class="composer-input" placeholder="O que voce precisa?" rows="1"></textarea><div class="divider"></div><div class="composer-toolbar"><div class="toolbar-group"><div class="model-pill">Território Próprio</div></div><div class="toolbar-group"><button class="send-btn" id="btn" onclick="handleBtn()"><svg id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><svg id="ico-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button></div></div></div></div></div>
+<div class="dock"><div class="dock-inner"><div class="composer-card"><textarea id="msg" class="composer-input" placeholder="O que voce precisa?" rows="1"></textarea><div class="divider"></div><div class="composer-toolbar"><div class="toolbar-group"><div class="model-pill">System Clow</div></div><div class="toolbar-group"><button class="send-btn" id="btn" onclick="handleBtn()"><svg id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><svg id="ico-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button></div></div></div></div></div>
 </div>
 <script>
 const U=location.origin;
@@ -342,7 +342,7 @@ function clearFeed(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W)}
 
 
 
-// ═══ Render Module — Claude Code style, Território Próprio palette ═══
+// ═══ Render Module — Claude Code style, System Clow palette ═══
 
 function timeNow(){const d=new Date();return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');}
 function userInitial(){return (localStorage.getItem('clow_login_user')||'U').charAt(0).toUpperCase();}
@@ -803,12 +803,12 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 <!-- ─── CRM Modal (full-screen, in-app) ─── -->
 <div class="crm-modal" id="crmModal" role="dialog" aria-modal="true" aria-label="CRM Clow">
   <div class="crm-modal-header">
-    <button class="crm-modal-back" type="button" onclick="closeCRM()" aria-label="Voltar pro Território Próprio">
+    <button class="crm-modal-back" type="button" onclick="closeCRM()" aria-label="Voltar pro System Clow">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
       Voltar pro Agente
     </button>
     <div class="crm-modal-title">
-      <svg class="crm-modal-infinite" viewBox="0 0 240 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Território Próprio">
+      <svg class="crm-modal-infinite" viewBox="0 0 240 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="System Clow">
         <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z"
               stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -955,7 +955,7 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 
     const sessionToken = localStorage.getItem('clow_token');
     if (!sessionToken) {
-      showCrmError(loading, 'Voce precisa estar logado no Território Próprio.', true);
+      showCrmError(loading, 'Voce precisa estar logado no System Clow.', true);
       return;
     }
 

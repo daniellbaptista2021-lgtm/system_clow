@@ -142,7 +142,7 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   }
 
   // Modo bônus: sem assinatura, não existe inadimplência — e o aluno já pagou
-  // pelo Território Próprio, que é onde este produto virou um bônus.
+  // pelo System Clow, que é onde este produto virou um bônus.
   // Ver src/tenancy/modoBonus.ts.
   //
   // 'suspended' continua barrando de propósito: no modo bônus ele deixa de ser

@@ -148,13 +148,6 @@ interface MetaCreds {
   verifyToken?: string;
   apiVersion?: string;
 }
-interface ZapiCreds {
-  instanceId: string;
-  token: string;
-  clientToken?: string;
-  baseUrl?: string;
-}
-
 function maskedChannel(ch: any) {
   let creds: any = null;
   try { creds = decryptJson(ch.credentialsEncrypted); } catch { /* corrupted */ }
@@ -166,10 +159,9 @@ function maskedChannel(ch: any) {
       appId: creds.appId,
       apiVersion: creds.apiVersion || 'v22.0',
     } : {
-      instanceId: creds.instanceId,
-      token: maskSecret(creds.token || ''),
-      clientToken: creds.clientToken ? maskSecret(creds.clientToken) : null,
-      baseUrl: creds.baseUrl || 'https://api.z-api.io',
+      baseUrl: creds.baseUrl || 'http://localhost:8080',
+      apiKey: maskSecret(creds.apiKey || ''),
+      instance: creds.instance,
     }
   ) : null;
   return {
@@ -346,8 +338,8 @@ export function registerChannelsRoutes(app: Hono): void {
   app.post('/channels', async (c) => {
     const tid = tenantOf(c);
     const body = await c.req.json().catch(() => ({}));
-    if (!body.type || !['meta', 'zapi', 'evolution'].includes(body.type)) {
-      return badRequest(c, 'type required (meta | zapi | evolution)');
+    if (!body.type || !['meta', 'evolution'].includes(body.type)) {
+      return badRequest(c, 'type required (meta | evolution)');
     }
     if (!body.name || !body.credentials) return badRequest(c, 'name and credentials required');
 
@@ -379,10 +371,7 @@ export function registerChannelsRoutes(app: Hono): void {
         return badRequest(c, 'evolution precisa de baseUrl + apiKey + instance');
       }
     } else {
-      const c2: ZapiCreds = body.credentials;
-      if (!c2.instanceId || !c2.token) {
-        return badRequest(c, 'zapi credentials need instanceId + token');
-      }
+      return badRequest(c, 'Tipo de canal invalido');
     }
 
     let encrypted: string;
@@ -400,22 +389,7 @@ export function registerChannelsRoutes(app: Hono): void {
       phoneNumberId: body.type === 'meta' ? body.credentials.phoneNumberId : undefined,
       status: 'pending', // until first webhook validates
     });
-    // Auto-configura webhooks na Z-API pra eliminar o passo manual de
-    // colar URL no painel deles. Sem isso, cliente salvava canal e msgs
-    // recebidas SUMIAM (Z-API nao sabia pra onde mandar).
-    if (body.type === 'zapi') {
-      try {
-        const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
-        const zapi = await import('../channels/zapi.js');
-        const r = await zapi.autoConfigureWebhooks(ch, baseUrl);
-        if (!r.ok) {
-          (c as any).set('zapiAutoConfig', { ok: false, configured: r.configured, failed: r.failed });
-        }
-      } catch (err: any) {
-        (c as any).set('zapiAutoConfig', { ok: false, error: err?.message });
-      }
-    }
-    return ok(c, { channel: maskedChannel(ch), zapiAutoConfig: (c as any).get('zapiAutoConfig') }, 201);
+    return ok(c, { channel: maskedChannel(ch) }, 201);
   });
   app.get('/channels/:id', (c) => {
     const ch = store.getChannel(tenantOf(c), c.req.param('id'));
@@ -438,19 +412,7 @@ export function registerChannelsRoutes(app: Hono): void {
     }
     const upd = store.updateChannel(tid, id, patch);
     if (!upd) return notFound(c, 'channel');
-    // Re-configura webhooks na Z-API se as credenciais mudaram (instanceId/token
-    // novos exigem nova chamada de update-webhook-*). Idempotente.
-    let zapiAutoConfig: any = null;
-    if (upd.type === 'zapi' && body.credentials) {
-      try {
-        const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
-        const zapi = await import('../channels/zapi.js');
-        zapiAutoConfig = await zapi.autoConfigureWebhooks(upd, baseUrl);
-      } catch (err: any) {
-        zapiAutoConfig = { ok: false, error: err?.message };
-      }
-    }
-    return ok(c, { channel: maskedChannel(upd), zapiAutoConfig });
+    return ok(c, { channel: maskedChannel(upd) });
   });
 
   // ─── EVOLUTION: pareamento por QR ──────────────────────────────────────
@@ -521,19 +483,7 @@ export function registerChannelsRoutes(app: Hono): void {
     } catch { /* noop */ }
     return ok(c, { desconectado: desconectou });
   });
-  // Endpoint pra forcar reconfigure dos webhooks de um canal Z-API
-  // existente. Util pra canais antigos criados antes da auto-config OU
-  // se o user mudar a URL publica do System Clow.
-  app.post('/channels/:id/zapi-reconfigure-webhooks', async (c) => {
-    const tid = tenantOf(c);
-    const ch = store.getChannel(tid, c.req.param('id'));
-    if (!ch) return notFound(c, 'channel');
-    if (ch.type !== 'zapi') return badRequest(c, 'channel is not zapi');
-    const baseUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
-    const zapi = await import('../channels/zapi.js');
-    const r = await zapi.autoConfigureWebhooks(ch, baseUrl);
-    return ok(c, r);
-  });
+
   // ── AI Agent config (per channel) ────────────────────────────────────
   app.get('/channels/:id/ai-config', (c) => {
     const tid = tenantOf(c);

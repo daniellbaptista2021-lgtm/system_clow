@@ -93,7 +93,7 @@ describe('Quotation Engine SulAmerica AP Flex (PR 5.1)', () => {
     });
     const channel = {
       id: 'ch_' + randomBytes(3).toString('hex'),
-      tenantId, type: 'zapi' as const, name: 't', credentialsEncrypted: '',
+      tenantId, type: 'evolution' as const, name: 't', credentialsEncrypted: '',
       webhookSecret: 'w', createdAt: Date.now(),
     };
     return {

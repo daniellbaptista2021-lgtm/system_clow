@@ -2,7 +2,7 @@
  * modoBonus.ts — o System Clow como bonus, sem assinatura.
  *
  * Decisao do Daniel (10/08/2026): o System Clow deixou de ser um SaaS cobrado
- * a parte e virou um bonus dentro do Territorio Proprio. Quem entra ja pagou
+ * a parte e virou um bonus dentro do System Clow. Quem entra ja pagou
  * pelo Territorio; cobrar de novo aqui nao faz sentido. E como a IA agora roda
  * na chave do proprio cliente (ver aiCredentials.ts), o custo por mensagem que
  * justificava cota tambem deixou de ser nosso.

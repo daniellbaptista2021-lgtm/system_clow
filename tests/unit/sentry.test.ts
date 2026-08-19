@@ -39,7 +39,7 @@ describe('shouldStripBody — sensitive route detector', () => {
     ['/v1/crm/channels/abc/credentials/rotate',   true],
     ['/v1/crm/contacts',                          false],
     ['/health/live',                              false],
-    ['/webhooks/crm/zapi/secret',                 false],   // intentional: only Stripe webhooks have signing secrets in body
+    ['/webhooks/crm/evolution/secret',                 false],   // intentional: only Stripe webhooks have signing secrets in body
     ['/v1/crm/channels',                          false],
   ])('shouldStripBody(%s) = %s', (path, expected) => {
     expect(shouldStripBody(path)).toBe(expected);

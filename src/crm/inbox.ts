@@ -14,7 +14,6 @@
 import * as store from './store.js';
 import { getCrmDb } from './schema.js';
 import * as meta from './channels/meta.js';
-import * as zapi from './channels/zapi.js';
 import * as evolution from './channels/evolution.js';
 import { saveMedia } from './media.js';
 import * as automations from './automations.js';
@@ -53,8 +52,7 @@ function isAvatarExpired(url: string): boolean {
  */
 function rotuloDoCanal(tipo: ChannelType): Channel {
   if (tipo === 'meta') return 'whatsapp_meta';
-  if (tipo === 'evolution') return 'whatsapp_evolution';
-  return 'whatsapp_zapi';
+  return 'whatsapp_evolution';
 }
 
 export async function ingestInbound(channel: Channel2, msg: {
@@ -85,21 +83,7 @@ export async function ingestInbound(channel: Channel2, msg: {
     source: rotuloDoCanal(channel.type),
   });
 
-  // 2.1. Onda 55: se nao tem avatar e o canal eh Z-API, busca foto de perfil em background
-  // (Meta nao expõe foto de contatos arbitrarios via API publica)
-  // 2026-05-05: tambem refaz se a URL atual ja expirou (oe=hex no query string).
-  // URLs do WhatsApp expiram em ~7 dias — sem refresh, fotos somem do CRM.
-  if (channel.type === 'zapi') {
-    const needsRefresh = !contact.avatarUrl || isAvatarExpired(contact.avatarUrl);
-    if (needsRefresh) {
-      void zapi.fetchProfilePicture(channel, msg.fromPhone).then((url) => {
-        if (url) {
-          try { store.updateContact(tenantId, contact.id, { avatarUrl: url }); }
-          catch { /* silent */ }
-        }
-      });
-    }
-  }
+
 
   // 3. Find or create card on the default sales board
   const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
@@ -179,8 +163,6 @@ export async function ingestInbound(channel: Channel2, msg: {
   if (!isOutbound) {
     if (channel.type === 'meta') {
       void meta.markAsRead(channel, msg.messageId);
-    } else if (channel.type === 'zapi') {
-      void zapi.markAsRead(channel, msg.messageId, msg.fromPhone);
     } else if (channel.type === 'evolution') {
       void evolution.markAsRead(channel, msg.messageId, msg.fromPhone);
     }
@@ -276,11 +258,6 @@ async function downloadAndSave(channel: Channel2, msg: any, tenantId: string) {
       if (!res.ok) return null;
       bytes = res.bytes;
       mime = res.mime || mime;
-    } else if (channel.type === 'zapi' && msg.mediaUrl) {
-      const res = await zapi.fetchMedia(channel, msg.mediaUrl);
-      if (!res.ok) return null;
-      bytes = res.bytes;
-      mime = res.mime || mime;
     } else if (channel.type === 'evolution' && msg.mediaUrl) {
       const res = await evolution.fetchMedia(channel, msg.mediaUrl);
       if (!res.ok) return null;
@@ -326,8 +303,6 @@ export async function sendOutbound(channel: Channel2, opts: SendInbox): Promise<
     result = await meta.sendMessage(channel, opts);
   } else if (channel.type === 'evolution') {
     result = await evolution.sendMessage(channel, opts);
-  } else if (channel.type === 'zapi') {
-    result = await zapi.sendMessage(channel, opts);
   } else {
     return { ok: false, error: `canal_desconhecido: ${channel.type}` };
   }

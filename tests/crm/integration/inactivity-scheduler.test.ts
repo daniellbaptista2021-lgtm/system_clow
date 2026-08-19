@@ -97,7 +97,7 @@ describe('Inactivity Scheduler — integration', () => {
     // credentialsEncrypted='' eh aceito (NOT NULL satisfeito) — sendReply esta
     // mockado no top do arquivo, nada eh decifrado nesses tests.
     const ch = store.createChannel(tenantId, {
-      type: 'zapi', name: 'TestCh',
+      type: 'evolution', name: 'TestCh',
       credentialsEncrypted: '',
       status: 'active',
     });

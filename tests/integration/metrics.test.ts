@@ -141,7 +141,7 @@ describe('Domain counters — incAiMessage / incWebhookReceived', () => {
     process.env.METRICS_TOKEN = 'tok';
     incWebhookReceived('meta');
     incWebhookReceived('meta');
-    incWebhookReceived('zapi');
+    incWebhookReceived('evolution');
     incWebhookReceived('stripe');
 
     const body = await (await buildApp().fetch(
@@ -149,7 +149,7 @@ describe('Domain counters — incAiMessage / incWebhookReceived', () => {
     )).text();
 
     expect(body).toMatch(/clow_webhooks_received_total\{[^}]*channel="meta"[^}]*\} 2/);
-    expect(body).toMatch(/clow_webhooks_received_total\{[^}]*channel="zapi"[^}]*\} 1/);
+    expect(body).toMatch(/clow_webhooks_received_total\{[^}]*channel="evolution"[^}]*\} 1/);
     expect(body).toMatch(/clow_webhooks_received_total\{[^}]*channel="stripe"[^}]*\} 1/);
   });
 });

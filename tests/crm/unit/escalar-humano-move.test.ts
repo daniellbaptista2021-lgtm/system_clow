@@ -49,7 +49,7 @@ describe('escalar_humano — move card pra Atendimento Humano', () => {
       tenantId: TENANT, role: 'qualificador',
       column: { id: LEAD, name: 'Lead novo', boardId: BOARD, agentRole: 'qualificador' },
       card: { id: CARD, tenantId: TENANT, boardId: BOARD, columnId: LEAD, title: 'Test Card', contactId: null },
-      channel: { id: 'ch1', tenantId: TENANT, name: 'Test', type: 'zapi', status: 'active' },
+      channel: { id: 'ch1', tenantId: TENANT, name: 'Test', type: 'evolution', status: 'active' },
       customerPhone: '5521999999999',
       state: { turnsCount: 1, status: 'active' },
     };

@@ -50,7 +50,7 @@ describe('Kill switch — agent_enabled=0 deve abortar runners', () => {
     agentActiveHoursStart: '00:00', agentActiveHoursEnd: '23:59',
   };
   const fakeChannel = {
-    id: CHANNEL_ID, tenantId: TENANT, name: 'Test', type: 'zapi',
+    id: CHANNEL_ID, tenantId: TENANT, name: 'Test', type: 'evolution',
     status: 'active', createdAt: Date.now(),
   };
   const fakeCard = {

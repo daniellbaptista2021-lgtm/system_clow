@@ -87,8 +87,8 @@ async function setupCardWithChannel() {
     valueCents: 250000,
   });
   store.createChannel(tenantId, {
-    type: 'zapi',
-    name: 'Z-API principal',
+    type: 'evolution',
+    name: 'Evolution principal',
     credentialsEncrypted: 'mock-encrypted-credentials',
     status: 'active',
   });

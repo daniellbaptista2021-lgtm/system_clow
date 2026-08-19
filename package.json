@@ -23,7 +23,7 @@
     "scan:secrets": "node scripts/run-gitleaks.cjs protect --staged --redact -v",
     "scan:secrets:full": "node scripts/run-gitleaks.cjs detect --source . --redact -v --report-path .gitleaks-report.json --report-format json",
     "scan:secrets:history": "node scripts/run-gitleaks.cjs detect --redact -v",
-    "prepare": "husky && node scripts/setup-husky.cjs",
+    "prepare": "husky",
     "postinstall": "node scripts/install-gitleaks.cjs"
   },
   "dependencies": {

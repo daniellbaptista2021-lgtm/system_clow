@@ -1,24 +1,21 @@
 /**
  * evolution.ts — canal WhatsApp pela Evolution API.
  *
- * Por que este canal existe: Z-API cobra por número e a Meta Cloud API exige
- * conta de negócios aprovada, modelos de mensagem homologados e um número que
- * não pode estar em uso no WhatsApp comum. A Evolution é auto-hospedada e
- * gratuita, e conecta o número do próprio cliente lendo um QR — que é o
- * caminho que um corretor consegue percorrer sozinho.
+ * A Evolution é auto-hospedada e gratuita, e conecta o número do próprio
+ * cliente lendo um QR — que é o caminho que um corretor consegue percorrer
+ * sozinho. A Meta Cloud API exige conta de negócios aprovada, modelos de
+ * mensagem homologados e um número que não pode estar em uso no WhatsApp
+ * comum.
  *
- * Espelha a interface de `zapi.ts` de propósito: `sendMessage`, `parseWebhook`,
- * `fetchMedia`, `fetchConnectedPhone` têm as MESMAS assinaturas. Quem despacha
- * por tipo de canal (`inbox.ts`) só precisa de mais um `else if`, e não de um
- * caminho paralelo — dois caminhos divergem com o tempo, e o que ninguém usa
- * envelhece calado.
+ * Cada canal WhatsApp no CRM é uma instância na Evolution. `sendMessage`,
+ * `parseWebhook`, `fetchMedia` e `fetchConnectedPhone` seguem a interface
+ * compartilhada definida em `../types.ts`.
  *
- * ── O que difere da Evolution para as outras ──────────────────────────────
+ * ── Características ──────────────────────────────────────────────────────
  *
- * 1. **A instância é nossa, não do fornecedor.** O servidor Evolution roda na
- *    nossa infra, e cada cliente é uma "instância" dentro dele. Por isso aqui
- *    tem criação e pareamento (QR), que em Z-API acontecia no painel deles.
- * 2. **Autenticação por `apikey` em header**, não por token na URL.
+ * 1. **A instância é nossa, não de fornecedor externo.** O servidor Evolution
+ *    roda na nossa infra, e cada cliente é uma "instância" dentro dele.
+ * 2. **Autenticação por `apikey` em header.**
  * 3. **O número vem como JID** (`5521999998888@s.whatsapp.net`), não limpo.
  * 4. **Mídia vem em base64 no próprio webhook** quando o servidor está com
  *    `WEBHOOK_BASE64=true`; senão vem uma URL que só a Evolution alcança.
@@ -26,8 +23,7 @@
  */
 import { decryptJson } from '../crypto.js';
 import { logger } from '../../utils/logger.js';
-import type { Channel2 } from '../types.js';
-import type { SendOptions, SendResult, ParsedInbound, WebhookValue } from './zapi.js';
+import type { Channel2, SendOptions, SendResult, ParsedInbound, WebhookValue } from '../types.js';
 
 export interface EvolutionCreds {
   baseUrl: string;

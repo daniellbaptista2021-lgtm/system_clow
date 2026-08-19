@@ -1,5 +1,5 @@
 /**
- * app.js — Território Próprio Frontend Application (Modular)
+ * app.js — System Clow Frontend Application (Modular)
  *
  * Separated from inline HTML for maintainability.
  * Modules: Auth, Sessions, Chat, UI, Markdown, Sidebar

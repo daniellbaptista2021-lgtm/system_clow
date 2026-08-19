@@ -85,7 +85,7 @@ async function sendBillingReminder(sub: Subscription, days: number): Promise<voi
   // Log + bump reminders_sent
   store.logActivity(tenantId, {
     cardId: sub.cardId, contactId: sub.contactId,
-    type: 'billing', channel: channels[0] ? (channels[0].type === 'meta' ? 'whatsapp_meta' : 'whatsapp_zapi') : 'manual',
+    type: 'billing', channel: channels[0] ? (channels[0].type === 'meta' ? 'whatsapp_meta' : 'whatsapp_evolution') : 'manual',
     content: `Lembrete cobrança T-${days}d enviado: ${sub.planName} ${fmtMoney(sub.amountCents)}`,
   });
   store.updateSubscription(tenantId, sub.id, { remindersSent: sub.remindersSent + 1 });

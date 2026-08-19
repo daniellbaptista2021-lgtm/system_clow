@@ -15,7 +15,7 @@
  *   6. POST /v1/crm/auth/exchange → CRM api_key
  *   7. CRM CRUD: create board / column / contact / channel via api_key
  *   8. POST /auth/authorized-phones — set phone whitelist
- *   9. POST /webhooks/crm/zapi/:secret with a real Z-API ReceivedCallback
+ *   9. POST /webhooks/crm/evolution/:secret with a real Evolution ReceivedCallback
  *      payload — verify it parses + logs activity (AI response loop is
  *      mocked at the adapter boundary so we don't need a real Anthropic
  *      key in CI)
@@ -35,7 +35,7 @@
  *   - The user said "/v1/crm/auth/exchange" returns api_key. Reality
  *     confirmed (src/crm/routes/auth-exchange.ts).
  *
- *   - Step 9: testing the FULL chain (Anthropic stream + Z-API outbound)
+ *   - Step 9: testing the FULL chain (Anthropic stream + Evolution outbound)
  *     would need live keys. We mock the Anthropic SDK + sendOutbound; the
  *     test verifies inbound is RECEIVED + ACTIVITY-LOGGED, which is the
  *     part that runs in the http handler synchronously. The AI roundtrip
@@ -282,13 +282,13 @@ describe('E2E onboarding flow — signup → checkout → CRM → inbound messag
     expect(r.body.card?.id ?? r.body.id).toMatch(/^crm_card_/);
   });
 
-  it('step 7e — POST /v1/crm/channels (Z-API)', async () => {
+  it('step 7e — POST /v1/crm/channels (Evolution)', async () => {
     const r = await api('/v1/crm/channels', {
       token: crmApiKey,
       body: {
-        type: 'zapi',
-        name: 'Z-API e2e',
-        credentials: { instanceId: 'inst_e2e', token: 'tok_e2e', clientToken: 'sec_e2e' },
+        type: 'evolution',
+        name: 'Evolution e2e',
+        credentials: { baseUrl: 'http://localhost:8080', apiKey: 'test', instance: 'test_inst' },
         phoneNumber: '+5511955554444',
       },
     });
@@ -314,20 +314,24 @@ describe('E2E onboarding flow — signup → checkout → CRM → inbound messag
     expect((t as any).authorized_phones).toEqual(expect.arrayContaining(normalized([SIGNUP_PHONE, '+5511955554444'])));
   });
 
-  // ─── 9. inbound Z-API webhook with realistic payload ──────────────────────
-  it('step 9 — POST /webhooks/crm/zapi/:secret with a valid ReceivedCallback parses + logs activity', async () => {
-    const r = await api(`/webhooks/crm/zapi/${webhookSecret}`, {
-      body: [
-        {
-          type: 'ReceivedCallback',
-          phone: '5511955554444',                           // Z-API sends without +
-          fromMe: false,
-          messageId: 'wamid.e2e_inbound_001',
-          momment: Date.now(),
-          senderName: 'Cliente E2E',
-          text: { message: 'Quero saber o orçamento desse apartamento' },
+  // ─── 9. inbound Evolution webhook with realistic payload ──────────────────────
+  it('step 9 — POST /webhooks/crm/evolution/:secret with a valid ReceivedCallback parses + logs activity', async () => {
+    const r = await api(`/webhooks/crm/evolution/${webhookSecret}`, {
+      body: {
+        event: 'messages.upsert',
+        data: {
+          key: {
+            remoteJid: '5511955554444@s.whatsapp.net',
+            fromMe: false,
+            id: 'wamid.e2e_inbound_001',
+          },
+          pushName: 'Cliente E2E',
+          messageTimestamp: Math.floor(Date.now() / 1000),
+          message: {
+            conversation: 'Quero saber o orçamento desse apartamento',
+          },
         },
-      ],
+      },
     });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect(r.body.ok).toBe(true);
@@ -346,6 +350,6 @@ describe('E2E onboarding flow — signup → checkout → CRM → inbound messag
       .all(tenantId, '%orçamento desse apartamento%') as any[];
 
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect(rows[0].direction === 'in' || rows[0].direction === 'inbound' || rows[0].channel === 'zapi').toBe(true);
+    expect(rows[0].direction === 'in' || rows[0].direction === 'inbound' || rows[0].channel === 'evolution').toBe(true);
   });
 });

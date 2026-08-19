@@ -2431,7 +2431,7 @@ async function renderFormsView() {
       }
     }
 
-    l.append(el('h3', { style: 'margin:24px 0 12px;color:var(--text)' }, 'Webhooks (Zapier / Make / n8n)'));
+    l.append(el('h3', { style: 'margin:24px 0 12px;color:var(--text)' }, 'Webhooks (evolutioner / Make / n8n)'));
     if (!hooksData.webhooks || hooksData.webhooks.length === 0) {
       l.append(el('div', { style: 'padding:20px;text-align:center;color:var(--text-dim);background:var(--bg-2);border-radius:8px' }, 'Nenhum webhook'));
     } else {
@@ -2440,7 +2440,7 @@ async function renderFormsView() {
         l.append(el('div', {
           style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;cursor:pointer',
           on: {
-            click: (e) => { if (e.target.closest('button') || e.target.closest('code')) return; copyTextDialog('Cole esta URL no Zapier/Make/n8n:', hookUrl); },
+            click: (e) => { if (e.target.closest('button') || e.target.closest('code')) return; copyTextDialog('Cole esta URL no evolutioner/Make/n8n:', hookUrl); },
             contextmenu: (e) => showContextMenu(e, [
               { label: '🔗 Copiar URL', action: () => copyTextDialog('URL:', hookUrl) },
               { label: h.enabled ? '⏸️ Desabilitar' : '▶️ Habilitar', action: async () => {
@@ -2556,8 +2556,8 @@ function openHookModal() {
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
   form.append(
-    inputField('name', 'Nome *', { required: true, attrs: { placeholder: 'Zapier Lead Gen' } }),
-    inputField('source', 'Fonte default', { value: 'zapier' }),
+    inputField('name', 'Nome *', { required: true, attrs: { placeholder: 'evolutioner Lead Gen' } }),
+    inputField('source', 'Fonte default', { value: 'evolutioner' }),
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:14px' }, 'Mapping default: aceita name/email/phone (lowercase ou Capitalized).'),
     el('button', { type: 'submit', style: 'width:100%;padding:12px;background:var(--purple);color:#fff;border:0;border-radius:6px;font-weight:600;cursor:pointer' }, 'Criar Webhook'),
   );
@@ -2880,7 +2880,7 @@ function renderChannelsList() {
       // mostrar uma URL "para colar no painel" seria instruir um passo que
       // não existe e que o cliente não teria onde executar.
       ch.type === 'evolution' ? null : el('div', { style: 'margin-top:10px;font-size:11px;color:var(--text-dim)' },
-        el('strong', {}, 'Webhook URL (cole no painel do Meta/Z-API): '),
+        el('strong', {}, 'Webhook URL (cole no painel do Meta/Evolution API): '),
         el('code', { style: 'display:block;background:var(--bg-3);padding:6px 8px;border-radius:6px;margin-top:4px;word-break:break-all;user-select:all' }, whUrl),
       ),
       el('div', { style: 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center' },
@@ -3095,9 +3095,9 @@ function showWebhookSetup(channel, isNew) {
     style: 'background:rgba(255,31,24,.08);border:1px solid rgba(255,31,24,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
     html: '<div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Como configurar no Meta</div>1. Acesse <strong>Meta for Developers</strong> → seu app → <strong>WhatsApp → Configuração</strong><br>2. No bloco <strong>Webhook</strong>, clique <strong>Editar</strong><br>3. Cole a <strong>Webhook URL</strong> abaixo no campo <em>"URL de retorno de chamada"</em><br>4. Cole o <strong>Verify Token</strong> abaixo no campo <em>"Verificar token"</em><br>5. Clique <strong>Verificar e salvar</strong> (deve ficar verde)<br>6. Em <strong>Campos do webhook</strong>, marque <code>messages</code> e <strong>Inscrever</strong>',
   });
-  const zapiInstr = el('div', {
+  const evolutionInstr = el('div', {
     style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
-    html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📋 Como configurar na Z-API</div>1. Acesse o painel da <strong>Z-API</strong> → sua instância<br>2. Vá em <strong>Webhooks</strong> no menu lateral<br>3. Cole a URL abaixo nos campos <strong>"Ao receber"</strong> (mensagens recebidas)<br>4. Marque a opção <strong>"Notificar mensagens enviadas por mim também"</strong> se quiser sync de outbound<br>5. Salve as alterações',
+    html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📋 Como configurar na Evolution API</div>1. Acesse o painel da <strong>Evolution API</strong> → sua instância<br>2. Vá em <strong>Webhooks</strong> no menu lateral<br>3. Cole a URL abaixo nos campos <strong>"Ao receber"</strong> (mensagens recebidas)<br>4. Marque a opção <strong>"Notificar mensagens enviadas por mim também"</strong> se quiser sync de outbound<br>5. Salve as alterações',
   });
 
   const fields = [copyableField('Webhook URL', whUrl)];
@@ -3105,8 +3105,8 @@ function showWebhookSetup(channel, isNew) {
 
   const modal = el('div', { class: 'modal', style: 'max-width:600px' },
     el('h3', { style: 'color:' + headerColor + ';margin:0 0 6px;font-size:18px' }, title),
-    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:18px' }, channel.name + ' · ' + (isMeta ? 'Meta Cloud API' : 'Z-API') + (channel.phoneNumber ? ' · ' + channel.phoneNumber : '')),
-    isMeta ? metaInstr : zapiInstr,
+    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:18px' }, channel.name + ' · ' + (isMeta ? 'Meta Cloud API' : 'Evolution API') + (channel.phoneNumber ? ' · ' + channel.phoneNumber : '')),
+    isMeta ? metaInstr : evolutionInstr,
     ...fields,
     el('div', { class: 'modal-actions' },
       el('button', { type: 'button', class: 'confirm', on: { click: () => backdrop.remove() } }, 'Concluído'),
@@ -3170,7 +3170,7 @@ async function openNewChannelModal(presetType) {
         ? '<strong>Meta:</strong> Configuração → Webhook → Editar → cole acima na <em>URL de retorno</em> + <em>Verificar token</em> abaixo → Verificar e salvar.'
         : currentType === 'evolution'
         ? '<strong>Nada a fazer aqui:</strong> configuramos isto sozinhos quando você conectar o WhatsApp pelo QR.'
-        : '<strong>Z-API:</strong> Painel da instância → Webhooks → cole acima no campo <em>"Ao receber"</em>.';
+        : '<strong>Evolution API:</strong> Painel da instância → Webhooks → cole acima no campo <em>"Ao receber"</em>.';
     }
     verifyTokBlock.style.display = currentType === 'meta' ? '' : 'none';
     whBlock.style.display = currentType === 'evolution' ? 'none' : '';
@@ -3192,9 +3192,9 @@ async function openNewChannelModal(presetType) {
     } : type === 'evolution' ? {
       usarServidorDoSistema: true,
     } : {
-      instanceId: fd.get('zapiInstance'),
-      token: fd.get('zapiToken'),
-      clientToken: fd.get('zapiClientToken') || undefined,
+      instanceId: fd.get('evolutionInstance'),
+      token: fd.get('evolutionToken'),
+      clientToken: fd.get('evolutionClientToken') || undefined,
     };
     try {
       const r = await api('/channels', { method: 'POST', body: {
@@ -3213,10 +3213,10 @@ async function openNewChannelModal(presetType) {
     field('Access Token', 'metaToken', 'text', ''),
     field('Phone Number ID', 'metaPhoneId', 'text', ''),
   );
-  const fieldsZapi = el('div', { style: 'display:none' },
-    field('Instance ID', 'zapiInstance', 'text', ''),
-    field('Token', 'zapiToken', 'text', ''),
-    field('Client-Token (opcional)', 'zapiClientToken', 'text', ''),
+  const fieldsevolution = el('div', { style: 'display:none' },
+    field('Instance ID', 'evolutionInstance', 'text', ''),
+    field('Token', 'evolutionToken', 'text', ''),
+    field('Client-Token (opcional)', 'evolutionClientToken', 'text', ''),
   );
 
   form.append(
@@ -3228,17 +3228,17 @@ async function openNewChannelModal(presetType) {
         const sel = el('select', { name: 'type', on: { change: (e) => {
           const v = e.target.value;
           fieldsMeta.style.display = v === 'meta' ? '' : 'none';
-          fieldsZapi.style.display = v === 'zapi' ? '' : 'none';
+          fieldsevolution.style.display = v === 'evolution' ? '' : 'none';
           refreshWebhookUI(v);
         } } },
           el('option', { value: 'evolution' }, 'WhatsApp por QR Code (grátis, recomendado)'),
-          el('option', { value: 'zapi' }, 'Z-API (pago, por número)'),
+          el('option', { value: 'evolution' }, 'Evolution API (pago, por número)'),
           el('option', { value: 'meta' }, 'Meta Cloud API (oficial, exige aprovação)'),
         );
         return sel;
       })(),
     ),
-    fieldsZapi,
+    fieldsevolution,
     fieldsMeta,
     whBlock,
     verifyTokBlock,
@@ -3254,7 +3254,7 @@ async function openNewChannelModal(presetType) {
 
   // Começa na Evolution: é a primeira opção e a única sem custo para o cliente.
   setTimeout(() => {
-    fieldsZapi.style.display = 'none';
+    fieldsevolution.style.display = 'none';
     fieldsMeta.style.display = 'none';
     refreshWebhookUI('evolution');
   }, 0);
@@ -3749,7 +3749,7 @@ async function openEditChannelModal(ch) {
   }
   const credsBlock = el('div', { style: 'border-top:1px solid var(--border);padding-top:14px;margin-top:6px' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:600' },
-      'Credenciais ' + (isMeta ? 'Meta' : 'Z-API')),
+      'Credenciais ' + (isMeta ? 'Meta' : 'Evolution API')),
   );
   if (isMeta) {
     credsBlock.append(field('Phone Number ID', 'phoneNumberId', 'text', c.phoneNumberId || ''));
@@ -3929,7 +3929,7 @@ function wireEvents() {
     const btn = document.getElementById('refreshPhotosBtn');
     if (!btn || btn.disabled) return;
     const force = await clowConfirm(
-      'Buscar foto de perfil dos contatos via Z-API. Pode levar alguns segundos. Forçar refresh de TODOS (mesmo dos que já têm foto)?',
+      'Buscar foto de perfil dos contatos via Evolution API. Pode levar alguns segundos. Forçar refresh de TODOS (mesmo dos que já têm foto)?',
       { title: 'Atualizar fotos WhatsApp', confirmLabel: 'Sim, todos' }
     );
     btn.disabled = true;
@@ -3998,7 +3998,7 @@ function wireEvents() {
 }
 
 
-// ─── Auto-login via Território Próprio session ───────────────────────────────
+// ─── Auto-login via System Clow session ───────────────────────────────
 async function tryExchange() {
   const sessionToken = localStorage.getItem('clow_token');
   if (!sessionToken) return null;
@@ -4019,7 +4019,7 @@ async function tryAutoLogin() {
     try { await attemptLogin(state.apiKey); return true; }
     catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
   }
-  // 2. Try exchange via Território Próprio session
+  // 2. Try exchange via System Clow session
   const fresh = await tryExchange();
   if (fresh) {
     state.apiKey = fresh;
@@ -4033,7 +4033,7 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do Território Próprio para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -4056,7 +4056,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro Território Próprio</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
     }
   }
 })();
@@ -5245,7 +5245,7 @@ async function openUploadDocModal(card, onDone) {
 
 async function openNewProposalModal(card, onDone) {
   await buildModal('Nova proposta', [
-    { name: 'title', label: 'Título', required: true, value: card.title ? 'Proposta · ' + card.title : '', placeholder: 'Ex: Plano Profissional + Z-API' },
+    { name: 'title', label: 'Título', required: true, value: card.title ? 'Proposta · ' + card.title : '', placeholder: 'Ex: Plano Profissional + Evolution API' },
     { name: 'totalBrl', label: 'Valor total (R$)', type: 'text', placeholder: '697.00', hint: 'Use ponto ou vírgula como separador decimal' },
     { name: 'description', label: 'Descrição / itens da proposta', type: 'textarea', rows: 4, placeholder: 'Ex: 1x Plano Profissional R$ 697/mês\n1x Setup inicial R$ 0\n...' },
   ], async (v) => {
@@ -5587,7 +5587,7 @@ async function openChannelInboxConfig(channel) {
 
     // Webhook URL — copiavel
     body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
-      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '🔗 URL do Webhook (cole na Z-API / Meta)'),
+      el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '🔗 URL do Webhook (cole na Evolution API / Meta)'),
       el('div', { style: 'display:flex;gap:6px;align-items:center' },
         el('input', { type: 'text', value: info.url, readonly: '', style: 'flex:1;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:monospace;font-size:11px', on: { click: (e) => e.target.select() } }),
         el('button', { style: 'padding:8px 14px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer', on: { click: async () => {
@@ -6132,7 +6132,7 @@ async function loadMyInfo() {
     const fb = {
       _fallback: true,
       tenant: { id: null, tier: 'unknown', status: 'unknown', hasStripe: false },
-      whatsapp: { included: 1, max: 999, zapiCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
+      whatsapp: { included: 1, max: 999, evolutionCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
     };
     window.state.me = fb;
     return fb;
@@ -6152,11 +6152,11 @@ function renderChannelsLimitsBadge() {
       el('span', { style: 'color:var(--text)' }, fullLabel),
     ),
     el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(225,6,0,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
-    me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Z-API ativo(s)') : null,
+    me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Evolution API ativo(s)') : null,
   );
 }
 
-// Pre-modal de escolha Z-API vs Meta
+// Pre-modal de escolha Evolution API vs Meta
 async function openChannelTypePicker() {
   console.log('[picker] openChannelTypePicker chamado');
   let me;
@@ -6197,9 +6197,9 @@ async function openChannelTypePicker() {
     return;
   }
 
-  // Mostrar picker (Z-API vs Meta)
+  // Mostrar picker (Evolution API vs Meta)
   const isFirstNumber = wa.totalUsed === 0;
-  const willCharge = !isFirstNumber; // primeiro numero e gratis (incluso); seguintes via Z-API custam R$100
+  const willCharge = !isFirstNumber; // primeiro numero e gratis (incluso); seguintes via Evolution API custam R$100
 
   const dialog = el('div', { class: 'modal-backdrop' });
   const modal = el('div', { class: 'modal', style: 'max-width:560px' },
@@ -6210,24 +6210,24 @@ async function openChannelTypePicker() {
       '. Escolha o tipo de conexao:'
     ),
 
-    // OPÇÃO Z-API
+    // OPÇÃO Evolution API
     el('button', { type: 'button', class: 'channel-type-btn', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(37,211,102,0.08),rgba(18,140,126,0.04));border:2px solid rgba(37,211,102,0.3);padding:18px;border-radius:14px;margin-bottom:12px;cursor:pointer;color:inherit;font-family:inherit',
       on: { click: async () => {
         if (willCharge) {
           // Onda 53h: ABRIR STRIPE CHECKOUT em nova aba; polling
           // ate cliente pagar; depois libera modal de cadastro.
           dialog.remove();
-          await openZapiCheckoutFlow(me);
+          await openevolutionCheckoutFlow(me);
           return;
         }
         // Primeiro numero (free) — abre modal direto
         dialog.remove();
-        await openNewChannelModal('zapi');
+        await openNewChannelModal('evolution');
       } } },
       el('div', { style: 'display:flex;align-items:center;gap:14px' },
         el('div', { style: 'width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#25D366,#128C7E);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;flex:0 0 auto' }, 'Z'),
         el('div', { style: 'flex:1' },
-          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Z-API ' + (isFirstNumber ? '(incluso no plano)' : '— adicional R$ 100/mes')),
+          el('div', { style: 'font-weight:700;font-size:15px;margin-bottom:4px' }, 'Evolution API ' + (isFirstNumber ? '(incluso no plano)' : '— adicional R$ 100/mes')),
           el('div', { style: 'font-size:12px;color:var(--text-dim);line-height:1.5' },
             isFirstNumber
               ? 'Seu numero incluso no plano. Conecta via QR Code, sem cobranca extra.'
@@ -6267,8 +6267,8 @@ async function openChannelTypePicker() {
   }
 }
 
-// Onda 53h: fluxo Stripe Checkout pra Z-API adicional
-async function openZapiCheckoutFlow(me) {
+// Onda 53h: fluxo Stripe Checkout pra Evolution API adicional
+async function openevolutionCheckoutFlow(me) {
   if (!me?.tenant?.id) { toast('Tenant nao identificado', 'error'); return; }
 
   // Caso admin/sem-subscription: cobra direto sem checkout (modo legacy)
@@ -6279,7 +6279,7 @@ async function openZapiCheckoutFlow(me) {
       'Adicionar'
     );
     if (!confirmed) return;
-    await openNewChannelModal('zapi');
+    await openNewChannelModal('evolution');
     return;
   }
 
@@ -6356,7 +6356,7 @@ async function openZapiCheckoutFlow(me) {
         clearInterval(poll);
         waitDialog.remove();
         toast('Pagamento confirmado! Configure agora seu numero.', 'success');
-        await openNewChannelModal('zapi');
+        await openNewChannelModal('evolution');
       }
     } catch {}
   }, 3000);

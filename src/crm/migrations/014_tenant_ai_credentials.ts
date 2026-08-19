@@ -1,7 +1,7 @@
 /**
  * 014 — BYOK: credencial e modelo de IA por tenant.
  *
- * O System Clow virou bonus do Territorio Proprio (ver tenancy/modoBonus.ts) e
+ * O System Clow virou bonus do System Clow (ver tenancy/modoBonus.ts) e
  * junto com isso a IA passou a rodar na chave do PROPRIO cliente. Sem essa
  * tabela, o custo por mensagem continuaria sendo nosso — que era justamente o
  * que a cota existia pra conter.

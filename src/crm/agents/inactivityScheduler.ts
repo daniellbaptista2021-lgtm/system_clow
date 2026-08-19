@@ -242,7 +242,7 @@ function forceMornoNoLLM(row: EligibleRow, fireCount: number): void {
  *  rastrear qual canal o cliente USOU originalmente (via activity log). */
 function pickChannelForCard(tenantId: string, card: any): Channel2 | null {
   const channels = store.listChannels(tenantId);
-  return channels.find((c: any) => c.status === 'active' && (c.type === 'zapi' || c.type === 'meta'))
+  return channels.find((c: any) => c.status === 'active' && (c.type === 'evolution' || c.type === 'meta'))
     ?? channels[0]
     ?? null;
 }

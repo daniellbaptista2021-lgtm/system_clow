@@ -179,18 +179,6 @@ async function markAsRead(messageId: string): Promise<void> {
   }
 }
 
-async function sendReaction(messageId: string, emoji: string): Promise<void> {
-  const config = getMetaConfig();
-  if (!config) return;
-
-  try {
-    const url = `https://graph.facebook.com/${config.apiVersion}/${config.phoneNumberId}/messages`;
-    // We need the recipient phone for reactions — skip if we don't have context
-    // This is a fire-and-forget UX enhancement
-  } catch {
-    // Non-critical
-  }
-}
 
 // ─── Audio Transcription (Google Speech-to-Text) ───────────────────────────
 

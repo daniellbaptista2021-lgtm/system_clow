@@ -758,13 +758,13 @@ app.post('/api/billing/whatsapp-addon/checkout', async (c) => {
       success_url: publicBase() + '/crm/?wa_addon_paid=1&session_id={CHECKOUT_SESSION_ID}',
       cancel_url: publicBase() + '/crm/?wa_addon_cancelled=1',
       metadata: {
-        type: 'whatsapp_addon_zapi',
+        type: 'whatsapp_addon_meta',
         tenant_id: t.id,
         tenant_email: t.email,
       },
       subscription_data: {
         metadata: {
-          type: 'whatsapp_addon_zapi',
+          type: 'whatsapp_addon_meta',
           tenant_id: t.id,
           parent_subscription_id: t.stripe_subscription_id || '',
         },

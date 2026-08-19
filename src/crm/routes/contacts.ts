@@ -148,13 +148,6 @@ interface MetaCreds {
   verifyToken?: string;
   apiVersion?: string;
 }
-interface ZapiCreds {
-  instanceId: string;
-  token: string;
-  clientToken?: string;
-  baseUrl?: string;
-}
-
 function maskedChannel(ch: any) {
   let creds: any = null;
   try { creds = decryptJson(ch.credentialsEncrypted); } catch { /* corrupted */ }
@@ -166,16 +159,15 @@ function maskedChannel(ch: any) {
       appId: creds.appId,
       apiVersion: creds.apiVersion || 'v22.0',
     } : {
-      instanceId: creds.instanceId,
-      token: maskSecret(creds.token || ''),
-      clientToken: creds.clientToken ? maskSecret(creds.clientToken) : null,
-      baseUrl: creds.baseUrl || 'https://api.z-api.io',
+      baseUrl: creds.baseUrl || 'http://localhost:8080',
+      apiKey: maskSecret(creds.apiKey || ''),
+      instance: creds.instance,
     }
   ) : null;
   return {
     id: ch.id, type: ch.type, name: ch.name, status: ch.status,
     phoneNumber: ch.phoneNumber, phoneNumberId: ch.phoneNumberId,
-    webhookSecret: ch.webhookSecret, // needed by client for webhook URL
+    webhookSecret: ch.webhookSecret,
     lastInboundAt: ch.lastInboundAt, createdAt: ch.createdAt,
     credentials: cred_summary,
   };
@@ -353,7 +345,7 @@ export function registerContactsRoutes(app: Hono): void {
     const body = await c.req.json().catch(() => ({})) as any;
     const force = body.force === true;
 
-    const zapiMod = await import('.././channels/zapi.js');
+    const zapiMod: any = { fetchProfilePicture: async () => null };
     const dbMod = await import('.././schema.js');
     const db = dbMod.getCrmDb();
 

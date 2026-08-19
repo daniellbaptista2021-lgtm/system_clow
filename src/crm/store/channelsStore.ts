@@ -123,16 +123,7 @@ export async function channelHealthCheck(tenantId: string, channelId: string): P
       } else {
         errors.push(`meta_api_http_${res.status}`);
       }
-    } else if (ch.type === 'zapi') {
-      // Z-API /status endpoint
-      const url = `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.instanceToken}/status`;
-      const res = await fetch(url);
-      apiReachable = true;
-      if (res.ok) {
-        const data: any = await res.json();
-        tokenValid = true;
-        phoneActive = !!(data.connected || data.session);
-      } else { errors.push(`zapi_http_${res.status}`); }
+
     }
   } catch (err: any) {
     errors.push(err.message || 'health_check_failed');

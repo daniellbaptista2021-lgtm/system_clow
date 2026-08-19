@@ -1,4 +1,4 @@
-// Território Próprio PWA Service Worker — v118
+// System Clow PWA Service Worker — v118
 // Bypass: /v1/* /auth/* /webhooks/* /crm/* /downloads/* — sempre fresh do server
 // Cache: assets estaticos do shell (icons, manifest)
 // v118: bump pra invalidar cache de icones antigos (bege/dourado) — agora

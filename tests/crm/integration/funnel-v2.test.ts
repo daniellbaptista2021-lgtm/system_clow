@@ -354,7 +354,7 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
     const card = createCardInColumn(tenantId, board.id, cols[0].id, 'qualificador');
     const ctx = {
       tenantId,
-      channel: { id: 'ch_x', tenantId, type: 'zapi' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      channel: { id: 'ch_x', tenantId, type: 'evolution' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
       card, column: cols[0],
       state: agentState.getCardAgentState(card.id),
       customerPhone: '+5511990000000', role: 'qualificador',
@@ -405,7 +405,7 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
     const card = createCardInColumn(tenantId, board.id, cols[0].id, 'qualificador');
     const ctx = {
       tenantId,
-      channel: { id: 'ch_x', tenantId, type: 'zapi' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      channel: { id: 'ch_x', tenantId, type: 'evolution' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
       card, column: cols[0],
       state: agentState.getCardAgentState(card.id),
       customerPhone: '+5511990000099', role: 'qualificador',
@@ -440,7 +440,7 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
     const card = createCardInColumn(tenantId, board.id, cols[0].id, 'coletor');
     const ctx = {
       tenantId,
-      channel: { id: 'ch_x', tenantId, type: 'zapi' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      channel: { id: 'ch_x', tenantId, type: 'evolution' as const, name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
       card, column: cols[0],
       state: agentState.getCardAgentState(card.id),
       customerPhone: '+5511990000888', role: 'coletor',

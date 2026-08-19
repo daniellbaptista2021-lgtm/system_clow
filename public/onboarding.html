@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Território Próprio — Configuração inicial</title>
+<title>System Clow — Configuração inicial</title>
 <style>
 :root{--bg:#08081a;--bg-2:#0F0F24;--bg-3:#14142A;--text:#E8E8F0;--text-dim:#9898B8;--text-faint:#6E6E8C;--purple:#E10600;--blue:#FF1F18;--green:#22C55E;--red:#EF4444;--border:rgba(255,255,255,.08);--border-2:rgba(225,6,0,.22);--grad:linear-gradient(135deg,#E10600,#FF1F18)}
 *{box-sizing:border-box}
@@ -78,13 +78,13 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
   <div class="card">
     <!-- STEP 1: Welcome -->
     <div class="step active" data-step="1">
-      <h1>Bem-vindo ao <span class="grad">Território Próprio</span>, <span id="firstName">amigo</span>!</h1>
+      <h1>Bem-vindo ao <span class="grad">System Clow</span>, <span id="firstName">amigo</span>!</h1>
       <p class="sub">Vamos configurar seu workspace em 3 minutos. Você vai sair com CRM + WhatsApp + automações rodando.</p>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;margin:20px 0">
         <div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:10px">O que vamos fazer:</div>
         <div style="font-size:13px;color:var(--text-dim);line-height:2">
           1. ✅ Confirmar seus telefones autorizados<br>
-          2. 📱 Conectar seu canal WhatsApp (Meta ou Z-API)<br>
+          2. 📱 Conectar seu canal WhatsApp (Meta ou Evolution API)<br>
           3. ⚡ Instalar automações prontas (opcional)<br>
           4. 🚀 Pronto pra atender
         </div>
@@ -123,9 +123,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
           <div class="name">Meta Cloud API</div>
           <div class="desc">Oficial. Grátis até 1000 conversas. Aprovado Meta.</div>
         </div>
-        <div class="choice-card" data-provider="zapi" onclick="selectProvider('zapi')">
+        <div class="choice-card" data-provider="evolution" onclick="selectProvider('evolution')">
           <div class="ico">⚡</div>
-          <div class="name">Z-API</div>
+          <div class="name">Evolution API</div>
           <div class="desc">BR. Simples. QR code. Sem aprovação.</div>
         </div>
       </div>
@@ -145,20 +145,20 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
         </div>
       </div>
 
-      <div id="zapiFields" style="display:none">
+      <div id="evolutionFields" style="display:none">
         <div class="two-col">
           <div class="field">
             <label>Instance ID</label>
-            <input type="text" id="zapiInstance" placeholder="ex: 3A2F8B...">
+            <input type="text" id="evolutionInstance" placeholder="ex: 3A2F8B...">
           </div>
           <div class="field">
             <label>Token</label>
-            <input type="text" id="zapiToken" placeholder="token da instância">
+            <input type="text" id="evolutionToken" placeholder="token da instância">
           </div>
         </div>
         <div class="field">
           <label>Client-Token (opcional)</label>
-          <input type="text" id="zapiClient" placeholder="deixa vazio se não usa">
+          <input type="text" id="evolutionClient" placeholder="deixa vazio se não usa">
         </div>
       </div>
 
@@ -296,7 +296,7 @@ function selectProvider(p) {
   state.provider = p;
   document.querySelectorAll('.choice-card').forEach(c => c.classList.toggle('selected', c.dataset.provider === p));
   document.getElementById('metaFields').style.display = p === 'meta' ? '' : 'none';
-  document.getElementById('zapiFields').style.display = p === 'zapi' ? '' : 'none';
+  document.getElementById('evolutionFields').style.display = p === 'evolution' ? '' : 'none';
   document.getElementById('verifyTokenBlock').style.display = p === 'meta' ? '' : 'none';
   updateWebhookPreview();
 }
@@ -318,7 +318,7 @@ function copyVerify() {
 }
 
 async function connectChannel() {
-  // First exchange Território Próprio token → CRM api_key
+  // First exchange System Clow token → CRM api_key
   const btn = document.getElementById('connectBtn');
   btn.disabled = true; btn.textContent = 'Conectando...';
   const errEl = document.getElementById('err3');
@@ -335,15 +335,15 @@ async function connectChannel() {
       verifyToken: state.verifyToken,
       apiVersion: 'v22.0',
     } : {
-      instanceId: document.getElementById('zapiInstance').value.trim(),
-      token: document.getElementById('zapiToken').value.trim(),
-      clientToken: document.getElementById('zapiClient').value.trim() || undefined,
+      instanceId: document.getElementById('evolutionInstance').value.trim(),
+      token: document.getElementById('evolutionToken').value.trim(),
+      clientToken: document.getElementById('evolutionClient').value.trim() || undefined,
     };
 
     if (state.provider === 'meta' && (!creds.accessToken || !creds.phoneNumberId)) {
       throw new Error('Preencha Access Token e Phone Number ID.');
     }
-    if (state.provider === 'zapi' && (!creds.instanceId || !creds.token)) {
+    if (state.provider === 'evolution' && (!creds.instanceId || !creds.token)) {
       throw new Error('Preencha Instance ID e Token.');
     }
 

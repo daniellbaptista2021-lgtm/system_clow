@@ -1,0 +1,102 @@
+##
+## docker-compose.evolution.yml — Evolution API para o System Clow
+##
+## Sobe a Evolution API (WhatsApp) + PostgreSQL + Redis.
+## O System Clow se conecta à Evolution via HTTP no port 8080.
+##
+## Uso:
+##   docker compose -f deploy/docker-compose.evolution.yml up -d
+##
+## Após subir, configure no .env:
+##   EVOLUTION_API_URL=http://localhost:8080
+##   EVOLUTION_API_KEY=<sua chave definida abaixo>
+##
+
+services:
+  evolution-api:
+    container_name: evolution_api
+    image: atendai/evolution-api:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # ─── Server ─────────────────────────────────────────────────────
+      - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8080}
+      - SERVER_PORT=8080
+
+      # ─── Auth ───────────────────────────────────────────────────────
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:-change_me_evolution_api_key}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+
+      # ─── Database ──────────────────────────────────────────────────
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${EVOLUTION_PG_PASSWORD:-evolution_pg_secret}@evolution-postgres:5432/evolution_db
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+
+      # ─── Cache ─────────────────────────────────────────────────────
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evolution-redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+
+      # ─── Webhook (base64 para mídia inline) ────────────────────────
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+
+      # ─── Logs ──────────────────────────────────────────────────────
+      - LOG_LEVEL=WARN
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    networks:
+      - evolution-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  evolution-postgres:
+    container_name: evolution_postgres
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=evolution_db
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${EVOLUTION_PG_PASSWORD:-evolution_pg_secret}
+    volumes:
+      - evolution-pgdata:/var/lib/postgresql/data
+    networks:
+      - evolution-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-redis:
+    container_name: evolution_redis
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - evolution-redisdata:/data
+    networks:
+      - evolution-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  evolution-net:
+    driver: bridge
+
+volumes:
+  evolution-pgdata:
+  evolution-redisdata:

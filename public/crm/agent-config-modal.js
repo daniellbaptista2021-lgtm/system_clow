@@ -82,7 +82,7 @@
       .agent-config-modal .toggle input:checked + .slider { background:#22c55e; }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
-      /* Botão integrado ao tema do Território Próprio — vai dentro de .col-head */
+      /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
       .col-agent-btn {
         display: inline-flex; align-items: center; gap: 4px;
         background: var(--bg-3); border: 1px solid var(--border);

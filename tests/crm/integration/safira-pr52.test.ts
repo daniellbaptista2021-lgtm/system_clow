@@ -55,7 +55,7 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
       cardId: card.id, columnId: cols[0].id, currentAgentRole: role, tenantId, status: 'active',
     });
     return {
-      tenantId, channel: { id: 'ch_x', tenantId, type: 'zapi', name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      tenantId, channel: { id: 'ch_x', tenantId, type: 'evolution', name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
       card, column: cols[0], state, customerPhone: '+5511990000000', role,
     };
   }
@@ -280,7 +280,7 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
       cardId: card.id, columnId: cols[0].id, currentAgentRole: 'qualificador', tenantId, status: 'active',
     });
     const ctx = {
-      tenantId, channel: { id: 'ch_x', tenantId, type: 'zapi', name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
+      tenantId, channel: { id: 'ch_x', tenantId, type: 'evolution', name: 't', credentialsEncrypted: '', webhookSecret: 'w', createdAt: Date.now() },
       card, column: cols[0], state, customerPhone: contact.phone, role: 'qualificador',
     };
     const r = await registry.executeToolCall({

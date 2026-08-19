@@ -50,7 +50,7 @@ describe('Column Agent Tools — integration', () => {
   function makeFakeChannel(tenantId: string) {
     return {
       id: 'ch_' + randomBytes(4).toString('hex'),
-      tenantId, type: 'zapi' as const, name: 'Test',
+      tenantId, type: 'evolution' as const, name: 'Test',
       credentialsEncrypted: '', webhookSecret: 'wh',
       createdAt: Date.now(),
     };

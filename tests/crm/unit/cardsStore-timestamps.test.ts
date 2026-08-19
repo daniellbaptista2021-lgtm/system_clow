@@ -134,7 +134,7 @@ describe('cardsStore — column_changed_at / last_bot_message_at / last_client_m
     const t0 = Date.now();
     store.logActivity(tenantId, {
       cardId: card.id, contactId: card.contactId,
-      type: 'message_out', channel: 'whatsapp_zapi', direction: 'out', content: 'oi',
+      type: 'message_out', channel: 'whatsapp_evolution', direction: 'out', content: 'oi',
     });
     const row = readCard(card.id);
     expect(row.last_bot_message_at).toBeGreaterThanOrEqual(t0);
@@ -150,7 +150,7 @@ describe('cardsStore — column_changed_at / last_bot_message_at / last_client_m
     const t0 = Date.now();
     store.logActivity(tenantId, {
       cardId: card.id, contactId: card.contactId,
-      type: 'message_in', channel: 'whatsapp_zapi', direction: 'in', content: 'oi do cliente',
+      type: 'message_in', channel: 'whatsapp_evolution', direction: 'in', content: 'oi do cliente',
     });
     const row = readCard(card.id);
     expect(row.last_client_message_at).toBeGreaterThanOrEqual(t0);
@@ -183,7 +183,7 @@ describe('cardsStore — column_changed_at / last_bot_message_at / last_client_m
 
     store.logActivity(tenantId, {
       cardId: card.id, contactId: card.contactId,
-      type: 'message_out', channel: 'whatsapp_zapi', direction: 'out', content: 'oi',
+      type: 'message_out', channel: 'whatsapp_evolution', direction: 'out', content: 'oi',
     });
     // Faz parecer que bot mandou ha 31 min
     schema.getCrmDb().prepare('UPDATE crm_cards SET last_bot_message_at = ? WHERE id = ?')
@@ -202,7 +202,7 @@ describe('cardsStore — column_changed_at / last_bot_message_at / last_client_m
     // Bot mandou ha 31 min
     store.logActivity(tenantId, {
       cardId: card.id, contactId: card.contactId,
-      type: 'message_out', channel: 'whatsapp_zapi', direction: 'out', content: 'oi',
+      type: 'message_out', channel: 'whatsapp_evolution', direction: 'out', content: 'oi',
     });
     schema.getCrmDb().prepare('UPDATE crm_cards SET last_bot_message_at = ? WHERE id = ?')
       .run(Date.now() - 31 * 60_000, card.id);
@@ -214,7 +214,7 @@ describe('cardsStore — column_changed_at / last_bot_message_at / last_client_m
     // Cliente responde agora
     store.logActivity(tenantId, {
       cardId: card.id, contactId: card.contactId,
-      type: 'message_in', channel: 'whatsapp_zapi', direction: 'in', content: 'opa',
+      type: 'message_in', channel: 'whatsapp_evolution', direction: 'in', content: 'opa',
     });
 
     // Agora chase NAO deve mais pegar

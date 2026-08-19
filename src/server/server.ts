@@ -41,7 +41,6 @@ import n8nRoutes from '../billing/n8nRoutes.js';
 import { PluginMcpLoader } from '../plugins/components/PluginMcpLoader.js';
 import { buildRoutes } from './routes.js';
 import { buildAdminRoutes, buildBillingRoutes } from './adminRoutes.js';
-import { buildWhatsAppRoutes } from '../adapters/whatsapp.js';
 import { buildMetaWhatsAppRoutes } from '../adapters/whatsappMeta.js';
 import { buildBridgeRoutes } from './bridgeRoutes.js';
 import { buildMCPRemoteRoutes } from './mcpRemoteServer.js';
@@ -229,15 +228,16 @@ async function main(): Promise<void> {
   const { honoSentryErrorHandler } = await import('../utils/sentry.js');
   app.onError(honoSentryErrorHandler);
 
-  // CORS is opt-in via allowlist. Same-origin requests work without these headers.
-  if (allowedCorsOrigins.length > 0) {
-    app.use('*', compress());
+  // Compression + CDN + DB pragmas run unconditionally
+  app.use('*', compress());
   app.use('*', cdnMiddleware());
-  // Apply DB pragmas on boot (idempotent)
   try { applyCrmPragmas(); } catch { /* DB not open yet */ }
-  app.use('*', cors({
+
+  // CORS is opt-in via allowlist
+  if (allowedCorsOrigins.length > 0) {
+    app.use('*', cors({
       origin: (origin) => isOriginAllowed(origin, allowedCorsOrigins) ? (origin || '') : '',
-      allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
     }));
   }
@@ -297,10 +297,6 @@ async function main(): Promise<void> {
   // Mount bridge routes
   const bridgeRoutes = buildBridgeRoutes();
   app.route('/', bridgeRoutes);
-
-  // Mount WhatsApp adapters
-  const whatsappRoutes = buildWhatsAppRoutes(pool);
-  app.route('/', whatsappRoutes);
 
   // Mount Meta WhatsApp Official API adapter
   const metaWhatsAppRoutes = buildMetaWhatsAppRoutes(pool);
@@ -643,7 +639,7 @@ async function main(): Promise<void> {
   logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate
-  const useHttps = process.env.CLOW_USE_HTTPS !== 'false';
+  const useHttps = process.env.CLOW_USE_HTTPS === 'true';
   
   if (useHttps) {
     const { key, cert } = ensureSSLCertificates();
@@ -652,13 +648,13 @@ async function main(): Promise<void> {
       logger.info(`  Listening on https://localhost:${PORT}`);
       logger.info(`  Health: https://localhost:${PORT}/health`);
       logger.info(`  MCP: https://localhost:${PORT}/mcp`);
-      logger.info(`  Webhook: https://localhost:${PORT}/webhooks/zapi\n`);
+      logger.info(`  Webhook: https://localhost:${PORT}/webhooks/crm/evolution\n`);
     });
   } else {
     serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
       logger.info(`  Listening on http://localhost:${info.port}`);
       logger.info(`  Health: http://localhost:${info.port}/health`);
-      logger.info(`  Webhook: http://localhost:${info.port}/webhooks/zapi\n`);
+      logger.info(`  Webhook: http://localhost:${info.port}/webhooks/crm/evolution\n`);
     });
   }
 }

@@ -71,7 +71,7 @@ describe('Column Agent — integration', () => {
     return {
       id: 'ch_' + randomBytes(4).toString('hex'),
       tenantId,
-      type: 'zapi' as const,
+      type: 'evolution' as const,
       name: 'Test Channel',
       credentialsEncrypted: '',
       webhookSecret: 'wh_test',
@@ -328,12 +328,12 @@ describe('Column Agent — integration', () => {
     const X = 'Olá! Eu sou a Safira, posso te ajudar?';
     store.logActivity(tenantId, {
       cardId: card.id, contactId: contact.id, type: 'message_in',
-      channel: 'whatsapp_zapi', direction: 'in', content: 'oi',
+      channel: 'whatsapp_evolution', direction: 'in', content: 'oi',
       providerMessageId: 'in-1',
     });
     store.logActivity(tenantId, {
       cardId: card.id, contactId: contact.id, type: 'message_out',
-      channel: 'whatsapp_zapi', direction: 'out', content: X,
+      channel: 'whatsapp_evolution', direction: 'out', content: X,
       providerMessageId: 'out-1',
     });
 

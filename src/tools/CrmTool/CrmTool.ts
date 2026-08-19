@@ -279,7 +279,7 @@ const SendWhatsAppSchema = z.object({
 export const CrmSendWhatsAppTool = buildTool<z.infer<typeof SendWhatsAppSchema>>({
   name: 'crm_send_whatsapp',
   searchHint: 'crm whatsapp send message message text reply',
-  description: `Envia mensagem WhatsApp pelo canal CRM (Meta ou Z-API). Loga automaticamente como message_out na timeline.
+  description: `Envia mensagem WhatsApp pelo canal CRM (Meta ou Evolution API). Loga automaticamente como message_out na timeline.
 Precisa do canal estar configurado em /crm/ (aba Canais).`,
   inputSchema: SendWhatsAppSchema,
   userFacingName: (i) => i ? `crm_send_whatsapp(${i.contactId || i.toPhone})` : 'crm_send_whatsapp',
@@ -1198,7 +1198,7 @@ sao retornados por card.`,
 
     // Resolve channel WhatsApp do tenant
     const channels = crm.listChannels?.(t) || [];
-    const channel = channels.find((c: any) => (c.type === 'meta' || c.type === 'zapi') && c.status !== 'inactive');
+    const channel = channels.find((c: any) => (c.type === 'meta' || c.type === 'evolution') && c.status !== 'inactive');
     if (!channel) {
       return { output: { error: 'no_channel' }, outputText: '❌ Nenhum canal WhatsApp ativo neste tenant.', isError: true };
     }
