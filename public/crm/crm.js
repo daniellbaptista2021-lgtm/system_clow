@@ -2214,7 +2214,7 @@ async function openSchedulingLinksModal() {
         el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px' }, `${lk.durationMinutes}min • ${lk.totalBookings || 0} agendamentos`),
         el('div', { style: 'display:flex;gap:6px' },
           el('button', { style: 'flex:1;padding:6px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer;font-size:11px', on: { click: () => copyTextDialog('URL pública:', url) } }, '🔗 Link'),
-          el('button', { style: 'padding:6px 10px;background:transparent;border:1px solid #f87171;color:#f87171;border-radius:4px;cursor:pointer;font-size:11px', on: { click: async () => {
+          el('button', { style: 'padding:6px 10px;background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:4px;cursor:pointer;font-size:11px', on: { click: async () => {
             if (!confirm('Deletar?')) return;
             await api(`/scheduling-links/${lk.id}`, { method: 'DELETE' });
             links = links.filter(x => x.id !== lk.id); renderList();
@@ -2500,7 +2500,7 @@ function openFormEditModal(form) {
             s.append(o);
           }
           return s; })(),
-        el('button', { type: 'button', style: 'background:transparent;border:1px solid #f87171;color:#f87171;padding:4px 8px;border-radius:4px;cursor:pointer', on: { click: () => { fields.splice(i, 1); renderFields(); } } }, '×'),
+        el('button', { type: 'button', style: 'background:transparent;border:1px solid var(--danger);color:var(--danger);padding:4px 8px;border-radius:4px;cursor:pointer', on: { click: () => { fields.splice(i, 1); renderFields(); } } }, '×'),
       ));
     });
     fieldsContainer.append(el('button', { type: 'button', style: 'background:var(--bg-3);border:1px dashed var(--border);color:var(--text-dim);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;width:100%;margin-top:4px', on: { click: () => { fields.push({ name: 'field_' + Date.now(), label: 'Novo campo', type: 'text' }); renderFields(); } } }, '+ Adicionar campo'));
@@ -2623,7 +2623,7 @@ async function renderCampaignsView() {
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Enviados'), el('div', { style: 'font-weight:600;font-size:16px' }, String(c.stats_sent || 0))),
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Abertos'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--green)' }, `${c.stats_opened || 0} (${openRate})`)),
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Cliques'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--blue)' }, `${c.stats_clicked || 0} (${clickRate})`)),
-          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Bounced'), el('div', { style: 'font-weight:600;font-size:16px;color:#F87171' }, String(c.stats_bounced || 0))),
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Bounced'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--danger)' }, String(c.stats_bounced || 0))),
         ),
       ));
     }
@@ -2905,7 +2905,7 @@ function renderChannelsList() {
               class: 'save-btn',
               style: 'flex:1;min-width:170px;font-size:12px;padding:9px;font-weight:700;' +
                 (ch.status === 'active'
-                  ? 'background:rgba(34,197,94,.12);color:#4ADE80;border:1px solid rgba(34,197,94,.35)'
+                  ? 'background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.35)'
                   : 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;border:none'),
               on: { click: () => {
                 if (!window.PareamentoWhatsApp) { toast('Tela de conexão não carregou', 'error'); return; }
@@ -3547,7 +3547,7 @@ async function openSchedulesModal() {
             schedules = schedules.filter(x => x.id !== s.id);
             renderList();
           } catch (e) { toast('Erro: ' + e.message, 'error'); }
-        } }, style: 'color:#f87171' }, 'Remover'),
+        } }, style: 'color:var(--danger)' }, 'Remover'),
       );
       list.append(row);
     }
@@ -4062,7 +4062,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#F87171">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
     }
   }
 })();
@@ -4221,7 +4221,7 @@ async function renderInsightsView() {
       list.append(row);
     }
     container.append(list);
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 async function openCardAIInsights(cardId) {
@@ -4297,7 +4297,7 @@ async function openCardAIInsights(cardId) {
         }, '📝 Resumo conversa'),
       ),
     );
-  } catch (e) { body.innerHTML = '<div style="color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { body.innerHTML = '<div style="color:var(--danger)">' + e.message + '</div>'; }
 }
 
 // ═════════ PERFORMANCE / GAMIFICAÇÃO ═════════════════════════════════════
@@ -4395,7 +4395,7 @@ async function renderPerformanceView() {
       }
       container.append(bContainer);
     }
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 function openNewGoalModal() {
@@ -4498,7 +4498,7 @@ async function renderSecurityView() {
         ));
       }
     }
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 function openNewRoleModal() {
@@ -4643,7 +4643,7 @@ async function renderPrivacyView() {
       el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:6px' }, `${unsubs.unsubscribes?.length || 0} emails que cancelaram inscrição`),
       ...(unsubs.unsubscribes || []).slice(0, 5).map(u => el('div', { style: 'font-size:11px;font-family:monospace;color:var(--text-dim);padding:2px 0' }, u.email + ' • ' + new Date(u.created_at).toLocaleDateString('pt-BR'))),
     ));
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 async function openLgpdContactModal(contactId) {
@@ -4664,7 +4664,7 @@ async function openLgpdContactModal(contactId) {
         on: { click: () => window.open(API_BASE + `/contacts/${contactId}/portability?format=download`, '_blank') },
       }, '📤 Exportar (JSON)'),
       el('button', {
-        style: 'padding:10px;background:#fbbf24;color:#fff;border:0;border-radius:6px;cursor:pointer',
+        style: 'padding:10px;background:var(--warning);color:#fff;border:0;border-radius:6px;cursor:pointer',
         on: { click: async () => {
           if (!confirm('Anonimizar este contato? PII será removida (nome, email, phone). Estrutura mantida.')) return;
           try {
@@ -4675,7 +4675,7 @@ async function openLgpdContactModal(contactId) {
         } },
       }, '🥸 Anonimizar'),
       el('button', {
-        style: 'padding:10px;background:#f87171;color:#fff;border:0;border-radius:6px;cursor:pointer;grid-column:span 2',
+        style: 'padding:10px;background:var(--danger);color:#fff;border:0;border-radius:6px;cursor:pointer;grid-column:span 2',
         on: { click: async () => {
           if (!confirm('DELETAR PERMANENTEMENTE este contato e TODOS os dados (cards/atividades/notas)? Sem volta.')) return;
           try {
@@ -4686,7 +4686,7 @@ async function openLgpdContactModal(contactId) {
         } },
       }, '🗑️ Direito ao Esquecimento (DELETE)'),
     ));
-  } catch (e) { body.append(el('div', { style: 'color:#f87171' }, e.message)); }
+  } catch (e) { body.append(el('div', { style: 'color:var(--danger)' }, e.message)); }
   const { backdrop } = openModal({ title: 'LGPD: ' + contactId, bodyEl: body, width: '560px' });
 }
 
@@ -4761,7 +4761,7 @@ async function renderTrashView() {
         );
       }),
     ));
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 async function showTrashEntity(entity) {
@@ -4784,7 +4784,7 @@ async function showTrashEntity(entity) {
             } },
           }, 'Restaurar'),
           el('button', {
-            style: 'background:#f87171;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
+            style: 'background:var(--danger);color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
             on: { click: async () => {
               if (!confirm('DELETAR permanentemente?')) return;
               await api(`/trash/${entity}/${it.id}/purge`, { method: 'DELETE' });
@@ -4830,7 +4830,7 @@ async function renderAITab(card) {
         } },
       }, '💡 Sugerir próximo passo'),
     ));
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 async function renderLinksTab(card) {
@@ -5263,7 +5263,7 @@ async function renderCommentsTab(card) {
     );
     wrap.append(form);
     sec.append(wrap);
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#f87171">' + e.message + '</div>'; }
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:var(--danger)">' + e.message + '</div>'; }
 }
 
 // Hook: when openCardPanel runs, populate the new tabs (AI/Links/Comments)
@@ -5557,7 +5557,7 @@ async function openChannelInboxConfig(channel) {
       ),
       el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px' },
         'Última mensagem recebida: ',
-        el('span', { style: info.lastInboundAt ? 'color:var(--green)' : 'color:#f87171' },
+        el('span', { style: info.lastInboundAt ? 'color:var(--green)' : 'color:var(--danger)' },
           info.lastInboundAt ? new Date(info.lastInboundAt).toLocaleString('pt-BR') : '⚠️ Nunca (webhook não configurado?)'),
       ),
     ));
@@ -5651,7 +5651,7 @@ async function openChannelInboxConfig(channel) {
     }, '🚀 Disparar simulação');
     body.append(simPhone, simName, simText, simBtn);
   } catch (e) {
-    body.innerHTML = '<div style="padding:20px;color:#f87171">Erro: ' + e.message + '</div>';
+    body.innerHTML = '<div style="padding:20px;color:var(--danger)">Erro: ' + e.message + '</div>';
   }
 }
 
@@ -6302,7 +6302,7 @@ async function openevolutionCheckoutFlow(me) {
   const waitDialog = el('div', { class: 'modal-backdrop' });
   let cancelled = false;
   const waitModal = el('div', { class: 'modal', style: 'max-width:480px;text-align:center' },
-    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:#4ADE80;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:var(--success);border-radius:50%;animation:bootspin .9s linear infinite' }),
     el('h3', {}, 'Aguardando pagamento...'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;line-height:1.6' },
       'Complete o pagamento na aba do Stripe que acabou de abrir.',
@@ -6460,7 +6460,7 @@ function openImportContactsModal() {
           renderSuccess(data, file.name);
         } catch (e) {
           errorBox.innerHTML = '';
-          errorBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:#fca5a5' }, '⚠ Erro: ' + e.message));
+          errorBox.append(el('div', { style: 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:14px;border-radius:8px;color:var(--danger)' }, '⚠ Erro: ' + e.message));
           submitBtn.disabled = false; submitBtn.textContent = 'Importar';
         }
       } }
@@ -6479,7 +6479,7 @@ function openImportContactsModal() {
           el('div', {}, '• address / endereço, cpf / cnpj / cnpj/cpf'),
           el('div', {}, '• tags (separadas por ; ou |), notes / observações'),
           el('div', {}, '• source / origem (default: "import")'),
-          el('div', { style: 'margin-top:6px;color:#fbbf24' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
+          el('div', { style: 'margin-top:6px;color:var(--warning)' }, '↻ Se phone ou email já existir, o contato é ATUALIZADO (não duplicado).'),
         ),
       ),
       el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:600' }, 'Arquivo (.csv, .xlsx)'),
@@ -6521,14 +6521,14 @@ function openImportContactsModal() {
       ),
       // Header mapping (collapsed por padrão se sucesso)
       (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-3);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
-        el('summary', { style: 'font-size:12px;color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
-        el('div', { style: 'background:rgba(225,6,0,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
+        el('summary', { style: 'font-size:12px;color:var(--primary);font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
+        el('div', { style: 'background:rgba(225,6,0,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--text-2)' },
           ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),
         ),
       ) : null,
       // Errors (se houver)
       (data.errors && data.errors.length) ? el('details', { style: 'background:rgba(239,68,68,0.05);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer' },
-        el('summary', { style: 'font-size:12px;color:#fca5a5;font-weight:600' }, '⚠ ' + data.errors.length + ' linha(s) com erro'),
+        el('summary', { style: 'font-size:12px;color:var(--danger);font-weight:600' }, '⚠ ' + data.errors.length + ' linha(s) com erro'),
         el('div', { style: 'background:rgba(239,68,68,0.05);padding:10px;border-radius:6px;margin-top:8px;max-height:160px;overflow-y:auto;font-size:11px;font-family:monospace' },
           ...data.errors.slice(0, 100).map(e => el('div', {}, 'linha ' + e.line + ': ' + e.error)),
           data.errors.length > 100 ? el('div', { style: 'margin-top:6px;font-style:italic' }, '...e mais ' + (data.errors.length - 100) + ' erros') : null,

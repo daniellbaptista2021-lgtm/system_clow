@@ -63,17 +63,36 @@
   --warning: var(--amber);
 }
 
-/* ─── Tema claro ──────────────────────────────────────────────────────
- * Escuro é o padrão (:root acima). "Sistema" só troca quando o SO pede
- * claro; "Claro" força independente do SO. O vermelho da marca não muda
- * em nenhum tema — só o fundo/texto/borda invertem. */
+/* ═══ TEMAS ══════════════════════════════════════════════════════════════
+ *
+ * Três temas, cada um com identidade própria:
+ *
+ *   dark    — escuro, o padrão (definido em :root acima)
+ *   light   — branco/clean: página quase branca, cards brancos puros
+ *   system  — cinza/neutro: página em cinza médio, cards cinza-claro
+ *
+ * Antes, "system" era uma cópia literal do bloco de "light" — os mesmos 19
+ * tokens com os mesmos valores, dentro de `@media (prefers-color-scheme:
+ * light)`. Escolher um ou outro não mudava um pixel quando o SO estava em
+ * claro, e quando o SO estava em escuro "system" caía no :root e virava o
+ * dark. Ou seja: nunca teve aparência própria.
+ *
+ * Agora os três são fixos e independentes do SO. Quem quiser acompanhar o
+ * sistema operacional escolhe explicitamente claro ou escuro; "system" é o
+ * tema neutro corporativo, e a escolha do usuário é sempre respeitada.
+ *
+ * REGRA: só se define token aqui. Nenhum componente deve carregar cor
+ * literal — se precisar de uma cor nova, ela nasce como token neste bloco.
+ * A diferença entre os temas fica inteira nestas três listas.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="light"],
-html[data-theme="system"] {
-  color-scheme: light;
-}
-html[data-theme="dark"] {
-  color-scheme: dark;
-}
+html[data-theme="system"] { color-scheme: light; }
+
+/* ─── Claro: branco e limpo ───────────────────────────────────────────
+ * A página é quase branca e o card é branco puro: a hierarquia aparece
+ * pela borda e pela sombra, não pela diferença de tom. */
 html[data-theme="light"] {
   --bg: #F7F8FA;
   --bg-2: #FFFFFF;
@@ -84,7 +103,7 @@ html[data-theme="light"] {
   --text: #111827;
   --text-2: #667085;
   --text-dim: #667085;
-  --text-faint: #98A2B3;
+  --text-faint: #79828F;
   --gray: #667085;
   --primary-soft: rgba(239,68,68,.08);
   --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
@@ -97,31 +116,76 @@ html[data-theme="light"] {
   --amber: #B45309;
   --red: #DC2626;
   --info: #2563EB;
+  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.10), rgba(255,31,24,.06));
+  --scroll-thumb: #CDD2D9;
+  --scroll-thumb-hover: #B6BDC7;
+  --overlay: rgba(16,24,40,.42);
+  --shadow-color: rgba(16,24,40,.16);
+  --input-bg: #FFFFFF;
+  --code-bg: #F1F2F4;
+  --on-primary: #FFFFFF;
 }
-html[data-theme="light"] select option { background: #FFFFFF; color: #111827; }
-@media (prefers-color-scheme: light) {
-  html[data-theme="system"] {
-    --bg: #F7F8FA;
-    --bg-2: #FFFFFF;
-    --bg-3: #FFFFFF;
-    --bg-4: #F1F2F4;
-    --border: #E5E7EB;
-    --border-2: rgba(239,68,68,.22);
-    --text: #111827;
-    --text-2: #667085;
-    --text-dim: #667085;
-    --text-faint: #98A2B3;
-    --gray: #667085;
-    --primary-soft: rgba(239,68,68,.08);
-    --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
-    --shadow-md: 0 4px 16px rgba(16,24,40,.08);
-    --shadow-lg: 0 16px 48px rgba(16,24,40,.14);
-    --green: #15803D;
-    --amber: #B45309;
-    --red: #DC2626;
-    --info: #2563EB;
-  }
-  html[data-theme="system"] select option { background: #FFFFFF; color: #111827; }
+
+/* ─── Sistema: cinza neutro ───────────────────────────────────────────
+ * Aqui a hierarquia é o inverso do claro: a página é o tom mais ESCURO da
+ * escala e o card é o mais claro, de modo que o conteúdo pareça pousado
+ * sobre a superfície. É o que dá a leitura "corporativa/neutra" e o que
+ * distingue este tema do claro à primeira vista, sem depender de borda.
+ *
+ * Os cinzas têm um leve viés azulado (matiz ~215°) em vez de cinza puro:
+ * cinza neutro exato ao lado do vermelho da marca puxa para o esverdeado
+ * na percepção, e o conjunto fica sujo. */
+html[data-theme="system"] {
+  --bg: #DDE2E8;
+  --bg-2: #E7EBF0;
+  --bg-3: #F2F4F7;
+  --bg-4: #D3D9E1;
+  --border: #C2CAD4;
+  --border-2: rgba(225,6,0,.30);
+  --text: #1B2430;
+  --text-2: #545D6B;
+  --text-dim: #545D6B;
+  --text-faint: #6E7784;
+  --gray: #545D6B;
+  --primary-soft: rgba(225,6,0,.10);
+  --shadow-sm: 0 1px 2px rgba(27,36,48,.10);
+  --shadow-md: 0 4px 14px rgba(27,36,48,.12);
+  --shadow-lg: 0 16px 44px rgba(27,36,48,.20);
+  /* Mesmas cores de status do claro: o fundo aqui também é claro, então os
+   * tons pastel do dark não teriam contraste suficiente. */
+  --green: #15803D;
+  --amber: #B45309;
+  --red: #C41C1C;
+  --info: #2563EB;
+  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.12), rgba(255,31,24,.07));
+  --scroll-thumb: #B4BDC9;
+  --scroll-thumb-hover: #9AA4B2;
+  --overlay: rgba(27,36,48,.46);
+  --shadow-color: rgba(27,36,48,.20);
+  --input-bg: #FFFFFF;
+  --code-bg: #E7EBF0;
+  --on-primary: #FFFFFF;
+}
+
+/* ─── Tokens que só o escuro precisava definir ────────────────────────
+ * Ficam aqui, e não no :root, para que a lista de cada tema seja lida como
+ * um bloco só. O :root continua sendo o dark de fato. */
+:root {
+  --scroll-thumb: rgba(255,255,255,.14);
+  --scroll-thumb-hover: rgba(255,255,255,.24);
+  --overlay: rgba(0,0,0,.62);
+  --shadow-color: rgba(0,0,0,.28);
+  --input-bg: var(--bg-4);
+  --code-bg: rgba(255,255,255,.06);
+  --on-primary: #FFFFFF;
+}
+
+/* `select` nativo não herda o fundo do tema em todo navegador: sem isto, a
+ * lista abre preta sobre preto no claro. Vale para os dois temas claros. */
+html[data-theme="light"] select option,
+html[data-theme="system"] select option {
+  background: var(--bg-3);
+  color: var(--text);
 }
 
 * { box-sizing: border-box; }
@@ -260,10 +324,17 @@ body {
   letter-spacing: 2.2px;
   text-transform: uppercase;
   color: var(--text-faint);
+  /* O relevo do nome ocupa ~4px abaixo da linha de base, e o subtítulo
+   * subia por cima dessa "parede", parecendo colado. A margem compensa a
+   * extrusão e devolve o ar entre as duas linhas. */
+  margin-top: 7px;
 }
 .brand:hover .brand-word-main { transform: translateY(-1px); }
 
-html[data-theme="light"] .brand-word-main {
+/* Nos dois temas claros a extrusão precisa inverter: a parede escura que
+ * dá volume sobre fundo preto vira um borrão sujo sobre fundo claro. */
+html[data-theme="light"] .brand-word-main,
+html[data-theme="system"] .brand-word-main {
   background: linear-gradient(180deg, #4A4A55 0%, #26262E 55%, #111827 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -273,6 +344,15 @@ html[data-theme="light"] .brand-word-main {
     0 2px 0 #B0B3BA,
     0 3px 1px rgba(16,24,40,.28),
     0 5px 10px rgba(16,24,40,.16);
+}
+/* No cinza a parede é um degrau mais escura: sobre #E7EBF0 o mesmo
+ * #C9CBD1 do claro quase desaparece e o relevo achata. */
+html[data-theme="system"] .brand-word-main {
+  text-shadow:
+    0 1px 0 #B9C1CB,
+    0 2px 0 #A2ABB7,
+    0 3px 1px rgba(27,36,48,.30),
+    0 5px 10px rgba(27,36,48,.18);
 }
 
 /* Sem gradiente recortado: usa a cor chapada em vez de texto invisível. */
@@ -390,8 +470,10 @@ html[data-theme="light"] .brand-word-main {
   background: var(--bg-2); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden; max-height: 100%;
 }
+/* No claro, --bg-2 e --bg-3 são os dois branco puro: a coluna sumiria
+ * contra os cards que carrega. --bg-4 devolve o degrau. O cinza tem escala
+ * própria e não precisa da correção — a coluna já contrasta com o card. */
 html[data-theme="light"] .kanban-col { background: var(--bg-4); }
-@media (prefers-color-scheme: light) { html[data-theme="system"] .kanban-col { background: var(--bg-4); } }
 .col-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px;
@@ -504,7 +586,8 @@ html[data-theme="light"] .kanban-col { background: var(--bg-4); }
   min-width: 500px;
   max-width: 620px;
   z-index: 900;
-  box-shadow: -16px 0 48px rgba(0,0,0,.28);
+  /* --shadow-lg acompanha o tema: preto denso no escuro, cinza leve nos claros. */
+  box-shadow: -16px 0 48px var(--shadow-color, rgba(0,0,0,.28));
   background: var(--bg-2); border-left: 1px solid var(--border);
   display: flex; flex-direction: column;
   overflow: hidden; max-height: 100vh;
@@ -650,7 +733,7 @@ html[data-theme="light"] .kanban-col { background: var(--bg-4); }
   width: 320px; max-width: 100%;
   max-height: 300px;
   background: var(--bg-2); border: 1px solid var(--border);
-  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  border-radius: 10px; box-shadow: var(--shadow-md);
   display: flex; flex-direction: column; overflow: hidden;
   margin-top: 4px;
 }
@@ -768,7 +851,8 @@ input[type="month"], input[type="week"], input[type="color"], textarea, input {
 /* Options do <select> em alguns browsers ainda quebram — forca
    explicito background+color escuro nas options renderizadas (tema claro
    tem seu proprio override mais acima). */
-select option { background: #0F0F24; color: #E8E8F0; }
+/* Fundo do dropdown nativo: o navegador nao herda o do tema. */
+select option { background: var(--bg-3); color: var(--text); }
 /* Kanban tem regras proprias (overflow-x na kanban-board) */
 #kanban {
   flex: 1;
@@ -799,7 +883,7 @@ select option { background: #0F0F24; color: #E8E8F0; }
 /* ─── Modal ──────────────────────────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 9999;
-  background: rgba(0,0,0,.7); backdrop-filter: blur(8px);
+  background: var(--overlay); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
 }
@@ -939,7 +1023,7 @@ select option { background: #0F0F24; color: #E8E8F0; }
   #app .sidebar.open,
   .sidebar.open {
     transform: translateX(0) !important;
-    box-shadow: 4px 0 24px rgba(0,0,0,.5);
+    box-shadow: 4px 0 24px var(--overlay);
     z-index: 1500 !important;
   }
 
@@ -947,7 +1031,7 @@ select option { background: #0F0F24; color: #E8E8F0; }
   .sidebar-backdrop {
     display: none;
     position: fixed; inset: 0;
-    background: rgba(0,0,0,.5);
+    background: var(--overlay);
     z-index: 999;
   }
   .sidebar.open ~ .sidebar-backdrop,
@@ -1161,9 +1245,10 @@ select option { background: #0F0F24; color: #E8E8F0; }
     letter-spacing: .5px !important;
   }
   .sidebar .sidebar-foot .logout-btn {
-    background: rgba(248, 113, 113, 0.1) !important;
-    color: #F87171 !important;
-    border: 1px solid rgba(248, 113, 113, 0.3) !important;
+    /* --danger acompanha o tema: pastel no escuro, saturado nos claros. */
+    background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+    color: var(--danger) !important;
+    border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent) !important;
     padding: 8px 14px !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
@@ -1172,7 +1257,7 @@ select option { background: #0F0F24; color: #E8E8F0; }
     margin-top: 8px !important;
   }
   .sidebar .sidebar-foot .logout-btn:hover {
-    background: rgba(239, 68, 68, 0.2) !important;
+    background: color-mix(in srgb, var(--danger) 22%, transparent) !important;
   }
   /* Brand menor no mobile pra dar espaco aos labels */
   .sidebar .brand {
@@ -1199,7 +1284,14 @@ select option { background: #0F0F24; color: #E8E8F0; }
       0 2px 1px rgba(16,24,40,.26),
       0 4px 8px rgba(16,24,40,.15);
   }
-  .sidebar .brand-word-sub { font-size: 8.5px; letter-spacing: 1.8px; }
+  html[data-theme="system"] .sidebar .brand-word-main {
+    text-shadow:
+      0 1px 0 #B9C1CB,
+      0 2px 1px rgba(27,36,48,.28),
+      0 4px 8px rgba(27,36,48,.17);
+  }
+  /* Relevo menor no mobile pede menos compensação. */
+  .sidebar .brand-word-sub { font-size: 8.5px; letter-spacing: 1.8px; margin-top: 5px; }
 }
 
 

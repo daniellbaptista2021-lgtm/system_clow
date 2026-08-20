@@ -367,7 +367,7 @@
               ),
               tags.length > 0 ? el('div', { style: 'display:flex;gap:5px;margin-top:5px;flex-wrap:wrap' },
                 ...tags.slice(0, 4).map(t => el('span', {
-                  style: 'background:rgba(225,6,0,.16);border:1px solid rgba(225,6,0,.28);color:#C5A4FF;padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
+                  style: 'background:rgba(225,6,0,.16);border:1px solid rgba(225,6,0,.28);color:var(--primary);padding:1px 7px;border-radius:6px;font-size:10.5px;font-weight:600;letter-spacing:.2px',
                 }, t)),
                 tags.length > 4 ? el('span', { style: 'color:var(--text-dim);font-size:10.5px;align-self:center' }, `+${tags.length - 4}`) : null,
               ) : null,
@@ -380,7 +380,7 @@
               // (interno, nao wa.me externo) com template ja no composer.
               (needsAction && contact)
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:#4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
                       mouseenter: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.16)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.50)'; },
                       mouseleave: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.08)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.30)'; },
@@ -436,7 +436,7 @@
                 : null,
               needsAction
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
                       mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
                       mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },

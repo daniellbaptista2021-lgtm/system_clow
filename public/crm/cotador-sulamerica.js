@@ -95,7 +95,7 @@
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .cot-sa-icon{
-  background:transparent;border:none;color:#9898B8;
+  background:transparent;border:none;color:var(--text-dim);
   width:30px;height:30px;border-radius:8px;
   cursor:pointer;font-size:16px;
   display:flex;align-items:center;justify-content:center;

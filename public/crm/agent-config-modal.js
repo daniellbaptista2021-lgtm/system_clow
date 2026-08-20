@@ -54,32 +54,32 @@
     style.id = 'agent-config-modal-styles';
     style.textContent = `
       .agent-config-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; }
-      .agent-config-modal { background:#1f2937; color:#e5e7eb; padding:24px; border-radius:12px; max-width:680px; width:92vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family: ui-sans-serif, system-ui, sans-serif; }
+      .agent-config-modal { background:#1f2937; color:var(--text); padding:24px; border-radius:12px; max-width:680px; width:92vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family: ui-sans-serif, system-ui, sans-serif; }
       .agent-config-modal h2 { margin:0 0 16px 0; font-size:18px; }
-      .agent-config-modal label { display:block; margin-top:12px; font-size:13px; font-weight:600; color:#cbd5e1; }
+      .agent-config-modal label { display:block; margin-top:12px; font-size:13px; font-weight:600; color:var(--text-2); }
       .agent-config-modal input[type="text"], .agent-config-modal input[type="number"], .agent-config-modal select, .agent-config-modal textarea {
-        width:100%; box-sizing:border-box; padding:8px; border:1px solid #374151; border-radius:6px;
-        background:#111827; color:#f1f5f9; margin-top:4px; font-family: ui-monospace, monospace; font-size:13px;
+        width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:6px;
+        background:#111827; color:var(--text); margin-top:4px; font-family: ui-monospace, monospace; font-size:13px;
       }
       .agent-config-modal textarea { min-height:120px; resize:vertical; font-family: ui-monospace, monospace; font-size:12px; }
       .agent-config-modal .row { display:flex; gap:12px; }
       .agent-config-modal .row > * { flex:1; }
       .agent-config-modal .footer { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
       .agent-config-modal button { padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-size:14px; }
-      .agent-config-modal .btn-save { background:#4ade80; color:white; }
-      .agent-config-modal .btn-cancel { background:#374151; color:#e5e7eb; }
+      .agent-config-modal .btn-save { background:var(--success); color:white; }
+      .agent-config-modal .btn-cancel { background:var(--bg-4); color:var(--text); }
       .agent-config-modal .btn-default { background:#3b82f6; color:white; margin-right:auto; }
-      .agent-config-modal .err { color:#f87171; font-size:12px; margin-top:6px; }
-      .agent-config-modal .hint { color:#94a3b8; font-size:11px; font-weight:400; margin-left:6px; }
+      .agent-config-modal .err { color:var(--danger); font-size:12px; margin-top:6px; }
+      .agent-config-modal .hint { color:var(--text-dim); font-size:11px; font-weight:400; margin-left:6px; }
 
       /* Toggle switch (visual, sem mudar o checkbox) */
       .agent-config-modal .switch-row { display:flex; align-items:center; gap:10px; margin-top:8px; }
       .agent-config-modal .switch-row label { margin-top:0; }
       .agent-config-modal .toggle { position:relative; display:inline-block; width:44px; height:24px; vertical-align:middle; flex-shrink:0; }
       .agent-config-modal .toggle input { opacity:0; width:0; height:0; }
-      .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:#374151; border-radius:24px; transition:.2s; }
+      .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:var(--bg-4); border-radius:24px; transition:.2s; }
       .agent-config-modal .toggle .slider::before { content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
-      .agent-config-modal .toggle input:checked + .slider { background:#4ade80; }
+      .agent-config-modal .toggle input:checked + .slider { background:var(--success); }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
       /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
@@ -99,7 +99,7 @@
         background: rgba(225, 6, 0, 0.08);
       }
       .col-agent-btn.active:hover { background: rgba(225, 6, 0, 0.15); }
-      .col-agent-btn.paused { color: #fbbf24; }
+      .col-agent-btn.paused { color: var(--warning); }
 
       /* Layout consistente da .col-head com 4 elementos: title | count | agent-btn | menu-btn */
       .col-head { gap: 8px; }
