@@ -53,6 +53,26 @@ services:
       - WEBHOOK_GLOBAL_URL=
       - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
 
+      # ─── Armazenamento de mídia (S3/MinIO) ─────────────────────────
+      #
+      # Sem isto a Evolution NÃO entrega o binário de áudio, imagem ou vídeo:
+      # o trecho do baileys.service que anexa `message.base64` e preenche
+      # `mediaUrl` só roda dentro do bloco de upload, que é pulado quando o S3
+      # está desligado. A `url` que sobra no payload aponta para o arquivo
+      # criptografado do WhatsApp e não serve para nada.
+      #
+      # Era essa a origem dos balões de áudio sem player na conversa
+      # (incidente 2026-08-20): a tabela `Media` ficava com zero linhas.
+      - S3_ENABLED=true
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-clowminio}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD no .env}
+      - S3_BUCKET=evolution
+      - S3_PORT=9000
+      - S3_ENDPOINT=evolution-minio
+      - S3_USE_SSL=false
+      # Vídeo é o único tipo que a Evolution deixa desligado por padrão.
+      - S3_SAVE_VIDEO=true
+
       # ─── Logs ──────────────────────────────────────────────────────
       - LOG_LEVEL=WARN
     depends_on:
@@ -60,14 +80,20 @@ services:
         condition: service_healthy
       evolution-redis:
         condition: service_healthy
+      evolution-minio:
+        condition: service_healthy
     networks:
       - system_clow_evolution-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      # `curl` não existe nesta imagem — o healthcheck antigo acumulou 1577
+      # falhas seguidas com "executable file not found" e marcava o container
+      # como unhealthy enquanto o serviço estava perfeito. O node está sempre
+      # presente, já que a aplicação roda nele.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 20s
 
   evolution-postgres:
     container_name: system_clow_evolution_postgres
@@ -101,6 +127,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # Guarda o binário das mídias do WhatsApp. Fica só na rede interna do
+  # compose — a Evolution serve os arquivos, ninguém precisa alcançar o MinIO
+  # de fora, e uma porta a menos exposta é uma porta a menos para proteger.
+  evolution-minio:
+    container_name: system_clow_evolution_minio
+    image: minio/minio:latest
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-clowminio}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD no .env}
+    volumes:
+      - system_clow_evolution-minio:/data
+    networks:
+      - system_clow_evolution-net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
 networks:
   system_clow_evolution-net:
     driver: bridge
@@ -108,3 +156,4 @@ networks:
 volumes:
   system_clow_evolution-pgdata:
   system_clow_evolution-redisdata:
+  system_clow_evolution-minio:

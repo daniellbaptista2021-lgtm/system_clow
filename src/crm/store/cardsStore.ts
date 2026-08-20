@@ -345,6 +345,29 @@ export function markCardRead(tenantId: string, cardId: string): boolean {
   return r.changes > 0;
 }
 
+/**
+ * Reescreve o conteúdo de uma atividade já gravada.
+ *
+ * Existe para a transcrição de áudio, que chega depois da mensagem: o webhook
+ * precisa responder rápido, então o áudio entra na conversa como "🎤 Áudio" e
+ * o texto substitui esse rótulo quando o whisper termina, segundos depois.
+ *
+ * Republica no SSE para o painel trocar o rótulo pela transcrição sem que
+ * ninguém precise recarregar a página.
+ */
+export function updateActivityContent(tenantId: string, activityId: string, content: string): boolean {
+  const db = getCrmDb();
+  const r = db.prepare('UPDATE crm_activities SET content = ? WHERE id = ? AND tenant_id = ?')
+    .run(content, activityId, tenantId);
+  if (r.changes > 0) {
+    void (async () => {
+      const pub = await getPublish();
+      pub(tenantId, 'activity', { activityId, action: 'updated' });
+    })();
+  }
+  return r.changes > 0;
+}
+
 export function listActivitiesByCard(tenantId: string, cardId: string, limit = 100): Activity[] {
   const db = getCrmDb();
   const rows = db.prepare(`

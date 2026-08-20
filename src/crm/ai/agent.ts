@@ -268,40 +268,122 @@ export async function callDeepSeek(
   return String(content).trim();
 }
 
-/** Transcreve audio via Whisper (OpenAI). Retorna string vazia em falha. */
-export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    logger.warn('[ai/agent] OPENAI_API_KEY not configured — pulando transcribe');
-    return '';
+/** Caminho do transcritor local. Ver /opt/whisper/whisper-transcribe. */
+const WHISPER_LOCAL = process.env.CLOW_WHISPER_CMD || '/opt/whisper/whisper-transcribe';
+
+/**
+ * Baixa o áudio para um arquivo temporário.
+ *
+ * `audioUrl` chega em dois formatos: um `data:` URI, quando a Evolution manda
+ * a mídia embutida no webhook (é o caso normal, com `webhookBase64` ligado),
+ * ou uma URL de verdade. O `data:` é decodificado aqui em vez de passar por
+ * `fetch` — um áudio de um minuto vira uma string base64 de megabytes, e não
+ * há motivo para atravessar a pilha de rede para ler algo que já está na
+ * memória.
+ */
+async function baixarAudioParaArquivo(audioUrl: string): Promise<string> {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const fs = await import('node:fs/promises');
+
+  let bytes: Buffer;
+  let ext = 'ogg';
+
+  // `.*?` e não `[^;]+`: o mime de áudio do WhatsApp vem com parâmetro
+  // (`audio/ogg; codecs=opus`), e um grupo que pare no primeiro `;` não casa.
+  const m = audioUrl.match(/^data:(.*?);base64,(.*)$/s);
+  if (m) {
+    bytes = Buffer.from(m[2], 'base64');
+    if (m[1].includes('mpeg') || m[1].includes('mp3')) ext = 'mp3';
+    else if (m[1].includes('mp4') || m[1].includes('m4a')) ext = 'm4a';
+    else if (m[1].includes('wav')) ext = 'wav';
+  } else {
+    const resp = await fetch(audioUrl);
+    if (!resp.ok) throw new Error(`audio download http_${resp.status}`);
+    bytes = Buffer.from(await resp.arrayBuffer());
   }
+  if (!bytes.length) throw new Error('audio vazio');
+
+  const destino = path.join(os.tmpdir(), `clow-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`);
+  await fs.writeFile(destino, bytes);
+  return destino;
+}
+
+/**
+ * Transcreve áudio do WhatsApp.
+ *
+ * Usa o faster-whisper instalado em /opt/whisper — modelo `small` em int8, na
+ * CPU do host. Sem custo por minuto e sem mandar a conversa do cliente para
+ * fora da VPS. A API da OpenAI fica como alternativa, usada só quando o
+ * transcritor local não está presente e há chave configurada.
+ *
+ * Nunca lança: transcrição é um enriquecimento do atendimento, e falhar aqui
+ * não pode derrubar a ingestão da mensagem. Devolve string vazia, e quem
+ * chama trata como "áudio sem texto".
+ */
+export async function transcribeAudio(audioUrl: string): Promise<string> {
+  const fs = await import('node:fs/promises');
+  let arquivo: string | undefined;
   try {
-    // 1. Baixa o áudio
-    const audioResp = await fetch(audioUrl);
-    if (!audioResp.ok) throw new Error(`audio download http_${audioResp.status}`);
-    const audioBuf = Buffer.from(await audioResp.arrayBuffer());
-    // 2. Whisper transcribe (multipart/form-data)
-    const FormData = (globalThis as any).FormData;
-    const Blob = (globalThis as any).Blob;
-    const fd = new FormData();
-    fd.append('file', new Blob([audioBuf], { type: 'audio/ogg' }), 'audio.ogg');
-    fd.append('model', 'whisper-1');
-    fd.append('language', 'pt');
-    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}` },
-      body: fd as any,
-    });
-    if (!r.ok) {
-      const body = await r.text().catch(() => '');
-      throw new Error(`whisper http_${r.status}: ${body.slice(0, 200)}`);
+    arquivo = await baixarAudioParaArquivo(audioUrl);
+
+    const existeLocal = await fs.access(WHISPER_LOCAL).then(() => true).catch(() => false);
+    if (existeLocal) return await transcreverLocal(arquivo);
+
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) {
+      logger.warn('[ai/agent] sem transcritor local nem OPENAI_API_KEY — pulando transcribe');
+      return '';
     }
-    const d: any = await r.json();
-    return String(d?.text || '').trim();
+    return await transcreverOpenAI(arquivo, key);
   } catch (err: any) {
     logger.warn('[ai/agent] transcribe falhou:', err?.message);
     return '';
+  } finally {
+    if (arquivo) await fs.unlink(arquivo).catch(() => {});
   }
+}
+
+/** faster-whisper local, por linha de comando. */
+async function transcreverLocal(arquivo: string): Promise<string> {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const exec = promisify(execFile);
+
+  // O timeout é generoso porque o modelo é carregado a cada chamada (~5s) e a
+  // VPS tem 2 vCPU: um áudio longo de WhatsApp pode levar perto de um minuto.
+  const { stdout, stderr } = await exec(WHISPER_LOCAL, [arquivo], {
+    timeout: 180_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, WHISPER_LANGUAGE: process.env.WHISPER_LANGUAGE || 'pt' },
+  });
+  // O script manda idioma e tempo pelo stderr — vale registrar, ajuda a saber
+  // se a transcrição está lenta demais antes de virar reclamação.
+  if (stderr?.trim()) logger.info(`[whisper] ${stderr.trim()}`);
+  return String(stdout || '').trim();
+}
+
+/** Alternativa paga, só quando não há transcritor local instalado. */
+async function transcreverOpenAI(arquivo: string, key: string): Promise<string> {
+  const fs = await import('node:fs/promises');
+  const bytes = await fs.readFile(arquivo);
+  const FormData = (globalThis as any).FormData;
+  const Blob = (globalThis as any).Blob;
+  const fd = new FormData();
+  fd.append('file', new Blob([bytes], { type: 'audio/ogg' }), 'audio.ogg');
+  fd.append('model', 'whisper-1');
+  fd.append('language', 'pt');
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}` },
+    body: fd as any,
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`whisper http_${r.status}: ${body.slice(0, 200)}`);
+  }
+  const d: any = await r.json();
+  return String(d?.text || '').trim();
 }
 
 /** Envia resposta de volta pelo canal E grava como message_out no CRM.

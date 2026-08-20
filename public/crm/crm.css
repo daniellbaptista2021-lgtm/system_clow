@@ -214,6 +214,78 @@ body {
   transition: transform .2s ease, filter .2s ease, opacity .2s ease;
 }
 .brand:hover .brand-logo { opacity: 1; transform: scale(1.03); }
+
+/* ─── Wordmark "System Clow" ──────────────────────────────────────────
+ * O relevo é uma pilha de text-shadow: quatro camadas de 1px descendo em
+ * cinza cada vez mais escuro formam a "parede" da letra extrudada, e a
+ * sombra larga embaixo apoia o conjunto no fundo. É mais leve que uma
+ * imagem, escala sem borrar e reage ao tema — em fundo claro a parede
+ * precisa ser mais fraca, senão o texto vira um borrão sujo.
+ * `-webkit-text-fill-color: transparent` recorta o gradiente dentro da
+ * letra; o fallback `color` cobre navegador sem background-clip. */
+.brand-word {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  user-select: none;
+}
+.brand-word-main {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  line-height: 1.05;
+  color: var(--text);
+  background: linear-gradient(180deg, #FFFFFF 0%, #D8D8E0 55%, #A8A8B4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow:
+    0 1px 0 #9A9AA6,
+    0 2px 0 #7E7E8A,
+    0 3px 0 #62626E,
+    0 4px 0 #4A4A55,
+    0 6px 12px rgba(0,0,0,.45);
+  transition: transform .2s ease, filter .2s ease;
+}
+/* "Clow" puxa a cor da marca — o gradiente vermelho é o mesmo --grad da
+ * paleta, repetido aqui em valores literais porque background-clip: text
+ * não herda o gradiente do elemento pai. */
+.brand-word-accent {
+  background: linear-gradient(180deg, #FF6B66 0%, #E10600 60%, #A30400 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.brand-word-sub {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.brand:hover .brand-word-main { transform: translateY(-1px); }
+
+html[data-theme="light"] .brand-word-main {
+  background: linear-gradient(180deg, #4A4A55 0%, #26262E 55%, #111827 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow:
+    0 1px 0 #C9CBD1,
+    0 2px 0 #B0B3BA,
+    0 3px 1px rgba(16,24,40,.28),
+    0 5px 10px rgba(16,24,40,.16);
+}
+
+/* Sem gradiente recortado: usa a cor chapada em vez de texto invisível. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .brand-word-main { -webkit-text-fill-color: currentColor; color: var(--text); }
+  .brand-word-accent { -webkit-text-fill-color: currentColor; color: #E10600; }
+}
+
+/* Relevo é enfeite: quem pediu menos animação não precisa do salto no hover. */
+@media (prefers-reduced-motion: reduce) {
+  .brand-word-main { transition: none; }
+  .brand:hover .brand-word-main { transform: none; }
+}
 /* ─── Itens do menu lateral: flat, com estado ativo por tinta + accent,
  * sem "cartão 3D" — o item selecionado não deve competir visualmente com
  * o conteúdo da tela. ─── */
@@ -1102,7 +1174,7 @@ select option { background: #0F0F24; color: #E8E8F0; }
   .sidebar .sidebar-foot .logout-btn:hover {
     background: rgba(239, 68, 68, 0.2) !important;
   }
-  /* Brand SVG menor no mobile pra dar espaco aos labels */
+  /* Brand menor no mobile pra dar espaco aos labels */
   .sidebar .brand {
     padding: 16px 12px !important;
     text-align: center !important;
@@ -1111,6 +1183,23 @@ select option { background: #0F0F24; color: #E8E8F0; }
     width: 48px !important;
     height: 48px !important;
   }
+  /* O wordmark encolhe junto — e o relevo perde uma camada, porque a
+   * extrusão de 4px em corpo 20 come a contraforma das letras. */
+  .sidebar .brand-word-main {
+    font-size: 20px;
+    text-shadow:
+      0 1px 0 #9A9AA6,
+      0 2px 0 #7E7E8A,
+      0 3px 0 #4A4A55,
+      0 5px 10px rgba(0,0,0,.42);
+  }
+  html[data-theme="light"] .sidebar .brand-word-main {
+    text-shadow:
+      0 1px 0 #C9CBD1,
+      0 2px 1px rgba(16,24,40,.26),
+      0 4px 8px rgba(16,24,40,.15);
+  }
+  .sidebar .brand-word-sub { font-size: 8.5px; letter-spacing: 1.8px; }
 }
 
 

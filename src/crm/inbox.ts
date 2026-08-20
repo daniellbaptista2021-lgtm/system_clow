@@ -18,6 +18,7 @@ import * as evolution from './channels/evolution.js';
 import { saveMedia } from './media.js';
 import * as automations from './automations.js';
 import { applyTagSystem, cardHasTag } from './agents/tools/tags.js';
+import { logger } from '../utils/logger.js';
 import type { Channel2, Activity, MediaType, Channel, ChannelType } from './types.js';
 
 export interface InboundResult {
@@ -55,6 +56,26 @@ function rotuloDoCanal(tipo: ChannelType): Channel {
   return 'whatsapp_evolution';
 }
 
+/**
+ * Rótulo por tipo, para quem chama sem passar um.
+ *
+ * O canal Evolution manda o rótulo pronto pelo normalizador, que sabe
+ * distinguir figurinha de imagem e nomear o arquivo do documento. Este aqui
+ * atende os outros caminhos de ingestão (Meta, criação manual, testes), onde
+ * só o tipo é conhecido.
+ */
+function rotuloPadrao(tipo: MediaType): string {
+  switch (tipo) {
+    case 'audio': return '🎤 Áudio';
+    case 'image': return '[imagem]';
+    case 'video': return '[vídeo]';
+    case 'document': return '📄 Documento';
+    case 'location': return '📍 Localização';
+    case 'interactive': return '[mensagem interativa]';
+    default: return '[mensagem não suportada]';
+  }
+}
+
 export async function ingestInbound(channel: Channel2, msg: {
   fromPhone: string;
   fromName?: string;
@@ -67,6 +88,8 @@ export async function ingestInbound(channel: Channel2, msg: {
   mediaMime?: string;
   mediaFilename?: string;
   context?: { messageId?: string };
+  /** Descrição do que a mensagem era, usada só quando não há texto nem mídia. */
+  rotulo?: string;
   timestamp: number;
   fromMe?: boolean; // Onda 61: Z-API ecoa msg que o corretor digitou no app/WA Web do numero conectado
 }): Promise<InboundResult> {
@@ -77,9 +100,17 @@ export async function ingestInbound(channel: Channel2, msg: {
     return { ok: true, error: 'duplicate_skipped' };
   }
 
+  // Guarda de contrato: `fromName` só pode descrever a pessoa do outro lado.
+  // Numa mensagem `fromMe` o provedor manda o nome da conta que escreveu (o
+  // corretor), e gravar isso renomearia o contato do cliente com o nome do
+  // operador do CRM. O parser da Evolution já não preenche o campo nesse
+  // caso; repetir a checagem aqui protege os outros caminhos de ingestão
+  // (Meta, criação manual, agente, automação, import) de reintroduzir o bug.
+  const nomeDoContato = msg.fromMe ? undefined : msg.fromName;
+
   // 2. Upsert contact
   const contact = store.upsertContactByPhone(tenantId, msg.fromPhone, {
-    name: msg.fromName,
+    name: nomeDoContato,
     source: rotuloDoCanal(channel.type),
   });
 
@@ -102,7 +133,13 @@ export async function ingestInbound(channel: Channel2, msg: {
   }
 
   // 3. Find or create card on the default sales board
-  const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
+  //
+  // O título sai do contato já resolvido, não de `fromName` cru: quando o
+  // corretor inicia a conversa pelo celular, `fromName` traz o nome dele, e
+  // um card novo nasceria batizado com o nome do próprio operador. `contact`
+  // acima já é o registro certo do cliente — se ele ainda não tem nome,
+  // `upsertContactByPhone` usa o telefone, que é o fallback correto.
+  const card = await findOrCreateOpenCardForContact(tenantId, contact.id, contact.name || msg.fromPhone, channel);
 
   // 4. Download/save media if applicable
   let mediaUrl: string | undefined;
@@ -129,6 +166,19 @@ export async function ingestInbound(channel: Channel2, msg: {
     content = msg.caption || '';
   }
 
+  // Rede de segurança: chegou aqui sem texto E sem mídia salva, o balão sai
+  // com o horário e nada dentro — foi o que aconteceu com conversas inteiras
+  // feitas só de áudio. Acontece quando `downloadAndSave` não conseguiu o
+  // binário (a Evolution só entrega mídia com S3 ligado; sem isso a `url` do
+  // payload aponta para o arquivo criptografado do WhatsApp e não serve) ou
+  // quando o formato não tem conteúdo textual nenhum, como uma figurinha.
+  //
+  // O rótulo diz o que a mensagem era. Não substitui conteúdo: só entra
+  // quando não há absolutamente nada para mostrar.
+  if (!content && !mediaUrl) {
+    content = msg.rotulo || rotuloPadrao(msg.type);
+  }
+
   // 6. Log activity
   // Onda 61: fromMe=true → corretor enviou direto pelo app/WA Web do numero
   // conectado. Loga como message_out / direction:'out' pra aparecer no
@@ -152,6 +202,28 @@ export async function ingestInbound(channel: Channel2, msg: {
       ...(savedFilename ? { savedFilename } : {}),
     },
   });
+
+  // 6.0. Transcreve o áudio e troca o rótulo pelo que foi dito.
+  //
+  // Fica fora do caminho do ACK de propósito: o whisper leva de segundos a
+  // um minuto, e a Evolution reentrega o webhook se demorarmos a responder —
+  // o que geraria a mesma mensagem de novo. A conversa recebe "🎤 Áudio"
+  // imediatamente e o texto entra no lugar quando fica pronto, via SSE.
+  if (msg.type === 'audio' && (mediaUrl || msg.mediaUrl)) {
+    void (async () => {
+      try {
+        const { transcribeAudio } = await import('./ai/agent.js');
+        const texto = await transcribeAudio(msg.mediaUrl || mediaUrl!);
+        if (!texto) return;
+        // O emoji fica: quem lê a conversa precisa continuar sabendo que
+        // aquilo foi falado, não digitado.
+        store.updateActivityContent(tenantId, activity.id, `🎤 ${texto}`);
+        logger.info(`[whisper] áudio transcrito (${texto.length} caracteres) — atividade ${activity.id}`);
+      } catch (err: any) {
+        logger.warn('[whisper] transcrição falhou:', err?.message);
+      }
+    })();
+  }
 
   // 6.1. Classifica primeira inbound do card como lead_pago ou lead_aleatorio.
   //      Lead pago vem do Click-to-Chat com texto "✅ Plano Familia/Individual - Clique Aqui".

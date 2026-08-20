@@ -709,6 +709,13 @@ export interface ParsedInbound {
   type: MediaType;
   text?: string;
   caption?: string;
+  /**
+   * Descrição curta do que a mensagem era ("🎤 Áudio", "📄 orcamento.pdf"),
+   * usada só quando não sobra texto nem mídia para renderizar. Sem ela, um
+   * áudio cujo binário não pôde ser baixado vira um balão com horário e nada
+   * dentro. Ver o passo 5 de `ingestInbound`.
+   */
+  rotulo?: string;
   mediaUrl?: string;
   mediaMime?: string;
   mediaFilename?: string;

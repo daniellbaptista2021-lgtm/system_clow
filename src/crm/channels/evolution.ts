@@ -24,6 +24,7 @@
 import { decryptJson } from '../crypto.js';
 import { logger } from '../../utils/logger.js';
 import { readMedia } from '../media.js';
+import { normalizarMensagemWhatsApp, chavesDeConteudo, desembrulhar } from './whatsappMessage.js';
 import type { Channel2, SendOptions, SendResult, ParsedInbound, WebhookValue } from '../types.js';
 
 export interface EvolutionCreds {
@@ -148,10 +149,18 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
   }
 }
 
-/** Marca como lida. Best-effort: falhar aqui não pode derrubar o atendimento. */
+/**
+ * Marca como lida. Best-effort: falhar aqui não pode derrubar o atendimento.
+ *
+ * `credsDo` fica DENTRO do try de propósito. Ela decifra as credenciais do
+ * canal e lança quando elas estão ausentes ou ilegíveis — e esta função é
+ * chamada com `void`, sem ninguém para capturar a rejeição. Fora do try, um
+ * canal com credencial quebrada derrubava o processo inteiro por unhandled
+ * rejection, justamente o oposto do "best-effort" prometido acima.
+ */
 export async function markAsRead(channel: Channel2, messageId: string, phone: string): Promise<void> {
-  const creds = credsDo(channel);
   try {
+    const creds = credsDo(channel);
     await fetch(url(creds, `/chat/markMessageAsRead/${encodeURIComponent(creds.instance)}`), {
       method: 'POST',
       headers: headers(creds),
@@ -167,10 +176,11 @@ export async function markAsRead(channel: Channel2, messageId: string, phone: st
   }
 }
 
-/** Indicador de "digitando". Também best-effort. */
+/** Indicador de "digitando". Também best-effort — `credsDo` dentro do try
+ *  pelo mesmo motivo de `markAsRead`. */
 export async function sendTyping(channel: Channel2, phone: string, ms = 2500): Promise<void> {
-  const creds = credsDo(channel);
   try {
+    const creds = credsDo(channel);
     await fetch(url(creds, `/chat/sendPresence/${encodeURIComponent(creds.instance)}`), {
       method: 'POST',
       headers: headers(creds),
@@ -186,34 +196,20 @@ export async function sendTyping(channel: Channel2, phone: string, ms = 2500): P
   }
 }
 
-/** Mapeia o tipo de mensagem da Evolution para o vocabulário do CRM. */
-function tipoDaMensagem(m: any): ParsedInbound['type'] {
-  if (m?.imageMessage) return 'image';
-  if (m?.audioMessage || m?.pttMessage) return 'audio';
-  if (m?.videoMessage) return 'video';
-  if (m?.documentMessage || m?.documentWithCaptionMessage) return 'document';
-  if (m?.stickerMessage) return 'image';
-  if (m?.locationMessage) return 'location';
-  return 'text';
-}
+// `tipoDaMensagem` e `textoDaMensagem` viviam aqui e conheciam sete formatos.
+// Foram substituídas por `normalizarMensagemWhatsApp` (whatsappMessage.ts),
+// que trata os 27 encontrados na instância real e desembrulha os envelopes —
+// tudo num lugar só, para que o próximo formato novo do WhatsApp seja uma
+// linha lá dentro e não mais um `if` espalhado por aqui.
 
-/** Texto de uma mensagem, que a Evolution esconde em lugares diferentes. */
-function textoDaMensagem(m: any): string | undefined {
-  return (m?.conversation ||
-    m?.extendedTextMessage?.text ||
-    m?.imageMessage?.caption ||
-    m?.videoMessage?.caption ||
-    m?.documentMessage?.caption ||
-    m?.buttonsResponseMessage?.selectedDisplayText ||
-    m?.listResponseMessage?.title ||
-    m?.templateButtonReplyMessage?.selectedDisplayText ||
-    undefined);
-}
-
-function midiaDaMensagem(m: any, base64?: string): Partial<ParsedInbound> {
+function midiaDaMensagem(mBruto: any, base64?: string): Partial<ParsedInbound> {
+  // Desembrulha antes de procurar: numa mensagem temporária a imagem está em
+  // `ephemeralMessage.message.imageMessage`, e a busca direta não a acharia.
+  const m = desembrulhar(mBruto);
   const bloco = m?.imageMessage || m?.audioMessage || m?.pttMessage || m?.videoMessage ||
-    m?.documentMessage || m?.documentWithCaptionMessage?.message?.documentMessage ||
-    m?.stickerMessage;
+    m?.ptvMessage || m?.documentMessage ||
+    m?.documentWithCaptionMessage?.message?.documentMessage ||
+    m?.stickerMessage || m?.lottieStickerMessage;
   if (!bloco) return {};
   const mime = bloco.mimetype || undefined;
   // Com WEBHOOK_BASE64=true o conteúdo vem no próprio evento. Preferimos isso:
@@ -257,22 +253,58 @@ export function parseWebhook(payload: any): WebhookValue {
     if (ehGrupo(item.key.remoteJid)) continue;
     const mensagem = item.message;
     if (!mensagem) continue;
-    const tipo = tipoDaMensagem(mensagem);
-    const texto = textoDaMensagem(mensagem);
+    // Toda a tradução de formato acontece no normalizador — ver
+    // whatsappMessage.ts. Aqui só se decide o que fazer com o resultado.
+    const norm = normalizarMensagemWhatsApp(mensagem);
+    const tipo = norm.tipo;
+    const texto = norm.texto;
     const midia = midiaDaMensagem(mensagem, item.message?.base64 || item.base64);
-    // Mensagem sem texto e sem mídia não tem o que processar (reação,
-    // edição, protocolo interno do WhatsApp).
-    if (tipo === 'text' && !texto) continue;
+
+    // Formato que o normalizador não reconheceu: registra o suficiente para
+    // acrescentá-lo depois. Sem isso, um formato novo do WhatsApp volta a
+    // virar balão vazio em silêncio — foi assim que `ptvMessage` e
+    // `lottieStickerMessage` passaram despercebidos até virarem reclamação.
+    if (norm.desconhecido) {
+      logger.warn(
+        '[evolution] formato de mensagem não reconhecido — ' +
+        JSON.stringify({
+          message_id: item.key.id,
+          from_me: !!item.key.fromMe,
+          message_type: item.messageType || null,
+          available_message_keys: chavesDeConteudo(mensagem),
+          raw_payload_present: !!mensagem,
+          normalized_text: null,
+        })
+      );
+    }
+
+    // `protocolMessage` e afins não têm nada para mostrar nem para guardar:
+    // são eventos internos do WhatsApp (apagar mensagem, sincronizar). Só
+    // esses são descartados — qualquer formato com rótulo vira uma linha
+    // legível na conversa em vez de sumir.
+    if (tipo === 'text' && !texto && norm.formato === 'desconhecido' && !midia.mediaUrl) continue;
     const carimbo = Number(item.messageTimestamp || item.date_time || 0);
+    // `pushName` é o nome de quem ESCREVEU, não o de quem está do outro lado
+    // da conversa. Numa mensagem que o corretor mandou pelo celular dele
+    // (`fromMe`), esse campo vem com o nome da própria conta — "Você" ou o
+    // nome do operador — enquanto `remoteJid` aponta para o cliente. Repassar
+    // os dois juntos fazia o ingest renomear o contato do cliente com o nome
+    // do corretor: o contato passava a se chamar como o operador do CRM assim
+    // que ele respondesse pelo aparelho. Só mensagem recebida traz nome de
+    // contato.
+    const nomeDoContato = item.key.fromMe ? undefined : (item.pushName || undefined);
     saida.messages.push({
       fromPhone: numeroDoJid(item.key.remoteJid),
-      fromName: item.pushName || undefined,
+      fromName: nomeDoContato,
       messageId: item.key.id || '',
       // A Evolution manda segundos; o CRM trabalha em milissegundos.
       timestamp: carimbo > 1e12 ? carimbo : carimbo * 1000 || Date.now(),
       type: tipo,
       text: tipo === 'text' ? texto : undefined,
       caption: tipo !== 'text' ? texto : undefined,
+      // Só entra na conversa se não sobrar nem legenda nem mídia para mostrar.
+      // Ver o passo 5 de `ingestInbound`.
+      rotulo: norm.rotulo,
       ...midia,
       fromMe: !!item.key.fromMe,
       raw: item,
@@ -287,7 +319,12 @@ export function parseWebhook(payload: any): WebhookValue {
  */
 export async function fetchMedia(channel: Channel2, mediaUrl: string): Promise<{ ok: boolean; bytes?: Buffer; mime?: string; error?: string }> {
   if (mediaUrl.startsWith('data:')) {
-    const m = mediaUrl.match(/^data:([^;]+);base64,(.*)$/);
+    // O mime pode trazer parâmetros — áudio do WhatsApp chega sempre como
+    // `audio/ogg; codecs=opus`. Um `[^;]+` antes do `;base64,` não casa com
+    // isso e devolvia "data_uri_malformado" para TODO áudio, mesmo com o
+    // base64 presente e íntegro; era a segunda razão de o player nunca
+    // aparecer na conversa. Por isso o grupo vai até o `;base64,` literal.
+    const m = mediaUrl.match(/^data:(.*?);base64,(.*)$/s);
     if (!m) return { ok: false, error: 'data_uri_malformado' };
     return { ok: true, bytes: Buffer.from(m[2], 'base64'), mime: m[1] };
   }
