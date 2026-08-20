@@ -45,15 +45,15 @@ export function createSubscription(tenantId: string, input: {
 export function listSubscriptions(tenantId: string, status?: SubscriptionStatus): Subscription[] {
   const db = getCrmDb();
   const rows = status
-    ? db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND status = ? ORDER BY next_charge_at ASC').all(tenantId, status) as any[]
-    : db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? ORDER BY next_charge_at ASC').all(tenantId) as any[];
+    ? db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND status = ? AND deleted_at IS NULL ORDER BY next_charge_at ASC').all(tenantId, status) as any[]
+    : db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND deleted_at IS NULL ORDER BY next_charge_at ASC').all(tenantId) as any[];
   return rows.map(rowToSubscription);
 }
 
 export function listSubscriptionsDue(beforeTs: number = now()): Subscription[] {
   const db = getCrmDb();
   const rows = db.prepare(`
-    SELECT * FROM crm_subscriptions WHERE status = 'active' AND next_charge_at <= ?
+    SELECT * FROM crm_subscriptions WHERE status = 'active' AND deleted_at IS NULL AND next_charge_at <= ?
     ORDER BY next_charge_at ASC
   `).all(beforeTs) as any[];
   return rows.map(rowToSubscription);
@@ -61,7 +61,7 @@ export function listSubscriptionsDue(beforeTs: number = now()): Subscription[] {
 
 export function updateSubscription(tenantId: string, subId: string, patch: Partial<Omit<Subscription, 'id' | 'tenantId' | 'createdAt'>>): Subscription | null {
   const db = getCrmDb();
-  const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ?').get(subId, tenantId) as any;
+  const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL').get(subId, tenantId) as any;
   if (!r) return null;
   const existing = rowToSubscription(r);
   const upd = { ...existing, ...patch };
@@ -210,11 +210,11 @@ export function computeMrr(tenantId: string): MrrSnapshot {
   const now30d = Date.now() - 30*24*60*60*1000;
 
   // Active: status='active' e cycle=monthly/yearly
-  const activeSubs = db.prepare("SELECT * FROM crm_subscriptions WHERE tenant_id=? AND status='active'").all(tenantId) as any[];
-  const pastDueSubs = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='past_due'").get(tenantId) as any).n;
-  const trialSubs = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='active' AND trial_until > ?").get(tenantId, Date.now()) as any).n;
-  const cancelledMonth = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='cancelled' AND cancelled_at >= ?").get(tenantId, now30d) as any).n;
-  const newMonth = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND created_at >= ?").get(tenantId, now30d) as any).n;
+  const activeSubs = db.prepare("SELECT * FROM crm_subscriptions WHERE tenant_id=? AND status='active' AND deleted_at IS NULL").all(tenantId) as any[];
+  const pastDueSubs = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='past_due' AND deleted_at IS NULL").get(tenantId) as any).n;
+  const trialSubs = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='active' AND deleted_at IS NULL AND trial_until > ?").get(tenantId, Date.now()) as any).n;
+  const cancelledMonth = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND status='cancelled' AND deleted_at IS NULL AND cancelled_at >= ?").get(tenantId, now30d) as any).n;
+  const newMonth = (db.prepare("SELECT COUNT(*) n FROM crm_subscriptions WHERE tenant_id=? AND deleted_at IS NULL AND created_at >= ?").get(tenantId, now30d) as any).n;
 
   let totalMrrCents = 0;
   for (const s of activeSubs) {
@@ -246,6 +246,28 @@ export function cancelSubscription(tenantId: string, id: string, reason?: string
   const db = getCrmDb();
   return db.prepare("UPDATE crm_subscriptions SET status='cancelled', cancelled_at=?, cancel_reason=? WHERE id=? AND tenant_id=?")
     .run(Date.now(), reason ?? null, id, tenantId).changes > 0;
+}
+
+/**
+ * Apaga a mensalidade do CRM — soft delete.
+ *
+ * Diferente de `cancelSubscription`: cancelar encerra a cobrança e mantém a
+ * linha visível no filtro de canceladas; apagar tira a mensalidade de todas
+ * as listas, contadores e buscas. A migration 015 explica por que não é um
+ * DELETE de verdade.
+ *
+ * O `tenant_id` no WHERE é o isolamento: um id de outro tenant não casa e a
+ * função devolve false sem tocar em nada. `deleted_at IS NULL` torna a
+ * operação idempotente — apagar duas vezes não reescreve o carimbo, e a
+ * segunda chamada responde honestamente que não havia o que apagar.
+ *
+ * Não conversa com gateway de pagamento: uma assinatura ativa no Stripe
+ * continua ativa lá. Encerrar cobrança é o que "Cancelar" faz.
+ */
+export function softDeleteSubscription(tenantId: string, id: string): boolean {
+  return getCrmDb()
+    .prepare('UPDATE crm_subscriptions SET deleted_at = ? WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL')
+    .run(Date.now(), id, tenantId).changes > 0;
 }
 
 export function setSubscriptionTrial(tenantId: string, id: string, trialUntil: number): boolean {

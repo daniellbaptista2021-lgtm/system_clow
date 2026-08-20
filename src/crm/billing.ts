@@ -54,7 +54,8 @@ async function sendUpcomingReminders(): Promise<void> {
     const windowEnd = now + (days * 86400_000) + 30 * 60_000;
     const rows = db.prepare(`
       SELECT * FROM crm_subscriptions
-      WHERE status = 'active' AND next_charge_at >= ? AND next_charge_at <= ? AND reminders_sent <= ?
+      WHERE status = 'active' AND deleted_at IS NULL
+        AND next_charge_at >= ? AND next_charge_at <= ? AND reminders_sent <= ?
     `).all(windowStart, windowEnd, REMINDER_DAYS.length - REMINDER_DAYS.indexOf(days)) as any[];
     for (const r of rows) {
       try { await sendBillingReminder(rowToSub(r), days); }
@@ -147,7 +148,7 @@ function rowToSub(r: any): Subscription {
  *  "Marcar como pago" aparecia eternamente no card. */
 export function markPaid(tenantId: string, subId: string): Subscription | null {
   const db = getCrmDb();
-  const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ?').get(subId, tenantId) as any;
+  const r = db.prepare('SELECT * FROM crm_subscriptions WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL').get(subId, tenantId) as any;
   if (!r) return null;
   const sub = rowToSub(r);
   store.logActivity(tenantId, {

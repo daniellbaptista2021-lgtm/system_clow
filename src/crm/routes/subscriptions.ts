@@ -393,6 +393,24 @@ export function registerSubscriptionsRoutes(app: Hono): void {
     const body = await c.req.json().catch(() => ({})) as any;
     return store.cancelSubscription(tenantOf(c), c.req.param('id'), body.reason) ? ok(c, { ok: true }) : notFound(c, 'subscription');
   });
+
+  /**
+   * Apaga a mensalidade do CRM (soft delete) — não cancela cobrança.
+   *
+   * O tenant vem de `tenantOf(c)`, que sai da sessão autenticada, nunca do
+   * corpo ou da URL. Ele entra no WHERE junto com o id, então um id de outro
+   * cliente simplesmente não casa: a resposta é 404, a mesma de um id que não
+   * existe. É de propósito — distinguir "não é seu" de "não existe" contaria
+   * a quem tentou que aquele id existe em algum lugar.
+   *
+   * Não toca em contato, conversa, card nem histórico de cobrança: some a
+   * mensalidade, não a pessoa. E não fala com o gateway — ver a nota em
+   * `softDeleteSubscription`.
+   */
+  app.delete('/subscriptions/:id', (c) =>
+    store.softDeleteSubscription(tenantOf(c), c.req.param('id'))
+      ? ok(c, { ok: true })
+      : notFound(c, 'subscription'));
   app.patch('/subscriptions/:id/trial', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
     if (typeof body.trial_until !== 'number') return badRequest(c, 'trial_until (ms) required');

@@ -563,7 +563,7 @@ export function getContactHistory(tenantId: string, contactId: string, opts: { l
   args.push(limit);
   const activities = db.prepare(sql).all(...args) as any[];
   const cards = db.prepare('SELECT * FROM crm_cards WHERE tenant_id = ? AND contact_id = ?').all(tenantId, contactId) as any[];
-  const subs = db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND contact_id = ?').all(tenantId, contactId) as any[];
+  const subs = db.prepare('SELECT * FROM crm_subscriptions WHERE tenant_id = ? AND contact_id = ? AND deleted_at IS NULL').all(tenantId, contactId) as any[];
   return { activities, cards, subscriptions: subs };
 }
 

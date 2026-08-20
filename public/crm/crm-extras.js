@@ -373,9 +373,15 @@
               ) : null,
             ),
           ) : null,
-          // Actions row (botoes ghost discretos, alinhados a direita)
-          (needsAction || s.status !== 'cancelled')
-            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid rgba(255,255,255,.05);padding-top:12px;margin-top:2px;flex-wrap:wrap' },
+          // Actions row (botoes ghost discretos, alinhados a direita).
+          //
+          // Sempre presente: "Apagar" vale para qualquer mensalidade, e a
+          // cancelada é justamente a que mais se quer tirar da lista. Antes a
+          // linha inteira sumia quando não havia ação pendente, e com ela
+          // sumiria o botão. `flex-wrap` deixa os quatro botões quebrarem
+          // para a linha de baixo em tela estreita, em vez de estourar o card.
+          true
+            ? el('div', { style: 'display:flex;gap:8px;justify-content:flex-end;align-items:center;border-top:1px solid var(--border);padding-top:12px;margin-top:2px;flex-wrap:wrap' },
               // Botao "Cobrar no chat" — abre painel de conversa do CRM
               // (interno, nao wa.me externo) com template ja no composer.
               (needsAction && contact)
@@ -460,7 +466,7 @@
                 ? el('button', {
                     style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;transition:all .15s ease',
                     on: {
-                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(239,68,68,.10)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,.40)'; e.currentTarget.style.color = '#F87171'; },
+                      mouseenter: (e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--danger) 12%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--danger) 42%, transparent)'; e.currentTarget.style.color = 'var(--danger)'; },
                       mouseleave: (e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'; },
                       click: async () => {
                         if (!(await clowConfirm(`Cancelar assinatura "${s.planName}"?`, { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar assinatura' }))) return;
@@ -477,6 +483,63 @@
                     'Cancelar',
                   )
                 : null,
+              // Apagar tira a mensalidade do CRM de vez. É diferente de
+              // Cancelar, que encerra a cobrança e mantém o registro visível
+              // entre as canceladas — por isso este aparece TAMBÉM nas já
+              // canceladas: é justamente aí que se quer limpar a lista.
+              // Não fala com gateway de pagamento nenhum.
+              el('button', {
+                type: 'button',
+                title: 'Apagar esta mensalidade do CRM',
+                style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;transition:all .15s ease',
+                on: {
+                  mouseenter: (e) => { if (e.currentTarget.disabled) return; e.currentTarget.style.background = 'color-mix(in srgb, var(--danger) 12%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--danger) 42%, transparent)'; e.currentTarget.style.color = 'var(--danger)'; },
+                  mouseleave: (e) => { if (e.currentTarget.disabled) return; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'; },
+                  click: async (e) => {
+                    const btn = e.currentTarget;
+                    if (btn.disabled) return;
+                    const quem = contact ? contact.name : 'contato sem nome';
+                    const ciclo = ({ weekly: '/semana', monthly: '/mês', quarterly: '/trimestre', yearly: '/ano', one_time: '' })[s.cycle] || '';
+                    const confirmou = await clowConfirm(
+                      `Você está prestes a excluir a mensalidade:\n\n${s.planName} — ${quem} — ${fmtMoney(s.amountCents)}${ciclo}\n\n`
+                      + 'Ela deixará de aparecer no CRM. O contato, a conversa e o histórico de pagamento continuam intactos, '
+                      + 'e nenhuma cobrança é cancelada em gateway de pagamento.',
+                      { title: 'Excluir mensalidade?', danger: true, confirmLabel: 'Apagar mensalidade', cancelLabel: 'Voltar' }
+                    );
+                    if (!confirmou) return;
+
+                    // Trava o botão enquanto a requisição corre: sem isso dois
+                    // cliques disparam dois DELETE, e o segundo volta 404 —
+                    // mostrando erro para uma exclusão que na verdade deu certo.
+                    const rotulo = btn.querySelector('.lbl');
+                    btn.disabled = true;
+                    btn.style.opacity = '.55';
+                    btn.style.cursor = 'wait';
+                    if (rotulo) rotulo.textContent = 'Apagando…';
+                    try {
+                      await api(`/subscriptions/${s.id}`, { method: 'DELETE' });
+                      toast('Mensalidade apagada com sucesso.', 'success');
+                      await renderSubsList();
+                    } catch (err) {
+                      // Deu errado: o card continua onde está e o botão volta
+                      // a funcionar, para a pessoa poder tentar de novo.
+                      toast('Não foi possível apagar a mensalidade.', 'error');
+                      btn.disabled = false;
+                      btn.style.opacity = '';
+                      btn.style.cursor = 'pointer';
+                      if (rotulo) rotulo.textContent = 'Apagar';
+                    }
+                  },
+                },
+              },
+                el('svg', { viewBox: '0 0 24 24', style: 'width:14px;height:14px;flex-shrink:0', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+                  el('polyline', { points: '3 6 5 6 21 6' }),
+                  el('path', { d: 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6' }),
+                  el('path', { d: 'M10 11v6M14 11v6' }),
+                  el('path', { d: 'M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2' }),
+                ),
+                el('span', { class: 'lbl' }, 'Apagar'),
+              ),
             )
             : null,
         );
