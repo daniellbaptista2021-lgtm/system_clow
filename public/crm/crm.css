@@ -1424,3 +1424,110 @@ img.card-avatar, img.contact-avatar {
 .theme-menu-item.active { color: var(--purple); font-weight: 600; background: var(--primary-soft); }
 .theme-menu-item .check { opacity: 0; color: var(--purple); font-weight: 700; }
 .theme-menu-item.active .check { opacity: 1; }
+
+/* ═══ Visualizador de mídia da conversa ══════════════════════════════════
+ * Ver media-viewer.js. O fundo é escuro nos três temas de propósito: foto e
+ * vídeo se leem melhor contra preto, e é o que todo visualizador de imagem
+ * faz — inclusive o do WhatsApp. Por isso os controles aqui usam branco
+ * literal em vez de --text: eles vivem sobre esse fundo, não sobre a
+ * superfície do tema. */
+.mv-backdrop {
+  position: fixed; inset: 0; z-index: 4000;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(8,8,12,.94);
+  backdrop-filter: blur(6px);
+}
+.mv-backdrop.show { display: flex; }
+
+.mv-bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(0,0,0,.55), transparent);
+  z-index: 2;
+}
+.mv-info { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.mv-nome {
+  color: #fff; font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw;
+}
+.mv-contador { color: rgba(255,255,255,.62); font-size: 12px; flex: 0 0 auto; }
+.mv-acoes { display: flex; gap: 6px; flex: 0 0 auto; }
+.mv-btn {
+  display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(255,255,255,.10); color: #fff;
+  border: 0; cursor: pointer;
+  transition: background var(--transition);
+}
+.mv-btn:hover { background: rgba(255,255,255,.22); }
+.mv-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.mv-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,.10); color: #fff;
+  border: 0; cursor: pointer; z-index: 2;
+  transition: background var(--transition);
+}
+.mv-nav:hover { background: rgba(255,255,255,.24); }
+.mv-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.mv-ant { left: 16px; }
+.mv-prox { right: 16px; }
+
+.mv-palco {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; padding: 64px 72px 76px;
+}
+.mv-img, .mv-video {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.5);
+}
+.mv-pdf {
+  width: min(960px, 100%); height: 100%;
+  border: 0; border-radius: 6px; background: #fff;
+}
+.mv-carregando, .mv-erro { color: rgba(255,255,255,.72); font-size: 13px; text-align: center; }
+.mv-erro small { color: rgba(255,255,255,.45); font-size: 11px; }
+
+.mv-arquivo {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 32px 40px; border-radius: 12px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  text-align: center;
+}
+.mv-arquivo-icone { font-size: 40px; line-height: 1; }
+.mv-arquivo-nome { color: #fff; font-size: 14px; font-weight: 600; max-width: 60vw; overflow-wrap: anywhere; }
+.mv-arquivo-dica { color: rgba(255,255,255,.55); font-size: 12px; }
+.mv-arquivo-baixar {
+  margin-top: 6px; padding: 9px 18px; border-radius: 8px; border: 0;
+  background: var(--purple); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.mv-arquivo-baixar:hover { background: var(--blue); }
+
+.mv-legenda {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 16px 20px 18px;
+  background: linear-gradient(0deg, rgba(0,0,0,.62), transparent);
+  color: #fff; font-size: 13px; line-height: 1.45;
+  text-align: center; white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 28vh; overflow-y: auto;
+}
+
+/* A mídia clicável precisa parecer clicável. */
+.msg-media img, .msg-media video, .msg-media .doc { cursor: pointer; }
+.msg-media img { transition: filter var(--transition); }
+.msg-media img:hover { filter: brightness(1.06); }
+
+@media (max-width: 720px) {
+  .mv-palco { padding: 58px 12px 70px; }
+  /* No celular o polegar arrasta para trocar de mídia; as setas só roubariam
+   * espaço da imagem. */
+  .mv-nav { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-media img { transition: none; }
+}

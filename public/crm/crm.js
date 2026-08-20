@@ -1264,6 +1264,28 @@ function renderMessages() {
   const list = $('#messagesList');
   list.innerHTML = '';
   const activities = state.currentCard?.activities || [];
+
+  // Índice das mídias da conversa, na ordem em que aparecem. É o que permite
+  // ir de uma foto para a próxima com as setas sem fechar o visualizador —
+  // como no WhatsApp. Áudio fica de fora: já tem player na bolha e não há o
+  // que "ver" em tela cheia.
+  const midias = [];
+  for (const a of activities) {
+    if (!a.mediaUrl) continue;
+    if (a.mediaType !== 'image' && a.mediaType !== 'video' && a.mediaType !== 'document') continue;
+    midias.push({
+      url: a.mediaUrl,
+      tipo: a.mediaType,
+      nome: a.metadata?.savedFilename || undefined,
+      legenda: a.content || '',
+      mime: a.metadata?.mediaMime || undefined,
+    });
+  }
+  const abrirMidia = (url) => {
+    const i = midias.findIndex((m) => m.url === url);
+    if (i >= 0 && window.clowMediaViewer) window.clowMediaViewer.abrir(midias, i);
+  };
+
   for (const a of activities) {
     const isIn = a.direction === 'in';
     const isOut = a.direction === 'out';
@@ -1275,7 +1297,11 @@ function renderMessages() {
     }
     const bubble = el('div', { class: `msg ${isIn ? 'in' : 'out'}` });
     if (a.mediaUrl && a.mediaType === 'image') {
-      const imgEl = el('img', { loading: 'lazy' });
+      const imgEl = el('img', {
+        loading: 'lazy',
+        title: 'Clique para ampliar',
+        on: { click: () => abrirMidia(a.mediaUrl) },
+      });
       bubble.append(el('div', { class: 'msg-media' }, imgEl));
       loadMediaWithAuth(a.mediaUrl, imgEl);
     } else if (a.mediaUrl && a.mediaType === 'audio') {
@@ -1283,15 +1309,29 @@ function renderMessages() {
       bubble.append(el('div', { class: 'msg-media' }, audioEl));
       loadMediaWithAuth(a.mediaUrl, audioEl);
     } else if (a.mediaUrl && a.mediaType === 'video') {
-      const videoEl = el('video', { controls: '' });
+      // O player pequeno continua na bolha; o clique fora dos controles é
+      // que abre em tela cheia — mesma divisão do WhatsApp.
+      const videoEl = el('video', {
+        controls: '',
+        title: 'Clique para ampliar',
+        on: { click: (e) => { if (e.offsetY < e.target.clientHeight - 34) abrirMidia(a.mediaUrl); } },
+      });
       bubble.append(el('div', { class: 'msg-media' }, videoEl));
       loadMediaWithAuth(a.mediaUrl, videoEl);
     } else if (a.mediaUrl && a.mediaType === 'document') {
       const docName = a.metadata?.savedFilename || 'Documento';
-      const docLink = el('a', { class: 'doc', href: '#' }, '📄 ', docName);
+      const ehPdf = /\.pdf$/i.test(docName) || a.metadata?.mediaMime === 'application/pdf';
+      const docLink = el('a', {
+        class: 'doc',
+        href: '#',
+        title: ehPdf ? 'Clique para abrir' : 'Clique para baixar',
+      }, '📄 ', docName);
       docLink.addEventListener('click', (e) => {
         e.preventDefault();
-        downloadMediaWithAuth(a.mediaUrl, docName);
+        // PDF dá para ler na hora; o resto o navegador não renderiza, então
+        // continua baixando direto em vez de abrir uma tela inútil.
+        if (ehPdf) abrirMidia(a.mediaUrl);
+        else downloadMediaWithAuth(a.mediaUrl, docName);
       });
       bubble.append(el('div', { class: 'msg-media' }, docLink));
     }
@@ -5358,6 +5398,16 @@ wireKanbanContextMenu();
 // Browsers nao mandam Authorization em <audio src>/<img src>, entao
 // fazemos fetch com auth, criamos blob URL e setamos como src.
 const _mediaBlobCache = new Map();
+
+/* crm.js é um módulo, então `const` daqui não existe para os scripts
+ * clássicos carregados ao lado. O visualizador de mídia precisa destes três:
+ * o cache para reaproveitar o blob que a miniatura já baixou (abrir uma foto
+ * já visível fica instantâneo), e a base/token para buscar o que ainda não
+ * veio — a mídia continua atrás da autenticação, nada é servido aberto. */
+window._clowMediaBlobCache = _mediaBlobCache;
+window.API_BASE = API_BASE;
+window.state = state;
+window.toast = toast;
 
 async function loadMediaWithAuth(mediaUrl, el) {
   if (!mediaUrl || !el) return;
