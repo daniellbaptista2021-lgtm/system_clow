@@ -36,7 +36,7 @@ fi
 
 # Carrega so as vars CLOW_BACKUP_* do .env (evita interpolacao de $X em valores
 # como bcrypt hash CLOW_ADMIN_PASS_HASH=$2b$10$...).
-if [[ -f /opt/system-clow/.env ]]; then
+if [[ -f /opt/system_clow/.env ]]; then
   while IFS= read -r line; do
     [[ "$line" =~ ^CLOW_BACKUP_[A-Z_]+= ]] || continue
     key="${line%%=*}"
@@ -45,7 +45,7 @@ if [[ -f /opt/system-clow/.env ]]; then
     val="${val%\"}"; val="${val#\"}"
     val="${val%\'}"; val="${val#\'}"
     export "$key=$val"
-  done < /opt/system-clow/.env
+  done < /opt/system_clow/.env
 fi
 
 # 1) rclone (recomendado — Backblaze B2 sai a ~$0.005/GB/mes)

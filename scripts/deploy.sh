@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 # deploy.sh — Pull, build, test, zero-downtime reload via PM2.
 # ─────────────────────────────────────────────────────────────────────────
-# Run from /opt/system-clow on the production VPS.
+# Run from /opt/system_clow on the production VPS.
 #
 # Sequence:
 #   1. git pull
@@ -32,7 +32,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/opt/system-clow}"
+REPO_DIR="${REPO_DIR:-/opt/system_clow}"
 APP_NAME="${APP_NAME:-clow}"
 
 cd "$REPO_DIR"
