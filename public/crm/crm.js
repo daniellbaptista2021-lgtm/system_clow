@@ -423,8 +423,8 @@ function ensureCtxMenuStyles() {
 .ctx-menu .ctx-item:hover{background:linear-gradient(135deg,rgba(225,6,0,.14),rgba(255,31,24,.08))}
 .ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#9898B8);display:inline-flex;align-items:center;justify-content:center}
 .ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#9898B8);font-size:11px}
-.ctx-menu .ctx-item.ctx-danger{color:var(--red,#EF4444)}
-.ctx-menu .ctx-item.ctx-danger .ctx-ico{color:var(--red,#EF4444)}
+.ctx-menu .ctx-item.ctx-danger{color:var(--red,#F87171)}
+.ctx-menu .ctx-item.ctx-danger .ctx-ico{color:var(--red,#F87171)}
 .ctx-menu .ctx-item.ctx-danger:hover{background:rgba(239,68,68,.12)}
 .ctx-menu .ctx-sep{height:1px;background:var(--border,rgba(255,255,255,.08));margin:4px 2px}
 .ctx-menu .ctx-header{padding:8px 12px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-faint,#6E6E8C);font-weight:700}
@@ -582,7 +582,7 @@ async function showColumnContextMenu(col, x, y) {
     }),
 
     ctxItem(ICO_COLOR, 'Mudar cor', async () => {
-      const palette = ['#E10600', '#FF1F18', '#22C55E', '#F59E0B', '#EF4444', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const palette = ['#E10600', '#FF1F18', '#4ADE80', '#FBBF24', '#F87171', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
       const v = await pickFromPalette(palette, col.color || '#E10600', 'Mudar cor da coluna');
       if (!v) return;
       try {
@@ -728,10 +728,10 @@ function showColumnReport(col, cards) {
     el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
       stat('Total de cards', String(totalCards)),
       stat('Contatos únicos', String(contacts)),
-      stat('Valor total', fmtMoney(totalValueCents), '#22C55E'),
+      stat('Valor total', fmtMoney(totalValueCents), '#4ADE80'),
       stat('Valor ponderado', fmtMoney(weightedCents), '#E10600'),
       stat('Probabilidade média', avgProb + '%'),
-      stat('Vencidos', String(overdue), overdue > 0 ? '#EF4444' : 'var(--text)'),
+      stat('Vencidos', String(overdue), overdue > 0 ? '#F87171' : 'var(--text)'),
     ),
     noValue > 0 ? el('p', { style: 'font-size:12px;color:var(--text-dim);margin:8px 0' }, '⚠ ' + noValue + ' card(s) sem valor definido') : null,
     topLabels.length ? el('div', { style: 'margin-top:12px' },
@@ -912,8 +912,8 @@ function truncate(s, n) {
 
 async function refreshBoard() {
   try {
-    await loadPipeline?.();
-    renderBoard?.();
+    await loadPipeline(state.currentBoardId);
+    renderKanban();
   } catch { /* silent */ }
 }
 
@@ -1800,7 +1800,16 @@ async function openNewCardModal(columnId = null) {
 async function showView(viewName) {
   $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === viewName));
   $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === viewName));
-  if (viewName === 'kanban') {
+  if (viewName === 'agente') {
+    const frame = document.getElementById('agenteFrameIframe');
+    const loading = document.getElementById('agenteFrameLoading');
+    if (frame && (!frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank')) {
+      frame.onload = () => { if (loading) loading.classList.add('hide'); };
+      frame.src = '/agente/?from=crm&_cb=' + Date.now();
+    } else if (loading) {
+      loading.classList.add('hide');
+    }
+  } else if (viewName === 'kanban') {
     await loadPipeline(state.currentBoardId);
     renderKanban();
   } else if (viewName === 'contacts') { await loadContacts(); renderContactsList(); }
@@ -1845,7 +1854,7 @@ function showContextMenu(evt, items) {
       menu.append(el('div', { style: 'height:1px;background:var(--border);margin:4px 0' }));
       continue;
     }
-    const item = el('button', { style: `display:block;width:100%;text-align:left;padding:8px 14px;background:transparent;border:0;color:${it.danger ? '#ef4444' : 'var(--text)'};cursor:pointer;font-size:13px;font-family:inherit`, on: {
+    const item = el('button', { style: `display:block;width:100%;text-align:left;padding:8px 14px;background:transparent;border:0;color:${it.danger ? '#f87171' : 'var(--text)'};cursor:pointer;font-size:13px;font-family:inherit`, on: {
       click: () => { menu.remove(); it.action(); },
       mouseenter: (e) => e.target.style.background = 'var(--bg-3)',
       mouseleave: (e) => e.target.style.background = 'transparent',
@@ -1876,7 +1885,7 @@ async function authenticatedDownload(path, filename) {
 function copyTextDialog(label, text) {
   const body = el('div', {},
     el('p', { style: 'color:var(--text-dim);font-size:13px;margin-bottom:10px' }, label),
-    el('input', { type: 'text', value: text, readonly: '', style: 'width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:monospace;font-size:12px;margin-bottom:12px', on: { click: (e) => e.target.select() } }),
+    el('input', { type: 'text', value: text, readonly: '', style: 'width:100%;padding:10px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:monospace;font-size:12px;margin-bottom:12px', on: { click: (e) => e.target.select() } }),
     el('button', {
       style: 'width:100%;padding:10px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-weight:600',
       on: { click: async () => {
@@ -1893,7 +1902,7 @@ function inputField(name, label, opts = {}) {
   wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px' }, label));
   const input = el(opts.tag || 'input', {
     name, ...(opts.attrs || {}),
-    style: 'width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:14px',
+    style: 'width:100%;padding:10px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:14px',
   });
   if (opts.value !== undefined) input.value = opts.value;
   if (opts.required) input.required = true;
@@ -1904,7 +1913,7 @@ function inputField(name, label, opts = {}) {
 function selectField(name, label, options, currentValue) {
   const wrap = el('div', { style: 'margin-bottom:10px' });
   wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px' }, label));
-  const sel = el('select', { name, style: 'width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:14px' });
+  const sel = el('select', { name, style: 'width:100%;padding:10px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px;box-sizing:border-box;font-family:inherit;font-size:14px' });
   for (const o of options) {
     const opt = el('option', { value: o.value }, o.label);
     if (o.value === currentValue) opt.selected = true;
@@ -1926,7 +1935,7 @@ async function renderTasksView() {
       statsEl.innerHTML = '';
       for (const [label, val, color] of [
         ['Abertas', s.open, 'var(--blue)'],
-        ['Atrasadas', s.overdue, '#EF4444'],
+        ['Atrasadas', s.overdue, '#F87171'],
         ['Hoje', s.dueToday, 'var(--amber)'],
         ['Esta semana', s.dueThisWeek, 'var(--purple)'],
         ['Concluídas 7d', s.completedLast7d, 'var(--green)'],
@@ -1954,7 +1963,7 @@ async function renderTasksView() {
       return;
     }
     for (const t of data.tasks) {
-      const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#F59E0B', low: '#64748B' }[t.priority] || '#64748B';
+      const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#FBBF24', low: '#64748B' }[t.priority] || '#64748B';
       const typeIcon = { call: '📞', email: '✉️', meeting: '👥', followup: '🔄', other: '📌' }[t.type] || '📌';
       const dueMs = t.dueAt ? (typeof t.dueAt === 'number' ? t.dueAt : Date.parse(t.dueAt)) : null;
       const dueStr = dueMs ? new Date(dueMs).toLocaleString('pt-BR') : 'Sem prazo';
@@ -2145,7 +2154,8 @@ async function renderAgendaView() {
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
-function openAppointmentEditModal(appt) {
+function openAppointmentEditModal(appt, opts) {
+  opts = opts || {};
   const isNew = !appt;
   appt = appt || {};
   const form = el('form', { on: { submit: async (e) => {
@@ -2159,11 +2169,15 @@ function openAppointmentEditModal(appt) {
       meetingUrl: fd.get('meetingUrl'), location: fd.get('location'),
       reminderMinutes: fd.get('reminder') ? Number(fd.get('reminder')) : 30,
     };
+    // Aberto a partir do card (aba Vínculos) — vincula direto ao contato/card,
+    // sem pedir pro usuário procurar de novo quem já está com o card aberto.
+    if (isNew && opts.contactId) body.contactId = opts.contactId;
+    if (isNew && opts.cardId) body.cardId = opts.cardId;
     try {
       if (isNew) await api('/appointments', { method: 'POST', body });
       else await api(`/appointments/${appt.id}`, { method: 'PATCH', body });
       backdrop.remove();
-      renderAgendaView();
+      if (opts.onSaved) opts.onSaved(); else renderAgendaView();
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
 
@@ -2199,8 +2213,8 @@ async function openSchedulingLinksModal() {
         el('div', { style: 'font-weight:600;margin-bottom:4px' }, lk.title),
         el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px' }, `${lk.durationMinutes}min • ${lk.totalBookings || 0} agendamentos`),
         el('div', { style: 'display:flex;gap:6px' },
-          el('button', { style: 'flex:1;padding:6px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer;font-size:11px', on: { click: () => copyTextDialog('URL pública:', url) } }, '🔗 Link'),
-          el('button', { style: 'padding:6px 10px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:4px;cursor:pointer;font-size:11px', on: { click: async () => {
+          el('button', { style: 'flex:1;padding:6px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer;font-size:11px', on: { click: () => copyTextDialog('URL pública:', url) } }, '🔗 Link'),
+          el('button', { style: 'padding:6px 10px;background:transparent;border:1px solid #f87171;color:#f87171;border-radius:4px;cursor:pointer;font-size:11px', on: { click: async () => {
             if (!confirm('Deletar?')) return;
             await api(`/scheduling-links/${lk.id}`, { method: 'DELETE' });
             links = links.filter(x => x.id !== lk.id); renderList();
@@ -2257,7 +2271,7 @@ async function renderDocumentsView() {
       return;
     }
     for (const d of data.documents) {
-      const statusColor = { draft: '#64748B', sent: '#3B82F6', viewed: '#F59E0B', signed: '#10B981', cancelled: '#EF4444' }[d.status] || '#64748B';
+      const statusColor = { draft: '#64748B', sent: '#3B82F6', viewed: '#FBBF24', signed: '#10B981', cancelled: '#F87171' }[d.status] || '#64748B';
       const row = el('div', {
         style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center;cursor:pointer',
         on: {
@@ -2288,7 +2302,7 @@ async function renderDocumentsView() {
             (d.signedAt ? ` • Assinado por ${d.signedBy}` : '')),
         ),
         el('button', {
-          style: 'background:var(--bg-1);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
+          style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
           on: { click: async () => {
             const r = await api(`/documents/${d.id}/public-link`);
             copyTextDialog('Link público (cliente abre, lê e assina aqui):', r.url);
@@ -2417,7 +2431,7 @@ async function renderFormsView() {
                 `${f.totalSubmissions || 0} submissões • slug: ${f.slug}`),
             ),
             el('button', {
-              style: 'background:var(--bg-1);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
+              style: 'background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;cursor:pointer',
               on: { click: () => window.open(hostedUrl, '_blank') },
             }, '🔗 Abrir'),
             el('button', {
@@ -2425,7 +2439,7 @@ async function renderFormsView() {
               on: { click: () => copyTextDialog('Cole no HTML do seu site:', snippet) },
             }, '📋 Embed'),
           ),
-          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-1);padding:4px 8px;border-radius:4px;display:block;word-break:break-all' }, snippet),
+          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-3);padding:4px 8px;border-radius:4px;display:block;word-break:break-all' }, snippet),
         );
         l.append(row);
       }
@@ -2458,7 +2472,7 @@ async function renderFormsView() {
             el('div', { style: 'font-weight:600' }, h.name),
             el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${h.enabled ? '#10B98120' : '#64748B20'};color:${h.enabled ? '#10B981' : '#64748B'}` }, h.enabled ? 'ATIVO' : 'INATIVO'),
           ),
-          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-1);padding:6px 10px;border-radius:4px;display:block;word-break:break-all' }, hookUrl),
+          el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-3);padding:6px 10px;border-radius:4px;display:block;word-break:break-all' }, hookUrl),
           el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:6px' }, `${h.totalReceived || 0} recebidos`),
         ));
       }
@@ -2477,19 +2491,19 @@ function openFormEditModal(form) {
     fieldsContainer.append(el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:8px' }, 'Campos do formulário:'));
     fields.forEach((f, i) => {
       fieldsContainer.append(el('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:6px' },
-        el('input', { value: f.name, placeholder: 'name', style: 'flex:1;padding:6px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { input: (e) => fields[i].name = e.target.value } }),
-        el('input', { value: f.label, placeholder: 'Label', style: 'flex:1;padding:6px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { input: (e) => fields[i].label = e.target.value } }),
-        (() => { const s = el('select', { style: 'padding:6px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { change: (e) => fields[i].type = e.target.value } });
+        el('input', { value: f.name, placeholder: 'name', style: 'flex:1;padding:6px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { input: (e) => fields[i].name = e.target.value } }),
+        el('input', { value: f.label, placeholder: 'Label', style: 'flex:1;padding:6px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { input: (e) => fields[i].label = e.target.value } }),
+        (() => { const s = el('select', { style: 'padding:6px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px', on: { change: (e) => fields[i].type = e.target.value } });
           for (const t of ['text','email','phone','textarea','select','number']) {
             const o = el('option', { value: t }, t);
             if (f.type === t) o.selected = true;
             s.append(o);
           }
           return s; })(),
-        el('button', { type: 'button', style: 'background:transparent;border:1px solid #ef4444;color:#ef4444;padding:4px 8px;border-radius:4px;cursor:pointer', on: { click: () => { fields.splice(i, 1); renderFields(); } } }, '×'),
+        el('button', { type: 'button', style: 'background:transparent;border:1px solid #f87171;color:#f87171;padding:4px 8px;border-radius:4px;cursor:pointer', on: { click: () => { fields.splice(i, 1); renderFields(); } } }, '×'),
       ));
     });
-    fieldsContainer.append(el('button', { type: 'button', style: 'background:var(--bg-1);border:1px dashed var(--border);color:var(--text-dim);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;width:100%;margin-top:4px', on: { click: () => { fields.push({ name: 'field_' + Date.now(), label: 'Novo campo', type: 'text' }); renderFields(); } } }, '+ Adicionar campo'));
+    fieldsContainer.append(el('button', { type: 'button', style: 'background:var(--bg-3);border:1px dashed var(--border);color:var(--text-dim);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;width:100%;margin-top:4px', on: { click: () => { fields.push({ name: 'field_' + Date.now(), label: 'Novo campo', type: 'text' }); renderFields(); } } }, '+ Adicionar campo'));
   };
   renderFields();
 
@@ -2532,7 +2546,7 @@ function openSubmissionsModal(form, subs) {
       const payload = JSON.parse(s.payload_json || '{}');
       body.append(el('div', { style: 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px' },
         el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:4px' }, new Date(s.created_at).toLocaleString('pt-BR') + ' • ' + (s.ip || 'unknown')),
-        el('pre', { style: 'background:var(--bg-1);padding:8px;border-radius:4px;font-size:11px;overflow:auto;margin:0' }, JSON.stringify(payload, null, 2)),
+        el('pre', { style: 'background:var(--bg-3);padding:8px;border-radius:4px;font-size:11px;overflow:auto;margin:0' }, JSON.stringify(payload, null, 2)),
       ));
     }
   }
@@ -2577,7 +2591,7 @@ async function renderCampaignsView() {
       return;
     }
     for (const c of data.campaigns) {
-      const statusColor = { draft: '#64748B', scheduled: '#F59E0B', sending: '#3B82F6', sent: '#10B981', paused: '#F97316' }[c.status] || '#64748B';
+      const statusColor = { draft: '#64748B', scheduled: '#FBBF24', sending: '#3B82F6', sent: '#10B981', paused: '#F97316' }[c.status] || '#64748B';
       const openRate = c.stats_sent > 0 ? ((c.stats_opened / c.stats_sent) * 100).toFixed(1) + '%' : '—';
       const clickRate = c.stats_sent > 0 ? ((c.stats_clicked / c.stats_sent) * 100).toFixed(1) + '%' : '—';
       l.append(el('div', {
@@ -2609,7 +2623,7 @@ async function renderCampaignsView() {
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Enviados'), el('div', { style: 'font-weight:600;font-size:16px' }, String(c.stats_sent || 0))),
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Abertos'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--green)' }, `${c.stats_opened || 0} (${openRate})`)),
           el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Cliques'), el('div', { style: 'font-weight:600;font-size:16px;color:var(--blue)' }, `${c.stats_clicked || 0} (${clickRate})`)),
-          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Bounced'), el('div', { style: 'font-weight:600;font-size:16px;color:#EF4444' }, String(c.stats_bounced || 0))),
+          el('div', {}, el('div', { style: 'color:var(--text-dim)' }, 'Bounced'), el('div', { style: 'font-weight:600;font-size:16px;color:#F87171' }, String(c.stats_bounced || 0))),
         ),
       ));
     }
@@ -2619,11 +2633,11 @@ async function renderCampaignsView() {
 async function openCampaignDetailModal(c) {
   const stats = await api(`/campaigns/${c.id}/stats`).catch(() => ({}));
   const body = el('div', {},
-    el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px' },
+    el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:6px;margin-bottom:14px' },
       el('div', { style: 'color:var(--text-dim);font-size:12px;margin-bottom:4px' }, 'Subject'),
       el('div', { style: 'font-weight:600' }, c.subject),
     ),
-    el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px;max-height:200px;overflow:auto' },
+    el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:6px;margin-bottom:14px;max-height:200px;overflow:auto' },
       el('div', { style: 'color:var(--text-dim);font-size:12px;margin-bottom:6px' }, 'Body HTML preview'),
       el('div', { html: c.body_html || '' }),
     ),
@@ -2891,7 +2905,7 @@ function renderChannelsList() {
               class: 'save-btn',
               style: 'flex:1;min-width:170px;font-size:12px;padding:9px;font-weight:700;' +
                 (ch.status === 'active'
-                  ? 'background:rgba(34,197,94,.12);color:#22C55E;border:1px solid rgba(34,197,94,.35)'
+                  ? 'background:rgba(34,197,94,.12);color:#4ADE80;border:1px solid rgba(34,197,94,.35)'
                   : 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;border:none'),
               on: { click: () => {
                 if (!window.PareamentoWhatsApp) { toast('Tela de conexão não carregou', 'error'); return; }
@@ -2939,7 +2953,7 @@ function renderAIToggleButton(ch) {
     }).catch(() => { state.aiConfigCache[ch.id] = { enabled: false }; });
   }
   const bg = enabled
-    ? 'linear-gradient(135deg,#22C55E,#16A34A)'
+    ? 'linear-gradient(135deg,#4ADE80,#16A34A)'
     : 'linear-gradient(135deg,#525252,#404040)';
   const label = enabled ? '🤖 IA: ON' : '🤖 IA: OFF';
   return el('button', {
@@ -3089,23 +3103,28 @@ function showWebhookSetup(channel, isNew) {
   const verifyTok = (channel.credentials && channel.credentials.verifyToken) || '';
 
   const headerColor = isNew ? 'var(--green)' : 'var(--purple)';
-  const title = isNew ? '✓ Canal criado — agora configure no provedor' : 'Webhook do canal ' + channel.name;
+  const title = isMeta
+    ? (isNew ? '✓ Canal criado — agora configure no Meta' : 'Webhook do canal ' + channel.name)
+    : '✓ Canal criado — agora conecte o WhatsApp';
 
   const metaInstr = el('div', {
     style: 'background:rgba(255,31,24,.08);border:1px solid rgba(255,31,24,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
     html: '<div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Como configurar no Meta</div>1. Acesse <strong>Meta for Developers</strong> → seu app → <strong>WhatsApp → Configuração</strong><br>2. No bloco <strong>Webhook</strong>, clique <strong>Editar</strong><br>3. Cole a <strong>Webhook URL</strong> abaixo no campo <em>"URL de retorno de chamada"</em><br>4. Cole o <strong>Verify Token</strong> abaixo no campo <em>"Verificar token"</em><br>5. Clique <strong>Verificar e salvar</strong> (deve ficar verde)<br>6. Em <strong>Campos do webhook</strong>, marque <code>messages</code> e <strong>Inscrever</strong>',
   });
+  // Evolution e sempre a instancia nossa, auto-provisionada: o webhook ja foi
+  // configurado sozinho na criacao do canal. Nao ha painel externo nenhum pro
+  // cliente acessar — so falta parear o numero pelo QR Code.
   const evolutionInstr = el('div', {
     style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
-    html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📋 Como configurar na Evolution API</div>1. Acesse o painel da <strong>Evolution API</strong> → sua instância<br>2. Vá em <strong>Webhooks</strong> no menu lateral<br>3. Cole a URL abaixo nos campos <strong>"Ao receber"</strong> (mensagens recebidas)<br>4. Marque a opção <strong>"Notificar mensagens enviadas por mim também"</strong> se quiser sync de outbound<br>5. Salve as alterações',
+    html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📲 Falta só conectar</div>O webhook já foi configurado automaticamente. Feche esta janela e clique em <strong>"Conectar WhatsApp"</strong> no canal, na lista — vai abrir o QR Code pra escanear com o celular.',
   });
 
-  const fields = [copyableField('Webhook URL', whUrl)];
+  const fields = isMeta ? [copyableField('Webhook URL', whUrl)] : [];
   if (isMeta && verifyTok) fields.push(copyableField('Verify Token', verifyTok));
 
   const modal = el('div', { class: 'modal', style: 'max-width:600px' },
     el('h3', { style: 'color:' + headerColor + ';margin:0 0 6px;font-size:18px' }, title),
-    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:18px' }, channel.name + ' · ' + (isMeta ? 'Meta Cloud API' : 'Evolution API') + (channel.phoneNumber ? ' · ' + channel.phoneNumber : '')),
+    el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:18px' }, channel.name + ' · ' + (isMeta ? 'Meta Cloud API' : 'WhatsApp por QR Code') + (channel.phoneNumber ? ' · ' + channel.phoneNumber : '')),
     isMeta ? metaInstr : evolutionInstr,
     ...fields,
     el('div', { class: 'modal-actions' },
@@ -3189,12 +3208,8 @@ async function openNewChannelModal(presetType) {
       phoneNumberId: fd.get('metaPhoneId'),
       verifyToken: verifyTokInput.value,
       apiVersion: 'v22.0',
-    } : type === 'evolution' ? {
-      usarServidorDoSistema: true,
     } : {
-      instanceId: fd.get('evolutionInstance'),
-      token: fd.get('evolutionToken'),
-      clientToken: fd.get('evolutionClientToken') || undefined,
+      usarServidorDoSistema: true,
     };
     try {
       const r = await api('/channels', { method: 'POST', body: {
@@ -3213,11 +3228,6 @@ async function openNewChannelModal(presetType) {
     field('Access Token', 'metaToken', 'text', ''),
     field('Phone Number ID', 'metaPhoneId', 'text', ''),
   );
-  const fieldsevolution = el('div', { style: 'display:none' },
-    field('Instance ID', 'evolutionInstance', 'text', ''),
-    field('Token', 'evolutionToken', 'text', ''),
-    field('Client-Token (opcional)', 'evolutionClientToken', 'text', ''),
-  );
 
   form.append(
     field('Nome do canal', 'name', 'text', '', { placeholder: 'Ex: WA Vendas' }),
@@ -3228,17 +3238,14 @@ async function openNewChannelModal(presetType) {
         const sel = el('select', { name: 'type', on: { change: (e) => {
           const v = e.target.value;
           fieldsMeta.style.display = v === 'meta' ? '' : 'none';
-          fieldsevolution.style.display = v === 'evolution' ? '' : 'none';
           refreshWebhookUI(v);
         } } },
           el('option', { value: 'evolution' }, 'WhatsApp por QR Code (grátis, recomendado)'),
-          el('option', { value: 'evolution' }, 'Evolution API (pago, por número)'),
           el('option', { value: 'meta' }, 'Meta Cloud API (oficial, exige aprovação)'),
         );
         return sel;
       })(),
     ),
-    fieldsevolution,
     fieldsMeta,
     whBlock,
     verifyTokBlock,
@@ -3254,7 +3261,6 @@ async function openNewChannelModal(presetType) {
 
   // Começa na Evolution: é a primeira opção e a única sem custo para o cliente.
   setTimeout(() => {
-    fieldsevolution.style.display = 'none';
     fieldsMeta.style.display = 'none';
     refreshWebhookUI('evolution');
   }, 0);
@@ -3391,7 +3397,7 @@ function plotSales(canvasId, rows) {
       labels: rows.map(r => r.bucket),
       datasets: [
         { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#E10600', backgroundColor: 'rgba(225,6,0,.2)', yAxisID: 'y' },
-        { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#22C55E', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
+        { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#4ADE80', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
       ],
     },
     options: chartDefaults({ dualAxis: true }),
@@ -3404,7 +3410,7 @@ function plotAgents(canvasId, rows) {
   if (!ctx) return;
   if (rows.length === 0) { emptyMsg(ctx); return; }
   const types = [...new Set(rows.flatMap(r => Object.keys(r.byType)))];
-  const palette = ['#E10600', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899'];
+  const palette = ['#E10600', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899'];
   window._rptCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -3430,7 +3436,7 @@ function plotSources(canvasId, rows) {
       labels: rows.map(r => r.source),
       datasets: [{
         data: rows.map(r => r.contactCount),
-        backgroundColor: ['#E10600', '#22C55E', '#F59E0B', '#3B82F6', '#EF4444', '#06B6D4', '#EC4899', '#64748B'],
+        backgroundColor: ['#E10600', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899', '#64748B'],
       }],
     },
     options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } } },
@@ -3449,7 +3455,7 @@ function plotLost(canvasId, rows) {
       datasets: [{
         label: 'Cards perdidos',
         data: rows.map(r => r.cardCount),
-        backgroundColor: '#EF4444',
+        backgroundColor: '#F87171',
       }],
     },
     options: chartDefaults({ horizontal: true }),
@@ -3541,7 +3547,7 @@ async function openSchedulesModal() {
             schedules = schedules.filter(x => x.id !== s.id);
             renderList();
           } catch (e) { toast('Erro: ' + e.message, 'error'); }
-        } }, style: 'color:#ef4444' }, 'Remover'),
+        } }, style: 'color:#f87171' }, 'Remover'),
       );
       list.append(row);
     }
@@ -4056,7 +4062,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#EF4444">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:#F87171">Erro ao iniciar</h1><p style="color:#9898B8">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
     }
   }
 })();
@@ -4215,7 +4221,7 @@ async function renderInsightsView() {
       list.append(row);
     }
     container.append(list);
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
 }
 
 async function openCardAIInsights(cardId) {
@@ -4233,10 +4239,10 @@ async function openCardAIInsights(cardId) {
     if (score?.insight) {
       const s = score.insight;
       const bd = s.contentJson || {};
-      body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px' },
+      body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:6px;margin-bottom:14px' },
         el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px' },
           el('div', { style: 'font-weight:600' }, 'Lead Score'),
-          el('div', { style: `font-size:32px;font-weight:700;color:${s.scoreNumeric > 60 ? 'var(--green)' : s.scoreNumeric > 30 ? 'var(--amber)' : '#ef4444'}` }, s.scoreNumeric + '/100'),
+          el('div', { style: `font-size:32px;font-weight:700;color:${s.scoreNumeric > 60 ? 'var(--green)' : s.scoreNumeric > 30 ? 'var(--amber)' : '#f87171'}` }, s.scoreNumeric + '/100'),
         ),
         el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;color:var(--text-dim)' },
           el('div', {}, `Atividade: ${bd.activity}/25`),
@@ -4250,7 +4256,7 @@ async function openCardAIInsights(cardId) {
     }
     if (classify?.insight) {
       const lbl = classify.insight.contentText;
-      const colors = { hot: '#ef4444', warm: '#f59e0b', cold: '#3b82f6' };
+      const colors = { hot: '#f87171', warm: '#fbbf24', cold: '#3b82f6' };
       body.append(el('div', { style: `background:${colors[lbl]}20;border:1px solid ${colors[lbl]};padding:14px;border-radius:6px;margin-bottom:14px` },
         el('div', { style: 'font-weight:600;margin-bottom:4px' }, '🌡️ Classificação'),
         el('div', { style: `font-size:24px;font-weight:700;color:${colors[lbl]};text-transform:uppercase` }, lbl),
@@ -4259,8 +4265,8 @@ async function openCardAIInsights(cardId) {
     }
     if (sentiment?.insight?.contentJson) {
       const sj = sentiment.insight.contentJson;
-      const sColor = { positive: '#10b981', neutral: '#64748b', negative: '#ef4444' }[sj.label];
-      body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:6px;margin-bottom:14px' },
+      const sColor = { positive: '#10b981', neutral: '#64748b', negative: '#f87171' }[sj.label];
+      body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:6px;margin-bottom:14px' },
         el('div', { style: 'font-weight:600;margin-bottom:6px' }, '💭 Sentimento (mensagens recentes)'),
         el('div', { style: `color:${sColor};font-size:18px;font-weight:600;text-transform:capitalize` }, `${sj.label} (${(sj.score * 100).toFixed(0)}%)`),
         sj.triggers?.length ? el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:6px' }, 'Palavras-chave: ' + sj.triggers.slice(0, 5).join(', ')) : null,
@@ -4291,7 +4297,7 @@ async function openCardAIInsights(cardId) {
         }, '📝 Resumo conversa'),
       ),
     );
-  } catch (e) { body.innerHTML = '<div style="color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { body.innerHTML = '<div style="color:#f87171">' + e.message + '</div>'; }
 }
 
 // ═════════ PERFORMANCE / GAMIFICAÇÃO ═════════════════════════════════════
@@ -4366,7 +4372,7 @@ async function renderPerformanceView() {
         gContainer.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px' },
           el('div', { style: 'font-weight:600;margin-bottom:6px' }, g.title || `${g.kind} ${g.target}`),
           el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:8px' }, `${prog.currentValue || 0} / ${g.target} • ${g.period}`),
-          el('div', { style: 'background:var(--bg-1);height:8px;border-radius:4px;overflow:hidden' },
+          el('div', { style: 'background:var(--bg-3);height:8px;border-radius:4px;overflow:hidden' },
             el('div', { style: `background:var(--purple);height:100%;width:${Math.min(100, prog.percent || 0)}%` }),
           ),
           el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:4px;text-align:right' }, `${prog.percent || 0}%`),
@@ -4389,7 +4395,7 @@ async function renderPerformanceView() {
       }
       container.append(bContainer);
     }
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
 }
 
 function openNewGoalModal() {
@@ -4492,7 +4498,7 @@ async function renderSecurityView() {
         ));
       }
     }
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
 }
 
 function openNewRoleModal() {
@@ -4620,7 +4626,7 @@ async function renderPrivacyView() {
     container.append(el('div', { style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px' },
       el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:8px' }, 'Digite o ID do contato para acessar consentimentos, exportação ou direito ao esquecimento:'),
       el('div', { style: 'display:flex;gap:8px' },
-        el('input', { type: 'text', id: 'lgpdContactInput', placeholder: 'crm_contact_xxx', style: 'flex:1;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px' }),
+        el('input', { type: 'text', id: 'lgpdContactInput', placeholder: 'crm_contact_xxx', style: 'flex:1;padding:10px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px' }),
         el('button', {
           style: 'padding:10px 16px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-weight:600',
           on: { click: () => {
@@ -4637,7 +4643,7 @@ async function renderPrivacyView() {
       el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:6px' }, `${unsubs.unsubscribes?.length || 0} emails que cancelaram inscrição`),
       ...(unsubs.unsubscribes || []).slice(0, 5).map(u => el('div', { style: 'font-size:11px;font-family:monospace;color:var(--text-dim);padding:2px 0' }, u.email + ' • ' + new Date(u.created_at).toLocaleDateString('pt-BR'))),
     ));
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
 }
 
 async function openLgpdContactModal(contactId) {
@@ -4658,7 +4664,7 @@ async function openLgpdContactModal(contactId) {
         on: { click: () => window.open(API_BASE + `/contacts/${contactId}/portability?format=download`, '_blank') },
       }, '📤 Exportar (JSON)'),
       el('button', {
-        style: 'padding:10px;background:#f59e0b;color:#fff;border:0;border-radius:6px;cursor:pointer',
+        style: 'padding:10px;background:#fbbf24;color:#fff;border:0;border-radius:6px;cursor:pointer',
         on: { click: async () => {
           if (!confirm('Anonimizar este contato? PII será removida (nome, email, phone). Estrutura mantida.')) return;
           try {
@@ -4669,7 +4675,7 @@ async function openLgpdContactModal(contactId) {
         } },
       }, '🥸 Anonimizar'),
       el('button', {
-        style: 'padding:10px;background:#ef4444;color:#fff;border:0;border-radius:6px;cursor:pointer;grid-column:span 2',
+        style: 'padding:10px;background:#f87171;color:#fff;border:0;border-radius:6px;cursor:pointer;grid-column:span 2',
         on: { click: async () => {
           if (!confirm('DELETAR PERMANENTEMENTE este contato e TODOS os dados (cards/atividades/notas)? Sem volta.')) return;
           try {
@@ -4680,7 +4686,7 @@ async function openLgpdContactModal(contactId) {
         } },
       }, '🗑️ Direito ao Esquecimento (DELETE)'),
     ));
-  } catch (e) { body.append(el('div', { style: 'color:#ef4444' }, e.message)); }
+  } catch (e) { body.append(el('div', { style: 'color:#f87171' }, e.message)); }
   const { backdrop } = openModal({ title: 'LGPD: ' + contactId, bodyEl: body, width: '560px' });
 }
 
@@ -4755,7 +4761,7 @@ async function renderTrashView() {
         );
       }),
     ));
-  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { container.innerHTML = '<div style="padding:40px;color:#f87171">' + e.message + '</div>'; }
 }
 
 async function showTrashEntity(entity) {
@@ -4778,7 +4784,7 @@ async function showTrashEntity(entity) {
             } },
           }, 'Restaurar'),
           el('button', {
-            style: 'background:#ef4444;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
+            style: 'background:#f87171;color:#fff;border:0;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px',
             on: { click: async () => {
               if (!confirm('DELETAR permanentemente?')) return;
               await api(`/trash/${entity}/${it.id}/purge`, { method: 'DELETE' });
@@ -4804,19 +4810,19 @@ async function renderAITab(card) {
     sec.append(el('div', { style: 'padding:14px' },
       el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:8px;margin-bottom:10px' },
         el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, 'Lead Score'),
-        el('div', { style: `font-size:28px;font-weight:700;color:${score?.insight?.scoreNumeric > 60 ? 'var(--green)' : score?.insight?.scoreNumeric > 30 ? 'var(--amber)' : '#ef4444'}` },
+        el('div', { style: `font-size:28px;font-weight:700;color:${score?.insight?.scoreNumeric > 60 ? 'var(--green)' : score?.insight?.scoreNumeric > 30 ? 'var(--amber)' : '#f87171'}` },
           (score?.insight?.scoreNumeric || 0) + '/100'),
       ),
       classify?.insight ? el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:8px;margin-bottom:10px' },
         el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, 'Classificação'),
-        el('div', { style: 'font-size:18px;font-weight:600;text-transform:uppercase;color:' + ({ hot: '#ef4444', warm: '#f59e0b', cold: '#3b82f6' }[classify.insight.contentText] || 'var(--text)') }, classify.insight.contentText),
+        el('div', { style: 'font-size:18px;font-weight:600;text-transform:uppercase;color:' + ({ hot: '#f87171', warm: '#fbbf24', cold: '#3b82f6' }[classify.insight.contentText] || 'var(--text)') }, classify.insight.contentText),
       ) : null,
       el('button', {
         style: 'width:100%;padding:10px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;margin-bottom:6px',
         on: { click: () => openCardAIInsights(card.id) },
       }, '🧠 Análise completa'),
       el('button', {
-        style: 'width:100%;padding:10px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer',
+        style: 'width:100%;padding:10px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer',
         on: { click: async () => {
           toast('Gerando próximo passo...', 'info');
           const r = await api(`/ai/cards/${card.id}/next-step`, { method: 'POST', body: {} }).catch(() => null);
@@ -4824,7 +4830,7 @@ async function renderAITab(card) {
         } },
       }, '💡 Sugerir próximo passo'),
     ));
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#f87171">' + e.message + '</div>'; }
 }
 
 async function renderLinksTab(card) {
@@ -4834,152 +4840,107 @@ async function renderLinksTab(card) {
 
   // Refs no escopo do tab pra refresh seletivo
   const refresh = () => renderLinksTab(card);
+  const contactId = card.contactId || card.contact_id || null;
 
-  let tasks = { tasks: [] }, docs = { documents: [] }, props = { proposals: [] }, subs = { subscriptions: [] };
+  let appts = { appointments: [] }, subs = { subscriptions: [] };
   try {
-    const [t1, d1, p1, s1] = await Promise.all([
-      api('/cards/' + card.id + '/tasks').catch(() => ({ tasks: [] })),
-      api('/cards/' + card.id + '/documents').catch(() => ({ documents: [] })),
-      api('/cards/' + card.id + '/proposals').catch(() => ({ proposals: [] })),
+    const [a1, s1] = await Promise.all([
+      contactId ? api('/appointments?contactId=' + contactId).catch(() => ({ appointments: [] })) : Promise.resolve({ appointments: [] }),
       api('/cards/' + card.id + '/subscriptions').catch(() => ({ subscriptions: [] })),
     ]);
-    tasks = t1; docs = d1; props = p1; subs = s1;
+    appts = a1; subs = s1;
   } catch (e) {
-    sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>';
+    sec.innerHTML = '<div style="padding:20px;color:var(--red)">' + e.message + '</div>';
     return;
   }
 
   sec.innerHTML = '';
-  const wrap = el('div', { style: 'padding:14px;display:flex;flex-direction:column;gap:18px' });
+  const wrap = el('div', { style: 'padding:24px 24px 28px;display:flex;flex-direction:column;gap:30px' });
 
-  // Helpers de UI
-  const sectionHead = (icon, title, count, onAdd) => el('div', {
-    style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px'
+  // ─── Helpers de UI — neutros por padrão; vermelho só no CTA principal.
+  // Cada seção tem EXATAMENTE UM botão de ação, no cabeçalho — o empty state
+  // nunca repete esse botão (ver critério do pedido: zero redundância). ──
+  const sectionHead = (icon, title, count, addLabel, onAdd) => el('div', {
+    style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'
   },
-    el('h4', { style: 'margin:0;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px' },
-      el('span', { style: 'font-size:14px' }, icon),
-      title,
-      el('span', { style: 'color:var(--text-dim);font-weight:500' }, '(' + count + ')'),
+    el('div', { style: 'display:flex;align-items:center;gap:8px;min-width:0' },
+      el('span', { style: 'font-size:14px;flex:0 0 auto' }, icon),
+      el('h4', { style: 'margin:0;font-size:13px;font-weight:700;color:var(--text)' }, title),
+      el('span', {
+        style: 'min-width:18px;height:18px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;' +
+          'background:var(--bg-4);color:var(--text-faint);border-radius:999px;font-size:10.5px;font-weight:700;flex:0 0 auto'
+      }, String(count)),
     ),
     el('button', {
       type: 'button',
-      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer',
+      style: 'height:32px;padding:0 14px;background:var(--grad);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;flex:0 0 auto',
       on: { click: onAdd }
-    }, '+ Adicionar')
+    }, addLabel)
   );
 
-  const emptyHint = (msg) => el('div', { style: 'color:var(--text-dim);font-size:12px;font-style:italic;padding:8px;background:rgba(225,6,0,0.04);border-radius:6px;text-align:center' }, msg);
+  // Mensagem informativa — nunca um segundo CTA, nunca parece campo clicável.
+  const emptyHint = (msg, subtitle) => el('div', {
+    style: 'padding:16px 14px;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--radius-sm);text-align:center'
+  },
+    el('div', { style: 'color:var(--text-2);font-size:12.5px' }, msg),
+    subtitle ? el('div', { style: 'color:var(--text-faint);font-size:11px;margin-top:4px' }, subtitle) : null,
+  );
 
   const itemCard = (children, opts) => el('div', {
-    style: 'background:var(--bg-3,rgba(255,255,255,0.03));border:1px solid rgba(225,6,0,0.12);padding:10px;border-radius:8px;margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
+    style: 'background:var(--bg-3);border:1px solid var(--border);padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:6px;font-size:12.5px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;' + (opts?.dimmed ? 'opacity:.55' : '')
   }, ...children);
 
   const inlineBtn = (label, onClick, danger) => el('button', {
     type: 'button',
-    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(239,68,68,0.4)' : 'rgba(225,6,0,0.3)') + ';color:' + (danger ? '#fca5a5' : 'var(--text)') + ';padding:3px 9px;border-radius:6px;font-size:11px;cursor:pointer',
+    style: 'background:transparent;border:1px solid ' + (danger ? 'rgba(248,113,113,.35)' : 'var(--border)') + ';color:' + (danger ? 'var(--red)' : 'var(--text-2)') + ';padding:3px 9px;border-radius:var(--radius-sm);font-size:11px;cursor:pointer',
     on: { click: onClick }
   }, label);
 
-  const PRIO_COLOR = { urgent: '#EF4444', high: '#F59E0B', med: '#E10600', low: '#64748B' };
-  const PRIO_LABEL = { urgent: 'Urgente', high: 'Alta', med: 'Média', low: 'Baixa' };
-
-  // ─── TAREFAS ─────────────────────────────────────────────────────────
-  const tasksSec = el('section', {});
-  tasksSec.append(sectionHead('✅', 'Tarefas', tasks.tasks?.length || 0, () => openNewTaskModal(card, refresh)));
-  if (!tasks.tasks?.length) tasksSec.append(emptyHint('Nenhuma tarefa. Use "+ Adicionar" pra criar (cobrar mensalidade, marcar reunião, etc)'));
-  else {
-    for (const t of tasks.tasks) {
-      const due = t.due_at || t.dueAt;
-      const dueDate = due ? new Date(due) : null;
-      const overdue = dueDate && dueDate.getTime() < Date.now() && t.status === 'open';
-      const done = t.status === 'done' || t.status === 'completed';
-      tasksSec.append(itemCard([
+  // ─── AGENDA ──────────────────────────────────────────────────────────
+  const agendaSec = el('section', {});
+  const abrirNovoCompromisso = () => openAppointmentEditModal(null, { contactId, cardId: card.id, onSaved: refresh });
+  agendaSec.append(sectionHead('📅', 'Agenda', appts.appointments?.length || 0, '+ Agendar', abrirNovoCompromisso));
+  if (!appts.appointments?.length) {
+    agendaSec.append(emptyHint('Nenhum compromisso agendado.', 'Os próximos compromissos deste contato aparecerão aqui.'));
+  } else {
+    const ordenados = [...appts.appointments].sort((a, b) => a.startsAt - b.startsAt);
+    const STATUS_LABEL = { scheduled: 'Agendado', completed: 'Concluído', cancelled: 'Cancelado' };
+    const STATUS_COLOR = { scheduled: 'var(--text-2)', completed: 'var(--green)', cancelled: 'var(--text-faint)' };
+    for (const a of ordenados) {
+      const when = new Date(a.startsAt);
+      agendaSec.append(itemCard([
         el('div', { style: 'flex:1;min-width:0' },
-          el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap' },
-            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + (PRIO_COLOR[t.priority] || '#E10600') }),
-            el('span', { style: 'text-decoration:' + (done ? 'line-through' : 'none') }, t.title || '(sem título)'),
-            t.type ? el('span', { style: 'font-size:10px;padding:2px 6px;background:rgba(225,6,0,0.15);border-radius:5px;color:var(--text-dim);text-transform:uppercase' }, t.type) : null,
+          el('div', { style: 'font-weight:600' },
+            when.toLocaleDateString('pt-BR') + ' · ' + when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
           ),
-          el('div', { style: 'color:' + (overdue ? '#fca5a5' : 'var(--text-dim)') + ';font-size:11px;margin-top:4px' },
-            (PRIO_LABEL[t.priority] || t.priority || '') + ' · ' + (t.status || '') +
-            (dueDate ? ' · ' + (overdue ? '⚠ vencida ' : '📅 ') + dueDate.toLocaleDateString('pt-BR') + (due.toString().includes('T') ? ' ' + dueDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '') : '')
-          ),
-          t.description ? el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px;white-space:pre-wrap' }, t.description) : null,
+          el('div', { style: 'color:var(--text);margin-top:2px' }, a.title || '(sem título)'),
+          a.description ? el('div', { style: 'color:var(--text-faint);font-size:11px;margin-top:4px;white-space:pre-wrap' }, a.description) : null,
+          el('div', { style: 'color:' + (STATUS_COLOR[a.status] || 'var(--text-faint)') + ';font-size:11px;margin-top:4px' }, STATUS_LABEL[a.status] || a.status),
         ),
         el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
-          !done ? inlineBtn('✓', async () => {
-            try { await api('/tasks/' + t.id + '/complete', { method: 'POST', body: {} }); toast('Concluída', 'success'); refresh(); }
+          inlineBtn('✎', () => openAppointmentEditModal(a, { onSaved: refresh })),
+          a.status === 'scheduled' ? inlineBtn('✓', async () => {
+            try { await api('/appointments/' + a.id, { method: 'PATCH', body: { status: 'completed' } }); toast('Concluído', 'success'); refresh(); }
             catch (e) { toast('Erro: ' + e.message, 'error'); }
           }) : null,
-          inlineBtn('✎', () => openEditTaskModal(t, refresh)),
           inlineBtn('×', async () => {
-            if (!(await clowConfirm('Apagar tarefa "' + (t.title || '') + '"?', { title: 'Apagar tarefa', danger: true, confirmLabel: 'Apagar' }))) return;
-            try { await api('/tasks/' + t.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
+            if (!(await clowConfirm('Apagar compromisso "' + (a.title || '') + '"?', { title: 'Apagar compromisso', danger: true, confirmLabel: 'Apagar' }))) return;
+            try { await api('/appointments/' + a.id, { method: 'DELETE' }); toast('Apagado', 'success'); refresh(); }
             catch (e) { toast('Erro: ' + e.message, 'error'); }
           }, true),
         ),
-      ], { dimmed: done }));
+      ], { dimmed: a.status === 'cancelled' }));
     }
   }
-  wrap.append(tasksSec);
-
-  // ─── DOCUMENTOS ──────────────────────────────────────────────────────
-  const docsSec = el('section', {});
-  docsSec.append(sectionHead('📄', 'Documentos', docs.documents?.length || 0, () => openUploadDocModal(card, refresh)));
-  if (!docs.documents?.length) docsSec.append(emptyHint('Nenhum documento. Use "+ Adicionar" pra anexar contratos, comprovantes, fotos, PDFs'));
-  else {
-    for (const d of docs.documents) {
-      const fileLink = extractFileLink(d.bodyHtml || d.body_html || '');
-      docsSec.append(itemCard([
-        el('div', { style: 'flex:1;min-width:0' },
-          el('div', { style: 'font-weight:600' }, d.title + ' · v' + (d.version || 1)),
-          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
-            (d.status || 'draft') + (d.created_at || d.createdAt ? ' · ' + new Date(d.created_at || d.createdAt).toLocaleDateString('pt-BR') : '')
-          ),
-        ),
-        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
-          fileLink ? inlineBtn('⬇', () => window.open(fileLink, '_blank')) : null,
-          inlineBtn('×', async () => {
-            if (!(await clowConfirm('Apagar documento "' + d.title + '"?', { title: 'Apagar documento', danger: true, confirmLabel: 'Apagar' }))) return;
-            try { await api('/documents/' + d.id, { method: 'DELETE' }); toast('Apagado', 'success'); refresh(); }
-            catch (e) { toast('Erro: ' + e.message, 'error'); }
-          }, true),
-        ),
-      ]));
-    }
-  }
-  wrap.append(docsSec);
-
-  // ─── PROPOSTAS ───────────────────────────────────────────────────────
-  const propsSec = el('section', {});
-  propsSec.append(sectionHead('💼', 'Propostas', props.proposals?.length || 0, () => openNewProposalModal(card, refresh)));
-  if (!props.proposals?.length) propsSec.append(emptyHint('Nenhuma proposta. Use "+ Adicionar" pra criar uma proposta comercial pro cliente'));
-  else {
-    for (const pr of props.proposals) {
-      propsSec.append(itemCard([
-        el('div', { style: 'flex:1;min-width:0' },
-          el('div', { style: 'font-weight:600' }, (pr.title || 'Proposta') + ' · v' + (pr.version || 1)),
-          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
-            (pr.status || 'draft') + ' · ' + fmtMoney(pr.totalCents || pr.total_cents || 0)
-          ),
-        ),
-        el('div', { style: 'display:flex;flex-direction:column;gap:4px;flex:0 0 auto' },
-          inlineBtn('×', async () => {
-            if (!(await clowConfirm('Apagar proposta?', { title: 'Apagar', danger: true, confirmLabel: 'Apagar' }))) return;
-            try { await api('/proposals/' + pr.id, { method: 'DELETE' }); toast('Apagada', 'success'); refresh(); }
-            catch (e) { toast('Erro: ' + e.message, 'error'); }
-          }, true),
-        ),
-      ]));
-    }
-  }
-  wrap.append(propsSec);
+  wrap.append(agendaSec);
 
   // ─── MENSALIDADES ────────────────────────────────────────────────────
   const subsSec = el('section', {});
-  subsSec.append(sectionHead('💳', 'Mensalidades', subs.subscriptions?.length || 0, () => openNewSubscriptionForCard(card, refresh)));
-  if (!subs.subscriptions?.length) subsSec.append(emptyHint('Nenhuma mensalidade. Use "+ Adicionar" pra criar cobrança recorrente (vai aparecer no menu Mensalidades também)'));
-  else {
+  const abrirNovaMensalidade = () => openNewSubscriptionForCard(card, refresh);
+  subsSec.append(sectionHead('💳', 'Mensalidades', subs.subscriptions?.length || 0, '+ Adicionar', abrirNovaMensalidade));
+  if (!subs.subscriptions?.length) {
+    subsSec.append(emptyHint('Nenhuma mensalidade cadastrada.', 'As cobranças recorrentes deste contato aparecerão aqui.'));
+  } else {
     for (const sb of subs.subscriptions) {
       const dueMs = sb.nextChargeAt - Date.now();
       const overdue = dueMs < 0 && sb.status === 'active';
@@ -4988,19 +4949,19 @@ async function renderLinksTab(card) {
         : paidThisCycle ? 'Paga'
         : overdue ? 'Atrasada'
         : 'Aguardando';
-      const statusColor = sb.status === 'cancelled' ? '#94A3B8'
-        : paidThisCycle ? '#22C55E'
-        : overdue ? '#F87171'
-        : '#F59E0B';
+      const statusColor = sb.status === 'cancelled' ? 'var(--text-faint)'
+        : paidThisCycle ? 'var(--green)'
+        : overdue ? 'var(--red)'
+        : 'var(--amber)';
       const cycleLabel = ({ monthly:'/mês', weekly:'/semana', quarterly:'/trim', yearly:'/ano', one_time:' (única)' })[sb.cycle] || ` /${sb.cycle}`;
       subsSec.append(itemCard([
         el('div', { style: 'flex:1;min-width:0' },
           el('div', { style: 'font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap' },
-            el('span', { style: 'width:8px;height:8px;border-radius:50%;background:' + statusColor }),
-            el('span', {}, sb.planName),
-            el('span', { style: 'font-size:10px;padding:2px 7px;background:rgba(' + (paidThisCycle ? '34,197,94' : overdue ? '239,68,68' : sb.status === 'cancelled' ? '148,163,184' : '245,158,11') + ',.15);color:' + statusColor + ';border-radius:5px;text-transform:uppercase;font-weight:700;letter-spacing:.3px' }, statusLabel),
+            el('span', { style: 'width:7px;height:7px;border-radius:50%;background:' + statusColor }),
+            el('span', { style: 'color:var(--text)' }, sb.planName),
+            el('span', { style: 'font-size:10px;padding:2px 7px;background:var(--bg-4);color:' + statusColor + ';border-radius:5px;text-transform:uppercase;font-weight:700;letter-spacing:.3px' }, statusLabel),
           ),
-          el('div', { style: 'color:var(--text-dim);font-size:11px;margin-top:4px' },
+          el('div', { style: 'color:var(--text-faint);font-size:11px;margin-top:4px' },
             fmtMoney(sb.amountCents) + cycleLabel + ' · próxima ' + new Date(sb.nextChargeAt).toLocaleDateString('pt-BR'),
           ),
         ),
@@ -5076,16 +5037,16 @@ function buildModal(title, fields, onSubmit) {
       wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600' }, f.label + (f.required ? ' *' : '')));
       let input;
       if (f.type === 'textarea') {
-        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
+        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'select') {
-        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         for (const opt of f.options) input.append(el('option', { value: opt.value }, opt.label));
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'file') {
-        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
+        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
       } else {
-        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-1,#1a1a26);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         if (f.value != null) input.value = f.value;
       }
       inputs[f.name] = input;
@@ -5297,12 +5258,12 @@ async function renderCommentsTab(card) {
       } catch (err) { toast('Erro: ' + err.message, 'error'); }
     } } });
     form.append(
-      el('textarea', { rows: 3, placeholder: 'Comentário (use @nome para mencionar agentes)', style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box' }),
+      el('textarea', { rows: 3, placeholder: 'Comentário (use @nome para mencionar agentes)', style: 'width:100%;padding:8px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:inherit;font-size:13px;box-sizing:border-box' }),
       el('button', { type: 'submit', style: 'margin-top:6px;padding:8px 16px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;font-size:13px' }, 'Comentar'),
     );
     wrap.append(form);
     sec.append(wrap);
-  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#ef4444">' + e.message + '</div>'; }
+  } catch (e) { sec.innerHTML = '<div style="padding:20px;color:#f87171">' + e.message + '</div>'; }
 }
 
 // Hook: when openCardPanel runs, populate the new tabs (AI/Links/Comments)
@@ -5586,7 +5547,7 @@ async function openChannelInboxConfig(channel) {
     body.innerHTML = '';
 
     // Webhook URL — copiavel
-    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+    body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:8px;margin-bottom:14px' },
       el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '🔗 URL do Webhook (cole na Evolution API / Meta)'),
       el('div', { style: 'display:flex;gap:6px;align-items:center' },
         el('input', { type: 'text', value: info.url, readonly: '', style: 'flex:1;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:monospace;font-size:11px', on: { click: (e) => e.target.select() } }),
@@ -5596,7 +5557,7 @@ async function openChannelInboxConfig(channel) {
       ),
       el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px' },
         'Última mensagem recebida: ',
-        el('span', { style: info.lastInboundAt ? 'color:var(--green)' : 'color:#ef4444' },
+        el('span', { style: info.lastInboundAt ? 'color:var(--green)' : 'color:#f87171' },
           info.lastInboundAt ? new Date(info.lastInboundAt).toLocaleString('pt-BR') : '⚠️ Nunca (webhook não configurado?)'),
       ),
     ));
@@ -5604,7 +5565,7 @@ async function openChannelInboxConfig(channel) {
     // Auto-create toggle
     const autoCreateCheckbox = el('input', { type: 'checkbox', id: 'autoCreateChk', style: 'margin-right:8px' });
     autoCreateCheckbox.checked = info.autoCreateCards !== false;
-    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+    body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:8px;margin-bottom:14px' },
       el('label', { style: 'display:flex;align-items:center;cursor:pointer' },
         autoCreateCheckbox,
         el('div', {},
@@ -5642,7 +5603,7 @@ async function openChannelInboxConfig(channel) {
     boardSel.addEventListener('change', reloadCols);
     reloadCols();
 
-    body.append(el('div', { style: 'background:var(--bg-1);padding:14px;border-radius:8px;margin-bottom:14px' },
+    body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:8px;margin-bottom:14px' },
       el('div', { style: 'font-size:12px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase' }, '📍 Onde criar novos leads'),
       el('label', { style: 'font-size:13px;display:block;margin-bottom:4px' }, 'Quadro'),
       boardSel,
@@ -5690,7 +5651,7 @@ async function openChannelInboxConfig(channel) {
     }, '🚀 Disparar simulação');
     body.append(simPhone, simName, simText, simBtn);
   } catch (e) {
-    body.innerHTML = '<div style="padding:20px;color:#ef4444">Erro: ' + e.message + '</div>';
+    body.innerHTML = '<div style="padding:20px;color:#f87171">Erro: ' + e.message + '</div>';
   }
 }
 
@@ -5800,6 +5761,26 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
         try {
           if (typeof window.__smartRefresh === 'function') {
             window.__smartRefresh('sse:message.read');
+          }
+        } catch {}
+      });
+      // Foto de perfil sincronizada sozinha (ver src/crm/inbox.ts). Sem
+      // hash-skip aqui de propósito: pipelineHash() não leva avatar em conta,
+      // então smartRefresh normal pularia o re-render achando que nada mudou.
+      state48.es.addEventListener('contact.avatar', async () => {
+        try {
+          if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
+            await loadPipeline(window.state.currentBoardId);
+            if (typeof window.__renderKanbanPreserve === 'function') window.__renderKanbanPreserve();
+            else if (typeof renderKanban === 'function') renderKanban();
+          }
+          if (window.state?.currentCard && typeof refreshCurrentCard === 'function') {
+            await refreshCurrentCard();
+          }
+          const contactsActive = document.querySelector('.view[data-view="contacts"].active');
+          if (contactsActive && typeof loadContacts === 'function' && typeof renderContactsList === 'function') {
+            await loadContacts();
+            renderContactsList();
           }
         } catch {}
       });
@@ -6145,7 +6126,7 @@ function renderChannelsLimitsBadge() {
   const wa = me.whatsapp;
   const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
   const tierLabel = (me.tenant?.tier || '').toUpperCase();
-  const color = wa.available === 0 ? '#EF4444' : (wa.available <= 1 ? '#F59E0B' : '#22C55E');
+  const color = wa.available === 0 ? '#F87171' : (wa.available <= 1 ? '#FBBF24' : '#4ADE80');
   return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
     el('div', { style: 'display:flex;align-items:center;gap:6px' },
       el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
@@ -6321,7 +6302,7 @@ async function openevolutionCheckoutFlow(me) {
   const waitDialog = el('div', { class: 'modal-backdrop' });
   let cancelled = false;
   const waitModal = el('div', { class: 'modal', style: 'max-width:480px;text-align:center' },
-    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:#22C55E;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:#4ADE80;border-radius:50%;animation:bootspin .9s linear infinite' }),
     el('h3', {}, 'Aguardando pagamento...'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;line-height:1.6' },
       'Complete o pagamento na aba do Stripe que acabou de abrir.',
@@ -6447,7 +6428,7 @@ function openImportContactsModal() {
     modal.innerHTML = '';
     const fileInput = el('input', {
       type: 'file', accept: '.csv,.xlsx,.xls',
-      style: 'width:100%;padding:8px;background:var(--bg-1);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
+      style: 'width:100%;padding:8px;background:var(--bg-3);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px'
     });
     const errorBox = el('div', { style: 'margin-top:14px' });
     const submitBtn = el('button', {
@@ -6488,7 +6469,7 @@ function openImportContactsModal() {
     modal.append(
       el('h3', { style: 'margin:0 0 8px' }, '⬆ Importar contatos'),
       el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 14px' }, 'Aceita CSV (UTF-8) ou Excel (XLSX). A primeira linha deve ser o cabeçalho.'),
-      el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
+      el('details', { style: 'background:var(--bg-3);padding:10px 14px;border-radius:8px;margin-bottom:14px;cursor:pointer' },
         el('summary', { style: 'font-size:12px;color:var(--text-dim);font-weight:600' }, '📋 Colunas reconhecidas (clique pra ver)'),
         el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6' },
           el('div', {}, '• ', el('b', {}, 'name'), ' / nome / nome completo / cliente / contato / razão social — obrigatório'),
@@ -6535,11 +6516,11 @@ function openImportContactsModal() {
       // Stats em cards grandes
       el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
         stat('Total processado', data.total || 0),
-        stat('Criados', data.created || 0, '#22C55E'),
+        stat('Criados', data.created || 0, '#4ADE80'),
         stat('Atualizados', data.updated || 0, '#E10600'),
       ),
       // Header mapping (collapsed por padrão se sucesso)
-      (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-1);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
+      (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-3);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
         el('summary', { style: 'font-size:12px;color:#a78bfa;font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
         el('div', { style: 'background:rgba(225,6,0,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:#cbd5e1' },
           ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),

@@ -4,1038 +4,171 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>System Clow</title>
-<link rel="icon" type="image/png" href="/assets/favicon.png">
-<link rel="shortcut icon" type="image/png" href="/assets/favicon.png">
-<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<script>
+// Aplica o tema salvo (mesma chave do CRM, mesma origem) antes do primeiro
+// paint, pra nao piscar o tema errado.
+(function(){try{var t=localStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}})();
+</script>
+<link rel="icon" href="/assets/territorio/icone-192.png">
+<link rel="apple-touch-icon" href="/assets/territorio/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1f1d1a">
+<meta name="theme-color" content="#050510">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/assets/clow-style.css?v=clow-v505">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0a0a;--bg-soft:#141414;--bg-panel:#0f0f0f;--bg-card:#1d1d1d;--line:#2a2a2a;--line-soft:#222222;--text:#fafafa;--muted:#a1a1aa;--muted-2:#71717a;--accent:#E10600;--blue:#FF1F18;--danger:#c46657;--shadow:0 20px 50px rgba(0,0,0,.4);--sidebar:320px;--topbar:64px;--compose:150px;--font:'Inter',system-ui,sans-serif;--serif:'Source Serif 4',serif;--mono:'JetBrains Mono',monospace;
+  --bg-0:#050510;--bg-1:#0A0A1A;--bg-2:#0F0F24;--bg-3:#14142E;
+  --t1:#E8E8F0;--t2:#9898B8;--tm:#585878;
+  --p:#E10600;--bl:#FF1F18;--r:#F87171;
+  --gp:linear-gradient(135deg,#E10600 0%,#FF1F18 100%);
+}
+html[data-theme="light"], html[data-theme="system"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"]{
+  --bg-0:#F7F7FA;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:#ECECF2;
+  --t1:#14142E;--t2:#6B6B85;--tm:#8C8CA6;
+}
+@media (prefers-color-scheme: light){
+  html[data-theme="system"]{
+    --bg-0:#F7F7FA;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:#ECECF2;
+    --t1:#14142E;--t2:#6B6B85;--tm:#8C8CA6;
+  }
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;min-height:100dvh;overflow:hidden}
-body{font-family:var(--font);color:var(--text);background:linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),radial-gradient(circle at top, rgba(255,255,255,.03), transparent 36%),var(--bg);background-size:40px 40px,40px 40px,100% 100%,auto;-webkit-font-smoothing:antialiased}
-button,input,textarea{font:inherit}
-a{color:inherit}
-.app-shell{display:flex;height:100%;min-height:100dvh}
-.sidebar{width:var(--sidebar);background:rgba(8,8,26,.96);border-right:1px solid var(--line);display:flex;flex-direction:column;position:relative;z-index:20;transition:transform .22s ease,margin-left .22s ease}
-.sidebar-top{height:var(--topbar);display:flex;align-items:center;padding:0 18px;gap:12px;border-bottom:1px solid var(--line-soft)}
-.brand-name{font-size:15px;font-weight:600;letter-spacing:.01em}
-.chrome-btn{width:34px;height:34px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
-.chrome-btn:hover{background:rgba(255,255,255,.04);color:var(--text);border-color:var(--line)}
-.sidebar-scroll{flex:1;overflow:auto;padding:18px 16px 18px}
-.sidebar-actions{display:flex;align-items:center;gap:12px;margin-bottom:18px}
-.sidebar-scroll::-webkit-scrollbar,#chat::-webkit-scrollbar{width:8px}
-.sidebar-scroll::-webkit-scrollbar-thumb,#chat::-webkit-scrollbar-thumb{background:#353560;border-radius:999px}
-.section-title{font-size:13px;color:var(--muted-2);margin:4px 0 12px}
-.recent-list{display:flex;flex-direction:column;gap:10px}
-.recent-item{border:1px solid rgba(255,255,255,.05);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));color:var(--text);border-radius:18px;padding:14px 15px;cursor:pointer;text-align:left;transition:border-color .16s ease,background .16s ease,transform .16s ease,box-shadow .16s ease}
-.recent-item:hover{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025));border-color:rgba(225,6,0,.22);transform:translateY(-1px)}
-.recent-item.active{background:linear-gradient(180deg,rgba(225,6,0,.12),rgba(255,255,255,.03));border-color:rgba(225,6,0,.3);box-shadow:0 14px 34px rgba(0,0,0,.16)}
-.recent-item.empty{cursor:default}
-.recent-shell{display:flex;gap:12px;align-items:flex-start;width:100%}
-.recent-main{min-width:0;flex:1 1 auto}
-.recent-name{font-size:15px;line-height:1.35;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.recent-meta{font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.recent-count{color:var(--muted-2)}
-.recent-delete{width:32px;height:32px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.12);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;transition:background .16s ease,border-color .16s ease,color .16s ease}
-.recent-delete:hover{background:rgba(196,102,87,.12);border-color:rgba(196,102,87,.28);color:#f2b5a4}
-.side-primary{width:100%;height:44px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);font-weight:600;cursor:pointer;transition:background .16s ease,border-color .16s ease;flex:1 1 auto}
-.side-primary:hover{background:rgba(255,255,255,.06);border-color:rgba(225,6,0,.2)}
-.side-menu-btn{width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;transition:background .16s ease,border-color .16s ease}
-.side-menu-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(225,6,0,.2)}
-.side-menu-btn svg{width:18px;height:18px}
-.sidebar-footer{border-top:1px solid var(--line-soft);padding:14px 16px;display:flex;align-items:center;gap:12px;justify-content:space-between}
-.avatar{width:44px;height:44px;border-radius:999px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#ffffff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;flex:0 0 auto}
-.account-name{font-size:15px;font-weight:600}
-.account-plan{font-size:13px;color:var(--muted)}
-.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
-.sidebar-peek-toggle{position:fixed;top:calc(env(safe-area-inset-top,0px) + 88px);left:12px;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(10,10,26,.94);color:var(--text);display:none;align-items:center;justify-content:center;cursor:pointer;z-index:26;box-shadow:0 14px 34px rgba(0,0,0,.22);transition:background .16s ease,border-color .16s ease,transform .16s ease}
-.sidebar-peek-toggle:hover{background:rgba(255,255,255,.06);border-color:rgba(225,6,0,.22)}
-.sidebar-peek-toggle:active{transform:translateY(1px)}
-.sidebar-peek-toggle svg{width:18px;height:18px}
-body.sidebar-collapsed .sidebar{margin-left:calc(-1 * var(--sidebar))}
-body.sidebar-collapsed .dock{left:24px}
-body.sidebar-collapsed .sidebar-peek-toggle{display:flex}
-.topbar{height:calc(var(--topbar) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 18px 0;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:12px;backdrop-filter:blur(16px);background:rgba(10,10,20,.85);z-index:10}
-.top-left,.top-right{display:flex;align-items:center;gap:8px;min-width:180px}
-.top-right{margin-left:auto;justify-content:flex-end}
-.mobile-only{display:none}
-.brand-top{display:flex;align-items:center}
-.brand-top img{height:96px;width:auto;max-width:min(100%,420px);object-fit:contain;object-position:left center;display:block;image-rendering:auto}
-.ghost-btn,.outline-btn{height:36px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;transition:background .16s ease,border-color .16s ease}
-.ghost-btn:hover,.outline-btn:hover{background:rgba(255,255,255,.05)}
-.outline-btn{color:#d0c0f0}
-.content{flex:1;min-height:0;position:relative}
-#chat{height:100%;overflow:auto;overscroll-behavior:contain}
-.feed{width:min(100%,1120px);margin:0 auto;padding:40px 28px 220px}
-.welcome{min-height:calc(100dvh - var(--topbar) - 160px);display:flex;align-items:center;justify-content:center;padding-top:0}
-.welcome.hide{display:none}
-.hero{width:min(100%,760px);display:flex;flex-direction:column;align-items:center;text-align:center}
-.hero-badge{display:flex;flex-direction:column;align-items:center;gap:16px;margin-bottom:18px}
-.hero-mark{width:52px;height:auto;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 10px 18px rgba(0,0,0,.24))}
-.hero h1{font-family:var(--serif);font-size:clamp(42px,6vw,64px);line-height:.96;letter-spacing:-.04em;font-weight:400;max-width:680px;text-align:center}
-.hero-sub{color:var(--muted);font-size:16px;margin:18px auto 0;max-width:600px;line-height:1.6;text-align:center}
-.composer-card{background:rgba(18,18,38,.97);border:1px solid rgba(255,255,255,.08);border-radius:24px;box-shadow:var(--shadow);padding:16px 18px 14px}
-.composer-input{width:100%;min-height:28px;max-height:140px;background:transparent;border:none;color:var(--text);resize:none;outline:none;font-size:16px;line-height:1.55}
-.composer-input::placeholder{color:var(--muted-2)}
-.composer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px}
-.toolbar-group{display:flex;align-items:center;gap:12px}
-.model-pill{display:inline-flex;align-items:center;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(225,6,0,.1);color:#E10600;font-size:14px}
-.u-row{display:flex;justify-content:flex-end;margin:26px 0 10px}
-.u-block{max-width:min(78%,760px);background:linear-gradient(135deg,#E10600,#FF1F18);color:#ffffff;border-radius:22px 22px 8px 22px;padding:16px 18px;box-shadow:0 14px 34px rgba(0,0,0,.24)}
-.ut{white-space:pre-wrap;line-height:1.6;font-size:15px}
-.rp-row{display:flex;justify-content:flex-start;margin:10px 0 22px}
-.rp{max-width:min(86%,840px);color:var(--text);background:rgba(16,16,32,.96);border:1px solid rgba(255,255,255,.08);border-radius:8px 22px 22px 22px;padding:16px 18px;box-shadow:0 18px 40px rgba(0,0,0,.18);line-height:1.7}
-.rp p{margin-bottom:10px}
-.rp strong{color:#e0d0ff}
-.rp em{color:#b8a8d0}
-.rp a{color:#b8a0f0;text-decoration:underline;text-underline-offset:3px}
-.rp pre{background:#121212;border:1px solid #2a2a2a;border-radius:14px;padding:14px 16px;overflow:auto;margin:10px 0}
-.rp code{font-family:var(--mono);font-size:13px}
-.rp :not(pre)>code{background:#121212;border:1px solid #2a2a2a;border-radius:8px;padding:2px 6px}
-.rp ul,.rp ol{margin:8px 0 8px 20px}
-.rp h3,.rp h4{margin:10px 0 6px}
-.tl-block{margin:6px 0;border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;background:rgba(14,14,30,.85)}
-.tl-h{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;color:var(--text)}
-.tl-h:hover{background:rgba(255,255,255,.03)}
-.tl-chv{font-size:11px;color:var(--muted);transition:transform .15s;width:12px}
-.tl-chv.op{transform:rotate(90deg)}
-.tl-lbl{font-weight:600}
-.tl-fl{margin-left:auto;color:var(--muted);font-size:12px;font-family:var(--mono);max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.tl-bd{max-height:0;overflow:hidden;transition:max-height .18s}
-.tl-bd.op{max-height:700px;overflow:auto}
-.tl-bdi{padding:14px;border-top:1px solid rgba(255,255,255,.06);background:#121212;color:#d2c6b8;font-size:12px;font-family:var(--mono);white-space:pre-wrap;word-break:break-word;line-height:1.55}
-.proc{display:flex;align-items:center;gap:10px;padding:14px 2px;font-size:15px;font-weight:600}
-.proc-dot{width:9px;height:9px;border-radius:999px;background:#E10600;animation:blink 1s ease-in-out infinite}.proc-label{color:#E10600;animation:pulse-gold 1.5s ease-in-out infinite}@keyframes pulse-gold{0%,100%{opacity:1;text-shadow:0 0 8px #E1060088}50%{opacity:0.5;text-shadow:0 0 2px #E1060022}}
-@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(.8)}}
-:root{--kb-h:0px}
-.dock{position:fixed;left:calc(var(--sidebar) + 24px);right:24px;bottom:calc(24px + var(--kb-h, 0px) + env(safe-area-inset-bottom,0px));z-index:15;pointer-events:none;transition:bottom .15s}
-.dock-inner{width:min(100%,920px);margin:0 auto;pointer-events:auto}
-.dock .composer-card{padding:16px 18px 14px;border-radius:24px}
-.dock .composer-input{min-height:30px;max-height:140px;font-size:16px}
-.send-btn{width:46px;height:46px;border:none;border-radius:14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#ffffff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:0;transition:filter .16s ease,transform .16s ease}
-.send-btn:hover{filter:brightness(1.04)}
-.send-btn:active{transform:translateY(1px)}
-.send-btn:disabled{opacity:.35;cursor:default}
-.send-btn.stop{background:var(--danger);color:#fff}
-.send-btn svg{width:20px;height:20px;display:block;flex:0 0 auto}
-.divider{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);margin:18px 0 4px}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:18}
-.overlay.show{opacity:1;pointer-events:auto}
-.login-ov{position:fixed;inset:0;z-index:30;background:linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),radial-gradient(circle at top, rgba(255,255,255,.03), transparent 36%),rgba(10,10,10,.98);background-size:40px 40px,40px 40px,100% 100%,auto;display:flex;align-items:center;justify-content:center;transition:opacity .25s}
-.login-ov.hide{opacity:0;pointer-events:none}
-html.clow-bridge-mode #loginScreen{display:none!important}
-.login-wrap{width:min(100%,560px);padding:24px}
-.login-card{background:rgba(20,20,20,.96);border:1px solid rgba(225,6,0,.12);border-radius:32px;padding:34px 30px 28px;box-shadow:var(--shadow)}
-.login-brand{display:flex;align-items:center;justify-content:center;margin:0 auto 30px}
-.login-brand img{height:116px;width:auto;max-width:100%;object-fit:contain;object-position:center;display:block;image-rendering:auto}
-.login-title{font-family:var(--serif);font-size:42px;line-height:.96;letter-spacing:-.04em;font-weight:400;margin-bottom:12px}
-.login-sub{color:var(--muted);font-size:15px;line-height:1.55;margin-bottom:24px}
-.login-f{width:100%;height:54px;border-radius:16px;border:1px solid var(--line);background:#1d1d1d;color:var(--text);padding:0 16px;margin-bottom:12px;outline:none}
-.login-f:focus{border-color:#6B59FC;box-shadow:0 0 0 4px rgba(255,255,255,.03)}
-.login-f::placeholder{color:var(--muted-2)}
-.login-b{width:100%;height:54px;border:none;border-radius:16px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#ffffff;font-weight:700;cursor:pointer;margin-top:6px;transition:filter .16s ease,transform .16s ease;box-shadow:inset 0 1px 0 rgba(225,6,0,.25),0 10px 24px rgba(0,0,0,.3)}
-.login-b:hover{filter:brightness(1.02)}
-.login-e{min-height:22px;color:#f2b5a4;font-size:13px;margin-top:10px}
-.recent-item:focus-visible,.side-primary:focus-visible,.side-menu-btn:focus-visible,.sidebar-peek-toggle:focus-visible,.ghost-btn:focus-visible,.outline-btn:focus-visible,.chrome-btn:focus-visible,.send-btn:focus-visible,.login-b:focus-visible,.login-f:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(225,6,0,.14)}
-@media (max-width:1180px){:root{--sidebar:286px}.hero h1{max-width:560px}}
-@media (max-width:900px){.mobile-only{display:flex}.desktop-only{display:none}body.sidebar-collapsed .sidebar{margin-left:0}.sidebar{position:fixed;inset:0 auto 0 0;margin-left:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);transform:translateX(-100%);transition:transform .22s ease;width:min(86vw,320px)}.sidebar.open{transform:translateX(0)}.sidebar-peek-toggle{display:flex!important;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px}.dock{left:14px;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px))}.feed{padding:24px 16px 210px}.welcome{min-height:calc(100dvh - 240px)}.topbar{padding-left:58px;padding-right:12px;gap:8px}.top-left,.top-right{min-width:auto}.brand-top img{height:56px;max-width:180px}.hero h1{font-size:48px;max-width:100%}.hero-mark{width:46px}.outline-btn{height:34px;padding:0 12px}}
-@media (max-width:640px){.hero h1{font-size:40px}.hero-mark{width:40px}.u-block{max-width:88%}.rp{max-width:94%}.login-wrap{padding:16px}.login-card{padding:28px 20px 24px;border-radius:24px}.login-title{font-size:34px}.top-right .ghost-btn{display:none}.top-right{gap:6px}.brand-top img{height:44px;max-width:132px}.login-brand img{height:96px}.login-sub{font-size:14px}.outline-btn{height:32px;padding:0 10px;font-size:14px}}
-
-/* ─── CRM Launcher (sidebar) ─── */
-.crm-launcher{margin-top:18px;padding:14px;background:linear-gradient(135deg,rgba(225,6,0,.18),rgba(255,31,24,.12));border:1px solid rgba(225,6,0,.28);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .18s ease;color:var(--text);font-family:inherit;width:100%;text-align:left}
-.crm-launcher:hover{border-color:rgba(225,6,0,.6);transform:translateY(-1px);box-shadow:0 8px 24px rgba(225,6,0,.2)}
-.crm-launcher .crm-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#E10600,#FF1F18);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:800;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(225,6,0,.35)}
-.crm-launcher .crm-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.crm-launcher .crm-title{font-weight:700;font-size:13px;color:var(--text)}
-.crm-launcher .crm-sub{font-size:11px;color:var(--muted);line-height:1.3}
-.crm-launcher .crm-arrow{color:var(--accent);font-size:18px;opacity:.6;transition:transform .18s ease,opacity .18s ease}
-.crm-launcher:hover .crm-arrow{transform:translateX(3px);opacity:1}
-
-/* ─── CRM Modal (full overlay) ─── */
-.crm-modal{position:fixed;inset:0;z-index:9999;background:rgba(8,8,26,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none;flex-direction:column;animation:crmFadeIn .25s ease}
-.crm-modal.show{display:flex}
-@keyframes crmFadeIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(14px)}}
-.crm-modal-header{min-height:calc(60px + env(safe-area-inset-top, 0px));padding:env(safe-area-inset-top, 0px) 22px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(225,6,0,.18);background:linear-gradient(180deg,rgba(15,15,36,.95),rgba(8,8,26,.95));flex-shrink:0}
-.crm-modal-back{display:flex;align-items:center;gap:10px;padding:9px 16px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;transition:transform .15s ease,box-shadow .15s ease}
-.crm-modal-back:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(225,6,0,.35)}
-.crm-modal-back svg{width:16px;height:16px}
-.crm-modal-title{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;color:var(--text);flex:1;justify-content:center}
-.crm-modal-title .crm-modal-dot{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#E10600,#FF1F18);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px}
-.crm-modal-close{background:transparent;color:var(--muted);border:1px solid var(--line);width:36px;height:36px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s ease}
-.crm-modal-close:hover{color:var(--text);border-color:var(--accent)}
-.crm-modal-body{flex:1;display:flex;align-items:stretch;justify-content:center;padding:18px 26px 22px;overflow:hidden}
-.crm-modal-frame-wrap{width:100%;max-width:1500px;height:100%;background:#0a0a0a;border:1px solid rgba(225,6,0,.22);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.02) inset;display:flex;flex-direction:column}
-.crm-modal-iframe{flex:1;width:100%;border:0;background:#0a0a0a}
-.crm-modal-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:var(--muted);font-size:13px;pointer-events:none}
-.crm-modal-loading.hide{display:none}
-.crm-spin{width:36px;height:36px;border:3px solid rgba(225,6,0,.25);border-top-color:#E10600;border-radius:50%;animation:crmSpin .9s linear infinite}
-@keyframes crmSpin{to{transform:rotate(360deg)}}
-.crm-modal-error{padding:24px;color:var(--danger);font-size:13px;text-align:center}
-
-@media (max-width:780px){
-  .crm-modal-body{padding:8px 8px 12px}
-  .crm-modal-frame-wrap{border-radius:10px}
-  .crm-modal-title{font-size:13px}
+html,body{height:100%;min-height:100dvh}
+body{
+  font-family:'DM Sans',system-ui,sans-serif;color:var(--t1);background:var(--bg-0);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  -webkit-font-smoothing:antialiased;
 }
-
-
-.crm-modal-infinite{height:32px;width:auto;display:block;filter:drop-shadow(0 2px 8px rgba(225,6,0,.4))}
+.login-wrap{width:100%;max-width:400px}
+.login-card{
+  background:var(--bg-1);border:1px solid rgba(225,6,0,.18);border-radius:24px;
+  padding:36px 30px;box-shadow:0 30px 80px rgba(0,0,0,.5);
+}
+.login-brand{display:flex;justify-content:center;margin-bottom:18px}
+.login-brand img{height:64px;width:64px;border-radius:16px}
+.login-title{font-size:24px;font-weight:700;text-align:center;letter-spacing:-.01em;margin-bottom:8px}
+.login-sub{font-size:13px;color:var(--t2);text-align:center;line-height:1.5;margin-bottom:26px}
+.login-f{
+  width:100%;height:52px;border-radius:14px;border:1px solid var(--bg-3);background:var(--bg-2);
+  color:var(--t1);padding:0 16px;margin-bottom:12px;outline:none;font:inherit;font-size:14px;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.login-f::placeholder{color:var(--tm)}
+.login-f:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(225,6,0,.12)}
+.login-b{
+  width:100%;height:52px;border:none;border-radius:14px;background:var(--gp);color:#fff;
+  font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;
+  transition:filter .15s ease,transform .15s ease;
+}
+.login-b:hover{filter:brightness(1.06)}
+.login-b:active{transform:translateY(1px)}
+.login-b:disabled{opacity:.6;cursor:default}
+.login-e{min-height:20px;color:var(--r);font-size:13px;margin-top:12px;text-align:center}
+.login-loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 0}
+.login-spin{width:36px;height:36px;border:3px solid rgba(225,6,0,.25);border-top-color:var(--p);border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-loading-text{font-size:13px;color:var(--t2)}
+.hide{display:none !important}
 </style>
-<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
-<div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/territorio/icone-192.png" alt="System Clow de IA" style="height:64px;width:64px;border-radius:16px"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM, os agentes e as conversas.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>
-<div style="margin-top:24px;padding-top:22px;border-top:1px solid rgba(255,255,255,.06);text-align:center">
-</div>
-</div></div></div>
-<div class="overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-<button class="sidebar-peek-toggle" onclick="openSidebar()" aria-label="Abrir menu lateral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button>
-<div id="app" style="display:none;height:100%"><div class="app-shell">
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-top"><button class="chrome-btn mobile-only" onclick="closeSidebar()" aria-label="Fechar menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button><div class="brand-name">Conversas</div></div>
-  <div class="sidebar-scroll">
-    <div class="sidebar-actions"><button class="side-primary" onclick="reset()">Nova conversa</button><button class="side-menu-btn desktop-only" onclick="toggleSidebar()" aria-label="Abrir ou fechar menu lateral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button></div>
-    <div class="section-title" style="margin-top:18px">Guardadas por 3 dias</div>
-    <div class="recent-list" id="recentList"></div>
-    <button type="button" class="crm-launcher" id="crmLauncher" onclick="openCRM()">
-      <div class="crm-icon">CRM</div>
-      <div class="crm-text">
-        <div class="crm-title">Abrir CRM</div>
-        <div class="crm-sub">Pipeline, contatos, WhatsApp</div>
-      </div>
-      <div class="crm-arrow">→</div>
-    </button>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div id="loadingScreen" class="login-loading">
+      <div class="login-spin"></div>
+      <div class="login-loading-text">Verificando sessão...</div>
+    </div>
+    <div id="loginScreen" class="hide">
+      <div class="login-brand"><img src="/assets/territorio/icone-192.png" alt="System Clow"></div>
+      <div class="login-title">Entre para continuar</div>
+      <div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM.</div>
+      <input class="login-f" id="loginUser" type="text" placeholder="Usuário ou email" autocomplete="username" autofocus>
+      <input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password">
+      <button class="login-b" id="loginBtn" onclick="doLogin()">Entrar</button>
+      <div class="login-e" id="loginError"></div>
+    </div>
   </div>
-  <div class="sidebar-footer"><div style="display:flex;align-items:center;gap:12px"><div class="avatar" id="acctAvatar">C</div><div><div class="account-name" id="acctName">—</div><div class="account-plan" id="acctTier">—</div></div></div><button class="chrome-btn" onclick="logout()" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button></div>
-</aside>
-<main class="main">
-  <div class="topbar">
-    <div class="top-left"><button class="chrome-btn mobile-only" onclick="openSidebar()" aria-label="Abrir menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></button><div class="brand-top"><img src="/assets/territorio/icone-192.png" alt="System Clow de IA" style="height:64px;width:64px;border-radius:16px"></div></div>
-    <div class="top-right"><button class="outline-btn" onclick="logout()">Sair</button></div>
-  </div>
-  <div class="content"><div id="chat"><div class="feed" id="feed"><section class="welcome" id="wel"><div class="hero"><div class="hero-badge"><div class="welc-tagline">INTELIGENCIA INFINITA &bull; POSSIBILIDADES PREMIUM</div><h1>Como posso <span class="gp">ajudar</span>?</h1></div><div class="hero-sub"></div></div></section></div></div></div>
-</main></div>
-<div class="dock"><div class="dock-inner"><div class="composer-card"><textarea id="msg" class="composer-input" placeholder="O que voce precisa?" rows="1"></textarea><div class="divider"></div><div class="composer-toolbar"><div class="toolbar-group"><div class="model-pill">System Clow</div></div><div class="toolbar-group"><button class="send-btn" id="btn" onclick="handleBtn()"><svg id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><svg id="ico-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button></div></div></div></div></div>
 </div>
-<script>
-const U=location.origin;
-const SESSION_TTL=3*24*60*60*1000;
-let _tenantId=null;
-function SESSIONS_KEY(){return _tenantId?`clow_web_sessions_v3_${_tenantId}`:'clow_web_sessions_v3_default'}
-function ACTIVE_SESSION_KEY(){return _tenantId?`clow_web_active_session_v3_${_tenantId}`:'clow_web_active_session_v3_default'}
-const TOKEN_KEY='clow_token';
-(function(){try{const params=new URLSearchParams(location.search);const ct=params.get('clow_token');if(ct&&ct.indexOf('clow_sonnet_')===0){localStorage.setItem(TOKEN_KEY,ct);localStorage.setItem('clow_bridge_mode','1');history.replaceState({},'',location.pathname);}if(localStorage.getItem('clow_bridge_mode')==='1'){document.documentElement.classList.add('clow-bridge-mode');}}catch(e){}})();
-let authToken=localStorage.getItem(TOKEN_KEY),isProcessing=false,abortCtrl=null,currentSessionId=null;
-const CLOW_BRIDGE_MODE=localStorage.getItem('clow_bridge_mode')==='1'&&(authToken||'').indexOf('clow_sonnet_')===0;
-window.addEventListener('error',e=>console.error(e.message));
-const LS=document.getElementById('loginScreen'),AP=document.getElementById('app'),LU=document.getElementById('loginUser'),LP=document.getElementById('loginPass'),LE=document.getElementById('loginError');
-const F=document.getElementById('feed'),I=document.getElementById('msg'),B=document.getElementById('btn'),W=document.getElementById('wel');
-const recentList=document.getElementById('recentList'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');
-const TL={Read:'Leu um arquivo',FileRead:'Leu um arquivo',Bash:'Executou comando',Edit:'Editou um arquivo',FileEdit:'Editou um arquivo',Write:'Criou um arquivo',FileWrite:'Criou um arquivo',Glob:'Buscou arquivos',Grep:'Pesquisou no código',Agent:'Iniciou subagente',WebFetch:'Acessou URL',WebSearch:'Pesquisou na web',Download:'Preparou download',TodoWrite:'Atualizou tarefas',EnterPlanMode:'Entrou em modo de plano',ExitPlanMode:'Tentou aprovar o plano'};
-if(CLOW_BRIDGE_MODE){showApp()}else if(authToken)verifySavedLogin();
-LP.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-LU.addEventListener('keydown',e=>{if(e.key==='Enter')LP.focus()});
-I?.addEventListener('input',()=>autoResize(I));
-I?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleBtn()}});
-function autoResize(el){if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,140)+'px'}
-function focusComposer(){if(!I)return;try{I.focus({preventScroll:true})}catch{I.focus()}}
-function isMobileLayout(){return window.matchMedia('(max-width: 900px)').matches}
-function syncSidebarState(){if(isMobileLayout()){document.body.classList.add('sidebar-collapsed')}else if(!document.body.dataset.sidebarDesktopLocked){document.body.classList.remove('sidebar-collapsed')}}
-function openSidebar(){if(isMobileLayout()){sidebar.classList.add('open');overlay.classList.add('show')}else{document.body.classList.remove('sidebar-collapsed')}}
-function closeSidebar(){if(isMobileLayout()){sidebar.classList.remove('open');overlay.classList.remove('show')}else{document.body.classList.add('sidebar-collapsed')}}
-function toggleSidebar(){if(isMobileLayout()){if(sidebar.classList.contains('open'))closeSidebar();else openSidebar()}else{document.body.classList.toggle('sidebar-collapsed')}}
-function authHeaders(){return authToken?{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`}:{'Content-Type':'application/json'}}
-function tl(n){return n.startsWith('mcp__')?'Usou integração':TL[n]||n}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function md(t){
-  var s=String(t||"");
-  // Escape code blocks first (protect from other replacements)
-  var codeBlocks=[];
-  s=s.replace(/```(\w*)\n([\s\S]*?)```/g,function(m,lang,code){
-    codeBlocks.push('<pre><code>'+code.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</code></pre>');
-    return '\x00CB'+(codeBlocks.length-1)+'\x00';
-  });
-  // Inline code
-  var inlineCode=[];
-  s=s.replace(/`([^`]+)`/g,function(m,c){inlineCode.push('<code>'+c.replace(/</g,'&lt;')+'</code>');return '\x00IC'+(inlineCode.length-1)+'\x00';});
-  // Headers
-  s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
-  s=s.replace(/^## (.+)$/gm,'<h2>$1</h2>');
-  s=s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
-  // Bold/italic
-  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-  s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
-  // HR
-  s=s.replace(/^---+$/gm,'<hr>');
-  // Blockquote
-  s=s.replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>');
-  s=s.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
-  // Tables (GFM)
-  s=s.replace(/(\|.+\|\s*\n\|[\s\-|:]+\|\s*\n(?:\|.+\|\s*\n?)+)/g,function(tbl){
-    var lines=tbl.trim().split('\n');
-    if(lines.length<2)return tbl;
-    var header=lines[0].split('|').slice(1,-1).map(function(h){return '<th>'+h.trim()+'</th>';}).join('');
-    var rows=lines.slice(2).map(function(row){
-      var cells=row.split('|').slice(1,-1).map(function(c){return '<td>'+c.trim()+'</td>';}).join('');
-      return '<tr>'+cells+'</tr>';
-    }).join('');
-    return '<table><thead><tr>'+header+'</tr></thead><tbody>'+rows+'</tbody></table>';
-  });
-  // Lists (- item)
-  s=s.replace(/^- (.+)$/gm,'<li>$1</li>');
-  s=s.replace(/(<li>.*<\/li>\n?)+/g,function(m){return '<ul>'+m.replace(/\n/g,'')+'</ul>';});
-  // Markdown links com URL absoluta (http/https)
-  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,function(m,txt,url){
-    var isDl = /\/downloads\//.test(url) || /\.(xlsx|xls|csv|pdf|docx|doc|pptx|ppt|zip|json|txt|md|html|mp4|mp3|png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(url);
-    return '<a href="'+url+'" target="_blank" rel="noopener"'+(isDl?' download':'')+'>'+txt+'</a>';
-  });
-  // Markdown links com path relativo (/downloads/..., /output/..., etc) — resolve pro dominio absoluto
-  s=s.replace(/\[([^\]]+)\]\((\/(?:downloads|output|files|public)\/[^\s)]+)\)/g,function(m,txt,path){
-    var url = location.origin + path;
-    return '<a href="'+url+'" target="_blank" rel="noopener" download>'+txt+'</a>';
-  });
-  // Linkify plain URLs
-  s=s.replace(/(^|\s)(https?:\/\/[^\s<]+)/g,function(m,pre,url){
-    var isDl = /\/downloads\//.test(url) || /\.(xlsx|xls|csv|pdf|docx|doc|pptx|ppt|zip)(\?|$)/i.test(url);
-    return pre+'<a href="'+url+'" target="_blank" rel="noopener"'+(isDl?' download':'')+'>'+url+'</a>';
-  });
-  // Paragraphs & breaks
-  s=s.replace(/\n{2,}/g,'</p><p>');
-  s=s.replace(/\n/g,'<br>');
-  // Restore code
-  s=s.replace(/\x00IC(\d+)\x00/g,function(m,i){return inlineCode[+i];});
-  s=s.replace(/\x00CB(\d+)\x00/g,function(m,i){return codeBlocks[+i];});
-  return s;
-}
-function scr(){document.getElementById('chat').scrollTop=1e6}
-function uid(){return`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`}
-function readSessions(){try{return JSON.parse(localStorage.getItem(SESSIONS_KEY())||'[]')||[]}catch{return[]}}
-function writeSessions(list){localStorage.setItem(SESSIONS_KEY(),JSON.stringify(list))}
-function clearLegacyClientCache(){['clow_web_sessions_v1','clow_web_active_session_v1','clow_recent_prompts'].forEach(key=>localStorage.removeItem(key))}
-function clearBrowserCaches(){if(!('caches' in window))return;caches.keys().then(keys=>Promise.all(keys.filter(key=>key.toLowerCase().includes('clow')||key.toLowerCase().includes('workbox')).map(key=>caches.delete(key)))).catch(()=>{})}
-function cleanupSessions(){const now=Date.now();const cleaned=readSessions().filter(session=>session&&session.id&&session.createdAt&&(now-session.createdAt)<SESSION_TTL).map(session=>({...session,messages:Array.isArray(session.messages)?session.messages:[]})).sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));writeSessions(cleaned);if(currentSessionId&&!cleaned.some(session=>session.id===currentSessionId)){currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY())}return cleaned}
-function getSessions(){return cleanupSessions()}
-function getSession(id=currentSessionId){return getSessions().find(session=>session.id===id)||null}
-function getLatestEmptySession(){return getSessions().find(session=>(session.messages?.length||0)===0)||null}
-function messageCountLabel(count){return count===1?'1 mensagem':`${count} mensagens`}
-function deriveTitle(text){const clean=String(text||'').trim().replace(/\s+/g,' ');return(clean||'Nova conversa').slice(0,72)}
-function relativeTime(ts){const diff=Date.now()-ts;const mins=Math.floor(diff/60000);if(mins<1)return'Agora mesmo';if(mins<60)return`Há ${mins} min`;const hrs=Math.floor(mins/60);if(hrs<24)return`Há ${hrs} h`;return`Há ${Math.floor(hrs/24)} d`}
-function saveSessionPatch(id,patcher){const sessions=getSessions();const index=sessions.findIndex(session=>session.id===id);if(index<0)return null;const updated=patcher({...sessions[index],messages:[...sessions[index].messages]});sessions[index]=updated;sessions.sort((a,b)=>(b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));writeSessions(sessions);return updated}
-function createLocalSession(serverSessionId=''){const now=Date.now();const session={id:uid(),serverSessionId,title:'Nova conversa',createdAt:now,updatedAt:now,messages:[]};const sessions=getSessions();sessions.unshift(session);writeSessions(sessions);currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);renderRecent();return session}
-function createUserMessage(text){return{id:uid(),role:'user',text,createdAt:Date.now()}}
-function createAssistantMessage(text=''){return{id:uid(),role:'assistant',text,createdAt:Date.now()}}
-function createToolMessage(toolName,toolInput){return{id:uid(),role:'tool',toolName,toolInput,createdAt:Date.now()}}
-function createErrorMessage(text){return{id:uid(),role:'error',text,createdAt:Date.now()}}
-function appendMessage(message){const session=saveSessionPatch(currentSessionId,current=>{const messages=[...current.messages,message];const firstUser=messages.find(item=>item.role==='user'&&item.text);return{...current,messages,updatedAt:Date.now(),title:firstUser?deriveTitle(firstUser.text):current.title}});renderRecent();return session}
-function updateAssistantMessage(messageId,text){saveSessionPatch(currentSessionId,current=>({...current,updatedAt:Date.now(),messages:current.messages.map(message=>message.id===messageId?{...message,text}:message)}))}
-function setServerSessionId(id,serverSessionId){saveSessionPatch(id,current=>({...current,serverSessionId,updatedAt:current.updatedAt||Date.now()}))}
-function deleteSession(id){const sessions=getSessions().filter(session=>session.id!==id);writeSessions(sessions);if(currentSessionId===id){currentSessionId=sessions[0]?.id||null;if(currentSessionId)localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);else localStorage.removeItem(ACTIVE_SESSION_KEY())}renderRecent();renderConversation(getSession())}
-function clearFeed(){F.innerHTML='';W.classList.remove('hide');F.appendChild(W)}
-
-
-
-
-// ═══ Render Module — Claude Code style, System Clow palette ═══
-
-function timeNow(){const d=new Date();return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');}
-function userInitial(){return (localStorage.getItem('clow_login_user')||'U').charAt(0).toUpperCase();}
-
-function renderUserMessage(text){
-  const row=document.createElement('div');row.className='u-row';
-  const d=document.createElement('div');d.className='u-block';
-  const meta=document.createElement('div');meta.className='msg-meta user';
-  meta.innerHTML='<span class="meta-name">voce</span><span class="meta-time">'+timeNow()+'</span><span class="meta-avatar">'+userInitial()+'</span>';
-  d.appendChild(meta);
-  const ut=document.createElement('div');ut.className='ut';ut.textContent=text;d.appendChild(ut);
-  row.appendChild(d);F.appendChild(row);
-}
-
-function renderAssistantMessage(text){
-  const row=document.createElement('div');row.className='rp-row';
-  const meta=document.createElement('div');meta.className='msg-meta';
-  meta.innerHTML='<span class="meta-time">'+timeNow()+'</span><span class="meta-name">Clow</span>';
-  row.appendChild(meta);
-  const d=document.createElement('div');d.className='rp';
-  d.innerHTML='<p>'+md(text)+'</p>';
-  row.appendChild(d);F.appendChild(row);return d;
-}
-
-function renderErrorMessage(text){
-  const row=document.createElement('div');row.className='rp-row';
-  const d=document.createElement('div');d.className='err-card';
-  d.textContent=text||'Erro desconhecido';
-  row.appendChild(d);F.appendChild(row);
-}
-
-// Tool block — Claude Code style with colored status dot
-function renderToolMessage(name,input,options){
-  options=options||{};
-  const s=typeof input==='object'?JSON.stringify(input,null,2):String(input||'');
-  let fl='';
-  if(input&&typeof input==='object'){
-    fl=(input.file_path&&input.file_path.split(/[\/\\]/).pop())
-      ||(input.path&&input.path.split(/[\/\\]/).pop())
-      ||(input.command&&input.command.slice(0,70))
-      ||input.pattern
-      ||(input.query&&input.query.slice(0,50))
-      ||'';
-  }
-  if(fl.length>75)fl=fl.slice(0,75)+'...';
-
-  const d=document.createElement('div');
-  d.className='tblk '+(options.status||'act');
-  d.dataset.toolName=name;
-  d.dataset.startTime=Date.now();
-
-  const outputLines=s.split('\n').slice(0,4).map(function(l){return '<span class="tline">'+esc(l)+'</span>';}).join('');
-  const totalLines=s.split('\n').length;
-  const more=totalLines>4?'<span class="tout-more">&hellip; +'+(totalLines-4)+' lines (click to expand)</span>':'';
-
-  d.innerHTML=''
-    +'<div class="tblk-head" onclick="this.nextElementSibling.classList.toggle(\'op\')">'
-    +  '<span class="tdot"></span>'
-    +  '<span class="tn">'+esc(name)+'</span>'
-    +  (fl?'<span class="ta">('+esc(fl)+')</span>':'')
-    +  '<span class="tdr"></span>'
-    +'</div>'
-    +'<div class="tout">'
-    +  '<div class="tout-inner">'+outputLines+more+'</div>'
-    +'</div>';
-
-  F.appendChild(d);return d;
-}
-
-// Mark a previously-rendered tool block as done or error, with duration
-function updateToolStatus(block,status,output){
-  if(!block)return;
-  block.classList.remove('act','done','err');
-  block.classList.add(status);
-  const durEl=block.querySelector('.tdr');
-  if(durEl&&block.dataset.startTime){
-    const ms=Date.now()-parseInt(block.dataset.startTime,10);
-    durEl.textContent=ms<1000?ms+'ms':(ms/1000).toFixed(1)+'s';
-  }
-  if(output!==undefined){
-    const inner=block.querySelector('.tout-inner');
-    if(inner){
-      const txt=typeof output==='object'?JSON.stringify(output,null,2):String(output||'');
-      const lines=txt.split('\n').slice(0,4).map(function(l){return '<span class="tline">'+esc(l)+'</span>';}).join('');
-      const total=txt.split('\n').length;
-      const more=total>4?'<span class="tout-more">&hellip; +'+(total-4)+' lines</span>':'';
-      inner.innerHTML=lines+more;
-    }
-  }
-}
-
-// Render turn-done marker
-function renderTurnDone(){
-  const d=document.createElement('div');d.className='turn-done';d.textContent='── concluido';
-  F.appendChild(d);
-}
-
-// File card (Download tool result)
-function renderFileCard(filename,url,sizeKb){
-  const row=document.createElement('div');row.className='rp-row';
-  const d=document.createElement('div');d.className='file-card';
-  const ext=(filename.split('.').pop()||'').toLowerCase();
-  const icon=({html:'🌐',xlsx:'📊',xls:'📊',csv:'📊',pdf:'📕',docx:'📄',doc:'📄',pptx:'🎬',png:'🖼️',jpg:'🖼️',zip:'📦',json:'📋',txt:'📄',md:'📄'})[ext]||'📁';
-  d.innerHTML=''
-    +'<div class="file-icon">'+icon+'</div>'
-    +'<div class="file-info">'
-    +  '<div class="file-name">'+esc(filename)+'</div>'
-    +  '<div class="file-size">'+(sizeKb?sizeKb+' KB':'')+'</div>'
-    +'</div>'
-    +'<div class="file-actions">'
-    +  '<a class="file-btn" href="'+esc(url)+'" target="_blank">Abrir</a>'
-    +  '<a class="file-btn" href="'+esc(url)+'" download>Download</a>'
-    +'</div>';
-  row.appendChild(d);F.appendChild(row);
-}
-
-// Mission card with progress — polls /v1/missions/:id every 2s
-function renderMissionCard(missionId){
-  const row=document.createElement('div');row.className='rp-row';
-  const d=document.createElement('div');d.className='mcard';d.dataset.missionId=missionId;
-  d.innerHTML=''
-    +'<div class="mcard-head">'
-    +  '<span style="font-size:18px">🚀</span>'
-    +  '<div class="mcard-title">Carregando missao...</div>'
-    +  '<div class="mcard-pct">0%</div>'
-    +'</div>'
-    +'<div class="mbar"><div class="mbar-fill" style="width:0%"></div></div>'
-    +'<div class="msteps"></div>';
-  row.appendChild(d);F.appendChild(row);
-
-  const poll=async()=>{
-    try{
-      const r=await fetch('/v1/missions/'+missionId,{headers:authHeaders()});
-      if(!r.ok)return;
-      const m=await r.json();
-      d.querySelector('.mcard-title').textContent=m.title;
-      d.querySelector('.mcard-pct').textContent=m.progress+'%';
-      d.querySelector('.mbar-fill').style.width=m.progress+'%';
-      const stepsHtml=(m.stepsDetailed||[]).map(function(s,i){
-        const icon=s.status==='running'?'⏳':s.status==='done'?'✅':s.status==='failed'?'❌':'○';
-        return '<div class="mstep '+s.status+'"><span class="mstep-icon">'+icon+'</span><span>'+esc(s.title)+'</span></div>';
-      }).join('');
-      d.querySelector('.msteps').innerHTML=stepsHtml;
-      if(m.status==='completed'){d.classList.add('done');return;}
-      if(m.status==='failed'){d.classList.add('failed');return;}
-      setTimeout(poll,2000);
-    }catch(err){console.warn('Mission poll error:',err);setTimeout(poll,5000);}
-  };
-  poll();
-}
-
-// Full conversation replay
-function renderConversation(session){
-  clearFeed();
-  if(!session||!session.messages.length){scr();return;}
-  W.classList.add('hide');
-  for(const m of session.messages){
-    if(m.role==='user')renderUserMessage(m.text);
-    else if(m.role==='assistant')renderAssistantMessage(m.text||'');
-    else if(m.role==='tool')renderToolMessage(m.toolName||'Tool',m.toolInput,{status:'done'});
-    else if(m.role==='error')renderErrorMessage(m.text);
-  }
-  scr();
-}
-
-function renderRecent(){const sessions=getSessions();recentList.innerHTML='';if(!sessions.length){recentList.innerHTML='<div class="recent-item empty"><div class="recent-main"><div class="recent-name">Nenhuma conversa ainda</div><div class="recent-meta"><span>As conversas da web expiram automaticamente após 3 dias.</span></div></div></div>';return}sessions.forEach(session=>{const btn=document.createElement('button');btn.type='button';btn.className=`recent-item${session.id===currentSessionId?' active':''}`;btn.innerHTML=`<div class="recent-shell"><div class="recent-main"><div class="recent-name">${esc(session.title||'Nova conversa')}</div><div class="recent-meta"><span>${relativeTime(session.updatedAt||session.createdAt)}</span><span class="recent-count">${messageCountLabel(session.messages.length)}</span></div></div><span class="recent-delete" role="button" aria-label="Apagar conversa" title="Apagar conversa"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></div>`;btn.onclick=()=>openSession(session.id);const del=btn.querySelector('.recent-delete');del.onclick=(event)=>{event.preventDefault();event.stopPropagation();deleteSession(session.id)};recentList.appendChild(btn)})}
-function openSession(id){const session=getSession(id);if(!session)return;currentSessionId=session.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId);renderRecent();renderConversation(session);closeSidebar();focusComposer()}
-function addProcessing(){const d=document.createElement("div");d.className="think";d.id="proc";d.innerHTML='<div class="think-logo"></div><span class="think-t">Working&hellip; (<span class="proc-s">0</span>s)</span>';F.appendChild(d);scr();const start=Date.now();window._procTimer=setInterval(function(){const el=document.querySelector(".proc-s");if(!el){clearInterval(window._procTimer);return}const s=Math.floor((Date.now()-start)/1000);el.textContent=s<60?s:Math.floor(s/60)+"m "+(s%60)+"s";},1000);}
-function setBtn(mode){const send=document.getElementById('ico-send'),stop=document.getElementById('ico-stop');if(mode==='stop'){send.style.display='none';stop.style.display='block';B.classList.add('stop');B.disabled=false}else{send.style.display='block';stop.style.display='none';B.classList.remove('stop');B.disabled=false}}
-function handleBtn(){if(isProcessing){abortCtrl?.abort();return}go()}
-async function createServerSession(){const r=await fetch(`${U}/v1/sessions`,{method:'POST',headers:authHeaders(),body:'{}'});if(!r.ok){if(r.status===401){logout();return''}throw new Error(`Erro ${r.status}`)}return(await r.json()).session_id||''}
-async function ensureCurrentSession(forceNew=false){let session=forceNew?null:getSession();if(!session){session=createLocalSession('')}if(session.serverSessionId&&!forceNew)return session;const serverSessionId=await createServerSession();if(!serverSessionId)return session;setServerSessionId(session.id,serverSessionId);session=getSession(session.id);return session}
-async function doLogin(){const u=LU.value.trim(),p=LP.value.trim();if(!u||!p){LE.textContent='Preencha todos os campos';return}document.getElementById('loginBtn').disabled=true;LE.textContent='';try{const r=await fetch(`${U}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(d.ok){authToken=d.token;localStorage.setItem(TOKEN_KEY,d.token);localStorage.setItem("clow_login_user",u);await showApp()}else LE.textContent=d.error||'Credenciais inválidas'}catch{LE.textContent='Erro de conexão'}document.getElementById('loginBtn').disabled=false}
-async function verifySavedLogin(){try{const r=await fetch(`${U}/auth/verify`,{headers:{Authorization:`Bearer ${authToken}`}});if(r.ok)await showApp();else logout()}catch{logout()}}
-async function showApp(){try{localStorage.removeItem('clow_sessions')}catch{}try{localStorage.removeItem('clow_active_session')}catch{}LS.classList.add('hide');setTimeout(()=>{LS.style.display='none'},250);AP.style.display='block';await applyTenantContext();syncSidebarState();clearLegacyClientCache();clearBrowserCaches();cleanupSessions();currentSessionId=null;localStorage.removeItem(ACTIVE_SESSION_KEY());const emptySession=getLatestEmptySession();if(emptySession){currentSessionId=emptySession.id;localStorage.setItem(ACTIVE_SESSION_KEY(),currentSessionId)}else{await ensureCurrentSession(true)}renderRecent();renderConversation(getSession());setTimeout(()=>focusComposer(),80)}
-async function applyTenantContext(){try{const r=await fetch(`${U}/auth/me`,{headers:authHeaders()});if(!r.ok)return;const d=await r.json();const u=d?.user;if(!u)return;const nameEl=document.getElementById('acctName');const tierEl=document.getElementById('acctTier');const avEl=document.getElementById('acctAvatar');if(nameEl)nameEl.textContent=u.name||u.email||(u.is_admin?'Clow Admin':'—');if(tierEl){const tierLabels={starter:'Starter',profissional:'Profissional',empresarial:'Empresarial',business:'Business',smart:'Smart',one:'One',admin:'Admin'};tierEl.textContent=u.is_admin?'Admin':('Plano '+(tierLabels[u.tier]||u.tier||'—'))}if(avEl)avEl.textContent=((u.name||u.email||'U')[0]||'U').toUpperCase();_tenantId=u.id||'default';try{localStorage.removeItem('clow_web_sessions_v2')}catch{}try{localStorage.removeItem('clow_web_active_session_v2')}catch{}}catch(e){}}
-function logout(){try{if(_tenantId){localStorage.removeItem(`clow_web_sessions_v3_${_tenantId}`);localStorage.removeItem(`clow_web_active_session_v3_${_tenantId}`)}localStorage.removeItem('clow_web_sessions_v3_default');localStorage.removeItem('clow_web_active_session_v3_default');localStorage.removeItem('clow_web_sessions_v2');localStorage.removeItem('clow_web_active_session_v2');}catch{}_tenantId=null;localStorage.removeItem(TOKEN_KEY);if(CLOW_BRIDGE_MODE){localStorage.removeItem('clow_bridge_mode');const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#08081a;color:#e8e4f0;font-family:system-ui;text-align:center;padding:40px;z-index:9999';d.textContent='Sessao expirada. Feche esta janela e clique novamente em SYSTEM CLOW SONNET 4 no Clow.';document.body.appendChild(d);return;}location.reload();}
-async function reset(){clearFeed();await ensureCurrentSession(true);renderRecent();renderConversation(getSession());closeSidebar();focusComposer()}
-async function go(){
-  const t=(I.value||'').trim();
-  if(!t)return;
-  if(!authToken){renderErrorMessage('Sessão expirada. Faça login novamente.');logout();return;}
-
-  let session;
-  try{session=await ensureCurrentSession(false);}
-  catch(e){renderErrorMessage(e?.message||'Não foi possível iniciar a conversa');return;}
-  if(!session?.serverSessionId)return;
-
-  I.value='';autoResize(I);
-  isProcessing=true;setBtn('stop');closeSidebar();
-  W.classList.add('hide');
-
-  // Render user message
-  appendMessage(createUserMessage(t));
-  renderUserMessage(t);
-
-  // Create assistant message placeholder
-  let assistantMessage=createAssistantMessage('');
-  appendMessage(assistantMessage);
-
-  // Working indicator appears immediately
-  addProcessing();
-
-  // Track active tool blocks by tool_use_id for live status updates
-  const activeTools=new Map();
-  let lastToolBlock=null;
-  let assistantEl=null;
-  let txt='';
-
-  try{
-    abortCtrl=new AbortController();
-    const tm=setTimeout(()=>abortCtrl.abort(),300000);
-    let r=await fetch(`${U}/v1/sessions/${session.serverSessionId}/messages`,{
-      method:'POST',
-      headers:authHeaders(),
-      body:JSON.stringify({message:t}),
-      signal:abortCtrl.signal
-    });
-    clearTimeout(tm);
-
-    if(r.status===404){
-      setServerSessionId(session.id,null);
-      session=await ensureCurrentSession(true);
-      if(session&&session.serverSessionId){
-        r=await fetch(U+'/v1/sessions/'+session.serverSessionId+'/messages',{
-          method:'POST',
-          headers:authHeaders(),
-          body:JSON.stringify({message:t})
-        });
-      }
-    }
-
-    if(!r.ok){
-      document.getElementById('proc')?.remove();
-      if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
-      let msg=`Erro ${r.status}`;
-      try{const d=await r.json();msg=d.message||d.error||msg;}catch{}
-      renderErrorMessage(msg);
-      return;
-    }
-
-    if(!r.body){
-      document.getElementById('proc')?.remove();
-      renderErrorMessage('Resposta vazia do servidor');
-      return;
-    }
-
-    // Remove working indicator once stream starts
-    const reader=r.body.getReader();
-    const decoder=new TextDecoder();
-    let buf='',ev='';
-    let firstEvent=true;
-
-    while(true){
-      const {done,value}=await reader.read();
-      if(done)break;
-      buf+=decoder.decode(value,{stream:true});
-      const lines=buf.split('\n');
-      buf=lines.pop()||'';
-
-      for(const ln of lines){
-        if(ln.startsWith('event: ')){ev=ln.slice(7).trim();continue;}
-        if(!ln.startsWith('data: '))continue;
-
-        // First event arrived — remove Working indicator
-        if(firstEvent){
-          document.getElementById('proc')?.remove();
-          if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
-          firstEvent=false;
-        }
-
-        try{
-          const d=JSON.parse(ln.slice(6));
-
-          if(ev==='tool_use'){
-            // Mark previous tool as done (if any still act)
-            if(lastToolBlock&&lastToolBlock.classList.contains('act')){
-              updateToolStatus(lastToolBlock,'done');
-            }
-            // Detect special tools for custom rendering
-            const toolName=d.tool_name||'Tool';
-            const toolInput=d.tool_input;
-
-            // Special handling for TodoWrite — render as task plan
-            if(toolName==='TodoWrite'&&toolInput&&Array.isArray(toolInput.todos)){
-              const block=renderTodoPlan(toolInput.todos);
-              lastToolBlock=null;
-            }
-            // Special handling for Agent — render as sub-agent
-            else if(toolName==='Agent'||toolName==='Task'){
-              const block=renderAgentStart(toolInput);
-              lastToolBlock=block;
-              if(d.tool_use_id)activeTools.set(d.tool_use_id,block);
-            }
-            // Standard tool
-            else{
-              const block=renderToolMessage(toolName,toolInput,{status:'act'});
-              lastToolBlock=block;
-              if(d.tool_use_id)activeTools.set(d.tool_use_id,block);
-            }
-
-            // Save to transcript
-            const toolMessage=createToolMessage(toolName,toolInput);
-            saveSessionPatch(currentSessionId,current=>({
-              ...current,
-              updatedAt:Date.now(),
-              messages:[...current.messages.filter(m=>m.id!==assistantMessage.id),toolMessage,assistantMessage]
-            }));
-            // Fix ordem visual (Claude Code style): proximo text_delta cria NOVO bloco DEPOIS desse tool
-            assistantEl=null;
-            txt='';
-            assistantMessage={...assistantMessage,id:uid(),text:''};
-            scr();
-          }
-          else if(ev==='tool_result'){
-            // Mark the matching tool block as done (or error)
-            const block=d.tool_use_id?activeTools.get(d.tool_use_id):lastToolBlock;
-            if(block){
-              updateToolStatus(block,d.is_error?'err':'done');
-              activeTools.delete(d.tool_use_id);
-            }
-          }
-          else if(ev==='text_delta'){
-            txt+=d.text||'';
-            assistantMessage={...assistantMessage,text:txt};
-            updateAssistantMessage(assistantMessage.id,txt);
-            // Ensure assistant element exists and update it live
-            if(!assistantEl||!document.body.contains(assistantEl)){
-              assistantEl=renderAssistantMessage(txt);
-            }else{
-              assistantEl.innerHTML='<p>'+md(txt)+'</p>';
-            }
-            scr();
-          }
-          else if(ev==='result'&&d.content){
-            // Se a resposta final nao bate com o bloco atual (ex: ja teve tools no meio),
-            // forca novo bloco pro texto vir DEPOIS do ultimo tool
-            if(assistantEl && txt && d.content !== txt){
-              assistantEl=null;
-              txt='';
-              assistantMessage={...assistantMessage,id:uid(),text:''};
-            }
-            txt=d.content;
-            assistantMessage={...assistantMessage,text:txt};
-            updateAssistantMessage(assistantMessage.id,txt);
-            if(!assistantEl||!document.body.contains(assistantEl)){
-              assistantEl=renderAssistantMessage(txt);
-            }else{
-              assistantEl.innerHTML='<p>'+md(txt)+'</p>';
-            }
-
-            // Check for mission card marker
-            if(d.missionId){
-              renderMissionCard(d.missionId);
-            }
-
-            // Check if response contains a download link — render as file card
-            const dlMatch=txt.match(/\[.*?\]\((https:\/\/[^\s)]*\/downloads\/([^\s)]+))\)/);
-            if(dlMatch){
-              const url=dlMatch[1];
-              const filename=decodeURIComponent(dlMatch[2]);
-              renderFileCard(filename,url);
-            }
-
-            scr();
-          }
-          else if(ev==='error'){
-            renderErrorMessage(d.message||d.content||'Erro durante o processamento');
-            isProcessing=false;setBtn('send');abortCtrl=null;focusComposer();
-            return;
-          }
-          else if(ev==='done'){
-            // Mark any remaining active tools as done
-            for(const [id,block] of activeTools){
-              if(block&&block.classList.contains('act')){
-                updateToolStatus(block,'done');
-              }
-            }
-            renderTurnDone();
-          }
-        }catch(err){console.warn('parse error:',err);}
-        ev='';
-      }
-    }
-    renderRecent();
-  }catch(e){
-    document.getElementById('proc')?.remove();
-    if(window._procTimer){clearInterval(window._procTimer);window._procTimer=null;}
-    renderErrorMessage(e?.name==='AbortError'?'Tempo limite excedido':(e?.message||'Erro de conexão'));
-  }
-
-  isProcessing=false;setBtn('send');abortCtrl=null;focusComposer();
-}
-
-// Render TodoWrite as a task plan card (Clow palette)
-function renderTodoPlan(todos){
-  const row=document.createElement('div');row.className='rp-row';
-  const d=document.createElement('div');d.className='tblk done';
-  const items=todos.map(function(t,i){
-    const icon=t.status==='completed'?'✅':t.status==='in_progress'?'⏳':'○';
-    const cls=t.status==='completed'?'done':t.status==='in_progress'?'running':'';
-    return '<div class="mstep '+cls+'"><span class="mstep-icon">'+icon+'</span><span>'+esc(t.content||t.activeForm||'')+'</span></div>';
-  }).join('');
-  d.innerHTML=''
-    +'<div class="tblk-head">'
-    +  '<span class="tdot"></span>'
-    +  '<span class="tn">Plano de Tarefas</span>'
-    +  '<span class="ta">('+todos.length+' etapas)</span>'
-    +  '<span class="tdr"></span>'
-    +'</div>'
-    +'<div class="tout op"><div class="tout-inner">'+items+'</div></div>';
-  row.appendChild(d);F.appendChild(row);scr();
-  return d;
-}
-
-// Render Agent/Task tool as sub-agent block
-function renderAgentStart(input){
-  const row=document.createElement('div');row.className='rp-row';
-  const d=document.createElement('div');d.className='tblk act';
-  d.dataset.toolName='Agent';
-  d.dataset.startTime=Date.now();
-  const desc=(input&&(input.description||input.subagent_type))||'Sub-agente';
-  const prompt=(input&&input.prompt)||'';
-  d.innerHTML=''
-    +'<div class="tblk-head" onclick="this.nextElementSibling.classList.toggle(\'op\')">'
-    +  '<span class="tdot"></span>'
-    +  '<span class="tn">Sub-agent</span>'
-    +  '<span class="ta">('+esc(desc)+')</span>'
-    +  '<span class="tdr"></span>'
-    +'</div>'
-    +'<div class="tout"><div class="tout-inner">'+esc(prompt.slice(0,400))+'</div></div>';
-  row.appendChild(d);F.appendChild(row);scr();
-  return d;
-}
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}
-window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classList.add('sidebar-collapsed')}else{sidebar.classList.remove('open');overlay.classList.remove('show')}})
-</script>
 
 <script>
-(function(){
-  if(!window.visualViewport) return;
-  var root = document.documentElement;
-  var apply = function(){
-    var vv = window.visualViewport;
-    // Distancia entre bottom da viewport layout e bottom da viewport visual = teclado
-    var kbH = Math.max(0, (window.innerHeight - vv.height - vv.offsetTop));
-    root.style.setProperty('--kb-h', kbH + 'px');
-    if(kbH > 50){ document.body.classList.add('kb-open'); }
-    else { document.body.classList.remove('kb-open'); }
-  };
-  window.visualViewport.addEventListener('resize', apply);
-  window.visualViewport.addEventListener('scroll', apply);
-  window.addEventListener('orientationchange', function(){ setTimeout(apply, 120); });
-  apply();
+const TOKEN_KEY = 'clow_token';
+const U = '';
+
+// ─── Bridge mode: embed de terceiros manda o token pela URL e espera
+// cair direto no agente de IA, não no CRM. Preserva esse comportamento
+// encaminhando pra /agente/ com a mesma query string. ───────────────
+(function () {
+  try {
+    const params = new URLSearchParams(location.search);
+    const ct = params.get('clow_token');
+    if (ct && ct.indexOf('clow_sonnet_') === 0) {
+      location.replace('/agente/' + location.search);
+      return;
+    }
+  } catch (e) {}
+  boot();
 })();
-</script>
 
-<!-- ─── CRM Modal (full-screen, in-app) ─── -->
-<div class="crm-modal" id="crmModal" role="dialog" aria-modal="true" aria-label="CRM Clow">
-  <div class="crm-modal-header">
-    <button class="crm-modal-back" type="button" onclick="closeCRM()" aria-label="Voltar pro System Clow">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-      Voltar pro Agente
-    </button>
-    <div class="crm-modal-title">
-      <svg class="crm-modal-infinite" viewBox="0 0 240 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="System Clow">
-        <path d="M 50,60 C 50,30 95,30 120,60 C 145,90 190,90 190,60 C 190,30 145,30 120,60 C 95,90 50,90 50,60 Z"
-              stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-    <button class="crm-modal-close" type="button" onclick="closeCRM()" aria-label="Fechar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-    </button>
-  </div>
-  <div class="crm-modal-body">
-    <div class="crm-modal-frame-wrap" style="position:relative">
-      <div class="crm-modal-loading" id="crmModalLoading">
-        <div class="crm-spin"></div>
-        <div>Carregando seu CRM...</div>
-      </div>
-      <iframe class="crm-modal-iframe" id="crmModalIframe" src="about:blank" allow="clipboard-read; clipboard-write; microphone; camera" loading="lazy"></iframe>
-    </div>
-  </div>
-</div>
+function showLoading(text) {
+  document.getElementById('loadingScreen').classList.remove('hide');
+  document.getElementById('loginScreen').classList.add('hide');
+  if (text) document.querySelector('.login-loading-text').textContent = text;
+}
+function showLogin() {
+  document.getElementById('loadingScreen').classList.add('hide');
+  document.getElementById('loginScreen').classList.remove('hide');
+}
 
-<script>
-(function(){
-  // ─── Open / close CRM in modal ─────────────────────────────────────
-  let _crmReady = false;
-  async function attemptExchange(sessionToken) {
-    const r = await fetch('/v1/crm/auth/exchange', {
+async function boot() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) { showLogin(); return; }
+  showLoading('Verificando sessão...');
+  try {
+    const r = await fetch(`${U}/auth/verify`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) { location.href = '/crm/'; return; }
+  } catch (e) {}
+  localStorage.removeItem(TOKEN_KEY);
+  showLogin();
+}
+
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  errEl.textContent = '';
+  if (!u || !p) { errEl.textContent = 'Preencha todos os campos'; return; }
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${U}/auth/login`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
     });
-    if (!r.ok) {
-      const txt = await r.text().catch(()=>('http_' + r.status));
-      const err = new Error(txt);
-      err.status = r.status;
-      throw err;
-    }
-    const data = await r.json();
-    return data.api_key;
-  }
-
-  function clearCrmCaches() {
-    sessionStorage.removeItem('clow_crm_exchanged');
-    localStorage.removeItem('clow_crm_key');
-  }
-
-  function showCrmError(loading, msg, showRelogin) {
-    if (!loading) return;
-    if (showRelogin) { showCrmInlineLogin(loading, msg); return; }
-    loading.innerHTML = '<div class="crm-modal-error">' + msg + '<br><br><button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit">Fechar</button></div>';
-    setTimeout(()=>{
-      const cb = document.getElementById('crmCloseBtn');
-      if (cb) cb.onclick = function(){ closeCRM(); };
-    }, 0);
-  }
-
-  // Inline login — substitui o antigo "Relogar" que mandava reload
-  // e deixava o usuario preso na tela de login do shell. Agora autentica
-  // direto e ja abre o CRM, sem refresh, sem friccao.
-  function showCrmInlineLogin(loading, msg) {
-    if (!loading) return;
-    var savedEmail = '';
-    try { savedEmail = localStorage.getItem('clow_last_email') || ''; } catch (e) {}
-    loading.innerHTML =
-      '<div class="crm-modal-error" style="text-align:center;max-width:360px;margin:0 auto;color:#E8E8F0">' +
-        '<div style="margin-bottom:14px;color:var(--danger);font-size:13px">' + msg + '</div>' +
-        '<form id="crmReloginForm" style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px;text-align:left">' +
-          '<input id="crmReloginEmail" type="email" placeholder="Seu email" autocomplete="username" required value="' + savedEmail.replace(/"/g, '&quot;') + '" ' +
-            'style="background:#14142A;border:1px solid rgba(225,6,0,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
-          '<input id="crmReloginPass" type="password" placeholder="Sua senha" autocomplete="current-password" required ' +
-            'style="background:#14142A;border:1px solid rgba(225,6,0,.28);color:#E8E8F0;padding:11px 14px;border-radius:10px;font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;outline:none">' +
-          '<button id="crmReloginSubmit" type="submit" ' +
-            'style="background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:12px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;margin-top:4px">' +
-            'Entrar e abrir CRM</button>' +
-        '</form>' +
-        '<div id="crmReloginErr" style="color:#F87171;font-size:12px;min-height:14px;margin:6px 0 12px;text-align:center"></div>' +
-        '<button id="crmCloseBtn" style="background:transparent;color:var(--muted);border:1px solid var(--line);padding:9px 18px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px">Fechar</button>' +
-      '</div>';
-    setTimeout(function(){
-      var form = document.getElementById('crmReloginForm');
-      var emailEl = document.getElementById('crmReloginEmail');
-      var passEl = document.getElementById('crmReloginPass');
-      var submitBtn = document.getElementById('crmReloginSubmit');
-      var errEl = document.getElementById('crmReloginErr');
-      var closeBtn = document.getElementById('crmCloseBtn');
-
-      if (emailEl && !emailEl.value) emailEl.focus(); else if (passEl) passEl.focus();
-
-      if (form) form.onsubmit = async function(e){
-        e.preventDefault();
-        if (errEl) errEl.textContent = '';
-        var email = (emailEl.value || '').trim().toLowerCase();
-        var password = passEl.value || '';
-        if (!email || !password) { if (errEl) errEl.textContent = 'Preencha email e senha.'; return; }
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Entrando...';
-        try {
-          var r = await fetch('/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: password }),
-          });
-          var d = await r.json().catch(function(){ return {}; });
-          if (!r.ok || !d.ok || !d.token) {
-            var em = d.error === 'invalid_credentials' ? 'Email ou senha incorretos.'
-                   : d.error === 'account_blocked' ? 'Conta suspensa. Contate o suporte.'
-                   : d.error === 'missing_credentials' ? 'Preencha email e senha.'
-                   : 'Erro ao entrar' + (d.error ? ' (' + d.error + ')' : '') + '.';
-            if (errEl) errEl.textContent = em;
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Entrar e abrir CRM';
-            return;
-          }
-          // Sucesso: salva token + email pra prefill futuro, limpa caches CRM
-          // antigos (apiKey antiga revogada do lado do servidor) e reabre o CRM.
-          try { localStorage.setItem('clow_token', d.token); } catch (e) {}
-          try { localStorage.setItem('clow_last_email', email); } catch (e) {}
-          if (typeof window.authToken !== 'undefined') { try { window.authToken = d.token; } catch (e) {} }
-          clearCrmCaches();
-          loading.innerHTML = '<div class="crm-spin"></div><div>Abrindo seu CRM...</div>';
-          loading.classList.remove('hide');
-          // Re-tenta o fluxo completo de abertura do CRM com o token novo
-          await window.openCRM();
-        } catch (err) {
-          if (errEl) errEl.textContent = 'Erro de conexao: ' + ((err && err.message) || 'tente novamente');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Entrar e abrir CRM';
-        }
-      };
-
-      if (closeBtn) closeBtn.onclick = function(){ closeCRM(); };
-    }, 0);
-  }
-
-  window.clearCrmCaches = clearCrmCaches;
-
-  window.openCRM = async function() {
-    const modal = document.getElementById('crmModal');
-    const frame = document.getElementById('crmModalIframe');
-    const loading = document.getElementById('crmModalLoading');
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-    if (loading) {
-      loading.classList.remove('hide');
-      loading.innerHTML = '<div class="crm-spin"></div><div>Carregando seu CRM...</div>';
-    }
-
-    const sessionToken = localStorage.getItem('clow_token');
-    if (!sessionToken) {
-      showCrmError(loading, 'Voce precisa estar logado no System Clow.', true);
+    const d = await r.json().catch(() => ({}));
+    if (d.ok && d.token) {
+      localStorage.setItem(TOKEN_KEY, d.token);
+      localStorage.setItem('clow_login_user', u);
+      showLoading('Abrindo seu CRM...');
+      location.href = '/crm/';
       return;
     }
+    errEl.textContent = d.error === 'invalid_credentials' ? 'Email/usuário ou senha incorretos.'
+      : d.error === 'account_blocked' ? 'Conta suspensa. Contate o suporte.'
+      : d.error || 'Credenciais inválidas';
+  } catch (e) {
+    errEl.textContent = 'Erro de conexão';
+  }
+  btn.disabled = false;
+}
 
-    let apiKey = null;
-    // Try cached exchange (only if same session token)
-    try {
-      const cached = JSON.parse(sessionStorage.getItem('clow_crm_exchanged') || 'null');
-      if (cached && cached.token === sessionToken && cached.api_key && (Date.now() - cached.ts) < 86400000) {
-        apiKey = cached.api_key;
-      }
-    } catch (e) {}
-
-    // Always validate by trying exchange (fresh) — fall back if cached fails
-    if (!apiKey) {
-      try {
-        apiKey = await attemptExchange(sessionToken);
-        sessionStorage.setItem('clow_crm_exchanged', JSON.stringify({ token: sessionToken, api_key: apiKey, ts: Date.now() }));
-      } catch (err) {
-        if (err.status === 401) {
-          // Token invalido/expirado — limpa tudo e pede relogin
-          clearCrmCaches();
-          showCrmError(loading, 'Sua sessao expirou. Faça login novamente para abrir o CRM.', true);
-          return;
-        }
-        showCrmError(loading, 'Erro ao abrir CRM: ' + (err.message || 'desconhecido'), false);
-        return;
-      }
-    }
-
-    // Save into the key the CRM UI looks for
-    localStorage.setItem('clow_crm_key', apiKey);
-
-    // Validate the key actually works (in case cached one was revoked)
-    try {
-      const v = await fetch('/v1/crm/stats', { headers: { 'Authorization': 'Bearer ' + apiKey } });
-      if (!v.ok) {
-        clearCrmCaches();
-        // Retry once with fresh exchange
-        try {
-          apiKey = await attemptExchange(sessionToken);
-          sessionStorage.setItem('clow_crm_exchanged', JSON.stringify({ token: sessionToken, api_key: apiKey, ts: Date.now() }));
-          localStorage.setItem('clow_crm_key', apiKey);
-        } catch (err) {
-          showCrmError(loading, 'Erro ao validar acesso CRM: ' + (err.message || ''), true);
-          return;
-        }
-      }
-    } catch (e) { /* network error — let iframe try */ }
-
-    // Open iframe
-    const url = '/crm/?from=shell&_cb=' + Date.now();
-    frame.onload = function(){ if (loading) loading.classList.add('hide'); _crmReady = true; };
-    frame.src = url;
-    setTimeout(()=>{ if (loading) loading.classList.add('hide'); }, 6000);
-  };
-
-  window.closeCRM = function() {
-    const modal = document.getElementById('crmModal');
-    const frame = document.getElementById('crmModalIframe');
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-    // Defer src clear so closing animation doesn't show blank flash
-    setTimeout(() => { if (frame && !modal.classList.contains('show')) frame.src = 'about:blank'; }, 280);
-  };
-
-  // ESC closes
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.getElementById('crmModal').classList.contains('show')) {
-      closeCRM();
-    }
-  });
-
-  // Clear cached exchange when user logs out
-  const origLogout = window.logout;
-  window.logout = function() {
-    sessionStorage.removeItem('clow_crm_exchanged');
-    localStorage.removeItem('clow_crm_key');
-    if (typeof origLogout === 'function') origLogout();
-  };
-})();
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hide')) doLogin();
+});
 </script>
 
 </body>

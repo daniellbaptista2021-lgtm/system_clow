@@ -83,7 +83,23 @@ export async function ingestInbound(channel: Channel2, msg: {
     source: rotuloDoCanal(channel.type),
   });
 
-
+  // 2.1. Sincroniza a foto de perfil sozinho — sem avatar, ou com o link do
+  // WhatsApp já vencido (ver isAvatarExpired). Fire-and-forget: é uma chamada
+  // de rede pra fora, não pode atrasar o ACK do webhook. Só a Evolution tem
+  // esse endpoint hoje; Meta usa outra API e fica pra depois se precisar.
+  if (!msg.fromMe && channel.type === 'evolution' && (!contact.avatarUrl || isAvatarExpired(contact.avatarUrl))) {
+    void (async () => {
+      try {
+        const evolution = await import('./channels/evolution.js');
+        const picUrl = await evolution.fetchProfilePicture(channel, msg.fromPhone);
+        if (picUrl && picUrl !== contact.avatarUrl) {
+          store.updateContact(tenantId, contact.id, { avatarUrl: picUrl });
+          const { publish } = await import('./events.js');
+          publish(tenantId, 'contact.avatar', { contactId: contact.id, avatarUrl: picUrl });
+        }
+      } catch { /* best-effort, silencioso */ }
+    })();
+  }
 
   // 3. Find or create card on the default sales board
   const card = await findOrCreateOpenCardForContact(tenantId, contact.id, msg.fromName || msg.fromPhone, channel);
@@ -173,6 +189,10 @@ export async function ingestInbound(channel: Channel2, msg: {
     tenantId, cardId: card?.id, contactId: contact.id, activityId: activity.id,
     text: msg.text || msg.caption || '',
   });
+
+  // Nao precisa publicar 'message.in' aqui: store.logActivity() (chamado
+  // acima) ja faz isso sozinho, com payload mais completo (unreadCount,
+  // columnId, push mobile) — ver src/crm/store/cardsStore.ts.
   return { ok: true, contactId: contact.id, cardId: card?.id, activityId: activity.id };
 }
 

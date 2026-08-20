@@ -546,6 +546,25 @@ async function main(): Promise<void> {
   });
   app.get('/crm', (c) => Response.redirect(new URL('/crm/', c.req.url).toString(), 302) as any);
 
+  // Serve Agente (chat IA) UI static files (public/agente/*)
+  app.get('/agente/*', async (c) => {
+    const url = new URL(c.req.url);
+    let p = url.pathname.replace(/^\/agente/, '') || '/';
+    if (p === '/' || p === '') p = '/index.html';
+    const fsMod = await import('fs');
+    const pathMod = await import('path');
+    const file = pathMod.join(process.cwd(), 'public/agente', p);
+    // path traversal guard
+    const base = pathMod.join(process.cwd(), 'public/agente');
+    if (!file.startsWith(base)) return c.text('forbidden', 403);
+    if (!fsMod.existsSync(file) || !fsMod.statSync(file).isFile()) return c.text('not found', 404);
+    const buf = fsMod.readFileSync(file);
+    const mt = p.endsWith('.html') ? 'text/html' : p.endsWith('.css') ? 'text/css' : p.endsWith('.js') ? 'application/javascript' : 'application/octet-stream';
+    const noCache = p.endsWith('.html') || p.endsWith('.js');
+    return new Response(buf, { headers: { 'Content-Type': mt + '; charset=utf-8', 'Cache-Control': noCache ? 'no-cache, no-store, must-revalidate' : 'public, max-age=300' } });
+  });
+  app.get('/agente', (c) => Response.redirect(new URL('/agente/', c.req.url).toString(), 302) as any);
+
   app.get('/onboarding', async (c) => {
     try {
       const fsMod = await import('fs');

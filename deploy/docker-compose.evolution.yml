@@ -1,27 +1,35 @@
 ##
-## docker-compose.evolution.yml — Evolution API para o System Clow
+## docker-compose.evolution.yml — Evolution API DEDICADA do System Clow.
 ##
-## Sobe a Evolution API (WhatsApp) + PostgreSQL + Redis.
-## O System Clow se conecta à Evolution via HTTP no port 8080.
+## Instância própria, isolada da do crm-territorio (que roda em /opt/evolution
+## na porta 8080). Sobe a Evolution API (WhatsApp) + PostgreSQL + Redis, tudo
+## com nomes/rede/volumes proprios — nada compartilhado entre os dois apps.
 ##
-## Uso:
-##   docker compose -f deploy/docker-compose.evolution.yml up -d
+## Uso (rodar da raiz do projeto, /opt/system_clow):
+##   docker compose -f deploy/docker-compose.evolution.yml --env-file /opt/system_clow/.env up -d
 ##
-## Após subir, configure no .env:
-##   EVOLUTION_API_URL=http://localhost:8080
-##   EVOLUTION_API_KEY=<sua chave definida abaixo>
+## O --env-file é OBRIGATÓRIO: o compose resolve a pasta do projeto pela
+## localização deste arquivo (deploy/), não pelo cwd, então sem o --env-file
+## explícito ele NÃO acha o .env da raiz e a Evolution sobe com a chave
+## default "change_me_evolution_api_key" (foi o que aconteceu no primeiro
+## deploy — incidente 2026-08-20, QR code dava 401 silencioso).
+##
+## Variáveis usadas por este compose (vêm do .env da raiz):
+##   EVOLUTION_BASE_URL=http://localhost:8081   (o que src/crm/routes/channels.ts lê —
+##                                                NÃO é EVOLUTION_API_URL, esse nome é lixo)
+##   EVOLUTION_API_KEY=<chave gerada>
 ##
 
 services:
   evolution-api:
-    container_name: evolution_api
-    image: atendai/evolution-api:latest
+    container_name: system_clow_evolution_api
+    image: evoapicloud/evolution-api:latest
     restart: always
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8081:8080"
     environment:
       # ─── Server ─────────────────────────────────────────────────────
-      - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8080}
+      - SERVER_URL=${EVOLUTION_SERVER_URL:-http://localhost:8081}
       - SERVER_PORT=8080
 
       # ─── Auth ───────────────────────────────────────────────────────
@@ -53,7 +61,7 @@ services:
       evolution-redis:
         condition: service_healthy
     networks:
-      - evolution-net
+      - system_clow_evolution-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s
@@ -62,7 +70,7 @@ services:
       start_period: 15s
 
   evolution-postgres:
-    container_name: evolution_postgres
+    container_name: system_clow_evolution_postgres
     image: postgres:15-alpine
     restart: always
     environment:
@@ -70,9 +78,9 @@ services:
       - POSTGRES_USER=evolution
       - POSTGRES_PASSWORD=${EVOLUTION_PG_PASSWORD:-evolution_pg_secret}
     volumes:
-      - evolution-pgdata:/var/lib/postgresql/data
+      - system_clow_evolution-pgdata:/var/lib/postgresql/data
     networks:
-      - evolution-net
+      - system_clow_evolution-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U evolution -d evolution_db"]
       interval: 10s
@@ -80,13 +88,13 @@ services:
       retries: 5
 
   evolution-redis:
-    container_name: evolution_redis
+    container_name: system_clow_evolution_redis
     image: redis:7-alpine
     restart: always
     volumes:
-      - evolution-redisdata:/data
+      - system_clow_evolution-redisdata:/data
     networks:
-      - evolution-net
+      - system_clow_evolution-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -94,9 +102,9 @@ services:
       retries: 5
 
 networks:
-  evolution-net:
+  system_clow_evolution-net:
     driver: bridge
 
 volumes:
-  evolution-pgdata:
-  evolution-redisdata:
+  system_clow_evolution-pgdata:
+  system_clow_evolution-redisdata:

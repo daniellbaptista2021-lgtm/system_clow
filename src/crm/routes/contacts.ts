@@ -345,13 +345,15 @@ export function registerContactsRoutes(app: Hono): void {
     const body = await c.req.json().catch(() => ({})) as any;
     const force = body.force === true;
 
-    const zapiMod: any = { fetchProfilePicture: async () => null };
+    const evolution = await import('.././channels/evolution.js');
     const dbMod = await import('.././schema.js');
     const db = dbMod.getCrmDb();
 
-    const channels = db.prepare("SELECT * FROM crm_channels WHERE tenant_id = ? AND type = 'zapi' AND status != 'disabled'").all(tid) as any[];
+    // Era 'zapi' — provedor descontinuado, nenhum canal desse tipo existe
+    // mais nesta versão do sistema. Todo mundo aqui usa Evolution.
+    const channels = db.prepare("SELECT * FROM crm_channels WHERE tenant_id = ? AND type = 'evolution' AND status != 'disabled'").all(tid) as any[];
     if (!channels.length) {
-      return c.json({ ok: false, error: 'no_zapi_channel', message: 'Conecte um canal Z-API primeiro' }, 400);
+      return c.json({ ok: false, error: 'no_evolution_channel', message: 'Conecte um canal de WhatsApp primeiro' }, 400);
     }
     const channel = {
       id: channels[0].id, tenantId: channels[0].tenant_id, type: channels[0].type,
@@ -368,7 +370,7 @@ export function registerContactsRoutes(app: Hono): void {
     const upd = db.prepare('UPDATE crm_contacts SET avatar_url = ?, updated_at = ? WHERE id = ?');
     for (const ct of contacts) {
       try {
-        const url = await zapiMod.fetchProfilePicture(channel as any, ct.phone);
+        const url = await evolution.fetchProfilePicture(channel as any, ct.phone);
         if (url) { upd.run(url, Date.now(), ct.id); updated++; }
         else { noPhoto++; }
       } catch { errors++; }

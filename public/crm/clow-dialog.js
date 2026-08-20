@@ -42,7 +42,7 @@
 .cdlg-btn-primary:hover:not(:disabled){box-shadow:0 10px 28px rgba(225,6,0,.42)}
 .cdlg-btn-ghost{background:transparent;color:var(--text-dim,#9898B8);border:1px solid var(--border,rgba(255,255,255,.1))}
 .cdlg-btn-ghost:hover{color:var(--text,#E8E8F0);border-color:rgba(225,6,0,.4);background:rgba(225,6,0,.06)}
-.cdlg-btn-danger{background:linear-gradient(135deg,#EF4444,#DC2626);color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.32)}
+.cdlg-btn-danger{background:linear-gradient(135deg,#F87171,#DC2626);color:#fff;box-shadow:0 8px 22px rgba(239,68,68,.32)}
 .cdlg-btn-danger:hover:not(:disabled){box-shadow:0 10px 28px rgba(239,68,68,.42)}
 .cdlg-hint{font-size:11.5px;color:var(--text-faint,#6E6E8C);margin-top:10px;line-height:1.5}
 @media(max-width:480px){.cdlg{padding:24px 20px;border-radius:14px}.cdlg h3{font-size:16px}.cdlg-actions{flex-direction:column-reverse}.cdlg-btn{width:100%}}

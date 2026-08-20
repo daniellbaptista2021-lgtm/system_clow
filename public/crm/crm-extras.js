@@ -64,12 +64,11 @@
   // ─── Inject extra nav items + views into the shell ───────────────────
   function injectExtras() {
     const nav = $('.sidebar nav');
-    if (!nav || nav.querySelector('[data-view="automations"]')) return;
-    const autoIcon = el('span', { class: 'nav-icon', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' });
+    if (!nav || nav.querySelector('[data-view="subscriptions"]')) return;
     const subsIcon = el('span', { class: 'nav-icon', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="9" y2="15"/></svg>' });
+    // Automações removida do menu por pedido (backend/view preservados,
+    // sem link de navegacao — mesmo padrao usado pra forms/campaigns/etc).
     nav.append(
-      el('button', { class: 'nav-item', data: { view: 'automations' } },
-        autoIcon, el('span', { class: 'nav-label' }, 'Automações')),
       el('button', { class: 'nav-item', data: { view: 'subscriptions' } },
         subsIcon, el('span', { class: 'nav-label' }, 'Mensalidades')),
     );
@@ -310,10 +309,10 @@
         const statusColors = s.status === 'cancelled'
           ? { bg: 'rgba(148,163,184,.12)', border: 'rgba(148,163,184,.30)', fg: '#94A3B8', label: 'Cancelada' }
           : paidThisCycle
-          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#22C55E', label: 'Paga' }
+          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#4ADE80', label: 'Paga' }
           : (s.status === 'past_due' || overdue)
           ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
-          : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#F59E0B', label: 'Aguardando pagamento' };
+          : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#FBBF24', label: 'Aguardando pagamento' };
         const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
 
         // Lookup do contato pra exibir info no card e habilitar
@@ -381,7 +380,7 @@
               // (interno, nao wa.me externo) com template ja no composer.
               (needsAction && contact)
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:#4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
                       mouseenter: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.16)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.50)'; },
                       mouseleave: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.08)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.30)'; },
@@ -437,7 +436,7 @@
                 : null,
               needsAction
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#22C55E;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:#4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
                       mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
                       mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },

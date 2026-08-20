@@ -222,7 +222,7 @@
           if (!r.ok) {
             mostrar(r.erro || 'A chave não foi aceita.', 'var(--red)');
           } else {
-            mostrar('Chave válida.' + (r.modelos ? ' ' + r.modelos.length + ' modelos disponíveis.' : ''), '#22c55e');
+            mostrar('Chave válida.' + (r.modelos ? ' ' + r.modelos.length + ' modelos disponíveis.' : ''), '#4ade80');
             // Com a lista em mãos, trocamos o campo livre por um seletor:
             // digitar nome de modelo à mão é a forma mais fácil de errar.
             if (r.modelos && r.modelos.length) {

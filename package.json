@@ -78,5 +78,10 @@
     "*": [
       "node scripts/run-gitleaks.cjs protect --staged --redact -v"
     ]
+  },
+  "allowScripts": {
+    "better-sqlite3@12.9.0": true,
+    "esbuild@0.27.7": true,
+    "sharp@0.34.5": true
   }
 }

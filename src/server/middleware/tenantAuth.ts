@@ -8,7 +8,7 @@
 
 import type { Context, Next } from 'hono';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { hashApiKey, findTenantByApiKeyHash, touchApiKey, type Tenant } from '../../tenancy/tenantStore.js';
+import { hashApiKey, findTenantByApiKeyHash, touchApiKey, listTenants, type Tenant } from '../../tenancy/tenantStore.js';
 import { verifyUserToken } from '../../auth/authRoutes.js';
 import { isTokenRevoked } from '../../auth/tokenRevocation.js';
 import { modoBonus } from '../../tenancy/modoBonus.js';
@@ -96,6 +96,17 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
     return next();
   }
 
+  // SSE (live updates) is opened via the browser's native EventSource, que
+  // não tem como mandar um header Authorization — só a URL. Por isso essa
+  // rota carrega o token como query param (?token=) e resolve o tenant
+  // sozinha (ver src/crm/routes/agents.ts, GET /events). Sem este skip, a
+  // conexão nunca passava daqui: 401 antes mesmo de chegar no handler que
+  // sabe ler o query param (incidente 2026-08-21 — updates ao vivo nunca
+  // funcionaram, nem antes nem depois de existir o publish() do outro lado).
+  if (reqPath === '/v1/crm/events') {
+    return next();
+  }
+
   // Skip auth if clowSonnetGuard already authenticated this request
   const alreadyAuthed = (c as unknown as { get?: (k: string) => unknown }).get?.('authMode');
   if (alreadyAuthed === 'clow_sonnet' || alreadyAuthed === 'admin_session') {
@@ -112,6 +123,14 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   if (adminSession.ok) {
     c.set('adminUser', adminSession.username);
     c.set('authMode', 'admin_session');
+    // Sem isto, o admin nunca tem tenantId no contexto: marcarTenant.ts pula
+    // o AsyncLocalStorage (ve tenantId undefined) e o motor de IA principal
+    // (src/api/anthropic.ts resolverMotor) cai no fallback de "CLI local do
+    // dono" — que falha com "sem credencial" mesmo com BYOK configurado.
+    // Mesma resolucao usada em /v1/crm/auth/exchange pra sessao de admin.
+    const tenants = listTenants();
+    const adminTenant = tenants.find((t) => t.email === 'admin@clow.dev') || tenants[0];
+    if (adminTenant) c.set('tenantId', adminTenant.id);
     return next();
   }
 

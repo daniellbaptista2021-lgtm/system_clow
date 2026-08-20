@@ -66,10 +66,10 @@
       .agent-config-modal .row > * { flex:1; }
       .agent-config-modal .footer { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
       .agent-config-modal button { padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-size:14px; }
-      .agent-config-modal .btn-save { background:#22c55e; color:white; }
+      .agent-config-modal .btn-save { background:#4ade80; color:white; }
       .agent-config-modal .btn-cancel { background:#374151; color:#e5e7eb; }
       .agent-config-modal .btn-default { background:#3b82f6; color:white; margin-right:auto; }
-      .agent-config-modal .err { color:#ef4444; font-size:12px; margin-top:6px; }
+      .agent-config-modal .err { color:#f87171; font-size:12px; margin-top:6px; }
       .agent-config-modal .hint { color:#94a3b8; font-size:11px; font-weight:400; margin-left:6px; }
 
       /* Toggle switch (visual, sem mudar o checkbox) */
@@ -79,7 +79,7 @@
       .agent-config-modal .toggle input { opacity:0; width:0; height:0; }
       .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:#374151; border-radius:24px; transition:.2s; }
       .agent-config-modal .toggle .slider::before { content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
-      .agent-config-modal .toggle input:checked + .slider { background:#22c55e; }
+      .agent-config-modal .toggle input:checked + .slider { background:#4ade80; }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
       /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
@@ -99,7 +99,7 @@
         background: rgba(225, 6, 0, 0.08);
       }
       .col-agent-btn.active:hover { background: rgba(225, 6, 0, 0.15); }
-      .col-agent-btn.paused { color: #f59e0b; }
+      .col-agent-btn.paused { color: #fbbf24; }
 
       /* Layout consistente da .col-head com 4 elementos: title | count | agent-btn | menu-btn */
       .col-head { gap: 8px; }

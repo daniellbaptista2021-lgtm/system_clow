@@ -371,7 +371,7 @@
     function phoneCountLabel() {
       const used = (me.user.authorized_phones || []).length;
       const remaining = maxPhones - used;
-      const color = remaining <= 0 ? '#F87171' : remaining === 1 ? '#F59E0B' : '#22C55E';
+      const color = remaining <= 0 ? '#F87171' : remaining === 1 ? '#FBBF24' : '#4ADE80';
       return el('span', { style: `font-size:11px;padding:3px 9px;border-radius:99px;background:rgba(${remaining <= 0 ? '239,68,68' : remaining === 1 ? '245,158,11' : '34,197,94'},.14);border:1px solid rgba(${remaining <= 0 ? '239,68,68' : remaining === 1 ? '245,158,11' : '34,197,94'},.35);color:${color};font-weight:700;letter-spacing:.3px;text-transform:uppercase` }, `${used} de ${maxPhones}`);
     }
     const headerWrap = el('div', { style: 'display:flex;align-items:center;gap:12px;margin:0 0 10px' },

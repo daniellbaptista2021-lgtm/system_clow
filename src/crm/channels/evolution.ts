@@ -23,6 +23,7 @@
  */
 import { decryptJson } from '../crypto.js';
 import { logger } from '../../utils/logger.js';
+import { readMedia } from '../media.js';
 import type { Channel2, SendOptions, SendResult, ParsedInbound, WebhookValue } from '../types.js';
 
 export interface EvolutionCreds {
@@ -73,6 +74,24 @@ function ehGrupo(jid: unknown): boolean {
   return typeof jid === 'string' && jid.includes('@g.us');
 }
 
+/**
+ * Se `mediaUrl` é um link interno nosso (/v1/crm/media/...), a Evolution não
+ * tem como buscar: ela roda isolada num container Docker à parte, sem rota
+ * até o processo do CRM, e mesmo se tivesse a URL exige um Bearer token que
+ * a Evolution não sabe mandar. Resolvemos lendo o arquivo do disco aqui
+ * (mesmo host) e mandando o conteúdo em base64 — a Evolution aceita os dois
+ * formatos no campo `media`. Link realmente externo (outro CDN) passa direto,
+ * já que aí sim é a Evolution buscando por fora, sem passar por nós.
+ */
+function mediaLocalComoBase64(mediaUrl: string): { base64: string; mime: string } | null {
+  const m = mediaUrl.match(/\/v1\/crm\/media\/([\w-]+)\/([\w-]+)\/([\w.-]+)$/);
+  if (!m) return null;
+  const [, tenantId, date, filename] = m;
+  const achado = readMedia(tenantId, date, filename);
+  if (!achado) return null;
+  return { base64: achado.bytes.toString('base64'), mime: achado.mime };
+}
+
 export async function sendMessage(channel: Channel2, opts: SendOptions): Promise<SendResult> {
   const creds = credsDo(channel);
   const numero = opts.to.replace(/\D/g, '');
@@ -84,10 +103,12 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
   const corpo: any = { number: numero };
   if (ehMidia) {
     corpo.mediatype = opts.mediaType === 'audio' ? 'audio' : opts.mediaType || 'image';
-    corpo.media = opts.mediaUrl;
+    const local = mediaLocalComoBase64(opts.mediaUrl!);
+    corpo.media = local ? local.base64 : opts.mediaUrl;
     if (opts.caption) corpo.caption = opts.caption;
     if (opts.mediaFilename) corpo.fileName = opts.mediaFilename;
     if (opts.mediaMime) corpo.mimetype = opts.mediaMime;
+    else if (local?.mime) corpo.mimetype = local.mime;
   } else {
     corpo.text = opts.text ?? '';
   }
@@ -315,6 +336,31 @@ export async function fetchConnectedPhone(channel: Channel2): Promise<string | n
     const numero = numeroDoJid(jid);
     return numero || null;
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Busca a URL da foto de perfil de um número no WhatsApp.
+ *
+ * `null` cobre dois casos que o CRM não precisa distinguir: o contato não
+ * tem foto de perfil, ou não está no WhatsApp. Em ambos, melhor não ter
+ * avatar do que quebrar o fluxo de quem chamou.
+ */
+export async function fetchProfilePicture(channel: Channel2, phone: string): Promise<string | null> {
+  const creds = credsDo(channel);
+  try {
+    const r = await fetch(url(creds, `/chat/fetchProfilePictureUrl/${encodeURIComponent(creds.instance)}`), {
+      method: 'POST',
+      headers: headers(creds),
+      body: JSON.stringify({ number: phone }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) return null;
+    const d = await r.json() as any;
+    return d?.profilePictureUrl || null;
+  } catch (err: any) {
+    logger.warn('[evolution] fetchProfilePicture falhou:', err?.message);
     return null;
   }
 }
