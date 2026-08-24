@@ -197,6 +197,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -208,6 +209,7 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 20px;
 }
 .login-card {
@@ -247,6 +249,7 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 .app-shell.panel-open {
@@ -590,7 +593,7 @@ html[data-theme="light"] .kanban-col { background: var(--bg-4); }
   box-shadow: -16px 0 48px var(--shadow-color, rgba(0,0,0,.28));
   background: var(--bg-2); border-left: 1px solid var(--border);
   display: flex; flex-direction: column;
-  overflow: hidden; max-height: 100vh;
+  overflow: hidden; max-height: 100vh; max-height: 100dvh;
 }
 .panel-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -1530,4 +1533,163 @@ img.card-avatar, img.contact-avatar {
 }
 @media (prefers-reduced-motion: reduce) {
   .msg-media img { transition: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * MOBILE — correcoes de responsividade
+ *
+ * Fica no fim do arquivo de proposito: sao overrides do que ja existe mais
+ * acima, e CSS resolve empate de especificidade pela ordem. Cada bloco diz
+ * qual bug de tela ele conserta, verificado em Chromium headless a 360, 390,
+ * 414 e 768px de largura.
+ * ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── 1. Painel lateral cortado ──────────────────────────────────────
+   * .side-panel nasce com min-width:500px pro desktop. A media query de
+   * cima ja mandava width/max-width:100vw, mas min-width sempre ganha de
+   * max-width em CSS — entao num aparelho de 360px o painel continuava com
+   * 500px e cortava o chat, as abas e o campo de escrever mensagem.
+   * Zerar o piso e o que faz o 100vw valer. */
+  .side-panel {
+    min-width: 0 !important;
+  }
+
+  /* ── 2. Zoom automatico do iOS ao focar campo ───────────────────────
+   * Safari da zoom em qualquer campo com fonte < 16px e nao volta sozinho,
+   * deixando a tela deslocada. O maximum-scale do viewport nao impede isso
+   * (iOS ignora por acessibilidade) — so o tamanho da fonte resolve.
+   * 16px vale so no mobile; o desktop segue com os 11-13px do design. */
+  .top-bar input,
+  .top-bar select,
+  .top-bar textarea,
+  .side-panel input,
+  .side-panel select,
+  .side-panel textarea,
+  .composer textarea,
+  .field input,
+  .field select,
+  .field textarea,
+  .modal input,
+  .modal select,
+  .modal textarea {
+    font-size: 16px !important;
+  }
+
+  /* ── 3. Botoes cortados na barra de acoes ───────────────────────────
+   * Views como Contatos trazem o grupo de botoes com flex-wrap:nowrap
+   * inline no HTML, o que empurrava "+ Novo Contato" pra fora da tela —
+   * botao existente e inalcancavel. Precisa de !important pra ganhar do
+   * style inline. Sem mudar ordem, texto ou acao de nenhum botao. */
+  .top-bar > div {
+    flex-wrap: wrap !important;
+    min-width: 0;
+  }
+  /* Campo de busca com largura fixa inline (280px) tambem precisa ceder */
+  .top-bar input[type="text"],
+  .top-bar-left input {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+  .top-bar-left,
+  .top-bar-right { min-width: 0; max-width: 100%; }
+  .top-bar-left h2 { flex: 0 0 auto; }
+  /* Selects da barra dividem a linha em vez de esticar */
+  .top-bar select { flex: 1 1 140px; min-width: 0; max-width: 100%; }
+
+  /* ── 4. Alvos de toque estreitos ────────────────────────────────────
+   * Os botoes de menu (⋮) da coluna e do card tinham 18-23px de largura.
+   * A altura ja era 44px; falta a largura pro dedo acertar. */
+  .col-menu-btn,
+  .card-menu-btn {
+    min-width: 40px;
+  }
+
+  /* ── 5. Barra superior comendo a tela ───────────────────────────────
+   * Com tudo quebrando linha, a top-bar chegava a 170px de altura num
+   * aparelho de 640px — 27% da tela so de controle. Compacta o respiro
+   * vertical sem esconder nada. */
+  .top-bar {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    row-gap: 6px;
+  }
+
+  /* ── 6. Rolagem vertical de verdade dentro do painel ────────────────
+   * Com o painel virando tela cheia, o conteudo precisa rolar com inercia
+   * e a lista de abas precisa rolar na horizontal em vez de espremer. */
+  .side-panel .panel-body,
+  .side-panel .panel-content {
+    -webkit-overflow-scrolling: touch;
+  }
+  .panel-tabs {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .panel-tabs::-webkit-scrollbar { display: none; }
+
+  /* ── 7. Campo de mensagem baixo demais ──────────────────────────────
+   * Com a fonte subindo pra 16px (item 2), os 38px de altura minima do
+   * composer cortavam a primeira linha do texto. Cresce junto. */
+  .composer textarea {
+    min-height: 46px;
+    line-height: 1.35;
+  }
+  /* Espremido entre os 4 botoes redondos, o campo ficava com ~150px e a
+   * frase quebrava em duas linhas cortadas. No mobile ele ganha a linha
+   * inteira e os botoes descem — mesmos botoes, mesma ordem, mesmas acoes. */
+  .composer-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .composer-row textarea {
+    flex: 1 1 100%;
+    order: -1;
+    width: 100%;
+  }
+
+  /* ── 8. Barra superior comendo um quarto da tela ────────────────────
+   * No Pipeline a barra chegava a 159px de altura: cada controle caia
+   * numa linha propria porque o filtro de instancia carrega
+   * min-width:200px inline no HTML, o que sozinho ja estoura uma tela de
+   * 360px e empurra o resto pra baixo. Soltando esse piso, os dois
+   * seletores dividem a mesma linha e os botoes ocupam a seguinte.
+   * Nenhum controle e escondido, renomeado ou reordenado — so param de
+   * exigir largura que o aparelho nao tem. */
+  /* Base de 50% menos o espaco do ↻ (40px) e dos dois gaps (16px), pra
+   * os dois seletores e o botao caberem na MESMA linha. Com 50% cheio
+   * eles sozinhos esgotavam a largura e jogavam o ↻ pra linha de baixo. */
+  .top-bar select {
+    min-width: 90px !important;
+    flex: 1 1 calc(50% - 28px);
+  }
+  /* O ↻ e um icone: nao precisa da largura de um botao de texto, mas
+   * continua com 40px de alvo pro dedo. */
+  .top-bar button.secondary#refreshBtn,
+  .top-bar #refreshBtn {
+    flex: 0 0 auto;
+    min-width: 40px;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  /* O vao reservado pro hamburger era 64px e sozinho impedia os dois
+   * seletores de dividirem a linha num aparelho de 360px. O botao tem
+   * 42px e mora a 10px da borda: 56px cobrem ele com folga. */
+  .top-bar {
+    padding-left: 56px !important;
+    padding-right: 12px !important;
+  }
+  /* Botoes de acao dividem a linha em vez de cada um puxar a sua */
+  .top-bar > div > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  /* Titulo da view nao precisa de linha exclusiva */
+  .top-bar h2 {
+    flex: 0 0 auto;
+    margin-right: 4px;
+  }
 }

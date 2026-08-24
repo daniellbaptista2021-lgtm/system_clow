@@ -4,17 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>CRM — System Clow de IA</title>
+<!-- theme-color pinta a barra do navegador/PWA acima da app. Fica ANTES do
+     script de tema porque ele reescreve o valor conforme o tema salvo.
+     Valor padrao = escuro (--bg do crm.css), que e o tema padrao. -->
+<meta name="theme-color" content="#09090F">
 <script>
 // Aplica o tema salvo antes do primeiro paint, pra nao piscar o tema errado.
-(function(){try{var t=localStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}})();
+// A barra do navegador acompanha: no escuro usa --bg (#09090F), pra ela somir
+// no fundo do CRM; nos temas claro/sistema segue o vermelho da marca, que e a
+// aparencia que esses temas ja tinham.
+(function(){try{var t=localStorage.getItem('clow_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#09090F':'#e10600');}catch(e){}})();
 </script>
 <link rel="icon" href="/assets/territorio/icone-192.png">
 <link rel="manifest" href="/crm/manifest.json">
-<meta name="theme-color" content="#e10600">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/territorio/apple-touch-icon.png">
-<link rel="stylesheet" href="/crm/crm.css?v=79">
+<link rel="stylesheet" href="/crm/crm.css?v=81">
 </head>
 <body>
 
@@ -416,6 +422,12 @@
   function getTheme() { return localStorage.getItem(THEME_KEY) || 'dark'; }
   function applyTheme(v) {
     document.documentElement.setAttribute('data-theme', v);
+    // Barra do navegador/PWA: escuro funde com o fundo do CRM (--bg);
+    // claro e sistema ficam como sempre foram (vermelho da marca).
+    try {
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', v === 'dark' ? '#09090F' : '#e10600');
+    } catch (e) {}
     // Mesma origem: se o iframe do Agente IA ja estiver carregado, atualiza
     // o tema nele tambem, sem precisar recarregar a view.
     try {

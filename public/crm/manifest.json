@@ -7,7 +7,7 @@
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0a0a0a",
-  "theme_color": "#e10600",
+  "theme_color": "#09090F",
   "icons": [
     { "src": "/assets/territorio/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/assets/territorio/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
