@@ -55,15 +55,32 @@ services:
 
       # ─── Armazenamento de mídia (S3/MinIO) ─────────────────────────
       #
-      # Sem isto a Evolution NÃO entrega o binário de áudio, imagem ou vídeo:
-      # o trecho do baileys.service que anexa `message.base64` e preenche
-      # `mediaUrl` só roda dentro do bloco de upload, que é pulado quando o S3
-      # está desligado. A `url` que sobra no payload aponta para o arquivo
-      # criptografado do WhatsApp e não serve para nada.
+      # DESLIGADO de propósito (incidente 2026-08-25). Com o S3 ligado, o
+      # handler de `messages.upsert` da Evolution 2.3.7 faz:
       #
-      # Era essa a origem dos balões de áudio sem player na conversa
-      # (incidente 2026-08-20): a tabela `Media` ficava com zero linhas.
-      - S3_ENABLED=true
+      #     if (isMedia && S3.ENABLE) {
+      #       const D = await this.getBase64FromMediaMessage(...);
+      #       if (!D) { this.logger.verbose(...); return }   // <- aborta tudo
+      #       ...upload MinIO...
+      #     }
+      #     ...
+      #     this.sendDataWebhook("messages.upsert", c);      // <- nunca alcançado
+      #
+      # Quando a extração do binário falha, ele RETORNA antes de disparar o
+      # webhook. A mensagem fica gravada no Postgres da Evolution e o CRM nunca
+      # fica sabendo. Como o aviso é `verbose` e LOG_LEVEL=WARN, some sem log.
+      # Isso derrubava 92% da mídia que o corretor mandava do próprio aparelho
+      # (256 áudios, 76 fotos entre 20/08 e 25/08) — a mídia recebida do cliente
+      # baixa normal e não era afetada.
+      #
+      # Desligar tira o bloco defeituoso do caminho. O comentário anterior dizia
+      # que sem S3 a Evolution não entrega `message.base64`; isso não vale para a
+      # 2.3.7 — o bloco que anexa o base64 é guardado por
+      # `localWebhook.enabled && isMedia && webhookBase64`, não por `S3.ENABLE`,
+      # e roda num try/catch que não aborta o envio do webhook. O CRM prefere o
+      # base64 (`item.message?.base64 || item.base64`) e guarda cópia própria em
+      # /var/lib/system-clow/crm-media, então o MinIO era redundante para ele.
+      - S3_ENABLED=false
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-clowminio}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:?defina MINIO_ROOT_PASSWORD no .env}
       - S3_BUCKET=evolution

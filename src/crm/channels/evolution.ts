@@ -403,6 +403,85 @@ export async function fetchProfilePicture(channel: Channel2, phone: string): Pro
 }
 
 /**
+ * Lê do banco da Evolution as mensagens de uma janela de tempo.
+ *
+ * A Evolution grava toda mensagem que passa pela instância, inclusive quando o
+ * webhook correspondente não sai — foi exatamente o que aconteceu com a mídia
+ * enviada pelo aparelho do corretor (ver `evolutionSync.ts`). Este endpoint é a
+ * fonte de verdade para descobrir o que o CRM deixou de receber.
+ *
+ * Os registros voltam no mesmo formato que o webhook entrega em `data`, então
+ * `parseWebhook` consome os dois sem tradução no meio. A diferença é que aqui
+ * nunca vem `base64`: a mídia precisa ser buscada à parte, com `fetchMediaByKey`.
+ */
+export async function findMessages(
+  channel: Channel2,
+  opts: { gte: number; lte: number; page?: number; offset?: number },
+): Promise<{ ok: boolean; records: any[]; pages: number; error?: string }> {
+  const creds = credsDo(channel);
+  const offset = opts.offset ?? 200;
+  const page = opts.page ?? 1;
+  try {
+    const r = await fetch(url(creds, `/chat/findMessages/${encodeURIComponent(creds.instance)}`), {
+      method: 'POST',
+      headers: headers(creds),
+      // A Evolution faz `new Date(...)` e divide por 1000, então manda-se ISO
+      // e ela cuida da conversão para epoch em segundos.
+      body: JSON.stringify({
+        where: {
+          messageTimestamp: {
+            gte: new Date(opts.gte).toISOString(),
+            lte: new Date(opts.lte).toISOString(),
+          },
+        },
+        page,
+        offset,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) return { ok: false, records: [], pages: 0, error: `http_${r.status}` };
+    const d = await r.json() as any;
+    return {
+      ok: true,
+      records: Array.isArray(d?.messages?.records) ? d.messages.records : [],
+      pages: Number(d?.messages?.pages) || 0,
+    };
+  } catch (err: any) {
+    return { ok: false, records: [], pages: 0, error: err?.message || 'erro_desconhecido' };
+  }
+}
+
+/**
+ * Busca o binário de uma mídia a partir da chave da mensagem.
+ *
+ * Só o caminho de reconciliação precisa disto: o webhook já traz `base64`
+ * embutido, `findMessages` não. Pode devolver `null` legitimamente — o WhatsApp
+ * expira o arquivo no servidor, e mídia que o próprio aparelho enviou costuma
+ * não estar mais disponível para a sessão. Nesse caso a mensagem entra na
+ * conversa com o rótulo e sem player, o que ainda é melhor do que não existir.
+ */
+export async function fetchMediaByKey(
+  channel: Channel2,
+  key: { id: string; remoteJid: string; fromMe?: boolean },
+): Promise<{ base64: string; mime?: string } | null> {
+  const creds = credsDo(channel);
+  try {
+    const r = await fetch(url(creds, `/chat/getBase64FromMediaMessage/${encodeURIComponent(creds.instance)}`), {
+      method: 'POST',
+      headers: headers(creds),
+      body: JSON.stringify({ message: { key }, convertToMp4: false }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) return null;
+    const d = await r.json() as any;
+    if (!d?.base64) return null;
+    return { base64: d.base64, mime: d.mimetype || undefined };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Cria a instância se ainda não existir e devolve o QR de pareamento.
  *
  * O QR **expira em cerca de 40 segundos** e é reemitido pela Evolution. Por

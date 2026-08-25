@@ -33,14 +33,20 @@ const TICK_INTERVAL_MS = 60_000;
 const TICK_LOCK_TTL_S = 55;
 const INACTIVITY_TICK_INTERVAL_MS = 30_000; // PR 4 Onda 62
 const COLUMN_TIMER_TICK_INTERVAL_MS = 60_000; // PR 7.0
+// Reconciliação Evolution → CRM (incidente 25/08/2026). A janela lida é de
+// 15min, bem maior que o intervalo, pra que uma passada que falhe seja coberta
+// pela seguinte sem furo. Ver channels/evolutionSync.ts.
+const EVOLUTION_SYNC_TICK_INTERVAL_MS = 5 * 60_000;
 const STALE_DAYS = 7;
 const DUE_APPROACHING_HOURS = 24;
 
 let _timer: NodeJS.Timeout | null = null;
 let _inactivityTimer: NodeJS.Timeout | null = null;
 let _columnTimerTimer: NodeJS.Timeout | null = null;
+let _evolutionSyncTimer: NodeJS.Timeout | null = null;
 let _runningInactivityTick = false;
 let _runningColumnTimerTick = false;
+let _runningEvolutionSyncTick = false;
 let _runningTick = false;
 
 /**
@@ -84,9 +90,17 @@ export function startScheduler(): void {
   _columnTimerTimer = setInterval(() => { void columnTimerTick(); }, COLUMN_TIMER_TICK_INTERVAL_MS);
   setTimeout(() => { void columnTimerTick(); }, 20_000);
 
+  // Reconciliação Evolution → CRM: recupera mensagem cujo webhook não chegou.
+  _evolutionSyncTimer = setInterval(() => { void evolutionSyncTick(); }, EVOLUTION_SYNC_TICK_INTERVAL_MS);
+  // A primeira passada roda logo depois do boot de propósito: restart é uma
+  // das formas de perder webhook, então a janela imediatamente anterior ao
+  // start é justamente a mais suspeita.
+  setTimeout(() => { void evolutionSyncTick(); }, 25_000);
+
   logger.info(
     `[CRM] Scheduler started (main tick ${TICK_INTERVAL_MS / 1000}s, inactivity tick ${INACTIVITY_TICK_INTERVAL_MS / 1000}s, ` +
     `column-timer tick ${COLUMN_TIMER_TICK_INTERVAL_MS / 1000}s, ` +
+    `evolution-sync tick ${EVOLUTION_SYNC_TICK_INTERVAL_MS / 1000}s, ` +
     `worker ${process.env.NODE_APP_INSTANCE ?? 'fork'})`,
   );
 }
@@ -95,6 +109,30 @@ export function stopScheduler(): void {
   if (_timer) { clearInterval(_timer); _timer = null; }
   if (_inactivityTimer) { clearInterval(_inactivityTimer); _inactivityTimer = null; }
   if (_columnTimerTimer) { clearInterval(_columnTimerTimer); _columnTimerTimer = null; }
+  if (_evolutionSyncTimer) { clearInterval(_evolutionSyncTimer); _evolutionSyncTimer = null; }
+}
+
+async function evolutionSyncTick(): Promise<void> {
+  if (_runningEvolutionSyncTick) return;
+  // Lock distribuído pela janela do tick, no mesmo molde dos outros: sem ele,
+  // dois workers reconciliariam a mesma janela em paralelo e disputariam a
+  // criação do card de um contato novo.
+  const lockKey = `crm:scheduler:tick:evolution-sync:${Math.floor(Date.now() / EVOLUTION_SYNC_TICK_INTERVAL_MS)}`;
+  const cluster = await getCluster();
+  const gotLock = await cluster.setNxEx(lockKey, '1', EVOLUTION_SYNC_TICK_INTERVAL_MS / 1000 - 5).catch(() => false);
+  if (!gotLock) {
+    logger.debug('[evolution-sync-tick] lock contention — skipping');
+    return;
+  }
+  _runningEvolutionSyncTick = true;
+  try {
+    const { syncAllChannels } = await import('./channels/evolutionSync.js');
+    await syncAllChannels();
+  } catch (err: any) {
+    logger.warn('[evolution-sync-tick] err:', err?.message);
+  } finally {
+    _runningEvolutionSyncTick = false;
+  }
 }
 
 async function columnTimerTick(): Promise<void> {

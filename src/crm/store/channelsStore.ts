@@ -51,6 +51,20 @@ export function listChannels(tenantId: string): Channel2[] {
   return rows.map(rowToChannel);
 }
 
+/**
+ * Todos os canais de todos os tenants.
+ *
+ * O scheduler roda fora de qualquer requisição, sem tenant no contexto, e o
+ * job de reconciliação precisa varrer canal por canal — por isso esta é a
+ * única leitura de canal sem filtro por tenant. Quem responde a requisição
+ * continua obrigado a usar `listChannels(tenantId)`.
+ */
+export function listAllChannels(): Channel2[] {
+  const db = getCrmDb();
+  const rows = db.prepare('SELECT * FROM crm_channels ORDER BY created_at ASC').all() as any[];
+  return rows.map(rowToChannel);
+}
+
 export function getChannel(tenantId: string, channelId: string): Channel2 | null {
   const db = getCrmDb();
   const r = db.prepare('SELECT * FROM crm_channels WHERE id = ? AND tenant_id = ?').get(channelId, tenantId) as any;
