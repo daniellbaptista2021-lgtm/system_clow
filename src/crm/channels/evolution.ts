@@ -314,6 +314,98 @@ export function parseWebhook(payload: any): WebhookValue {
 }
 
 /**
+ * Ids das mensagens que o WhatsApp acabou de marcar como lidas no aparelho.
+ *
+ * ── Por que isto existe ──────────────────────────────────────────────────
+ *
+ * O contador de não lidas do card só zerava por duas vias: alguém abrir o
+ * card no CRM, ou sair uma mensagem para o cliente. Ler a conversa no celular
+ * não é nenhuma das duas, então o alerta ficava aceso indefinidamente em
+ * conversa já lida — o incômodo diário de quem atende pelo aparelho e usa o
+ * CRM como painel.
+ *
+ * Este evento é a peça que faltava. Quando a conversa é aberta no celular, o
+ * aparelho principal transmite o recibo de leitura para os aparelhos pareados;
+ * a sessão da Evolution recebe e emite `messages.update` com `status: READ` e
+ * `fromMe: false` — ou seja, "mensagem que EU recebi passou a estar lida".
+ *
+ * ── Por que se devolve o id da mensagem, e não o telefone ────────────────
+ *
+ * Diferente de `messages.upsert`, a Evolution NÃO troca o `@lid` pelo número
+ * real antes de despachar `messages.update` (whatsapp.baileys.service.ts:1478
+ * faz a troca só no upsert). O `remoteJid` daqui chega como `23317478...@lid`,
+ * que não casa com telefone nenhum do CRM. O `keyId`, por outro lado, é o
+ * mesmo id que o ingest gravou em `provider_message_id` — casa exato, sem
+ * depender de tradução de jid.
+ *
+ * `PLAYED` entra junto: áudio ouvido no aparelho também é conversa lida.
+ */
+export function parseReadReceipt(payload: any): { messageIds: string[] } {
+  const evento = String(payload?.event || payload?.Event || '').toLowerCase();
+  if (!evento.startsWith('messages.update')) return { messageIds: [] };
+  const bruto = payload?.data ?? payload;
+  const itens = Array.isArray(bruto) ? bruto : [bruto];
+  const ids: string[] = [];
+  for (const item of itens) {
+    if (!item) continue;
+    // Só recibo de mensagem RECEBIDA. `fromMe` aqui seria o cliente lendo o
+    // que nós mandamos — isso é o tique azul dele, não tem relação com o
+    // alerta do card.
+    const fromMe = item.fromMe ?? item.key?.fromMe;
+    if (fromMe) continue;
+    const status = String(item.status || item.update?.status || '').toUpperCase();
+    if (status !== 'READ' && status !== 'PLAYED') continue;
+    const id = item.keyId || item.key?.id || item.messageId;
+    if (id) ids.push(String(id));
+  }
+  return { messageIds: ids };
+}
+
+/**
+ * Lista as conversas da instância com o contador de não lidas do WhatsApp.
+ *
+ * É a fonte de verdade para reconciliar o alerta do card: o contador que a
+ * Evolution mantém aqui acompanha o aparelho de verdade — medido em
+ * 26/08/2026, 17 dos 21 cards com alerta no CRM também estavam sem ler no
+ * celular, e os outros 4 eram justamente os falsos alertas de que este
+ * conserto trata. Ele não é sujo pelo `markAsRead` que o próprio CRM dispara
+ * no ingest, porque aquela chamada mira `numero@s.whatsapp.net` enquanto as
+ * conversas de hoje vivem em `@lid`.
+ *
+ * `remoteJidAlt` da última mensagem é o que devolve o telefone real; o
+ * `remoteJid` da conversa vem em `@lid`. Grupo fica de fora — o CRM é um a um.
+ */
+export async function findChats(
+  channel: Channel2,
+): Promise<{ ok: boolean; chats: Array<{ phone: string; unreadCount: number }>; error?: string }> {
+  const creds = credsDo(channel);
+  try {
+    const r = await fetch(url(creds, `/chat/findChats/${encodeURIComponent(creds.instance)}`), {
+      method: 'POST',
+      headers: headers(creds),
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) return { ok: false, chats: [], error: `http_${r.status}` };
+    const d = await r.json() as any;
+    const lista = Array.isArray(d) ? d : (Array.isArray(d?.chats) ? d.chats : []);
+    const chats: Array<{ phone: string; unreadCount: number }> = [];
+    for (const c of lista) {
+      const jidReal = c?.lastMessage?.key?.remoteJidAlt || c?.remoteJid;
+      if (ehGrupo(jidReal) || ehGrupo(c?.remoteJid)) continue;
+      const phone = numeroDoJid(jidReal);
+      // Sem telefone legível não há como achar o contato — e um `@lid` cru
+      // casaria com contato errado se fosse tratado como número.
+      if (!phone || phone.length < 8) continue;
+      chats.push({ phone, unreadCount: Number(c?.unreadCount ?? c?.unreadMessages ?? 0) || 0 });
+    }
+    return { ok: true, chats };
+  } catch (err: any) {
+    return { ok: false, chats: [], error: err?.message || 'erro_desconhecido' };
+  }
+}
+
+/**
  * Baixa mídia. Quando o webhook já trouxe base64, `parseWebhook` devolve um
  * `data:` URI e esta função nem precisa ir à rede.
  */
@@ -623,7 +715,13 @@ export async function configurarWebhook(creds: EvolutionCreds, webhookUrl: strin
           url: webhookUrl,
           byEvents: false,
           base64: true,
-          events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+          // `MESSAGES_UPDATE` é o que avisa que a conversa foi lida no
+          // aparelho. Sem ele o CRM só ficava sabendo de leitura quando
+          // alguém abria o card aqui dentro, e o alerta de mensagem nova
+          // continuava aceso em conversa que o corretor já tinha lido — e às
+          // vezes já respondido — pelo celular. Ver `parseReadReceipt` aqui e
+          // `syncReadState` em evolutionSync.ts.
+          events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
         },
       }),
       signal: AbortSignal.timeout(20_000),

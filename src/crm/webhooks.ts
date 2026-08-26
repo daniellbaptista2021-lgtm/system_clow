@@ -155,10 +155,43 @@ app.post('/evolution/:secret', async (c) => {
     }
     return c.json({ ok: true, processed: 0 });
   }
-  const parsed = evolution.parseWebhook(payload);
-  for (const msg of parsed.messages) {
-    void ingestInbound(channel, msg);
+  // Conversa lida no aparelho: apaga o alerta do card. Sem isto o corretor
+  // que atende pelo celular via o alerta de mensagem nova continuar aceso em
+  // conversa que ele já tinha aberto, lido e às vezes até respondido.
+  const recibos = evolution.parseReadReceipt(payload);
+  if (recibos.messageIds.length) {
+    try {
+      const { aplicarRecibosDeLeitura } = await import('./channels/evolutionSync.js');
+      const limpos = aplicarRecibosDeLeitura(channel, recibos.messageIds);
+      // Uma linha por conversa aberta no celular, não por mensagem: é o
+      // rastro que permite dizer se o caminho rápido está de pé sem ligar o
+      // log verboso. Recibo de mensagem que o CRM não ingeriu dá zero, e é
+      // silencioso de propósito.
+      if (limpos) {
+        logger.info(`[evolution-read] canal ${channel.id}: ${limpos} alerta(s) apagado(s) pelo recibo do aparelho`);
+      }
+    } catch (err: any) {
+      logger.warn('[evolution-webhook] recibo de leitura falhou:', err?.message);
+    }
+    return c.json({ ok: true, processed: 0, lidos: recibos.messageIds.length });
   }
+
+  const parsed = evolution.parseWebhook(payload);
+  // Encadeadas, não disparadas em paralelo.
+  //
+  // Um mesmo lote pode trazer a mensagem do cliente E a resposta que o
+  // corretor mandou do celular. Em paralelo, a resposta às vezes era gravada
+  // primeiro: o `unread_count = 0` do `message_out` acontecia ANTES do `+1`
+  // do `message_in`, e o alerta nascia aceso numa conversa já respondida.
+  // O encadeamento preserva a ordem sem segurar a resposta do webhook — o que
+  // faria a Evolution reentregar o lote inteiro.
+  let fila: Promise<unknown> = Promise.resolve();
+  for (const msg of parsed.messages) {
+    fila = fila.then(() => ingestInbound(channel, msg)).catch((err: any) => {
+      logger.warn('[evolution-webhook] ingest falhou:', err?.message);
+    });
+  }
+  void fila;
   // Dispara o agente de IA. Só para mensagem do CLIENTE: `fromMe` é o próprio
   // corretor escrevendo pelo celular dele, e responder a isso faria o agente
   // conversar sozinho.

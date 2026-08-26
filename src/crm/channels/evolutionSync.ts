@@ -66,6 +66,8 @@ export interface ResultadoSync {
   faltando: number;
   ingeridas: number;
   midiaRecuperada: number;
+  /** Alertas de não lida apagados por já estarem lidos no aparelho. */
+  alertasLimpos: number;
   erro?: string;
 }
 
@@ -104,9 +106,18 @@ export async function syncChannel(
   opts: { desdeMs?: number } = {},
 ): Promise<ResultadoSync> {
   const base: ResultadoSync = {
-    canal: channel.id, lidas: 0, faltando: 0, ingeridas: 0, midiaRecuperada: 0,
+    canal: channel.id, lidas: 0, faltando: 0, ingeridas: 0, midiaRecuperada: 0, alertasLimpos: 0,
   };
   if (channel.type !== 'evolution') return { ...base, erro: 'canal_nao_evolution' };
+
+  // Antes da reconciliação de mensagens, e fora dos `return` adiantados dela:
+  // o alerta preso precisa ser acertado mesmo numa janela sem mensagem
+  // nenhuma faltando — que é justamente o caso normal.
+  try {
+    base.alertasLimpos = await syncReadState(channel);
+  } catch (err: any) {
+    logger.warn(`[evolution-read] canal ${channel.id} falhou:`, err?.message);
+  }
 
   const janela = Math.min(opts.desdeMs ?? JANELA_PADRAO_MS, JANELA_MAX_MS);
   const lte = Date.now();
@@ -179,6 +190,79 @@ export async function syncChannel(
 }
 
 /**
+ * Apaga o alerta dos cards cujas mensagens acabaram de ser lidas no aparelho.
+ *
+ * Chamada pelo handler do webhook, no caminho rápido: o recibo chega segundos
+ * depois de a conversa ser aberta no celular, e o alerta some na tela sem
+ * esperar o tick. `syncReadState` cobre o que este caminho perder.
+ *
+ * Devolve quantos cards mudaram — zero é normal e silencioso: recibo de
+ * mensagem que o CRM não ingeriu, ou de card já lido, não tem o que fazer.
+ */
+export function aplicarRecibosDeLeitura(channel: Channel2, messageIds: string[]): number {
+  let limpos = 0;
+  for (const id of messageIds) {
+    try {
+      const cardId = store.findCardIdByProviderMessageId(channel.tenantId, id);
+      if (cardId && store.markCardRead(channel.tenantId, cardId)) limpos++;
+    } catch (err: any) {
+      logger.warn(`[evolution-read] recibo ${id} falhou:`, err?.message);
+    }
+  }
+  return limpos;
+}
+
+/**
+ * Reconcilia o alerta de não lida contra o estado real do WhatsApp.
+ *
+ * O recibo de leitura do webhook é o caminho rápido, e como todo webhook ele
+ * se perde: restart, deploy, instância caída, timeout. Esta passada fecha a
+ * categoria do mesmo jeito que a reconciliação de mensagens fecha a dela — a
+ * cada tick, o que o aparelho considera lido e o CRM ainda considera não lido
+ * é acertado.
+ *
+ * Só apaga alerta, nunca acende: um card lido aqui dentro continua lido mesmo
+ * que o WhatsApp ainda conte não lidas do lado dele. E só apaga quando a
+ * conversa aparece na lista com contador ZERO — conversa ausente da lista, ou
+ * telefone que casa com mais de uma conversa e alguma delas ainda tem não
+ * lida, fica como está. Na dúvida o alerta permanece: alerta a mais custa um
+ * clique, alerta a menos custa um lead sem resposta.
+ */
+export async function syncReadState(channel: Channel2): Promise<number> {
+  const pendentes = store.listUnreadCardsWithPhone(channel.tenantId);
+  if (!pendentes.length) return 0;
+
+  const r = await evolution.findChats(channel);
+  if (!r.ok) {
+    logger.warn(`[evolution-read] canal ${channel.id}: não consegui listar conversas — ${r.error}`);
+    return 0;
+  }
+
+  // Chaveado pelos últimos 10 dígitos, que é o mesmo critério que
+  // `findContactByPhone` usa para tolerar variação de DDI/nono dígito. Uma
+  // conversa pode aparecer duas vezes (uma em `@lid`, outra em
+  // `@s.whatsapp.net`); guarda-se o MAIOR contador, para que uma delas ainda
+  // com não lidas impeça o alerta de ser apagado.
+  const naoLidasPorTelefone = new Map<string, number>();
+  for (const chat of r.chats) {
+    const chave = chat.phone.slice(-10);
+    naoLidasPorTelefone.set(chave, Math.max(naoLidasPorTelefone.get(chave) ?? 0, chat.unreadCount));
+  }
+
+  let limpos = 0;
+  for (const p of pendentes) {
+    const chave = p.phone.replace(/\D/g, '').slice(-10);
+    const naoLidas = naoLidasPorTelefone.get(chave);
+    if (naoLidas !== 0) continue; // ausente da lista (undefined) ou ainda não lida
+    if (store.markCardRead(channel.tenantId, p.cardId)) limpos++;
+  }
+  if (limpos) {
+    logger.info(`[evolution-read] canal ${channel.id}: ${limpos} alerta(s) apagado(s) — já lidos no aparelho`);
+  }
+  return limpos;
+}
+
+/**
  * Passada em todos os canais Evolution de todos os tenants.
  *
  * Nunca lança: é chamada de dentro do tick do scheduler, e uma instância
@@ -199,7 +283,7 @@ export async function syncAllChannels(opts: { desdeMs?: number } = {}): Promise<
       } catch (err: any) {
         logger.warn(`[evolution-sync] canal ${canal.id} falhou:`, err?.message);
         saida.push({
-          canal: canal.id, lidas: 0, faltando: 0, ingeridas: 0, midiaRecuperada: 0,
+          canal: canal.id, lidas: 0, faltando: 0, ingeridas: 0, midiaRecuperada: 0, alertasLimpos: 0,
           erro: err?.message || 'erro_desconhecido',
         });
       }
@@ -213,10 +297,12 @@ export async function syncAllChannels(opts: { desdeMs?: number } = {}): Promise<
     const recuperadas = saida.reduce((n, r) => n + r.ingeridas, 0);
     const midia = saida.reduce((n, r) => n + r.midiaRecuperada, 0);
     const erros = saida.filter((r) => r.erro);
-    if (lidas || recuperadas || erros.length) {
+    const alertas = saida.reduce((n, r) => n + r.alertasLimpos, 0);
+    if (lidas || recuperadas || alertas || erros.length) {
       logger.info(
         `[evolution-sync] ${saida.length} canal(is), ${lidas} mensagem(ns) conferida(s), ` +
         `${recuperadas} recuperada(s)${midia ? ` (${midia} com mídia)` : ''}` +
+        `${alertas ? `, ${alertas} alerta(s) de não lida apagado(s)` : ''}` +
         `${erros.length ? ` — ${erros.length} canal(is) com erro: ${erros.map((e) => e.erro).join(', ')}` : ''}`,
       );
     }

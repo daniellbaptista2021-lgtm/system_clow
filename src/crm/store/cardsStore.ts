@@ -335,6 +335,42 @@ export function logActivity(tenantId: string, input: {
   return a;
 }
 
+/**
+ * Card dono da mensagem cujo id do provedor é este.
+ *
+ * O recibo de leitura da Evolution identifica a mensagem pelo id dela, não
+ * pelo telefone — e é bom que seja assim: o `remoteJid` de `messages.update`
+ * chega em `@lid`, que não casa com telefone nenhum daqui. O
+ * `provider_message_id` já está gravado desde o ingest e casa exato.
+ */
+export function findCardIdByProviderMessageId(tenantId: string, providerMessageId: string): string | null {
+  const db = getCrmDb();
+  const r = db.prepare(
+    'SELECT card_id FROM crm_activities WHERE tenant_id = ? AND provider_message_id = ? AND card_id IS NOT NULL LIMIT 1',
+  ).get(tenantId, providerMessageId) as { card_id?: string } | undefined;
+  return r?.card_id || null;
+}
+
+/**
+ * Cards com alerta aceso, junto do telefone do contato.
+ *
+ * A reconciliação parte daqui, e não da lista de conversas do WhatsApp: são
+ * poucas dezenas de cards com alerta contra centenas de conversas, então
+ * conferir só o que está aceso troca centenas de buscas por contato por uma
+ * consulta só. Card sem contato ou sem telefone fica de fora — não há como
+ * casar com conversa nenhuma.
+ */
+export function listUnreadCardsWithPhone(tenantId: string): Array<{ cardId: string; phone: string }> {
+  const db = getCrmDb();
+  return db.prepare(`
+    SELECT c.id AS cardId, ct.phone AS phone
+      FROM crm_cards c
+      JOIN crm_contacts ct ON ct.id = c.contact_id
+     WHERE c.tenant_id = ? AND c.unread_count > 0
+       AND ct.phone IS NOT NULL AND ct.phone <> ''
+  `).all(tenantId) as Array<{ cardId: string; phone: string }>;
+}
+
 export function markCardRead(tenantId: string, cardId: string): boolean {
   const db = getCrmDb();
   const r = db.prepare('UPDATE crm_cards SET unread_count = 0 WHERE id = ? AND tenant_id = ? AND unread_count > 0')
