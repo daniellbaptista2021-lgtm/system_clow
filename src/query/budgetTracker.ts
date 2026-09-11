@@ -93,6 +93,25 @@ export class BudgetTracker {
   }
 
   /**
+   * Zera os contadores mantendo os limites configurados.
+   *
+   * Chamado a cada pergunta do usuário, e é o que dá sentido ao nome dos
+   * limites: sem isso, `maxTurns` e `maxBudgetUsd` viravam uma cota VITALÍCIA
+   * da sessão. Como a sessão do CRM fica viva no pool enquanto a pessoa
+   * trabalha, o cliente somava centavos ao longo da tarde e, ao cruzar o teto,
+   * toda pergunta passava a responder "Budget exceeded" — inclusive um "oi".
+   *
+   * O histórico da conversa NÃO passa por aqui: quem o guarda é o
+   * MessageState, e ele tem de sobreviver entre perguntas.
+   */
+  reset(): void {
+    this.turnCount = 0;
+    this.totalCostUsd = 0;
+    this.tokensThisTurn = 0;
+    this.modelCosts.clear();
+  }
+
+  /**
    * Record a completed turn with its cost.
    */
   recordTurn(costUsd: number, model?: string): void {

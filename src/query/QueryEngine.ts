@@ -78,6 +78,10 @@ export class QueryEngine {
 
   /** Per-instance cost tracking (for sub-agent budget) */
   private instanceCostUsd: number = 0;
+  /** Quanto de `instanceCostUsd` já foi entregue ao orçamento (ver recordTurn). */
+  private custoJaContabilizado: number = 0;
+  /** Quanto a instancia ja tinha gasto quando ESTA pergunta comecou. */
+  private custoBaseDaPergunta: number = 0;
   private instanceInputTokens: number = 0;
   private instanceOutputTokens: number = 0;
   private instanceTurns: number = 0;
@@ -139,6 +143,27 @@ export class QueryEngine {
    * da requisicao.
    */
   async *submitMessage(prompt: string): AsyncGenerator<SDKMessage> {
+    /*
+     * O ORÇAMENTO VALE POR PERGUNTA, e não pela vida inteira da sessão.
+     *
+     * `resetState()` existe, mas só o CLI o chamava — no CRM o contador nunca
+     * era zerado. Como a sessão fica viva no pool enquanto a pessoa estiver
+     * trabalhando, os limites eram, na prática, uma cota vitalícia: o cliente
+     * somava centavos ao longo da tarde e, ao cruzar o teto, TUDO passava a
+     * responder "Budget exceeded" — inclusive um "oi".
+     *
+     * Aqui o contador zera a cada mensagem, então `maxTurns` e `maxBudgetUsd`
+     * passam a significar o que o nome diz: o quanto UMA resposta pode
+     * custar. É o que protege contra agente em laço sem punir quem usa muito.
+     *
+     * Zera SÓ o orçamento: `resetState()` também troca o MessageState, o que
+     * apagaria o histórico da conversa a cada pergunta e faria o agente
+     * esquecer tudo o que foi dito.
+     */
+    this.budget.reset();
+    this.custoJaContabilizado = this.instanceCostUsd;
+    this.custoBaseDaPergunta = this.instanceCostUsd;
+
     const tenantId = this.getExecutionContext().tenantId;
     const interno = this.submitMessageInterno(prompt);
     if (!tenantId) {
@@ -259,16 +284,48 @@ export class QueryEngine {
       }
 
       // ── Budget check ───────────────────────────────────────────────
-      const effectiveCost = this.depth > 0 ? this.instanceCostUsd : getTotalCostUSD();
+      //
+      // O CUSTO COMPARADO É O DESTA SESSÃO, NUNCA O DO PROCESSO INTEIRO.
+      //
+      // Aqui estava `depth > 0 ? this.instanceCostUsd : getTotalCostUSD()`, e
+      // `getTotalCostUSD()` lê uma variável de MÓDULO: o gasto somado de TODOS
+      // os clientes desde que o Clow subiu. Num sistema multi-tenant isso
+      // significa que, quando o conjunto passava de US$ 5, **todo cliente
+      // não-admin travava de uma vez** — e só voltava com restart do processo.
+      // O admin tem teto `Infinity` e nunca via nada, o que fazia o problema
+      // parecer do cliente ("só o adm consegue").
+      //
+      // O sintoma era `✗ Budget exceeded` em cima de qualquer pergunta, sem
+      // relação nenhuma com o que aquela pessoa tinha gastado.
+      // O custo DESTA pergunta: o acumulado da sessao menos o que ja havia
+      // quando ela comecou. Comparar o acumulado contra um teto por pergunta
+      // faria a conversa travar de novo, so que mais devagar.
+      const effectiveCost = Math.max(0, this.instanceCostUsd - this.custoBaseDaPergunta);
       const budgetExceeded = this.budget.checkBeforeTurn();
       if (budgetExceeded) {
-        yield { type: 'result', subtype: budgetExceeded, content: `Budget exceeded`, cost: effectiveCost };
+        yield {
+          type: 'result',
+          subtype: budgetExceeded,
+          content:
+            budgetExceeded === 'error_max_turns'
+              ? 'Esta resposta deu muitas voltas e foi interrompida por segurança. ' +
+                'Mande a pergunta de novo, de preferência mais específica.'
+              : 'Esta resposta alcançou o limite de gasto de uma pergunta e foi ' +
+                'interrompida por segurança. Mande a pergunta de novo.',
+          cost: effectiveCost,
+        };
         return;
       }
 
-      // Also check per-instance budget for sub-agents
+      // Também confere o custo desta instância — é o que segura sub-agente.
       if (this.config.maxBudgetUsd !== undefined && effectiveCost >= this.config.maxBudgetUsd) {
-        yield { type: 'result', subtype: 'error_max_budget_usd', content: `Budget $${effectiveCost.toFixed(4)} >= $${this.config.maxBudgetUsd}` };
+        yield {
+          type: 'result',
+          subtype: 'error_max_budget_usd',
+          content:
+            'Esta resposta alcançou o limite de gasto de uma pergunta e foi ' +
+            'interrompida por segurança. Mande a pergunta de novo.',
+        };
         return;
       }
 
@@ -399,7 +456,15 @@ export class QueryEngine {
           }
         }
 
-        this.budget.recordTurn(this.instanceCostUsd);
+        // O INCREMENTO DO TURNO, não o acumulado.
+        //
+        // `recordTurn` faz `totalCostUsd += custo`, e aqui passava-se
+        // `instanceCostUsd`, que JÁ é a soma de tudo até agora. O orçamento
+        // crescia como soma triangular: três turnos de US$ 0,01 viravam
+        // US$ 0,06 em vez de US$ 0,03, e o teto chegava muitas vezes mais
+        // cedo do que o gasto real — inflando o problema de cima.
+        this.budget.recordTurn(this.instanceCostUsd - this.custoJaContabilizado);
+        this.custoJaContabilizado = this.instanceCostUsd;
         this.instanceTurns = this.budget.getTurnCount();
         yield { type: 'result', subtype: 'success', content: assistantText, cost: this.budget.getTotalCost() };
         return;
