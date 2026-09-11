@@ -402,11 +402,35 @@ export async function sendReply(
   text: string,
   contactId: string | null,
 ): Promise<void> {
+  const { maskPhone } = await import('../../utils/redact.js');
+
+  // NADA VAZIO SAI DAQUI — e esta guarda vem ANTES do rate limit de proposito.
+  //
+  // Em 10/09/2026 um cliente recebeu `""` a cada 2 minutos por horas. O texto
+  // que o modelo devolveu era literalmente dois caracteres de aspas, e por
+  // isso escapou de TODOS os guards de vazio do caminho: `!finalText` e
+  // `!text.trim()` sao falsos para `'""'`, que e uma string de tamanho 2.
+  //
+  // A guarda mora aqui, no envio, porque este e o unico ponto por onde passam
+  // 100% das mensagens — inclusive as de causas que ainda nao conhecemos.
+  // Corrigir so o parser deixaria o proximo formato de vazio passar igual.
+  //
+  // Antes do rate limit: mensagem vazia nao pode consumir a cota do numero do
+  // tenant. No incidente, cada disparo inutil gastava um slot do limite que
+  // existe para impedir banimento por burst.
+  const limpo = String(text ?? '').trim();
+  if (!limpo || /^["'\s]*$/.test(limpo)) {
+    logger.error(
+      `[sendReply] ENVIO VAZIO BLOQUEADO to=${maskPhone(customerPhone)} ` +
+        `tenant=${channel.tenantId.slice(0, 8)} raw=${JSON.stringify(text)}`,
+    );
+    return;
+  }
+
   // Rate-limit por destinatario: protege o numero do tenant de banimento
   // por Z-API/Meta quando o agente entra em loop ou um bot envia burst.
   // Default 60 msgs/min/numero (configuravel via CLOW_WPP_OUTBOUND_RATE_PER_MIN).
   const { tryConsume } = await import('../outboundRateLimit.js');
-  const { maskPhone } = await import('../../utils/redact.js');
   const rl = tryConsume(customerPhone);
   if (!rl.ok) {
     logger.warn(

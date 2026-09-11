@@ -213,6 +213,32 @@ export function clearInactivityTimer(cardId: string): void {
   `).run(now(), cardId);
 }
 
+/**
+ * Desarma o timer PRESERVANDO o contador de disparos.
+ *
+ * A diferenca para `clearInactivityTimer` e uma linha, e ela decide se a trava
+ * de seguranca do scheduler funciona ou nao.
+ *
+ * `clearInactivityTimer` zera `inactivity_fire_count` junto — o que esta certo
+ * quando o ciclo TERMINOU (card promovido, card sumiu, card saiu da coluna do
+ * agente). Mas chamar aquela versao depois de cada disparo apagaria a memoria
+ * de quantas vezes ja tentamos, e `FIRE_COUNT_FORCE_MORNO = 3` — que existe
+ * para parar de perseguir um contato que nao responde — nunca seria atingido.
+ *
+ * Em 10/09/2026 o tenant inteiro estava com `inactivity_fire_count = 0`
+ * justamente por isso: a trava era codigo morto, e nao havia corte automatico
+ * nenhum para o loop que mandou `""` a um cliente de 2 em 2 minutos por horas.
+ */
+export function disarmInactivityTimer(cardId: string): void {
+  const db = getCrmDb();
+  db.prepare(`
+    UPDATE crm_card_agent_state SET
+      inactivity_timer_at = NULL,
+      updated_at = ?
+    WHERE card_id = ?
+  `).run(now(), cardId);
+}
+
 export function setCardAgentStatus(cardId: string, status: CardAgentStatus): void {
   const db = getCrmDb();
   db.prepare(`

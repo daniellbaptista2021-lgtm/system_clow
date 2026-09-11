@@ -21,10 +21,14 @@
  *      c. Incrementa fire_count atomico
  *      d. Se fire_count >= 3: forca marcar_morno + clear timer + return
  *      e. Senao: dispatcha runFromInactivityFire(card, fireCount)
- *      f. NAO limpa timer apos run — runner.recordAgentTurn('agent') ja
- *         atualizou o estado, e proximo client msg re-arma via JOIN.
- *         Se cliente nao responder, timer nao re-arma; novo fire so se
- *         agente setar manualmente um followup.
+ *      f. DESARMA o timer antes do run, preservando o fire_count. Ate
+ *         10/09/2026 este passo dizia o
+ *         contrario ("NAO limpa timer apos run — recordAgentTurn ja atualizou
+ *         o estado"), e essa frase era falsa: os states ficavam com o timer
+ *         vencido e fire_count=0 indefinidamente. Sem limpar, o card volta a
+ *         ser elegivel na passada seguinte e o lock de 120s vira o unico
+ *         freio — que foi como um cliente recebeu mensagem de 2 em 2 minutos
+ *         por horas.
  *
  * Scheduler nao bloqueia o tick se um card demora — usa Promise.allSettled
  * com timeout por card (60s).
@@ -38,6 +42,7 @@ import {
   upsertCardAgentState,
   recordAgentMetric,
   clearInactivityTimer,
+  disarmInactivityTimer,
 } from '../store/cardAgentStateStore.js';
 import { runFromInactivityFire } from './columnAgentRunner.js';
 import { getCurrentHourMinuteBRT, isWithinActiveHours } from './columnAgentRunner.js';
@@ -60,13 +65,31 @@ interface EligibleRow {
   board_id: string;
 }
 
-/** Busca cards com timer vencido e agente de coluna ativo. */
+/**
+ * Busca cards com timer vencido e agente de coluna ativo.
+ *
+ * A COLUNA VEM DO CARD, NUNCA DO STATE — e e esse o conserto.
+ *
+ * `crm_card_agent_state.column_id` e gravado quando o card ENTRA na coluna e
+ * nunca mais atualizado. Enquanto o JOIN era por ele, mover o card para uma
+ * coluna sem agente (`agent_enabled = 0`) nao o tirava da varredura: o state
+ * seguia apontando para a coluna antiga, que tem agente ligado, e o card
+ * continuava elegivel para sempre.
+ *
+ * Em 10/09/2026 isso mandou `""` a cada 2 minutos para o WhatsApp de um
+ * cliente real, por horas — inclusive DEPOIS de o card ser movido para
+ * "Qualificado" as 22:03:48, com disparos as 22:04:18 e 22:06:17.
+ *
+ * O intervalo de 2 minutos nao era um timer: era o `INACTIVITY_LOCK_TTL_S`
+ * expirando e devolvendo o card a fila. O lock era o unico freio entre um
+ * disparo e o seguinte.
+ */
 export function findEligibleCards(nowMs = Date.now()): EligibleRow[] {
   const db = getCrmDb();
   return db.prepare(`
     SELECT
       cas.card_id          AS card_id,
-      cas.column_id        AS column_id,
+      c.id                 AS column_id,
       cas.tenant_id        AS tenant_id,
       cas.inactivity_timer_at AS inactivity_timer_at,
       cas.inactivity_fire_count AS inactivity_fire_count,
@@ -75,7 +98,8 @@ export function findEligibleCards(nowMs = Date.now()): EligibleRow[] {
       c.agent_active_hours_end   AS hours_end,
       c.board_id           AS board_id
     FROM crm_card_agent_state cas
-    JOIN crm_columns c ON c.id = cas.column_id
+    JOIN crm_cards card ON card.id = cas.card_id
+    JOIN crm_columns c  ON c.id = card.column_id
     WHERE cas.status = 'active'
       AND cas.inactivity_timer_at IS NOT NULL
       AND cas.inactivity_timer_at <= ?
@@ -185,10 +209,27 @@ async function processOneCard(row: EligibleRow): Promise<'done'> {
     clearInactivityTimer(row.card_id);
     return 'done';
   }
+  // A coluna do CARD, pelo mesmo motivo do `findEligibleCards`. Resolver por
+  // `row.column_id` do state faria o runner rodar com a coluna de onde o card
+  // JA SAIU — no incidente de 10/09/2026, com o prompt de "Lead novo" para um
+  // card que estava em "Qualificado".
   const cols = store.listColumns(row.tenant_id, card.boardId!);
-  const column = cols.find((c) => c.id === row.column_id);
+  const column = cols.find((c) => c.id === card.columnId);
   if (!column) {
     logger.warn(`[inact-sched] card=${row.card_id} column_gone — clearing timer`);
+    clearInactivityTimer(row.card_id);
+    return 'done';
+  }
+
+  // Card que saiu para uma coluna sem agente nao dispara, e o state MORRE aqui
+  // em vez de voltar na proxima passada. Sem limpar o timer, o card so nao
+  // dispara enquanto a consulta o filtrar — e qualquer volta dele a uma coluna
+  // com agente ressuscitaria um timer vencido ha dias, disparando na hora.
+  if (!column.agentEnabled) {
+    logger.warn(
+      `[inact-sched] card=${row.card_id} saiu para coluna sem agente ` +
+        `(${column.id}) — clearing timer`,
+    );
     clearInactivityTimer(row.card_id);
     return 'done';
   }
@@ -200,6 +241,24 @@ async function processOneCard(row: EligibleRow): Promise<'done'> {
     reason: `fire_count=${newCount} elapsed_min=${elapsedMin}`,
     turnsInColumn: row.turns_count,
   });
+  // O TIMER E LIMPO ANTES DO DISPATCH, e as duas coisas importam: que ele
+  // seja limpo, e que seja ANTES.
+  //
+  // QUE SEJA LIMPO: o comentario no topo deste arquivo afirma que nao e
+  // preciso, porque "recordAgentTurn('agent') ja atualizou o estado". Isso nao
+  // corresponde ao comportamento real — em 10/09/2026 os states do tenant
+  // estavam todos com `inactivity_fire_count = 0` e `inactivity_timer_at`
+  // vencido ha horas. Com o timer parado no passado, o card volta a ser
+  // elegivel na passada seguinte, e o unico obstaculo entre dois disparos vira
+  // o lock de INACTIVITY_LOCK_TTL_S. E dai que nasce o intervalo cravado de
+  // 2 minutos: o lock expira, o card volta a fila, dispara, re-locka. Um
+  // cliente real recebeu `""` nesse ritmo por horas.
+  //
+  // QUE SEJA ANTES: se o runner armar um followup durante o run, limpar depois
+  // apagaria justamente o agendamento novo — e o agente ficaria mudo no caso
+  // oposto. Limpando antes, o que o runner escrever fica de pe.
+  disarmInactivityTimer(row.card_id);
+
   await runFromInactivityFire({
     channel, card, column,
     fireCount: newCount,
