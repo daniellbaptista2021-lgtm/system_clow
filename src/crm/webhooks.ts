@@ -191,14 +191,23 @@ app.post('/evolution/:secret', async (c) => {
       logger.warn('[evolution-webhook] ingest falhou:', err?.message);
     });
   }
-  void fila;
   // Dispara o agente de IA. Só para mensagem do CLIENTE: `fromMe` é o próprio
   // corretor escrevendo pelo celular dele, e responder a isso faria o agente
   // conversar sozinho.
-  try {
-    for (const msg of parsed.messages) {
-      if (msg.fromMe) continue;
-      const aiAgent = await import('./ai/agent.js');
+  //
+  // O DISPARO ENTRA NA MESMA FILA, DEPOIS DA INGESTÃO — e isso não é detalhe.
+  // Ele rodava em paralelo com a fila acima, então o `pickAgent` procurava o
+  // contato e o card ANTES de `ingestInbound` criá-los. Na primeira mensagem
+  // de um lead novo não havia contato nenhum, a escolha dava "nenhum agente"
+  // e a mensagem morria sem resposta e sem log. Da segunda em diante
+  // funcionava, e por isso parecia intermitente. Medido em 14/09/2026: o
+  // primeiro "Oi" de todo lead do SDR do cliente ficou sem resposta.
+  // Continua sem `await`: segurar a resposta faria a Evolution reentregar.
+  fila = fila.then(async () => {
+    const mensagensDoCliente = parsed.messages.filter((msg) => !msg.fromMe);
+    if (!mensagensDoCliente.length) return;
+    const aiAgent = await import('./ai/agent.js');
+    for (const msg of mensagensDoCliente) {
       aiAgent.handleInboundForAI({
         channel,
         customerPhone: msg.fromPhone,
@@ -209,9 +218,10 @@ app.post('/evolution/:secret', async (c) => {
         messageId: msg.messageId,
       });
     }
-  } catch (err: any) {
+  }).catch((err: any) => {
     logger.warn('[evolution-webhook] disparo do agente falhou:', err?.message);
-  }
+  });
+  void fila;
   return c.json({ ok: true, processed: parsed.messages.length });
 });
 

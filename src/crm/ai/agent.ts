@@ -608,9 +608,13 @@ async function runAgent(ctx: InboundContext, config: ChannelAIConfig): Promise<v
     .replace(/\{\{customer_phone\}\}/g, customerPhone);
 
   // 4. Chama DeepSeek
+  //
+  // O tenant é obrigatório: sem ele `resolverDestino` não acha a chave de
+  // ninguém e todo agente de canal responde "Nenhuma chave de IA conectada",
+  // mesmo com a chave do cliente gravada e com saldo.
   let reply: string;
   try {
-    reply = await callDeepSeek(systemPrompt, history, userMessage, config.model);
+    reply = await callDeepSeek(systemPrompt, history, userMessage, config.model, channel.tenantId);
   } catch (err: any) {
     logger.error('[ai/agent] DeepSeek call falhou:', err?.message);
     return;
