@@ -28,8 +28,8 @@
     setTimeout(() => t.remove(), 3000);
   };
 
-  const crmKey = () => localStorage.getItem('clow_crm_key') || '';
-  const userToken = () => localStorage.getItem('clow_token') || '';
+  const crmKey = () => window.clowStorage.getItem('clow_crm_key') || '';
+  const userToken = () => window.clowStorage.getItem('clow_token') || '';
 
   async function crmApi(path, opts = {}) {
     const h = { 'Authorization': 'Bearer ' + crmKey(), ...(opts.headers || {}) };

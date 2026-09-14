@@ -13,6 +13,7 @@ import { verifyUserToken } from '../../auth/authRoutes.js';
 import { isTokenRevoked } from '../../auth/tokenRevocation.js';
 import { modoBonus } from '../../tenancy/modoBonus.js';
 import { logger } from '../../utils/logger.js';
+import { territorioExclusivo } from '../../tenancy/territorio.js';
 
 const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -103,7 +104,9 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
   // conexão nunca passava daqui: 401 antes mesmo de chegar no handler que
   // sabe ler o query param (incidente 2026-08-21 — updates ao vivo nunca
   // funcionaram, nem antes nem depois de existir o publish() do outro lado).
-  if (reqPath === '/v1/crm/events') {
+  // Sessão do Território (tp.) não é API key: o handler não a resolveria
+  // sozinho, então ela segue para a validação abaixo.
+  if (reqPath === '/v1/crm/events' && !territorioExclusivo() && !c.req.query('token')?.startsWith('tp.')) {
     return next();
   }
 
@@ -115,7 +118,13 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
 
   // Extract API key
   const auth = c.req.header('Authorization');
-  const bearerToken = extractBearerToken(auth);
+  const bearerToken = extractBearerToken(auth) || (reqPath === '/v1/crm/events' ? c.req.query('token') : undefined);
+  if (territorioExclusivo() && !bearerToken?.startsWith('tp.')) {
+    return c.json({ error: 'territorio_required', message: 'Abra o CRM pelo Território Próprio.' }, 401);
+  }
+  if (bearerToken?.startsWith('tp.') && /^\/v[12]\/crm\/admin(?:\/|$)/.test(reqPath)) {
+    return c.json({ error: 'platform_admin_required' }, 403);
+  }
   if (!bearerToken) {
     return c.json({ error: 'missing_api_key', message: 'Authorization: Bearer <api_key> required' }, 401);
   }
@@ -142,6 +151,7 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
     c.set('userEmail', userPayload.email);
     c.set('userRole', userPayload.role);
     c.set('authMode', 'user_session');
+    if (bearerToken.startsWith('tp.')) c.set('territorioExpiresAt', userPayload.exp);
     return next();
   }
 

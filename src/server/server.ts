@@ -57,6 +57,8 @@ import { getMetricsSummary, logger } from '../utils/logger.js';
 import { buildDashboardRoutes } from './adminDashboard.js';
 import { apiQueue } from './requestQueue.js';
 import { buildSSORoutes } from './ssoAuth.js';
+import { buildTerritorioRoutes } from './territorioRoutes.js';
+import { territorioExclusivo, territorioOrigin } from '../tenancy/territorio.js';
 import { buildMarketplaceRoutes } from '../plugins/marketplace.js';
 import { buildMissionRoutes } from './missions.js';
 
@@ -230,6 +232,18 @@ async function main(): Promise<void> {
 
   // Compression + CDN + DB pragmas run unconditionally
   app.use('*', compress());
+  // Antes de qualquer rota: entrada web exclusivamente pelo Território, só no modo exclusivo.
+  app.use('*', async (c, next) => {
+    if (!territorioExclusivo()) return next();
+    const p = c.req.path;
+    c.header('Content-Security-Policy', `frame-ancestors 'self' ${territorioOrigin()}`);
+    c.header('Referrer-Policy', 'no-referrer');
+    if (p === '/' || p === '/signup' || p === '/pricing' || p === '/signup.html' || p === '/pricing.html') return c.redirect(`${territorioOrigin()}/app/crm`);
+    if (p === '/auth/login' || p === '/auth/signup' || p.startsWith('/auth/sso')) return c.json({ error: 'territorio_required', message: 'Entre pelo Território Próprio.' }, 403);
+    if (p.startsWith('/v1/sessions') && !c.req.header('Authorization')?.startsWith('Bearer tp.')) return c.json({ error: 'territorio_required' }, 401);
+    return next();
+  });
+  app.route('/', buildTerritorioRoutes());
   app.use('*', cdnMiddleware());
   try { applyCrmPragmas(); } catch { /* DB not open yet */ }
 
@@ -437,7 +451,7 @@ async function main(): Promise<void> {
     // 1) Tenant user_session token (formato usr.payload.sig) — caso comum SaaS.
     //    Sem isso, todo reload de pagina chamava logout() e matava o token,
     //    deixando o usuario preso na tela de login (incidente 2026-04-26).
-    if (token.startsWith('usr.')) {
+    if (token.startsWith('usr.') || token.startsWith('tp.')) {
       const { verifyUserToken } = await import('../auth/authRoutes.js');
       const payload = verifyUserToken(token);
       if (payload) return c.json({ ok: true, kind: 'user', tid: payload.tid });

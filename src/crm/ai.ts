@@ -448,7 +448,7 @@ async function callLLM(system: string, user: string, maxTokens: number): Promise
 }
 
 // ─── Scheduler hook: rolling auto-score top N stale cards ──────────────
-export async function tickAutoScore(limit = 10): Promise<{ scored: number }> {
+export async function tickAutoScore(limit = 10, tenantId?: string): Promise<{ scored: number }> {
   const db = getCrmDb();
   // Find open cards without a fresh score insight
   const stale = db.prepare(`
@@ -456,10 +456,11 @@ export async function tickAutoScore(limit = 10): Promise<{ scored: number }> {
     JOIN crm_columns col ON col.id = c.column_id
     LEFT JOIN crm_ai_insights ai ON ai.entity = 'card' AND ai.entity_id = c.id AND ai.kind = 'score'
     WHERE col.stage_type = 'open'
+      AND (? IS NULL OR c.tenant_id = ?)
       AND (ai.id IS NULL OR ai.stale_at IS NULL OR ai.stale_at < ?)
     ORDER BY COALESCE(c.last_activity_at, c.updated_at) DESC
     LIMIT ?
-  `).all(now(), limit) as any[];
+  `).all(tenantId ?? null, tenantId ?? null, now(), limit) as any[];
 
   let scored = 0;
   for (const r of stale) {

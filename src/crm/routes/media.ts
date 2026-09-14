@@ -445,7 +445,7 @@ export function registerMediaRoutes(app: Hono): void {
   app.post('/ai/batch-score', async (c) => {
     const body = await c.req.json().catch(() => ({})) as any;
     const limit = Math.min(50, Number(body.limit) || 10);
-    const r = await ai.tickAutoScore(limit);
+    const r = await ai.tickAutoScore(limit, tenantOf(c));
     return ok(c, r);
   });
 }

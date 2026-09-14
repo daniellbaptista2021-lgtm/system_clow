@@ -16,6 +16,8 @@ import { TIERS, type TierName, type TierConfig } from './tiers.js';
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface Tenant {
+  /** Vínculo imutável com a conta confirmada do Território; nunca com o slot. */
+  territorio_profile_id?: string;
   id: string;
   email: string;
   name: string;
@@ -131,15 +133,19 @@ function readStore(): StoreData {
   try {
     const raw = fs.readFileSync(storePath(), 'utf-8');
     return JSON.parse(raw);
-  } catch {
-    return { tenants: [], api_keys: [], whatsapp_numbers: [] };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { tenants: [], api_keys: [], whatsapp_numbers: [] };
+    // Arquivo corrompido não é parque vazio: regravá-lo apagaria todos os clientes.
+    throw error;
   }
 }
 
 function writeStoreUnsafe(data: StoreData): void {
   const p = storePath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(data, null, 2), { mode: 0o600 });
+  const tmp = `${p}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, p);
 }
 
 /**
@@ -262,6 +268,44 @@ export function createTenant(opts: {
 export function getTenant(id: string): Tenant | null {
   const store = readStore();
   return store.tenants.find((t) => t.id === id) || null;
+}
+
+/** Assinatura repetida, slot recriado e abertura em outra VPS mantêm o mesmo CRM. */
+export function ensureTerritorioTenant(person: { sub: string; email: string; name: string }): Tenant {
+  const known = listTenants().find(t => t.territorio_profile_id === person.sub);
+  if (known) return known;
+  return mutateStore(store => {
+    const existing = store.tenants.find(t => t.territorio_profile_id === person.sub);
+    if (existing) return existing;
+    // O CRM atual do Daniel só pode ser ligado ao UUID explicitamente configurado.
+    const ownerId = process.env.CRM_TERRITORIO_OWNER_PROFILE_ID;
+    const ownerTenant = process.env.CRM_TERRITORIO_OWNER_TENANT_ID;
+    let tenant = person.sub === ownerId && ownerTenant
+      ? store.tenants.find(t => t.id === ownerTenant)
+      : store.tenants.find(t => t.email.toLowerCase() === person.email.toLowerCase());
+    if (person.sub === ownerId && ownerTenant && !tenant) throw new Error('CRM do administrador não encontrado');
+    if (tenant?.territorio_profile_id && tenant.territorio_profile_id !== person.sub) throw new Error('CRM já vinculado a outra conta');
+    if (!tenant) {
+      // Login de colaborador não prova propriedade do CRM da empresa inteira.
+      if (store.tenants.some(t => t.additional_logins?.some(l => l.email.toLowerCase() === person.email.toLowerCase()))) throw new Error('Email pertence a um colaborador de outro CRM');
+      const tier = 'starter' as const;
+      const limits = TIERS[tier];
+      const now = new Date().toISOString();
+      tenant = {
+        id: crypto.randomUUID(), email: person.email.toLowerCase(), name: person.name,
+        tier, status: 'active', created_at: now,
+        max_messages_per_month: limits.max_messages_per_month,
+        max_cost_usd_per_month: limits.max_cost_usd_per_month,
+        max_concurrent_sessions: limits.max_concurrent_sessions,
+        max_workspace_size_mb: limits.max_workspace_size_mb,
+        current_month_messages: 0, current_month_cost_usd: 0, current_month_started_at: now,
+      };
+      // Não cria senha, trial, cobrança nem chave de API permanente.
+      store.tenants.push(tenant);
+    }
+    tenant.territorio_profile_id = person.sub;
+    return tenant;
+  });
 }
 
 export function findTenantByEmail(email: string): Tenant | null {

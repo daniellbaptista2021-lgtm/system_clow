@@ -348,6 +348,8 @@ export function registerAuthExchangeRoutes(app: Hono): void {
       const ts = await import('../../tenancy/tenantStore.js');
       const t = ts.getTenant(userTok.tid);
       if (!t) return c.json({ error: 'tenant_not_found' }, 404);
+      // Sessão curta permanece curta. Trocar por API key tornaria o acesso permanente.
+      if (token.startsWith('tp.')) return c.json({ api_key: token, tenant_id: t.id, tenant_name: t.name, tenant_email: t.email, tier: t.tier });
       // Revoga apenas as keys do MESMO usuário (token.uid). Multi-user no
       // mesmo tenant não pode invalidar a sessão dos outros.
       const userKey = userTok.uid;

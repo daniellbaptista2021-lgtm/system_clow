@@ -5,7 +5,7 @@
 
 // ─── Global state ──────────────────────────────────────────────────────
 const state = {
-  apiKey: localStorage.getItem('clow_crm_key') || '',
+  apiKey: window.clowStorage.getItem('clow_crm_key') || '',
   tenant: null,
   boards: [],
   currentBoardId: null,
@@ -17,6 +17,10 @@ const state = {
   currentCard: null,
   pollInterval: null,
 };
+
+window.addEventListener('territorio-session', () => {
+  state.apiKey = window.clowStorage.getItem('clow_crm_key') || '';
+});
 
 // ─── API helper ────────────────────────────────────────────────────────
 const API_BASE = '/v1/crm';
@@ -128,7 +132,7 @@ async function attemptLogin(apiKey) {
       const data = await r.json().catch(() => ({}));
       throw new Error(data.message || `HTTP ${r.status}`);
     }
-    localStorage.setItem('clow_crm_key', apiKey);
+    window.clowStorage.setItem('clow_crm_key', apiKey);
     state.apiKey = apiKey;
     return true;
   } catch (e) {
@@ -137,7 +141,7 @@ async function attemptLogin(apiKey) {
 }
 
 function logout() {
-  localStorage.removeItem('clow_crm_key');
+  window.clowStorage.removeItem('clow_crm_key');
   state.apiKey = '';
   if (state.pollInterval) clearInterval(state.pollInterval);
   location.reload();
@@ -3945,6 +3949,7 @@ function wireEvents() {
       $('#loginScreen').classList.add('hide');
       $('#app').classList.remove('hide');
       await bootstrap();
+      if (window.clowTerritorio && window.CLOW_TERRITORIO_ORIGIN) window.parent.postMessage({ type: 'territorio:crm:loaded' }, window.CLOW_TERRITORIO_ORIGIN);
     } catch (err) {
       errEl.textContent = err.message || 'Erro de autenticação';
       errEl.classList.remove('hide');
@@ -4046,7 +4051,7 @@ function wireEvents() {
 
 // ─── Auto-login via System Clow session ───────────────────────────────
 async function tryExchange() {
-  const sessionToken = localStorage.getItem('clow_token');
+  const sessionToken = window.clowStorage.getItem('clow_token');
   if (!sessionToken) return null;
   try {
     const r = await fetch('/v1/crm/auth/exchange', {
@@ -4060,18 +4065,22 @@ async function tryExchange() {
 }
 
 async function tryAutoLogin() {
+  if (window.clowTerritorio) {
+    await window.clowTerritorioReady;
+    state.apiKey = window.clowStorage.getItem('clow_crm_key') || '';
+  }
   // 1. Try cached CRM api_key
   if (state.apiKey) {
     try { await attemptLogin(state.apiKey); return true; }
-    catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
+    catch (e) { state.apiKey = ''; window.clowStorage.removeItem('clow_crm_key'); }
   }
   // 2. Try exchange via System Clow session
   const fresh = await tryExchange();
   if (fresh) {
     state.apiKey = fresh;
-    localStorage.setItem('clow_crm_key', fresh);
+    window.clowStorage.setItem('clow_crm_key', fresh);
     try { await attemptLogin(fresh); return true; }
-    catch (e) { state.apiKey = ''; localStorage.removeItem('clow_crm_key'); }
+    catch (e) { state.apiKey = ''; window.clowStorage.removeItem('clow_crm_key'); }
   }
   return false;
 }
@@ -5787,7 +5796,7 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   }
 
   function connect() {
-    const token = (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || window.__CRM_API_KEY__ || '';
+    const token = (window.state && window.state.apiKey) || window.clowStorage.getItem('clow_crm_key') || window.__CRM_API_KEY__ || '';
     if (!token) { setTimeout(connect, 3000); return; }
     try {
       if (state48.es) state48.es.close();
@@ -5866,7 +5875,7 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
   const sync49 = { lastRefresh: 0, pollTimer: null, sseAlive: false };
 
   function getToken() {
-    return (window.state && window.state.apiKey) || localStorage.getItem('clow_crm_key') || '';
+    return (window.state && window.state.apiKey) || window.clowStorage.getItem('clow_crm_key') || '';
   }
 
   async function forceRefresh(reason) {

@@ -30,7 +30,7 @@
     return e;
   };
 
-  const apiKey = () => localStorage.getItem('clow_crm_key') || '';
+  const apiKey = () => window.clowStorage.getItem('clow_crm_key') || '';
   async function api(path, opts = {}) {
     const headers = { Authorization: `Bearer ${apiKey()}`, ...(opts.headers || {}) };
     if (opts.body && typeof opts.body !== 'string') {

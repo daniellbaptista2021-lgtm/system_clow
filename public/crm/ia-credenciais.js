@@ -24,8 +24,8 @@
 
   function chave() {
     return (
-      localStorage.getItem('clow_crm_key') ||
-      localStorage.getItem('clow_token') ||
+      window.clowStorage.getItem('clow_crm_key') ||
+      window.clowStorage.getItem('clow_token') ||
       ''
     );
   }

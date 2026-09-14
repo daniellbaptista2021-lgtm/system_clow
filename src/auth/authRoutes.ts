@@ -31,6 +31,7 @@ import { createAgent, listAgents } from '../crm/store/agentsStore.js';
 import { seedDefaultRoles, listRoles, assignRoleToAgent } from '../crm/security.js';
 import { revokeToken, isTokenRevoked } from './tokenRevocation.js';
 import { logger } from '../utils/logger.js';
+import { territorioExclusivo, territorioSession } from '../tenancy/territorio.js';
 
 const app = new Hono();
 
@@ -72,6 +73,8 @@ export function signUserToken(payload: Omit<UserSessionPayload, 'type' | 'iat' |
 }
 
 export function verifyUserToken(token: string | undefined): UserSessionPayload | null {
+  if (token?.startsWith('tp.')) return territorioSession(token);
+  if (territorioExclusivo()) return null;
   if (!token || !token.startsWith('usr.')) return null;
   const parts = token.slice(4).split('.');
   if (parts.length !== 2) return null;

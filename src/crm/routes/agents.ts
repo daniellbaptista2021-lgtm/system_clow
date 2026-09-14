@@ -1088,6 +1088,7 @@ export function registerAgentsRoutes(app: Hono): void {
     return ok(c, { ok: true, strategy: body.strategy });
   });
   app.get('/events', async (c) => {
+    const expiresAt = (c as any).get('territorioExpiresAt') as number | undefined;
     const tokenQ = c.req.query('token');
     let tid = (c as any).get?.('tenantId');
     if (!tid && tokenQ) {
@@ -1096,6 +1097,7 @@ export function registerAgentsRoutes(app: Hono): void {
     }
     if (!tid) return c.text('unauthorized', 401);
     const tenantId = tid;
+    let cleanup = () => {};
     const stream = new ReadableStream({
       start(controller) {
         const enc = new TextEncoder();
@@ -1103,14 +1105,27 @@ export function registerAgentsRoutes(app: Hono): void {
         const heartbeat = setInterval(() => {
           try { controller.enqueue(enc.encode(': hb\n\n')); } catch { clearInterval(heartbeat); }
         }, 25_000);
+        let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+        let closed = false;
         const unsub = subscribe(tenantId, {
           send: (event, data) => {
+            if (expiresAt && Date.now() >= expiresAt) { cleanup(); return; }
             try { controller.enqueue(enc.encode(formatSseFrame(event, data))); } catch {}
           },
-          close: () => { clearInterval(heartbeat); try { controller.close(); } catch {} },
+          close: () => cleanup(),
         });
-        (c as any).req.raw?.signal?.addEventListener?.('abort', () => { clearInterval(heartbeat); unsub(); try { controller.close(); } catch {} });
+        cleanup = () => {
+          if (closed) return;
+          closed = true;
+          clearInterval(heartbeat);
+          clearTimeout(expiryTimer);
+          unsub();
+          try { controller.close(); } catch {}
+        };
+        if (expiresAt) expiryTimer = setTimeout(cleanup, Math.max(0, expiresAt - Date.now()));
+        c.req.raw.signal.addEventListener('abort', cleanup, { once: true });
       },
+      cancel() { cleanup(); },
     });
     return new Response(stream, {
       headers: {

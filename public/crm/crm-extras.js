@@ -35,7 +35,7 @@
     }
     return e;
   };
-  const apiKey = () => localStorage.getItem('clow_crm_key') || '';
+  const apiKey = () => window.clowStorage.getItem('clow_crm_key') || '';
   async function api(path, opts = {}) {
     const headers = { 'Authorization': `Bearer ${apiKey()}`, ...(opts.headers || {}) };
     if (!(opts.body instanceof FormData)) {
@@ -674,6 +674,8 @@
       if (window.__crmRefresh) await window.__crmRefresh();
     });
   }
+
+  window.addEventListener('territorio-session', () => { if (_es) startSSE(); });
 
   // ─── Boot hook: detect login + inject ───────────────────────────────
   function tryBoot() {

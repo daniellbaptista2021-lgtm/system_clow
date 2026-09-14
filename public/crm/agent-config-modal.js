@@ -26,8 +26,8 @@
     // Mesma autenticação do resto do app (crm.js usa Authorization: Bearer).
     // Backend (tenantAuth.ts) só aceita esse header — X-API-Key é ignorado.
     const apiKey = (window.state && window.state.apiKey)
-      || localStorage.getItem('clow_crm_key')
-      || localStorage.getItem('clow_token');
+      || window.clowStorage.getItem('clow_crm_key')
+      || window.clowStorage.getItem('clow_token');
 
     const headers = { 'Content-Type': 'application/json' };
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
