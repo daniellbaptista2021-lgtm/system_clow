@@ -320,11 +320,20 @@
 
   function refreshColumnBadge(columnId, enabled) {
     if (_agentBadgeCache.map) _agentBadgeCache.map[columnId] = !!enabled;
-    document.querySelectorAll(`.col-agent-btn[data-col-id="${columnId}"]`).forEach((btn) => {
-      btn.classList.toggle('active', !!enabled);
-      btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
-      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
-    });
+    document.querySelectorAll(`.col-agent-btn[data-col-id="${columnId}"]`).forEach((btn) => paintButton(btn, enabled));
+  }
+
+  // So escreve o que mudou. Reescrever textContent sempre gera mutacao, o
+  // MutationObserver chama applyBadgeMap de novo e o botao era recriado a
+  // cada frame (~140x/s) — o clique de quem tentava abrir o painel se perdia.
+  function paintButton(btn, enabled) {
+    if (btn.dataset.opening) return; // "Abrindo..." manda enquanto carrega
+    enabled = !!enabled;
+    const text = enabled ? '🟢 Agente' : '⚙️ Agente';
+    const title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
+    if (btn.classList.contains('active') !== enabled) btn.classList.toggle('active', enabled);
+    if (btn.title !== title) btn.title = title;
+    if (btn.textContent !== text) btn.textContent = text;
   }
 
   // ─── Auto-inject nos column headers ────────────────────────────────────
@@ -349,12 +358,7 @@
   const _agentBadgeCache = { boardId: null, map: {}, ts: 0 };
 
   function applyBadgeMap(map) {
-    document.querySelectorAll('.col-agent-btn').forEach((btn) => {
-      const enabled = !!map[btn.dataset.colId];
-      btn.classList.toggle('active', enabled);
-      btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
-      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
-    });
+    document.querySelectorAll('.col-agent-btn').forEach((btn) => paintButton(btn, map[btn.dataset.colId]));
   }
 
   async function refreshBadges(force) {
@@ -401,13 +405,34 @@
 
   // Click delegation no document — sobrevive a re-renders do Kanban
   // e funciona pra botões injetados após o load.
-  document.addEventListener('click', async (e) => {
+  //
+  // O painel so aparece depois de 2-3 requests (~1s ate Montreal). Sem sinal
+  // nenhum nesse meio tempo a pessoa clicava de novo, e cada clique empilhava
+  // um painel. Agora o botao diz "Abrindo..." na hora e clique repetido e
+  // ignorado ate o painel abrir (ou falhar).
+  //
+  // Abre no pointerup, e o click fica de reserva (teclado). O Kanban se
+  // redesenha sozinho (SSE, polling): se isso cair entre apertar e soltar, o
+  // botao apertado some e o navegador nao dispara click nenhum. O pointerup
+  // chega no botao recriado; a trava abaixo impede abrir duas vezes.
+  let _opening = false;
+  const onAgentButton = async (e) => {
     const btn = e.target.closest('.col-agent-btn');
     if (!btn) return;
+    if (e.type === 'pointerup' && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    if (_opening || document.querySelector('.agent-config-modal-bg')) return;
+    _opening = true;
+    const colId = btn.dataset.colId;
+    const setOpening = (on) => {
+      document.querySelectorAll(`.col-agent-btn[data-col-id="${colId}"]`).forEach((b) => {
+        if (on) { b.dataset.opening = '1'; b.textContent = '⏳ Abrindo…'; }
+        else { delete b.dataset.opening; paintButton(b, _agentBadgeCache.map[colId]); }
+      });
+    };
+    setOpening(true);
     try {
-      const colId = btn.dataset.colId;
       const boardId = btn.dataset.boardId
         || document.querySelector('[data-current-board-id]')?.dataset.currentBoardId
         || getCurrentBoardId();
@@ -416,8 +441,13 @@
       console.error('[agent-config] erro abrindo modal:', err);
       if (window.toast) window.toast('Erro ao abrir configuração: ' + err.message, 'error');
       else alert('Erro: ' + err.message);
+    } finally {
+      _opening = false;
+      setOpening(false);
     }
-  });
+  };
+  document.addEventListener('pointerup', onAgentButton);
+  document.addEventListener('click', onAgentButton);
 
   // MutationObserver com debounce (evita loop infinito + thrashing)
   let _debounceTick = null;
