@@ -287,7 +287,7 @@
         body.append(el('div', { class: 'empty', style: 'text-align:center;padding:40px' },
           el('div', { style: 'font-size:14px;color:var(--text-dim);margin-bottom:14px' }, 'Não foi possível carregar suas configurações.'),
           el('button', {
-            style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600',
+            style: 'background:var(--grad);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600',
             on: { click: () => location.reload() }
           }, 'Recarregar página'),
         ));

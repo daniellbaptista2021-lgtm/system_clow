@@ -881,7 +881,7 @@ select option { background: var(--bg-3); color: var(--text); }
 .pill.amber { background: rgba(245,158,11,.15); color: var(--amber); }
 .pill.red { background: rgba(239,68,68,.15); color: var(--red); }
 .pill.gray { background: rgba(148,163,184,.15); color: var(--gray); }
-.pill.purple { background: rgba(225,6,0,.15); color: var(--purple); }
+.pill.purple { background: color-mix(in srgb, var(--purple) 15%, transparent); color: var(--purple); }
 
 /* ─── Modal ──────────────────────────────────────────────────────────── */
 .modal-backdrop {
@@ -1053,7 +1053,7 @@ select option { background: var(--bg-3); color: var(--text); }
     color: #fff;
     border: 0;
     font-size: 22px;
-    box-shadow: 0 4px 12px rgba(225,6,0,.4);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--purple) 40%, transparent);
     cursor: pointer;
   }
 
@@ -1305,7 +1305,7 @@ select option { background: var(--bg-3); color: var(--text); }
   text-decoration: underline;
   font-weight: 500;
 }
-.msg.in a { color: #FF1F18; }
+.msg.in a { color: var(--blue); }
 .msg.out a { color: #fff; text-decoration: underline; }
 .msg b { font-weight: 700; }
 .msg i { font-style: italic; }
@@ -1344,11 +1344,11 @@ img.card-avatar, img.contact-avatar {
 
 /* Onda 59: drop indicator entre cards (reorder via drag-drop) */
 .kanban-col .card.drop-before {
-  box-shadow: inset 0 3px 0 0 #E10600, 0 0 0 1px rgba(225,6,0,.5);
+  box-shadow: inset 0 3px 0 0 var(--purple), 0 0 0 1px color-mix(in srgb, var(--purple) 50%, transparent);
   transition: box-shadow .12s;
 }
 .kanban-col .card.drop-after {
-  box-shadow: inset 0 -3px 0 0 #E10600, 0 0 0 1px rgba(225,6,0,.5);
+  box-shadow: inset 0 -3px 0 0 var(--purple), 0 0 0 1px color-mix(in srgb, var(--purple) 50%, transparent);
   transition: box-shadow .12s;
 }
 .kanban-col .card.dragging {
@@ -1383,7 +1383,7 @@ img.card-avatar, img.contact-avatar {
 .ai-chat-spin {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(225,6,0,.25);
+  border: 3px solid color-mix(in srgb, var(--purple) 25%, transparent);
   border-top-color: var(--purple);
   border-radius: 50%;
   animation: bootspin .9s linear infinite;
@@ -1692,4 +1692,22 @@ img.card-avatar, img.contact-avatar {
     flex: 0 0 auto;
     margin-right: 4px;
   }
+}
+
+/* ─── Marca do cliente (vinda do Território Próprio) ─────────────────────
+ * Quando o cliente define a própria identidade no painel, o wordmark
+ * "System Clow" sai e entra o logo + nome dele. Cores vêm das variáveis,
+ * que a ponte (territorio-bridge.js) reescreve no <html>. */
+.brand.brand-cliente { flex-direction: column; gap: 10px; text-align: center; }
+.brand.brand-cliente .brand-logo {
+  width: auto; height: auto; max-width: 140px; max-height: 64px;
+  border-radius: 10px; object-fit: contain; opacity: 1; filter: none;
+}
+.brand-cliente-texto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.brand-cliente-texto strong {
+  font-size: 18px; font-weight: 800; letter-spacing: -.3px; line-height: 1.15;
+  color: var(--text); overflow-wrap: anywhere;
+}
+.brand-cliente-texto span {
+  font-size: 11px; color: var(--text-faint); line-height: 1.35; overflow-wrap: anywhere;
 }

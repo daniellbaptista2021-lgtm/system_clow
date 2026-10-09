@@ -59,7 +59,7 @@
       mostrar(
         el('div', {
           style:
-            'width:38px;height:38px;border:3px solid rgba(225,6,0,.25);border-top-color:#e10600;' +
+            'width:38px;height:38px;border:3px solid color-mix(in srgb, var(--purple) 25%, transparent);border-top-color:var(--purple);' +
             'border-radius:50%;animation:qrSpin .9s linear infinite',
         }),
         el('div', { style: 'font-size:13px;color:var(--text-dim)' }, texto),
@@ -72,7 +72,7 @@
         el('div', { style: 'font-size:13px;color:var(--red);text-align:center;max-width:340px;line-height:1.5' }, mensagem),
         el('button', {
           class: 'save-btn',
-          style: 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;padding:9px 18px;font-size:13px',
+          style: 'background:var(--grad);color:#fff;padding:9px 18px;font-size:13px',
           on: { click: () => pedirQr() },
         }, 'Tentar de novo'),
       );
@@ -89,7 +89,7 @@
           'As mensagens dos seus contatos já começam a aparecer no funil.'),
         el('button', {
           class: 'save-btn',
-          style: 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;padding:10px 22px;font-size:13px;margin-top:4px',
+          style: 'background:var(--grad);color:#fff;padding:10px 22px;font-size:13px;margin-top:4px',
           on: { click: () => { encerrar(); aoConectar(); } },
         }, 'Pronto'),
       );

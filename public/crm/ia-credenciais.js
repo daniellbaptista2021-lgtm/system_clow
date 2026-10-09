@@ -186,7 +186,7 @@
 
       const btSalvar = el('button', {
         style:
-          'padding:9px 18px;border-radius:8px;border:none;background:linear-gradient(135deg,#E10600,#FF1F18);' +
+          'padding:9px 18px;border-radius:8px;border:none;background:var(--grad);' +
           'color:#fff;font-size:13px;font-weight:600;cursor:pointer',
       }, estado.conectado ? 'Salvar alterações' : 'Conectar');
 

@@ -96,9 +96,9 @@
       }
       .col-agent-btn.active {
         color: var(--purple); border-color: var(--border-2);
-        background: rgba(225, 6, 0, 0.08);
+        background: color-mix(in srgb, var(--purple) 8%, transparent);
       }
-      .col-agent-btn.active:hover { background: rgba(225, 6, 0, 0.15); }
+      .col-agent-btn.active:hover { background: color-mix(in srgb, var(--purple) 15%, transparent); }
       .col-agent-btn.paused { color: var(--warning); }
 
       /* Layout consistente da .col-head com 4 elementos: title | count | agent-btn | menu-btn */

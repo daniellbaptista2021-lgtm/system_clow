@@ -326,7 +326,7 @@ function cardEl(card) {
             const r = e.currentTarget.getBoundingClientRect();
             showCardContextMenu(card, r.right, r.bottom + 4);
           },
-          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(225,6,0,0.12)'; },
+          mouseenter: (e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'color-mix(in srgb, var(--purple) 12%, transparent)'; },
           mouseleave: (e) => { e.currentTarget.style.opacity = '.7'; e.currentTarget.style.background = 'transparent'; },
         }
       }, '⋯'),
@@ -421,10 +421,10 @@ function ensureCtxMenuStyles() {
   const st = document.createElement('style');
   st.id = 'ctx-menu-style';
   st.textContent = `
-.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,rgba(225,6,0,.3));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
+.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,color-mix(in srgb, var(--purple) 30%, transparent));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
 @keyframes ctxIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .ctx-menu .ctx-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--text,#E8E8F0);user-select:none;white-space:nowrap;position:relative}
-.ctx-menu .ctx-item:hover{background:linear-gradient(135deg,rgba(225,6,0,.14),rgba(255,31,24,.08))}
+.ctx-menu .ctx-item:hover{background:linear-gradient(135deg,color-mix(in srgb, var(--purple) 14%, transparent),color-mix(in srgb, var(--blue) 8%, transparent))}
 .ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#9898B8);display:inline-flex;align-items:center;justify-content:center}
 .ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#9898B8);font-size:11px}
 .ctx-menu .ctx-item.ctx-danger{color:var(--red,#F87171)}
@@ -720,7 +720,7 @@ function showColumnReport(col, cards) {
   const avgProb = totalCards ? Math.round(cards.reduce((a, c) => a + (c.probability || 0), 0) / totalCards) : 0;
 
   const dialog = el('div', { class: 'modal-backdrop' });
-  const stat = (label, value, color) => el('div', { style: 'background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);padding:14px;border-radius:10px' },
+  const stat = (label, value, color) => el('div', { style: 'background:color-mix(in srgb, var(--purple) 6%, transparent);border:1px solid color-mix(in srgb, var(--purple) 18%, transparent);padding:14px;border-radius:10px' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
     el('div', { style: 'font-size:22px;font-weight:800;color:' + (color || 'var(--text)') }, value),
   );
@@ -2883,7 +2883,7 @@ function renderPagination(currentPage, totalPages, onPageChange) {
     if (disabled || active) b.disabled = true;
     b.style.cssText = 'min-width:36px;padding:7px 11px;border-radius:7px;font-size:12px;font-weight:600;' +
       'cursor:' + (disabled || active ? 'default' : 'pointer') + ';' +
-      'background:' + (active ? 'linear-gradient(135deg,#E10600,#FF1F18)' : 'transparent') + ';' +
+      'background:' + (active ? 'var(--grad)' : 'transparent') + ';' +
       'color:' + (active ? '#fff' : disabled ? 'var(--text-dim)' : 'var(--text)') + ';' +
       'border:1px solid ' + (active ? 'transparent' : 'var(--border)') + ';' +
       'opacity:' + (disabled && !active ? '.5' : '1');
@@ -2950,7 +2950,7 @@ function renderChannelsList() {
               style: 'flex:1;min-width:170px;font-size:12px;padding:9px;font-weight:700;' +
                 (ch.status === 'active'
                   ? 'background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.35)'
-                  : 'background:linear-gradient(135deg,#e10600,#ff1f18);color:#fff;border:none'),
+                  : 'background:var(--grad);color:#fff;border:none'),
               on: { click: () => {
                 if (!window.PareamentoWhatsApp) { toast('Tela de conexão não carregou', 'error'); return; }
                 window.PareamentoWhatsApp.abrir(ch, {
@@ -2961,9 +2961,9 @@ function renderChannelsList() {
             }, ch.status === 'active' ? '✅ WhatsApp conectado' : '📲 Conectar WhatsApp')
           : null,
         renderAIToggleButton(ch),
-        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;font-size:12px;padding:9px;font-weight:700',
+        el('button', { class: 'save-btn', style: 'flex:1;min-width:160px;background:var(--grad);color:#fff;font-size:12px;padding:9px;font-weight:700',
           on: { click: () => openAIAgentModal(ch) } }, '⚙️ Configurar IA'),
-        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:rgba(255,31,24,.12);color:#FF1F18;border:1px solid rgba(255,31,24,.35);font-size:12px;padding:9px 12px',
+        el('button', { class: 'save-btn', style: 'flex:0 1 auto;background:color-mix(in srgb, var(--blue) 12%, transparent);color:var(--blue);border:1px solid color-mix(in srgb, var(--blue) 35%, transparent);font-size:12px;padding:9px 12px',
           on: { click: () => showWebhookSetup(ch, false) } }, '📡 Webhook'),
         el('button', { class: 'save-btn', style: 'background:transparent;border:1px solid var(--red);color:var(--red);padding:9px 14px;font-size:12px',
           on: { click: async () => {
@@ -3073,9 +3073,9 @@ async function openAIAgentModal(channel) {
   form.append(
     el('div', { style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
       'Ativa um agente de IA que atende automaticamente clientes neste canal WhatsApp. Cliente manda mensagem → agente responde com base no system prompt. Suporta texto e áudio (transcrito via Whisper). Use ',
-      el('code', { style: 'background:rgba(225,6,0,.15);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
+      el('code', { style: 'background:color-mix(in srgb, var(--purple) 15%, transparent);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
       ' e ',
-      el('code', { style: 'background:rgba(225,6,0,.15);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
+      el('code', { style: 'background:color-mix(in srgb, var(--purple) 15%, transparent);padding:1px 5px;border-radius:4px' }, '{{customer_phone}}'),
       ' no prompt pra personalizar.',
     ),
     el('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer' },
@@ -3130,7 +3130,7 @@ function copyableField(label, value) {
   });
   const btn = el('button', {
     type: 'button',
-    style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    style: 'padding:0 14px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
     on: { click: () => copyToClipboard(value) },
   }, 'Copiar');
   wrap.append(
@@ -3152,7 +3152,7 @@ function showWebhookSetup(channel, isNew) {
     : '✓ Canal criado — agora conecte o WhatsApp';
 
   const metaInstr = el('div', {
-    style: 'background:rgba(255,31,24,.08);border:1px solid rgba(255,31,24,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
+    style: 'background:color-mix(in srgb, var(--blue) 8%, transparent);border:1px solid color-mix(in srgb, var(--blue) 25%, transparent);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
     html: '<div style="font-weight:700;color:var(--blue);margin-bottom:8px">📋 Como configurar no Meta</div>1. Acesse <strong>Meta for Developers</strong> → seu app → <strong>WhatsApp → Configuração</strong><br>2. No bloco <strong>Webhook</strong>, clique <strong>Editar</strong><br>3. Cole a <strong>Webhook URL</strong> abaixo no campo <em>"URL de retorno de chamada"</em><br>4. Cole o <strong>Verify Token</strong> abaixo no campo <em>"Verificar token"</em><br>5. Clique <strong>Verificar e salvar</strong> (deve ficar verde)<br>6. Em <strong>Campos do webhook</strong>, marque <code>messages</code> e <strong>Inscrever</strong>',
   });
   // Evolution e sempre a instancia nossa, auto-provisionada: o webhook ja foi
@@ -3197,10 +3197,10 @@ async function openNewChannelModal(presetType) {
   });
   const whCopyBtn = el('button', {
     type: 'button',
-    style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
+    style: 'padding:0 14px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit',
     on: { click: () => copyToClipboard(whUrlInput.value) },
   }, 'Copiar');
-  const whBlock = el('div', { style: 'background:rgba(225,6,0,.06);border:1px solid rgba(225,6,0,.18);padding:12px;border-radius:10px;margin-bottom:14px' },
+  const whBlock = el('div', { style: 'background:color-mix(in srgb, var(--purple) 6%, transparent);border:1px solid color-mix(in srgb, var(--purple) 18%, transparent);padding:12px;border-radius:10px;margin-bottom:14px' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔗 WEBHOOK URL (cole no painel do provedor)'),
     el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, whUrlInput, whCopyBtn),
     el('div', { id: 'whInstr', style: 'font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5' }),
@@ -3213,10 +3213,10 @@ async function openNewChannelModal(presetType) {
     style: 'flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;user-select:all',
     on: { focus: (e) => e.target.select() },
   });
-  const verifyTokBlock = el('div', { style: 'background:rgba(255,31,24,.06);border:1px solid rgba(255,31,24,.18);padding:12px;border-radius:10px;margin-bottom:14px;display:none' },
+  const verifyTokBlock = el('div', { style: 'background:color-mix(in srgb, var(--blue) 6%, transparent);border:1px solid color-mix(in srgb, var(--blue) 18%, transparent);padding:12px;border-radius:10px;margin-bottom:14px;display:none' },
     el('div', { style: 'font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px' }, '🔑 VERIFY TOKEN (cole no campo "Verificar token" do Meta)'),
     el('div', { style: 'display:flex;gap:6px;align-items:stretch' }, verifyTokInput,
-      el('button', { type: 'button', style: 'padding:0 14px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit', on: { click: () => copyToClipboard(verifyTokInput.value) } }, 'Copiar'),
+      el('button', { type: 'button', style: 'padding:0 14px;background:var(--grad);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit', on: { click: () => copyToClipboard(verifyTokInput.value) } }, 'Copiar'),
     ),
   );
 
@@ -4088,7 +4088,7 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -4111,7 +4111,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
     }
   }
 })();
@@ -4217,7 +4217,7 @@ async function openCardById(id) {
 // ═════════ INSIGHTS AI ═══════════════════════════════════════════════════
 async function renderInsightsView() {
   const container = $('#insightsContent');
-  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(225,6,0,.3);border-top-color:#E10600;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid color-mix(in srgb, var(--purple) 30%, transparent);border-top-color:var(--purple);border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Carregando insights...</div></div>';
   try {
     let forecast = await api('/ai/forecast').catch(() => ({}));
     const cards = await api('/cards-paginated?limit=50').catch(() => ({ cards: [] }));
@@ -4225,7 +4225,7 @@ async function renderInsightsView() {
     // Auto-score sincrono na primeira visita: garante dados antes de renderizar
     if (noScore && !window._insightsAutoScored) {
       window._insightsAutoScored = true;
-      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid rgba(225,6,0,.3);border-top-color:#E10600;border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-dim)"><div style="display:inline-block;width:32px;height:32px;border:3px solid color-mix(in srgb, var(--purple) 30%, transparent);border-top-color:var(--purple);border-radius:50%;animation:bootspin .8s linear infinite;margin-bottom:12px"></div><div>Calculando IA pela primeira vez (pode levar 10-20s)...</div></div>';
       try {
         await api('/ai/batch-score', { method: 'POST', body: { limit: 20 } });
         forecast = await api('/ai/forecast').catch(() => ({}));
@@ -5086,16 +5086,16 @@ function buildModal(title, fields, onSubmit) {
       wrap.append(el('label', { style: 'display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600' }, f.label + (f.required ? ' *' : '')));
       let input;
       if (f.type === 'textarea') {
-        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
+        input = el('textarea', { rows: f.rows || 3, placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,color-mix(in srgb, var(--purple) 20%, transparent));color:var(--text);border-radius:7px;font-family:inherit;font-size:13px;box-sizing:border-box;resize:vertical' });
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'select') {
-        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('select', { style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,color-mix(in srgb, var(--purple) 20%, transparent));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         for (const opt of f.options) input.append(el('option', { value: opt.value }, opt.label));
         if (f.value != null) input.value = f.value;
       } else if (f.type === 'file') {
-        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
+        input = el('input', { type: 'file', accept: f.accept || '*', style: 'width:100%;padding:6px;background:var(--bg-3);border:1px solid var(--border,color-mix(in srgb, var(--purple) 20%, transparent));color:var(--text);border-radius:7px;font-size:12px;box-sizing:border-box' });
       } else {
-        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
+        input = el('input', { type: f.type || 'text', placeholder: f.placeholder || '', style: 'width:100%;padding:8px 10px;background:var(--bg-3);border:1px solid var(--border,color-mix(in srgb, var(--purple) 20%, transparent));color:var(--text);border-radius:7px;font-size:13px;box-sizing:border-box' });
         if (f.value != null) input.value = f.value;
       }
       inputs[f.name] = input;
@@ -5105,7 +5105,7 @@ function buildModal(title, fields, onSubmit) {
     }
     const submitBtn = el('button', {
       type: 'button',
-      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
+      style: 'background:var(--grad);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer',
       on: { click: async () => {
         const values = {};
         for (const f of fields) {
@@ -5127,10 +5127,10 @@ function buildModal(title, fields, onSubmit) {
       } }
     }, 'Salvar');
     formChildren.push(el('div', { class: 'modal-actions', style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:8px' },
-      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,rgba(225,6,0,0.2));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
+      el('button', { type: 'button', class: 'cancel', style: 'background:transparent;border:1px solid var(--border,color-mix(in srgb, var(--purple) 20%, transparent));color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer', on: { click: () => { dialog.remove(); resolve(false); } } }, 'Cancelar'),
       submitBtn,
     ));
-    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:20px' }, ...formChildren);
+    const modal = el('div', { class: 'modal', style: 'max-width:480px;background:var(--bg-2,#13131c);border:1px solid color-mix(in srgb, var(--purple) 20%, transparent);border-radius:12px;padding:20px' }, ...formChildren);
     dialog.append(modal);
     document.body.append(dialog);
   });
@@ -6186,12 +6186,12 @@ function renderChannelsLimitsBadge() {
   const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
   const tierLabel = (me.tenant?.tier || '').toUpperCase();
   const color = wa.available === 0 ? '#F87171' : (wa.available <= 1 ? '#FBBF24' : '#4ADE80');
-  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);border-radius:10px;margin-bottom:14px;font-size:13px' },
+  return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:color-mix(in srgb, var(--purple) 6%, transparent);border:1px solid color-mix(in srgb, var(--purple) 18%, transparent);border-radius:10px;margin-bottom:14px;font-size:13px' },
     el('div', { style: 'display:flex;align-items:center;gap:6px' },
       el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
       el('span', { style: 'color:var(--text)' }, fullLabel),
     ),
-    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(225,6,0,0.15);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
+    el('span', { style: 'color:var(--text-dim);font-size:11px;padding:2px 8px;border-radius:6px;background:color-mix(in srgb, var(--purple) 15%, transparent);text-transform:uppercase;letter-spacing:.4px;font-weight:700' }, 'Plano ' + tierLabel),
     me.whatsapp.extraPaid > 0 ? el('span', { style: 'color:var(--text-dim);font-size:11px' }, '· ' + me.whatsapp.extraPaid + ' adicional(is) Evolution API ativo(s)') : null,
   );
 }
@@ -6228,7 +6228,7 @@ async function openChannelTypePicker() {
         'Pra conectar mais numeros, faca upgrade pro plano superior:'
       ) : null,
       el('div', { class: 'modal-actions', style: 'gap:8px;flex-direction:column' },
-        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
+        wa.max < 10 ? el('a', { href: '/pricing', target: '_blank', class: 'confirm', style: 'display:block;text-align:center;text-decoration:none;background:var(--grad);color:#fff;padding:11px;border-radius:10px;font-weight:700' }, 'Ver planos →') : null,
         el('button', { class: 'cancel', on: { click: () => dialog.remove() } }, 'Fechar'),
       ),
     );
@@ -6326,7 +6326,7 @@ async function openevolutionCheckoutFlow(me) {
   // Mostrar overlay de carregamento
   const loadingDialog = el('div', { class: 'modal-backdrop' });
   const loadingModal = el('div', { class: 'modal', style: 'max-width:420px;text-align:center' },
-    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(225,6,0,.25);border-top-color:#E10600;border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid color-mix(in srgb, var(--purple) 25%, transparent);border-top-color:var(--purple);border-radius:50%;animation:bootspin .9s linear infinite' }),
     el('h3', {}, 'Abrindo pagamento...'),
     el('p', { style: 'color:var(--text-dim);font-size:13px' }, 'Voce sera redirecionado pro Stripe Checkout.'),
   );
@@ -6478,7 +6478,7 @@ window.__onda53 = { loadMyInfo, openChannelTypePicker, openBillingPortal, render
 // ─── Onda 56: Importar/Exportar contatos ────────────────────────────────
 function openImportContactsModal() {
   const dialog = el('div', { class: 'modal-backdrop' });
-  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:24px' });
+  const modal = el('div', { class: 'modal', style: 'max-width:560px;background:var(--bg-2);border:1px solid color-mix(in srgb, var(--purple) 20%, transparent);border-radius:12px;padding:24px' });
   dialog.append(modal);
   document.body.append(dialog);
 
@@ -6491,7 +6491,7 @@ function openImportContactsModal() {
     });
     const errorBox = el('div', { style: 'margin-top:14px' });
     const submitBtn = el('button', {
-      style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
+      style: 'background:var(--grad);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700',
       on: { click: async () => {
         const file = fileInput.files?.[0];
         if (!file) { toast('Selecione um arquivo', 'error'); return; }
@@ -6559,7 +6559,7 @@ function openImportContactsModal() {
     modal.innerHTML = '';
     const noneCreated = (data.created === 0 && data.updated === 0);
     const totalSaved = (data.created || 0) + (data.updated || 0);
-    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:rgba(225,6,0,0.06);border:1px solid rgba(225,6,0,0.18);padding:14px 8px;border-radius:10px' },
+    const stat = (label, value, color) => el('div', { style: 'flex:1;text-align:center;background:color-mix(in srgb, var(--purple) 6%, transparent);border:1px solid color-mix(in srgb, var(--purple) 18%, transparent);padding:14px 8px;border-radius:10px' },
       el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px' }, label),
       el('div', { style: 'font-size:28px;font-weight:800;color:' + (color || 'var(--text)') }, String(value)),
     );
@@ -6581,7 +6581,7 @@ function openImportContactsModal() {
       // Header mapping (collapsed por padrão se sucesso)
       (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-3);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },
         el('summary', { style: 'font-size:12px;color:var(--primary);font-weight:600' }, '🗂 Como suas colunas foram mapeadas'),
-        el('div', { style: 'background:rgba(225,6,0,0.04);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--text-2)' },
+        el('div', { style: 'background:color-mix(in srgb, var(--purple) 4%, transparent);padding:10px;border-radius:6px;margin-top:8px;max-height:200px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--text-2)' },
           ...data.headerDetected.map(h => el('div', { style: 'padding:2px 0' }, h)),
         ),
       ) : null,
@@ -6600,7 +6600,7 @@ function openImportContactsModal() {
           on: { click: () => renderForm() }
         }, '⬆ Importar outra'),
         el('button', {
-          style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
+          style: 'background:var(--grad);color:#fff;border:none;padding:11px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px',
           on: { click: () => dialog.remove() }
         }, '✓ Pronto, fechar'),
       ),
@@ -6632,19 +6632,19 @@ function openExportContactsMenu() {
       })
       .catch(e => { toast('Erro: ' + e.message, 'error'); });
   };
-  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid rgba(225,6,0,0.2);border-radius:12px;padding:24px' },
+  const modal = el('div', { class: 'modal', style: 'max-width:380px;background:var(--bg-2);border:1px solid color-mix(in srgb, var(--purple) 20%, transparent);border-radius:12px;padding:24px' },
     el('h3', { style: 'margin:0 0 14px' }, '⬇ Exportar contatos'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;margin:0 0 18px' }, 'Escolha o formato:'),
     el('div', { style: 'display:flex;flex-direction:column;gap:10px' },
       el('button', {
-        style: 'background:linear-gradient(135deg,#E10600,#FF1F18);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        style: 'background:var(--grad);color:#fff;border:none;padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
         on: { click: () => dl('xlsx') }
       },
         el('div', {}, '📊 Excel (.xlsx)'),
         el('div', { style: 'font-size:11px;opacity:.85;margin-top:2px' }, 'Recomendado — abre direto no Excel/Google Sheets'),
       ),
       el('button', {
-        style: 'background:rgba(225,6,0,0.1);border:1px solid rgba(225,6,0,0.3);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
+        style: 'background:color-mix(in srgb, var(--purple) 10%, transparent);border:1px solid color-mix(in srgb, var(--purple) 30%, transparent);color:var(--text);padding:14px;border-radius:10px;cursor:pointer;font-weight:600;text-align:left',
         on: { click: () => dl('csv') }
       },
         el('div', {}, '📄 CSV (.csv)'),
