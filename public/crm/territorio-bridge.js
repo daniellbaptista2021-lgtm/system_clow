@@ -45,6 +45,15 @@
       '--grad': 'linear-gradient(135deg, ' + m.primaria + ', ' + m.destaque + ')',
       '--grad-soft': 'linear-gradient(135deg, ' + rgba(m.primaria, .16) + ', ' + rgba(m.destaque, .10) + ')',
       '--primary-soft': rgba(m.primaria, .14),
+      // A pagina do Agente IA (/agente) usa nomes proprios para as mesmas cores.
+      '--accent': m.primaria,
+      '--bg-soft': mix(m.superficie, m.fundo, 45),
+      '--bg-panel': mix(m.superficie, m.fundo, 45),
+      '--bg-card': m.superficie,
+      '--line': mix(m.texto, 'transparent', 7),
+      '--line-soft': mix(m.texto, 'transparent', 5),
+      '--muted': mix(m.texto, m.fundo, 68),
+      '--muted-2': mix(m.texto, m.fundo, 50),
     };
     const raiz = document.documentElement.style;
     Object.entries(css).forEach(([k, v]) => raiz.setProperty(k, v));
