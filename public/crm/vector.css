@@ -408,3 +408,7 @@ html[data-theme="system"] .brand-word-main.vector-word {
   .dt-cliente { grid-template-columns: 1fr 1fr; }
   .dt-cliente-apol { grid-column: 1 / -1; }
 }
+
+/* Rodapé da barra lateral: nome e e-mail da conta (antes saía "Tenant"). */
+.sidebar .tenant-info .name { color: #F4F4F5; font-size: 12.5px; }
+.sidebar .tenant-info .tier { text-transform: none; letter-spacing: 0; color: #A9B4C6; font-size: 11px; word-break: break-all; }

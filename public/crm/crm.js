@@ -233,8 +233,17 @@ async function loadStats() {
 
 // ─── Rendering: sidebar ────────────────────────────────────────────────
 function renderSidebarTenant() {
-  $('#tenantName').textContent = state.tenant?.name || 'Tenant';
-  $('#tenantTier').textContent = state.tenant?.tier || '';
+  // state.tenant nunca era preenchido e o rodapé mostrava a palavra "Tenant".
+  // O nome da conta vem de /me; o plano (tier) não diz nada ao corretor, o
+  // e-mail diz em qual conta ele está — no Vector cada vendedor tem a sua.
+  const nome = $('#tenantName'), sub = $('#tenantTier');
+  if (nome) nome.textContent = state.tenant?.name || '';
+  if (sub) sub.textContent = state.tenant?.email || '';
+  api('/me').then((r) => {
+    state.tenant = r.tenant || state.tenant;
+    if (nome) nome.textContent = state.tenant?.name || state.tenant?.email || '';
+    if (sub) sub.textContent = state.tenant?.name ? (state.tenant?.email || '') : '';
+  }).catch(() => {});
 }
 
 // ─── Rendering: board selector ─────────────────────────────────────────
