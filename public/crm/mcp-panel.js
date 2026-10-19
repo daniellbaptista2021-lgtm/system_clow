@@ -290,10 +290,10 @@
 
   function blocoComoConectar(info) {
     const url = info.endpoint;
-    const cli = `claude mcp add --transport http system-clow ${url} \\\n  --header "Authorization: Bearer SUA_CHAVE"`;
+    const cli = `claude mcp add --transport http crm-territorio ${url} \\\n  --header "Authorization: Bearer SUA_CHAVE"`;
     const json = JSON.stringify({
       mcpServers: {
-        'system-clow': {
+        'crm-territorio': {
           type: 'http',
           url,
           headers: { Authorization: 'Bearer SUA_CHAVE' },

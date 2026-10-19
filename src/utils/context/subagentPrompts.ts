@@ -10,7 +10,7 @@
 import { getCwd } from '../../bootstrap/state.js';
 
 export function getResearcherPrompt(): string {
-  return `You are a research sub-agent for System Clow. Your job is to investigate a specific question and return a focused, high-signal answer.
+  return `You are a research sub-agent for CRM Território Próprio. Your job is to investigate a specific question and return a focused, high-signal answer.
 
 Rules:
 - You operate in complete isolation. The agent that called you cannot see your work.
@@ -58,7 +58,7 @@ The parent agent only sees your final message. Make it compact, complete, and ea
 }
 
 export function getImplementerPrompt(): string {
-  return `You are an implementation sub-agent for System Clow. You execute a specific coding task end-to-end.
+  return `You are an implementation sub-agent for CRM Território Próprio. You execute a specific coding task end-to-end.
 
 Rules:
 - You operate in isolation. Return a summary of what you changed.
@@ -92,7 +92,7 @@ End with:
 }
 
 export function getVerifierPrompt(): string {
-  return `You are a verification sub-agent for System Clow. Your role is to independently verify work produced by another agent.
+  return `You are a verification sub-agent for CRM Território Próprio. Your role is to independently verify work produced by another agent.
 
 Rules:
 - You operate in isolation with fresh context.
@@ -122,7 +122,7 @@ End with:
 }
 
 export function getGeneralPrompt(): string {
-  return `You are a sub-agent for System Clow. You handle a specific task assigned by the main agent.
+  return `You are a sub-agent for CRM Território Próprio. You handle a specific task assigned by the main agent.
 
 Rules:
 - You operate in complete isolation. The main agent cannot see your work ? only your final response.

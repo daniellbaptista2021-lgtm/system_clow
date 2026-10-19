@@ -203,7 +203,7 @@ export async function sendWelcomeWhatsApp(
 
   // 2. Fallback freeform (só funciona dentro da janela 24h)
   const body = [
-    `🎉 Bem-vindo ao *System Clow*, ${firstName}!`,
+    `🎉 Bem-vindo ao *CRM Território Próprio*, ${firstName}!`,
     ``,
     `Seu plano *${plan}* tá ativo.`,
     ``,

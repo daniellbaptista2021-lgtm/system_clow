@@ -647,7 +647,7 @@ async function main(): Promise<void> {
       const html = fs.readFileSync(htmlPath, 'utf-8');
       return c.html(html);
     }
-    return c.text('System Clow API', 200);
+    return c.text('CRM Território Próprio API', 200);
   });
 
   // Graceful shutdown
@@ -668,7 +668,7 @@ async function main(): Promise<void> {
 
   // Start
   logger.info(`\n  ╔═══════════════════════════════════════╗`);
-  logger.info(`  ║   System Clow API — port ${PORT}         ║`);
+  logger.info(`  ║   CRM Território Próprio API — port ${PORT}         ║`);
   logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate

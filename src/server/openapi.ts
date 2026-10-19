@@ -13,10 +13,10 @@ import { Hono } from 'hono';
 export const OPENAPI_SPEC = {
   openapi: '3.1.0',
   info: {
-    title: 'System Clow API',
+    title: 'CRM Território Próprio API',
     version: '1.0.0',
     description: 'AI coding agent API — execute tasks, manage sessions, search memory, and more.',
-    contact: { name: 'System Clow', url: 'https://github.com/daniellbaptista2021-lgtm/system_clow' },
+    contact: { name: 'CRM Território Próprio', url: 'https://github.com/daniellbaptista2021-lgtm/system_clow' },
     license: { name: 'Proprietary' },
   },
   servers: [
@@ -456,7 +456,7 @@ export function buildDocsRoutes(): Hono {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>System Clow API Docs</title>
+  <title>CRM Território Próprio API Docs</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
   <style>body{margin:0;background:#1a1a2e}.topbar{display:none}</style>
 </head>

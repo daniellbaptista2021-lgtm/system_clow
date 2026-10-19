@@ -225,21 +225,21 @@ app.post('/signup', async (c) => {
     const verifyUrl = `${baseUrl}/auth/verify-email?token=${emailToken}`;
     await sendMail({
       to: email.toLowerCase(),
-      subject: 'Confirme seu cadastro — System Clow',
+      subject: 'Confirme seu cadastro — CRM Território Próprio',
       text:
         `Olá, ${full_name}!\n\n` +
-        `Seu cadastro no System Clow foi recebido. Clique no link abaixo pra confirmar seu email:\n\n` +
+        `Seu cadastro no CRM Território Próprio foi recebido. Clique no link abaixo pra confirmar seu email:\n\n` +
         `${verifyUrl}\n\n` +
         `O link expira em 7 dias.\n\n` +
         `Se você não fez esse cadastro, pode ignorar essa mensagem.\n\n` +
-        `— Equipe System Clow`,
+        `— Equipe Território Próprio`,
       html:
         `<p>Olá, <strong>${full_name}</strong>!</p>` +
-        `<p>Seu cadastro no System Clow foi recebido. Clique no link abaixo pra confirmar seu email:</p>` +
+        `<p>Seu cadastro no CRM Território Próprio foi recebido. Clique no link abaixo pra confirmar seu email:</p>` +
         `<p><a href="${verifyUrl}">${verifyUrl}</a></p>` +
         `<p>O link expira em 7 dias.</p>` +
         `<p>Se você não fez esse cadastro, pode ignorar essa mensagem.</p>` +
-        `<p>— Equipe System Clow</p>`,
+        `<p>— Equipe Território Próprio</p>`,
     });
   } catch (err: any) {
     logger.warn('[auth/signup] sendMail falhou (segue):', err?.message);
@@ -336,7 +336,7 @@ app.post('/resend-verification', async (c) => {
     const verifyUrl = `${baseUrl}/auth/verify-email?token=${newToken}`;
     await sendMail({
       to: tenant.email,
-      subject: 'Confirme seu cadastro — System Clow',
+      subject: 'Confirme seu cadastro — CRM Território Próprio',
       text: `Clique no link pra confirmar seu email:\n\n${verifyUrl}\n\nO link expira em 7 dias.`,
       html: `<p>Clique no link pra confirmar seu email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>O link expira em 7 dias.</p>`,
     });

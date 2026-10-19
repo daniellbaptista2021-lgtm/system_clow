@@ -4088,7 +4088,7 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do System Clow para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do CRM Território Próprio para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -4111,7 +4111,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro System Clow</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro CRM Território Próprio</a></div>';
     }
   }
 })();

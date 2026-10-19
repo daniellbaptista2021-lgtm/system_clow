@@ -1,6 +1,6 @@
 {
-  "name": "System Clow Workspace",
-  "short_name": "System Clow",
+  "name": "CRM Território Próprio",
+  "short_name": "CRM Território Próprio",
   "description": "CRM completo + Agente IA via WhatsApp + Automações n8n. Gerencie carteira de clientes, pipeline de vendas e atendimento por WhatsApp em uma única plataforma.",
   "start_url": "/?source=pwa",
   "id": "/",
@@ -27,7 +27,7 @@
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Tela de login do System Clow"
+      "label": "Tela de login do CRM Território Próprio"
     },
     {
       "src": "/assets/screenshots/screenshot-02-agente-ia.png",

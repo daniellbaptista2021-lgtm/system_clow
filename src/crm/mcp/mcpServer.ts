@@ -46,7 +46,7 @@ const VERSAO_PREFERIDA = '2025-06-18';
 
 const SERVER_INFO = {
   name: 'system-clow-crm',
-  title: 'System Clow CRM',
+  title: 'CRM Território Próprio',
   version: '1.0.0',
 };
 
@@ -281,7 +281,7 @@ export async function tratarMensagem(
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:
-          'Ferramentas do CRM System Clow. Antes de criar card ou mandar mensagem, ' +
+          'Ferramentas do CRM Território Próprio. Antes de criar card ou mandar mensagem, ' +
           'resolva o contato com crm_find_or_create_contact e use o id retornado. ' +
           'crm_pipeline e crm_dashboard dão o panorama; crm_search encontra por texto. ' +
           'Tools de envio falam com clientes reais — confirme com o usuário antes de disparar.',

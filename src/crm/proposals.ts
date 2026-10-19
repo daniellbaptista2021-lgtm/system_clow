@@ -87,7 +87,7 @@ export function buildContext(tenantId: string, proposalId: string, baseUrl: stri
     contact,
     items,
     publicUrl: `${baseUrl.replace(/\/$/, '')}/p/proposals/${token}`,
-    brandName: 'System Clow',
+    brandName: 'CRM Território Próprio',
   };
 }
 
