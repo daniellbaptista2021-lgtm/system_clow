@@ -15,7 +15,7 @@ html[data-theme="system"],
 html[data-theme="dark"] {
   color-scheme: light;
   --bg: #ECEBE8;
-  --bg-2: rgba(255,255,255,.62);
+  --bg-2: #E2E1DD;
   --bg-3: #FFFFFF;
   --bg-4: #F3F2EF;
   --border: rgba(10,17,27,.14);
@@ -181,3 +181,25 @@ html[data-theme="system"] .brand-word-main.vector-word {
   border-radius: 10px;
 }
 .agent-config-modal h2 { font-size: 17px; padding-bottom: 12px; border-bottom: 1px solid rgba(10,17,27,.18); }
+
+/* ─── Painel do lead (conversa, info, vínculos) ────────────────────────
+ * Cinza da pedra, sólido, com a textura por baixo: o funil não pode
+ * aparecer através dele. */
+.side-panel {
+  background:
+    linear-gradient(rgba(226,225,221,.82), rgba(226,225,221,.82)),
+    url("/assets/vector/textura-pedra.jpg") center / cover,
+    #E2E1DD;
+  border-left: 1px solid #0A111B;
+}
+.side-panel .panel-head { border-bottom: 1px solid #0A111B; }
+.side-panel .panel-tab {
+  font-family: var(--titulo);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+.side-panel .panel-tab.active { border-bottom-color: #C18638; }
+.side-panel .composer { background: rgba(255,255,255,.55); border-top: 1px solid rgba(10,17,27,.18); }
+.side-panel .msg.in { background: #FFFFFF; color: #0A111B; border: 1px solid rgba(10,17,27,.10); }
+.side-panel .msg.out { background: #1A2A43; color: #FFFFFF; }
