@@ -89,6 +89,21 @@ else
   echo "já existe — preservado"
 fi
 
+passo "4b cores do funil (paleta da marca)"
+# As colunas criadas antes da troca de paleta guardam a cor antiga no banco.
+# Só mexe nas cores do modelo original; cor escolhida à mão fica como está.
+if [ -f "$DADOS/crm.sqlite3" ]; then
+  (cd "$APP" && CRM_DB="$DADOS/crm.sqlite3" node -e "
+const db = require('better-sqlite3')(process.env.CRM_DB);
+const mapa = { '#94A3B8':'#A9B4C6', '#4A9EFF':'#395988', '#9B59FC':'#6F8FC4', '#F59E0B':'#E3B574', '#22C55E':'#C18638' };
+const up = db.prepare('UPDATE crm_columns SET color = ? WHERE upper(color) = ?');
+let n = 0; for (const [de, para] of Object.entries(mapa)) n += up.run(para, de).changes;
+console.log('colunas repintadas:', n);
+")
+else
+  echo "banco ainda não existe — nada a repintar"
+fi
+
 passo "5/8 processo PM2 ($NOME)"
 cat >"$APP/vector.config.cjs" <<'EOF'
 // O daemon do PM2 desta máquina carrega env de outros apps (incidente de

@@ -421,18 +421,18 @@ function ensureCtxMenuStyles() {
   const st = document.createElement('style');
   st.id = 'ctx-menu-style';
   st.textContent = `
-.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0F0F24);border:1px solid var(--border-2,color-mix(in srgb, var(--purple) 30%, transparent));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#E8E8F0);animation:ctxIn .14s ease}
+.ctx-menu{position:fixed;z-index:9998;background:var(--bg-2,#0E1828);border:1px solid var(--border-2,color-mix(in srgb, var(--purple) 30%, transparent));border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.55),0 1px 0 rgba(255,255,255,.04) inset;min-width:220px;padding:6px;font-family:inherit;font-size:13px;color:var(--text,#F4F4F5);animation:ctxIn .14s ease}
 @keyframes ctxIn{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-.ctx-menu .ctx-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--text,#E8E8F0);user-select:none;white-space:nowrap;position:relative}
+.ctx-menu .ctx-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;cursor:pointer;color:var(--text,#F4F4F5);user-select:none;white-space:nowrap;position:relative}
 .ctx-menu .ctx-item:hover{background:linear-gradient(135deg,color-mix(in srgb, var(--purple) 14%, transparent),color-mix(in srgb, var(--blue) 8%, transparent))}
-.ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#9898B8);display:inline-flex;align-items:center;justify-content:center}
-.ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#9898B8);font-size:11px}
+.ctx-menu .ctx-item .ctx-ico{width:16px;height:16px;flex-shrink:0;color:var(--text-dim,#A9B4C6);display:inline-flex;align-items:center;justify-content:center}
+.ctx-menu .ctx-item .ctx-arrow{margin-left:auto;color:var(--text-dim,#A9B4C6);font-size:11px}
 .ctx-menu .ctx-item.ctx-danger{color:var(--red,#F87171)}
 .ctx-menu .ctx-item.ctx-danger .ctx-ico{color:var(--red,#F87171)}
 .ctx-menu .ctx-item.ctx-danger:hover{background:rgba(239,68,68,.12)}
 .ctx-menu .ctx-sep{height:1px;background:var(--border,rgba(255,255,255,.08));margin:4px 2px}
-.ctx-menu .ctx-header{padding:8px 12px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-faint,#6E6E8C);font-weight:700}
-.ctx-sub{padding:6px 12px;color:var(--text-dim,#9898B8);font-size:11.5px;font-style:italic}
+.ctx-menu .ctx-header{padding:8px 12px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-faint,#6B7A93);font-weight:700}
+.ctx-sub{padding:6px 12px;color:var(--text-dim,#A9B4C6);font-size:11.5px;font-style:italic}
 `;
   document.head.appendChild(st);
 }
@@ -586,7 +586,7 @@ async function showColumnContextMenu(col, x, y) {
     }),
 
     ctxItem(ICO_COLOR, 'Mudar cor', async () => {
-      const palette = ['#C18638', '#D9A15A', '#4ADE80', '#FBBF24', '#F87171', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const palette = ['#C18638', '#D9A15A', '#C18638', '#E3B574', '#F87171', '#6F8FC4', '#D9A15A', '#6F8FC4', '#C18638', '#D9A15A', '#6B7A93'];
       const v = await pickFromPalette(palette, col.color || '#C18638', 'Mudar cor da coluna');
       if (!v) return;
       try {
@@ -732,7 +732,7 @@ function showColumnReport(col, cards) {
     el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
       stat('Total de cards', String(totalCards)),
       stat('Contatos únicos', String(contacts)),
-      stat('Valor total', fmtMoney(totalValueCents), '#4ADE80'),
+      stat('Valor total', fmtMoney(totalValueCents), '#C18638'),
       stat('Valor ponderado', fmtMoney(weightedCents), '#C18638'),
       stat('Probabilidade média', avgProb + '%'),
       stat('Vencidos', String(overdue), overdue > 0 ? '#F87171' : 'var(--text)'),
@@ -2007,7 +2007,7 @@ async function renderTasksView() {
       return;
     }
     for (const t of data.tasks) {
-      const priorityColor = { urgent: '#DC2626', high: '#F97316', med: '#FBBF24', low: '#64748B' }[t.priority] || '#64748B';
+      const priorityColor = { urgent: '#DC2626', high: '#D9A15A', med: '#E3B574', low: '#6B7A93' }[t.priority] || '#6B7A93';
       const typeIcon = { call: '📞', email: '✉️', meeting: '👥', followup: '🔄', other: '📌' }[t.type] || '📌';
       const dueMs = t.dueAt ? (typeof t.dueAt === 'number' ? t.dueAt : Date.parse(t.dueAt)) : null;
       const dueStr = dueMs ? new Date(dueMs).toLocaleString('pt-BR') : 'Sem prazo';
@@ -2315,7 +2315,7 @@ async function renderDocumentsView() {
       return;
     }
     for (const d of data.documents) {
-      const statusColor = { draft: '#64748B', sent: '#3B82F6', viewed: '#FBBF24', signed: '#10B981', cancelled: '#F87171' }[d.status] || '#64748B';
+      const statusColor = { draft: '#6B7A93', sent: '#395988', viewed: '#E3B574', signed: '#C18638', cancelled: '#F87171' }[d.status] || '#6B7A93';
       const row = el('div', {
         style: 'background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;display:flex;gap:14px;align-items:center;cursor:pointer',
         on: {
@@ -2514,7 +2514,7 @@ async function renderFormsView() {
         },
           el('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:6px' },
             el('div', { style: 'font-weight:600' }, h.name),
-            el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${h.enabled ? '#10B98120' : '#64748B20'};color:${h.enabled ? '#10B981' : '#64748B'}` }, h.enabled ? 'ATIVO' : 'INATIVO'),
+            el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${h.enabled ? '#10B98120' : '#64748B20'};color:${h.enabled ? '#C18638' : '#6B7A93'}` }, h.enabled ? 'ATIVO' : 'INATIVO'),
           ),
           el('code', { style: 'font-size:11px;color:var(--text-dim);background:var(--bg-3);padding:6px 10px;border-radius:4px;display:block;word-break:break-all' }, hookUrl),
           el('div', { style: 'font-size:11px;color:var(--text-dim);margin-top:6px' }, `${h.totalReceived || 0} recebidos`),
@@ -2635,7 +2635,7 @@ async function renderCampaignsView() {
       return;
     }
     for (const c of data.campaigns) {
-      const statusColor = { draft: '#64748B', scheduled: '#FBBF24', sending: '#3B82F6', sent: '#10B981', paused: '#F97316' }[c.status] || '#64748B';
+      const statusColor = { draft: '#6B7A93', scheduled: '#E3B574', sending: '#395988', sent: '#C18638', paused: '#D9A15A' }[c.status] || '#6B7A93';
       const openRate = c.stats_sent > 0 ? ((c.stats_opened / c.stats_sent) * 100).toFixed(1) + '%' : '—';
       const clickRate = c.stats_sent > 0 ? ((c.stats_clicked / c.stats_sent) * 100).toFixed(1) + '%' : '—';
       l.append(el('div', {
@@ -2949,7 +2949,7 @@ function renderChannelsList() {
               class: 'save-btn',
               style: 'flex:1;min-width:170px;font-size:12px;padding:9px;font-weight:700;' +
                 (ch.status === 'active'
-                  ? 'background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.35)'
+                  ? 'background:rgba(193,134,56,.12);color:var(--success);border:1px solid rgba(193,134,56,.35)'
                   : 'background:var(--grad);color:#fff;border:none'),
               on: { click: () => {
                 if (!window.PareamentoWhatsApp) { toast('Tela de conexão não carregou', 'error'); return; }
@@ -2997,7 +2997,7 @@ function renderAIToggleButton(ch) {
     }).catch(() => { state.aiConfigCache[ch.id] = { enabled: false }; });
   }
   const bg = enabled
-    ? 'linear-gradient(135deg,#4ADE80,#16A34A)'
+    ? 'linear-gradient(135deg,#C18638,#16A34A)'
     : 'linear-gradient(135deg,#525252,#404040)';
   const label = enabled ? '🤖 IA: ON' : '🤖 IA: OFF';
   return el('button', {
@@ -3071,7 +3071,7 @@ async function openAIAgentModal(channel) {
     } catch (err) { toast('Erro: ' + err.message, 'error'); }
   } } });
   form.append(
-    el('div', { style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
+    el('div', { style: 'background:rgba(193,134,56,.08);border:1px solid rgba(193,134,56,.25);padding:12px;border-radius:8px;margin-bottom:14px;font-size:12.5px;color:var(--text-dim);line-height:1.5' },
       'Ativa um agente de IA que atende automaticamente clientes neste canal WhatsApp. Cliente manda mensagem → agente responde com base no system prompt. Suporta texto e áudio (transcrito via Whisper). Use ',
       el('code', { style: 'background:color-mix(in srgb, var(--purple) 15%, transparent);padding:1px 5px;border-radius:4px' }, '{{customer_name}}'),
       ' e ',
@@ -3159,7 +3159,7 @@ function showWebhookSetup(channel, isNew) {
   // configurado sozinho na criacao do canal. Nao ha painel externo nenhum pro
   // cliente acessar — so falta parear o numero pelo QR Code.
   const evolutionInstr = el('div', {
-    style: 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
+    style: 'background:rgba(193,134,56,.08);border:1px solid rgba(193,134,56,.25);padding:14px;border-radius:10px;margin-bottom:16px;font-size:12px;line-height:1.65;color:var(--text-2)',
     html: '<div style="font-weight:700;color:var(--green);margin-bottom:8px">📲 Falta só conectar</div>O webhook já foi configurado automaticamente. Feche esta janela e clique em <strong>"Conectar WhatsApp"</strong> no canal, na lista — vai abrir o QR Code pra escanear com o celular.',
   });
 
@@ -3441,7 +3441,7 @@ function plotSales(canvasId, rows) {
       labels: rows.map(r => r.bucket),
       datasets: [
         { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#C18638', backgroundColor: 'rgba(193,134,56,.2)', yAxisID: 'y' },
-        { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#4ADE80', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
+        { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#C18638', backgroundColor: 'rgba(193,134,56,.2)', yAxisID: 'y1' },
       ],
     },
     options: chartDefaults({ dualAxis: true }),
@@ -3454,7 +3454,7 @@ function plotAgents(canvasId, rows) {
   if (!ctx) return;
   if (rows.length === 0) { emptyMsg(ctx); return; }
   const types = [...new Set(rows.flatMap(r => Object.keys(r.byType)))];
-  const palette = ['#C18638', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899'];
+  const palette = ['#C18638', '#C18638', '#E3B574', '#395988', '#F87171', '#6F8FC4', '#D9A15A'];
   window._rptCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -3480,10 +3480,10 @@ function plotSources(canvasId, rows) {
       labels: rows.map(r => r.source),
       datasets: [{
         data: rows.map(r => r.contactCount),
-        backgroundColor: ['#C18638', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899', '#64748B'],
+        backgroundColor: ['#C18638', '#C18638', '#E3B574', '#395988', '#F87171', '#6F8FC4', '#D9A15A', '#6B7A93'],
       }],
     },
-    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } } },
+    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#C9D2DF' } } } },
   });
 }
 
@@ -3510,15 +3510,15 @@ function chartDefaults(o = {}) {
   const opts = {
     responsive: true,
     plugins: {
-      legend: { labels: { color: '#cbd5e1' } },
+      legend: { labels: { color: '#C9D2DF' } },
     },
     scales: {
-      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,.1)' }, stacked: !!o.stacked },
-      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,.1)' }, stacked: !!o.stacked, beginAtZero: true },
+      x: { ticks: { color: '#A9B4C6' }, grid: { color: 'rgba(169,180,198,.1)' }, stacked: !!o.stacked },
+      y: { ticks: { color: '#A9B4C6' }, grid: { color: 'rgba(169,180,198,.1)' }, stacked: !!o.stacked, beginAtZero: true },
     },
   };
   if (o.dualAxis) {
-    opts.scales.y1 = { position: 'right', ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, beginAtZero: true };
+    opts.scales.y1 = { position: 'right', ticks: { color: '#A9B4C6' }, grid: { drawOnChartArea: false }, beginAtZero: true };
   }
   if (o.horizontal) opts.indexAxis = 'y';
   return opts;
@@ -3526,7 +3526,7 @@ function chartDefaults(o = {}) {
 
 function emptyMsg(ctx) {
   ctx.save();
-  ctx.fillStyle = '#94a3b8';
+  ctx.fillStyle = '#A9B4C6';
   ctx.font = '13px system-ui';
   ctx.textAlign = 'center';
   ctx.fillText('Sem dados no período', ctx.canvas.width / 2, ctx.canvas.height / 2);
@@ -4234,7 +4234,7 @@ async function renderInsightsView() {
 
     container.innerHTML = '';
     // Forecast hero
-    container.append(el('div', { style: 'background:linear-gradient(135deg,var(--purple),#6d28d9);color:#fff;padding:24px;border-radius:12px;margin-bottom:20px' },
+    container.append(el('div', { style: 'background:linear-gradient(135deg,var(--purple),#21395D);color:#fff;padding:24px;border-radius:12px;margin-bottom:20px' },
       el('div', { style: 'font-size:14px;opacity:.85;margin-bottom:6px' }, 'Forecast Pipeline (próximos 30 dias)'),
       el('div', { style: 'font-size:36px;font-weight:700;margin-bottom:8px' }, fmtMoney(forecast.weightedCents || 0)),
       el('div', { style: 'font-size:13px;opacity:.85' }, `Pipeline bruto: ${fmtMoney(forecast.pipelineTotalCents || 0)} • Vendas esperadas: ${forecast.expectedWinsCount || 0}`),
@@ -4305,7 +4305,7 @@ async function openCardAIInsights(cardId) {
     }
     if (classify?.insight) {
       const lbl = classify.insight.contentText;
-      const colors = { hot: '#f87171', warm: '#fbbf24', cold: '#3b82f6' };
+      const colors = { hot: '#f87171', warm: '#E3B574', cold: '#395988' };
       body.append(el('div', { style: `background:${colors[lbl]}20;border:1px solid ${colors[lbl]};padding:14px;border-radius:6px;margin-bottom:14px` },
         el('div', { style: 'font-weight:600;margin-bottom:4px' }, '🌡️ Classificação'),
         el('div', { style: `font-size:24px;font-weight:700;color:${colors[lbl]};text-transform:uppercase` }, lbl),
@@ -4314,7 +4314,7 @@ async function openCardAIInsights(cardId) {
     }
     if (sentiment?.insight?.contentJson) {
       const sj = sentiment.insight.contentJson;
-      const sColor = { positive: '#10b981', neutral: '#64748b', negative: '#f87171' }[sj.label];
+      const sColor = { positive: '#C18638', neutral: '#6B7A93', negative: '#f87171' }[sj.label];
       body.append(el('div', { style: 'background:var(--bg-3);padding:14px;border-radius:6px;margin-bottom:14px' },
         el('div', { style: 'font-weight:600;margin-bottom:6px' }, '💭 Sentimento (mensagens recentes)'),
         el('div', { style: `color:${sColor};font-size:18px;font-weight:600;text-transform:capitalize` }, `${sj.label} (${(sj.score * 100).toFixed(0)}%)`),
@@ -4377,7 +4377,7 @@ async function renderPerformanceView() {
       for (let i = 0; i < Math.min(3, board.length); i++) {
         const r = board[i];
         const medals = ['🥇', '🥈', '🥉'];
-        podium.append(el('div', { style: `background:var(--bg-2);border:2px solid ${i === 0 ? '#FFD700' : i === 1 ? '#C0C0C0' : '#CD7F32'};border-radius:10px;padding:18px;text-align:center` },
+        podium.append(el('div', { style: `background:var(--bg-2);border:2px solid ${i === 0 ? '#E3B574' : i === 1 ? '#C0C0C0' : '#8E6224'};border-radius:10px;padding:18px;text-align:center` },
           el('div', { style: 'font-size:32px' }, medals[i]),
           el('div', { style: 'font-weight:700;margin-top:8px' }, r.agentName),
           el('div', { style: 'color:var(--purple);font-size:18px;font-weight:600;margin-top:4px' }, fmtMoney(r.value)),
@@ -4641,7 +4641,7 @@ async function renderPrivacyView() {
     container.innerHTML = '';
 
     // Banner LGPD
-    container.append(el('div', { style: 'background:linear-gradient(135deg,#3b82f6,#1e40af);color:#fff;padding:18px;border-radius:10px;margin-bottom:20px' },
+    container.append(el('div', { style: 'background:linear-gradient(135deg,#395988,#21395D);color:#fff;padding:18px;border-radius:10px;margin-bottom:20px' },
       el('div', { style: 'font-size:14px;font-weight:600;margin-bottom:4px' }, '⚖️ Conformidade LGPD'),
       el('div', { style: 'font-size:12px;opacity:.9' }, 'Sistema cobre Art 7-8 (consentimento) · Art 15 (retenção) · Art 18 V (portabilidade) · Art 18 VI (esquecimento) · Art 37 (registros)'),
     ));
@@ -4665,7 +4665,7 @@ async function renderPrivacyView() {
             el('div', { style: 'font-weight:600' }, p.entity),
             el('div', { style: 'font-size:11px;color:var(--text-dim)' }, `Manter por ${p.daysToKeep} dias` + (p.autoAnonymize ? ' • Anonimizar' : '')),
           ),
-          el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${p.enabled ? '#10b98120' : '#64748b20'};color:${p.enabled ? '#10b981' : '#64748b'}` }, p.enabled ? 'ATIVO' : 'INATIVO'),
+          el('span', { style: `padding:3px 10px;border-radius:12px;font-size:11px;background:${p.enabled ? '#10b98120' : '#64748b20'};color:${p.enabled ? '#C18638' : '#6B7A93'}` }, p.enabled ? 'ATIVO' : 'INATIVO'),
         ));
       }
     }
@@ -4864,7 +4864,7 @@ async function renderAITab(card) {
       ),
       classify?.insight ? el('div', { style: 'background:var(--bg-3);padding:12px;border-radius:8px;margin-bottom:10px' },
         el('div', { style: 'font-size:11px;color:var(--text-dim);text-transform:uppercase' }, 'Classificação'),
-        el('div', { style: 'font-size:18px;font-weight:600;text-transform:uppercase;color:' + ({ hot: '#f87171', warm: '#fbbf24', cold: '#3b82f6' }[classify.insight.contentText] || 'var(--text)') }, classify.insight.contentText),
+        el('div', { style: 'font-size:18px;font-weight:600;text-transform:uppercase;color:' + ({ hot: '#f87171', warm: '#E3B574', cold: '#395988' }[classify.insight.contentText] || 'var(--text)') }, classify.insight.contentText),
       ) : null,
       el('button', {
         style: 'width:100%;padding:10px;background:var(--purple);color:#fff;border:0;border-radius:6px;cursor:pointer;margin-bottom:6px',
@@ -6185,7 +6185,7 @@ function renderChannelsLimitsBadge() {
   const wa = me.whatsapp;
   const fullLabel = wa.totalUsed + ' de ' + wa.max + ' numeros conectados';
   const tierLabel = (me.tenant?.tier || '').toUpperCase();
-  const color = wa.available === 0 ? '#F87171' : (wa.available <= 1 ? '#FBBF24' : '#4ADE80');
+  const color = wa.available === 0 ? '#F87171' : (wa.available <= 1 ? '#E3B574' : '#C18638');
   return el('div', { style: 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:color-mix(in srgb, var(--purple) 6%, transparent);border:1px solid color-mix(in srgb, var(--purple) 18%, transparent);border-radius:10px;margin-bottom:14px;font-size:13px' },
     el('div', { style: 'display:flex;align-items:center;gap:6px' },
       el('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + color }),
@@ -6278,7 +6278,7 @@ async function openChannelTypePicker() {
     ),
 
     // OPÇÃO Meta Cloud API
-    el('button', { type: 'button', class: 'channel-type-btn-NEW', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(24,119,242,0.08),rgba(13,86,184,0.04));border:2px solid rgba(24,119,242,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
+    el('button', { type: 'button', class: 'channel-type-btn-NEW', style: 'width:100%;text-align:left;background:linear-gradient(135deg,rgba(57,89,136,0.08),rgba(33,57,93,0.04));border:2px solid rgba(57,89,136,0.3);padding:18px;border-radius:14px;cursor:pointer;color:inherit;font-family:inherit',
       on: { click: async () => {
         dialog.remove();
         await openNewChannelModal('meta');
@@ -6361,7 +6361,7 @@ async function openevolutionCheckoutFlow(me) {
   const waitDialog = el('div', { class: 'modal-backdrop' });
   let cancelled = false;
   const waitModal = el('div', { class: 'modal', style: 'max-width:480px;text-align:center' },
-    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(34,197,94,.25);border-top-color:var(--success);border-radius:50%;animation:bootspin .9s linear infinite' }),
+    el('div', { style: 'width:48px;height:48px;margin:0 auto 16px;border:3px solid rgba(193,134,56,.25);border-top-color:var(--success);border-radius:50%;animation:bootspin .9s linear infinite' }),
     el('h3', {}, 'Aguardando pagamento...'),
     el('p', { style: 'color:var(--text-dim);font-size:13px;line-height:1.6' },
       'Complete o pagamento na aba do Stripe que acabou de abrir.',
@@ -6567,15 +6567,15 @@ function openImportContactsModal() {
     modal.append(
       // Cabeçalho com check grande
       el('div', { style: 'text-align:center;padding:10px 0 18px' },
-        el('div', { style: 'width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:' + (noneCreated ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:36px' }, noneCreated ? '⚠' : '✓'),
-        el('h3', { style: 'margin:0;font-size:20px;color:' + (noneCreated ? '#fca5a5' : '#86efac') }, noneCreated ? 'Nada foi importado' : 'Importação concluída!'),
+        el('div', { style: 'width:64px;height:64px;margin:0 auto 14px;border-radius:50%;background:' + (noneCreated ? 'rgba(239,68,68,0.15)' : 'rgba(193,134,56,0.15)') + ';display:flex;align-items:center;justify-content:center;font-size:36px' }, noneCreated ? '⚠' : '✓'),
+        el('h3', { style: 'margin:0;font-size:20px;color:' + (noneCreated ? '#fca5a5' : '#E3B574') }, noneCreated ? 'Nada foi importado' : 'Importação concluída!'),
         el('p', { style: 'color:var(--text-dim);font-size:13px;margin:8px 0 0' }, noneCreated ? 'Nenhum contato foi criado nem atualizado. Veja o mapeamento abaixo.' : totalSaved + ' contato(s) salvos no CRM com sucesso.'),
         el('p', { style: 'color:var(--text-dim);font-size:11px;margin:6px 0 0;font-family:monospace' }, '📄 ' + filename),
       ),
       // Stats em cards grandes
       el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
         stat('Total processado', data.total || 0),
-        stat('Criados', data.created || 0, '#4ADE80'),
+        stat('Criados', data.created || 0, '#C18638'),
         stat('Atualizados', data.updated || 0, '#C18638'),
       ),
       // Header mapping (collapsed por padrão se sucesso)

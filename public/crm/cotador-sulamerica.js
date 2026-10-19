@@ -66,10 +66,10 @@
   right:${CHAT_WIDTH + GAP}px;top:50%;transform:translateY(-50%);
   background:#0a0a18;border-radius:22px;
   border:1px solid rgba(193,134,56,.35);
-  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 4px #1a1a2e,0 0 0 5px rgba(255,255,255,.04);
+  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 4px #1A2A43,0 0 0 5px rgba(255,255,255,.04);
   display:flex;flex-direction:column;
   overflow:hidden;
-  font-family:inherit;color:#E8E8F0;
+  font-family:inherit;color:#F4F4F5;
   animation:cotSaIn .22s cubic-bezier(.2,.7,.2,1);
 }
 @keyframes cotSaIn{from{opacity:0;transform:translateY(-50%) scale(.96)}to{opacity:1;transform:translateY(-50%) scale(1)}}
@@ -82,7 +82,7 @@
   height:48px;flex-shrink:0;
   display:flex;align-items:center;gap:8px;
   padding:0 12px 0 18px;
-  background:linear-gradient(180deg,#15152a,#0f0f24);
+  background:linear-gradient(180deg,#15152a,#0E1828);
   border-bottom:1px solid rgba(255,255,255,.06);
   cursor:move;user-select:none;
   border-top-left-radius:22px;border-top-right-radius:22px;
@@ -101,7 +101,7 @@
   display:flex;align-items:center;justify-content:center;
   transition:background .14s, color .14s;
 }
-.cot-sa-icon:hover{background:rgba(193,134,56,.14);color:#E8E8F0}
+.cot-sa-icon:hover{background:rgba(193,134,56,.14);color:#F4F4F5}
 
 .cot-sa-body{
   flex:1;min-height:0;position:relative;background:#fff;

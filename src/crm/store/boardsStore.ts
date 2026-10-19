@@ -102,7 +102,7 @@ export function createColumn(tenantId: string, input: {
     boardId: input.boardId,
     name: input.name,
     position: getNextColumnPosition(db, input.boardId),
-    color: input.color ?? '#9B59FC',
+    color: input.color ?? '#6F8FC4',
     autoRule: input.autoRule ?? null,
     isTerminal: input.isTerminal ?? false,
     createdAt: now(),
@@ -185,11 +185,11 @@ export function seedDefaultBoards(tenantId: string): Board {
     description: 'Leads do primeiro contato até o fechamento' });
 
   const salesCols = [
-    { name: 'Lead novo', color: '#94A3B8' },
-    { name: 'Qualificado', color: '#4A9EFF' },
-    { name: 'Proposta enviada', color: '#9B59FC' },
-    { name: 'Negociação', color: '#F59E0B' },
-    { name: 'Ganho', color: '#22C55E', isTerminal: true },
+    { name: 'Lead novo', color: '#A9B4C6' },
+    { name: 'Qualificado', color: '#395988' },
+    { name: 'Proposta enviada', color: '#6F8FC4' },
+    { name: 'Negociação', color: '#E3B574' },
+    { name: 'Ganho', color: '#C18638', isTerminal: true },
     { name: 'Perdido', color: '#EF4444', isTerminal: true },
   ];
   for (const c of salesCols) {
@@ -202,9 +202,9 @@ export function seedDefaultBoards(tenantId: string): Board {
   });
   for (const c of [
     { name: 'Aberto', color: '#EF4444' },
-    { name: 'Em andamento', color: '#F59E0B' },
-    { name: 'Aguardando cliente', color: '#94A3B8' },
-    { name: 'Resolvido', color: '#22C55E', isTerminal: true },
+    { name: 'Em andamento', color: '#E3B574' },
+    { name: 'Aguardando cliente', color: '#A9B4C6' },
+    { name: 'Resolvido', color: '#C18638', isTerminal: true },
   ]) {
     createColumn(tenantId, { boardId: supportBoard.id, name: c.name, color: c.color, isTerminal: c.isTerminal });
   }
@@ -269,7 +269,7 @@ export function createSwimlane(tenantId: string, boardId: string, input: { name:
   const pos = input.position ?? (((db.prepare('SELECT MAX(position) as m FROM crm_swimlanes WHERE board_id=?').get(boardId) as any).m ?? -1) + 1);
   const s: Swimlane = {
     id: nid('crm_sl'), tenantId, boardId, name: input.name,
-    color: input.color || '#9B59FC', position: pos, createdAt: now(),
+    color: input.color || '#6F8FC4', position: pos, createdAt: now(),
   };
   db.prepare('INSERT INTO crm_swimlanes (id, tenant_id, board_id, name, color, position, created_at) VALUES (?,?,?,?,?,?,?)')
     .run(s.id, tenantId, boardId, s.name, s.color, s.position, s.createdAt);

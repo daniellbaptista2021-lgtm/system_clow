@@ -21,18 +21,18 @@
   --border: rgba(255,255,255,.07);
   --border-2: rgba(193,134,56,.28);
   --text: #F4F4F5;
-  --text-2: #A1A1AA;
-  --text-dim: #A1A1AA;
-  --text-faint: #71717A;
+  --text-2: #A9B4C6;
+  --text-dim: #A9B4C6;
+  --text-faint: #6B7A93;
   /* Eram o roxo e o azul da marca antiga. Hoje são os dois tons do vermelho
    * oficial, pra que todo componente que pede "roxo" nasça na cor certa. */
   --purple: #C18638;
   --blue: #D9A15A;
-  --green: #4ADE80;
-  --amber: #FBBF24;
+  --green: #C18638;
+  --amber: #E3B574;
   --red: #F87171;
   --info: #6F8FC4;
-  --gray: #A1A1AA;
+  --gray: #A9B4C6;
   --grad: linear-gradient(135deg, #C18638, #D9A15A);
   --grad-soft: linear-gradient(135deg, rgba(193,134,56,.16), rgba(217,161,90,.10));
   --primary-soft: rgba(193,134,56,.14);
@@ -100,7 +100,7 @@ html[data-theme="light"] {
   --bg-4: #F1F2F4;
   --border: #E5E7EB;
   --border-2: rgba(239,68,68,.22);
-  --text: #111827;
+  --text: #0A111B;
   --text-2: #667085;
   --text-dim: #667085;
   --text-faint: #79828F;
@@ -112,10 +112,10 @@ html[data-theme="light"] {
   /* Verde/âmbar/vermelho "pastel" (bons em fundo escuro) viram texto de
    * contraste ruim em fundo quase branco — versão mais saturada/escura só
    * pra tema claro. Uso como fundo/ícone grande continua igual. */
-  --green: #15803D;
-  --amber: #B45309;
+  --green: #8E6224;
+  --amber: #8E6224;
   --red: #DC2626;
-  --info: #2563EB;
+  --info: #395988;
   --grad-soft: linear-gradient(135deg, rgba(193,134,56,.10), rgba(217,161,90,.06));
   --scroll-thumb: #CDD2D9;
   --scroll-thumb-hover: #B6BDC7;
@@ -143,20 +143,20 @@ html[data-theme="system"] {
   --border: #C2CAD4;
   --border-2: rgba(193,134,56,.30);
   --text: #1B2430;
-  --text-2: #545D6B;
-  --text-dim: #545D6B;
+  --text-2: #4F5E78;
+  --text-dim: #4F5E78;
   --text-faint: #6E7784;
-  --gray: #545D6B;
+  --gray: #4F5E78;
   --primary-soft: rgba(193,134,56,.10);
   --shadow-sm: 0 1px 2px rgba(27,36,48,.10);
   --shadow-md: 0 4px 14px rgba(27,36,48,.12);
   --shadow-lg: 0 16px 44px rgba(27,36,48,.20);
   /* Mesmas cores de status do claro: o fundo aqui também é claro, então os
    * tons pastel do dark não teriam contraste suficiente. */
-  --green: #15803D;
-  --amber: #B45309;
+  --green: #8E6224;
+  --amber: #8E6224;
   --red: #C41C1C;
-  --info: #2563EB;
+  --info: #395988;
   --grad-soft: linear-gradient(135deg, rgba(193,134,56,.12), rgba(217,161,90,.07));
   --scroll-thumb: #B4BDC9;
   --scroll-thumb-hover: #9AA4B2;
@@ -338,7 +338,7 @@ body {
  * dá volume sobre fundo preto vira um borrão sujo sobre fundo claro. */
 html[data-theme="light"] .brand-word-main,
 html[data-theme="system"] .brand-word-main {
-  background: linear-gradient(180deg, #4A4A55 0%, #26262E 55%, #111827 100%);
+  background: linear-gradient(180deg, #4A4A55 0%, #26262E 55%, #0A111B 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -877,10 +877,10 @@ select option { background: var(--bg-3); color: var(--text); }
 .list-item-title { font-weight: 600; font-size: 13px; }
 .list-item-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .pill { padding: 3px 9px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
-.pill.green { background: rgba(34,197,94,.15); color: var(--green); }
-.pill.amber { background: rgba(245,158,11,.15); color: var(--amber); }
+.pill.green { background: rgba(193,134,56,.15); color: var(--green); }
+.pill.amber { background: rgba(227,181,116,.15); color: var(--amber); }
 .pill.red { background: rgba(239,68,68,.15); color: var(--red); }
-.pill.gray { background: rgba(148,163,184,.15); color: var(--gray); }
+.pill.gray { background: rgba(169,180,198,.15); color: var(--gray); }
 .pill.purple { background: color-mix(in srgb, var(--purple) 15%, transparent); color: var(--purple); }
 
 /* ─── Modal ──────────────────────────────────────────────────────────── */
@@ -1437,7 +1437,7 @@ img.card-avatar, img.contact-avatar {
 .mv-backdrop {
   position: fixed; inset: 0; z-index: 4000;
   display: none; align-items: center; justify-content: center;
-  background: rgba(8,8,12,.94);
+  background: rgba(10,17,27,.94);
   backdrop-filter: blur(6px);
 }
 .mv-backdrop.show { display: flex; }

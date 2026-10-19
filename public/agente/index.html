@@ -26,7 +26,7 @@
    * precisa ser a mesma paleta, não um produto visual à parte. Nomes de
    * variável ficam como estavam (usados em centenas de lugares neste
    * arquivo); só os VALORES foram alinhados. */
-  --bg:#0A111B;--bg-soft:#0E1828;--bg-panel:#0E1828;--bg-card:#142037;--line:rgba(255,255,255,.07);--line-soft:rgba(255,255,255,.05);--text:#F4F4F5;--muted:#A1A1AA;--muted-2:#71717A;--accent:#C18638;--blue:#D9A15A;--danger:#F87171;--shadow:0 20px 50px rgba(0,0,0,.4);--sidebar:320px;--topbar:64px;--compose:150px;--font:'Inter',system-ui,sans-serif;--serif:'Source Serif 4',serif;--mono:'JetBrains Mono',monospace;
+  --bg:#0A111B;--bg-soft:#0E1828;--bg-panel:#0E1828;--bg-card:#142037;--line:rgba(255,255,255,.07);--line-soft:rgba(255,255,255,.05);--text:#F4F4F5;--muted:#A9B4C6;--muted-2:#6B7A93;--accent:#C18638;--blue:#D9A15A;--danger:#F87171;--shadow:0 20px 50px rgba(0,0,0,.4);--sidebar:320px;--topbar:64px;--compose:150px;--font:'Inter',system-ui,sans-serif;--serif:'Source Serif 4',serif;--mono:'JetBrains Mono',monospace;
   --rp-bg:var(--bg-card);--rp-border:var(--line);
 }
 /* ─── Tema claro — mesmo mecanismo do CRM (data-theme no <html>,
@@ -34,12 +34,12 @@
 html[data-theme="light"], html[data-theme="system"] { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="light"]{
-  --bg:#F7F8FA;--bg-soft:#FFFFFF;--bg-panel:#FFFFFF;--bg-card:#FFFFFF;--line:#E5E7EB;--line-soft:#EDEEF1;--text:#111827;--muted:#667085;--muted-2:#98A2B3;--danger:#DC2626;
+  --bg:#F7F8FA;--bg-soft:#FFFFFF;--bg-panel:#FFFFFF;--bg-card:#FFFFFF;--line:#E5E7EB;--line-soft:#EDEEF1;--text:#0A111B;--muted:#667085;--muted-2:#98A2B3;--danger:#DC2626;
   --rp-bg:#FFFFFF;--rp-border:#E5E7EB;
 }
 @media (prefers-color-scheme: light){
   html[data-theme="system"]{
-    --bg:#F7F8FA;--bg-soft:#FFFFFF;--bg-panel:#FFFFFF;--bg-card:#FFFFFF;--line:#E5E7EB;--line-soft:#EDEEF1;--text:#111827;--muted:#667085;--muted-2:#98A2B3;--danger:#DC2626;
+    --bg:#F7F8FA;--bg-soft:#FFFFFF;--bg-panel:#FFFFFF;--bg-card:#FFFFFF;--line:#E5E7EB;--line-soft:#EDEEF1;--text:#0A111B;--muted:#667085;--muted-2:#98A2B3;--danger:#DC2626;
     --rp-bg:#FFFFFF;--rp-border:#E5E7EB;
   }
 }
@@ -96,7 +96,7 @@ body.sidebar-collapsed .sidebar-peek-toggle{display:flex}
 .brand-top img{height:96px;width:auto;max-width:min(100%,420px);object-fit:contain;object-position:left center;display:block;image-rendering:auto}
 .ghost-btn,.outline-btn{height:36px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);cursor:pointer;transition:background .16s ease,border-color .16s ease}
 .ghost-btn:hover,.outline-btn:hover{background:rgba(255,255,255,.05)}
-.outline-btn{color:#9898B8}
+.outline-btn{color:#A9B4C6}
 .content{flex:1;min-height:0;position:relative}
 #chat{height:100%;overflow:auto;overscroll-behavior:contain}
 .feed{width:min(100%,1120px);margin:0 auto;padding:40px 28px 220px}
@@ -119,8 +119,8 @@ body.sidebar-collapsed .sidebar-peek-toggle{display:flex}
 .rp-row{display:flex;justify-content:flex-start;margin:10px 0 22px}
 .rp{max-width:min(86%,840px);color:var(--text);background:var(--rp-bg);border:1px solid var(--rp-border);border-radius:8px 22px 22px 22px;padding:16px 18px;box-shadow:0 18px 40px rgba(0,0,0,.18);line-height:1.7}
 .rp p{margin-bottom:10px}
-.rp strong{color:#E8E8F0}
-.rp em{color:#9898B8}
+.rp strong{color:#F4F4F5}
+.rp em{color:#A9B4C6}
 .rp a{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 .rp pre{background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;overflow:auto;margin:10px 0}
 .rp code{font-family:var(--mono);font-size:13px}

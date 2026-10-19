@@ -91,7 +91,7 @@
               'display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:18px;' +
               (problema
                 ? 'background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.35)'
-                : 'background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35)'),
+                : 'background:rgba(193,134,56,.10);border:1px solid rgba(193,134,56,.35)'),
           },
             el('span', { style: 'font-size:16px' }, problema ? '⚠️' : '✅'),
             el('div', { style: 'font-size:13px;line-height:1.5' },
@@ -110,7 +110,7 @@
           el('div', {
             style:
               'display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:18px;' +
-              'background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35)',
+              'background:rgba(227,181,116,.10);border:1px solid rgba(227,181,116,.35)',
           },
             el('span', { style: 'font-size:16px' }, '⚠️'),
             el('div', { style: 'font-size:13px;line-height:1.5' },
@@ -222,7 +222,7 @@
           if (!r.ok) {
             mostrar(r.erro || 'A chave não foi aceita.', 'var(--red)');
           } else {
-            mostrar('Chave válida.' + (r.modelos ? ' ' + r.modelos.length + ' modelos disponíveis.' : ''), '#4ade80');
+            mostrar('Chave válida.' + (r.modelos ? ' ' + r.modelos.length + ' modelos disponíveis.' : ''), '#C18638');
             // Com a lista em mãos, trocamos o campo livre por um seletor:
             // digitar nome de modelo à mão é a forma mais fácil de errar.
             if (r.modelos && r.modelos.length) {

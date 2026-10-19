@@ -307,12 +307,12 @@
         //  - overdue/past_due → vermelha "Atrasada"
         //  - resto (active aguardando 1º pagamento ou ciclo novo) → âmbar "Aguardando pagamento"
         const statusColors = s.status === 'cancelled'
-          ? { bg: 'rgba(148,163,184,.12)', border: 'rgba(148,163,184,.30)', fg: '#94A3B8', label: 'Cancelada' }
+          ? { bg: 'rgba(169,180,198,.12)', border: 'rgba(169,180,198,.30)', fg: '#A9B4C6', label: 'Cancelada' }
           : paidThisCycle
-          ? { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.35)', fg: '#4ADE80', label: 'Paga' }
+          ? { bg: 'rgba(193,134,56,.12)', border: 'rgba(193,134,56,.35)', fg: '#C18638', label: 'Paga' }
           : (s.status === 'past_due' || overdue)
           ? { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.35)', fg: '#F87171', label: overdue ? 'Atrasada' : 'Vencida' }
-          : { bg: 'rgba(245,158,11,.12)', border: 'rgba(245,158,11,.35)', fg: '#FBBF24', label: 'Aguardando pagamento' };
+          : { bg: 'rgba(227,181,116,.12)', border: 'rgba(227,181,116,.35)', fg: '#E3B574', label: 'Aguardando pagamento' };
         const cycleLabel = ({ monthly: '/mês', weekly: '/semana', quarterly: '/trimestre', yearly: '/ano', one_time: ' (única)' })[s.cycle] || ` /${s.cycle}`;
 
         // Lookup do contato pra exibir info no card e habilitar
@@ -386,10 +386,10 @@
               // (interno, nao wa.me externo) com template ja no composer.
               (needsAction && contact)
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.30);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(193,134,56,.08);border:1px solid rgba(193,134,56,.30);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
-                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.16)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.50)'; },
-                      mouseleave: (e) => { e.currentTarget.style.background = 'rgba(34,197,94,.08)'; e.currentTarget.style.borderColor = 'rgba(34,197,94,.30)'; },
+                      mouseenter: (e) => { e.currentTarget.style.background = 'rgba(193,134,56,.16)'; e.currentTarget.style.borderColor = 'rgba(193,134,56,.50)'; },
+                      mouseleave: (e) => { e.currentTarget.style.background = 'rgba(193,134,56,.08)'; e.currentTarget.style.borderColor = 'rgba(193,134,56,.30)'; },
                       click: async (e) => {
                         const btn = e.currentTarget;
                         const oldHTML = btn.innerHTML;
@@ -442,10 +442,10 @@
                 : null,
               needsAction
                 ? el('button', {
-                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
+                    style: 'display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(193,134,56,.10);border:1px solid rgba(193,134,56,.35);color:var(--success);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:all .15s ease',
                     on: {
-                      mouseenter: (e) => { e.target.style.background = 'rgba(34,197,94,.18)'; e.target.style.borderColor = 'rgba(34,197,94,.55)'; },
-                      mouseleave: (e) => { e.target.style.background = 'rgba(34,197,94,.10)'; e.target.style.borderColor = 'rgba(34,197,94,.35)'; },
+                      mouseenter: (e) => { e.target.style.background = 'rgba(193,134,56,.18)'; e.target.style.borderColor = 'rgba(193,134,56,.55)'; },
+                      mouseleave: (e) => { e.target.style.background = 'rgba(193,134,56,.10)'; e.target.style.borderColor = 'rgba(193,134,56,.35)'; },
                       click: async () => {
                         const updated = await api(`/subscriptions/${s.id}/mark-paid`, { method: 'POST' });
                         const nx = updated?.subscription?.nextChargeAt

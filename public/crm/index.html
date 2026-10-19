@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <script src="/integrations/territorio/config.js"></script>
-<script src="/crm/territorio-bridge.js?v=3"></script>
+<script src="/crm/territorio-bridge.js?v=vector2"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>CRM Vector</title>
@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#0A111B">
 <script>
 // Aplica o tema salvo antes do primeiro paint, pra nao piscar o tema errado.
-// A barra do navegador acompanha: no escuro usa --bg (#09090F), pra ela somir
+// A barra do navegador acompanha: no escuro usa --bg (#0A111B), pra ela somir
 // no fundo do CRM; nos temas claro/sistema segue o vermelho da marca, que e a
 // aparencia que esses temas ja tinham.
 (function(){try{var t=window.clowStorage.getItem('clow_theme')||'dark';document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#0A111B':'#1A2A43');}catch(e){}})();
@@ -23,8 +23,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/territorio/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Raleway:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/crm/crm.css?v=83">
-<link rel="stylesheet" href="/crm/vector.css?v=1">
+<link rel="stylesheet" href="/crm/crm.css?v=vector2">
+<link rel="stylesheet" href="/crm/vector.css?v=vector2">
 </head>
 <body>
 
@@ -32,7 +32,7 @@
 <div id="loginScreen" class="login-shell">
   <div class="login-card" style="text-align:center">
     <div style="width:40px;height:40px;margin:0 auto 16px;border:3px solid rgba(193,134,56,.25);border-top-color:#C18638;border-radius:50%;animation:bootspin .9s linear infinite"></div>
-    <div style="color:#9898B8;font-size:13px">Conectando seu CRM...</div>
+    <div style="color:#A9B4C6;font-size:13px">Conectando seu CRM...</div>
     <style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
   </div>
 </div>
@@ -431,7 +431,7 @@
     // claro e sistema ficam como sempre foram (vermelho da marca).
     try {
       var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', v === 'dark' ? '#09090F' : '#C18638');
+      if (meta) meta.setAttribute('content', v === 'dark' ? '#0A111B' : '#C18638');
     } catch (e) {}
     // Mesma origem: se o iframe do Agente IA ja estiver carregado, atualiza
     // o tema nele tambem, sem precisar recarregar a view.
@@ -484,16 +484,16 @@
 
 <!-- ─── SCRIPT ─── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/crm/clow-dialog.js?v=58"></script>
-<script src="/crm/media-viewer.js?v=1"></script>
-<script type="module" src="/crm/crm.js?v=81"></script>
-<script src="/crm/crm-extras.js?v=59"></script>
+<script src="/crm/clow-dialog.js?v=vector2"></script>
+<script src="/crm/media-viewer.js?v=vector2"></script>
+<script type="module" src="/crm/crm.js?v=vector2"></script>
+<script src="/crm/crm-extras.js?v=vector2"></script>
 <!-- Antes do settings-ext: ele procura window.CartaoIA ao desenhar as configurações. -->
-<script src="/crm/ia-credenciais.js?v=1"></script>
-<script src="/crm/whatsapp-qr.js?v=1"></script>
-<script src="/crm/crm-settings-ext.js?v=69"></script>
-<script src="/crm/agent-config-modal.js?v=4"></script>
-<script src="/crm/mcp-panel.js?v=2"></script>
+<script src="/crm/ia-credenciais.js?v=vector2"></script>
+<script src="/crm/whatsapp-qr.js?v=vector2"></script>
+<script src="/crm/crm-settings-ext.js?v=vector2"></script>
+<script src="/crm/agent-config-modal.js?v=vector2"></script>
+<script src="/crm/mcp-panel.js?v=vector2"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
