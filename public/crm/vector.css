@@ -1,0 +1,21 @@
+/* CRM Vector — identidade da equipe Pulse (manual da Amarelo Limão).
+ * Paleta: #0A111B #1A2A43 #21395D #395988 (azuis) + #C18638 (dourado).
+ * Títulos em Merriweather, texto em Raleway. Carregado DEPOIS do crm.css. */
+.brand-word { gap: 4px; }
+.vector-logo { width: 56px; height: 56px; display: block; margin-bottom: 2px; }
+.brand-word-main.vector-word {
+  font-family: "Merriweather", Georgia, serif;
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+.brand-word-main.vector-word .brand-word-accent {
+  background: linear-gradient(180deg, #E3B574 0%, #C18638 60%, #8E6224 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.vector-ponto { color: #395988; -webkit-text-fill-color: #395988; }
+.brand-word-sub { margin-top: 2px; }
+.top-bar h2, .login-card h1, .modal h3 { font-family: "Merriweather", Georgia, serif; }

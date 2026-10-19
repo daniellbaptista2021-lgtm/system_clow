@@ -143,7 +143,7 @@ export function buildDashboardRoutes(pool: any): Hono {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CRM Território Próprio — Admin Dashboard</title>
+<title>CRM Vector — Admin Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',system-ui,sans-serif;background:#0f0f13;color:#e8e4dd;min-height:100vh;padding:24px}
@@ -171,7 +171,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:#0f0f13;color:#e8e4dd;m
 </head>
 <body>
 <div class="header">
-  <h1>CRM Território Próprio — Dashboard</h1>
+  <h1>CRM Vector — Dashboard</h1>
   <button class="refresh" onclick="location.reload()">Atualizar</button>
 </div>
 <div class="grid">

@@ -337,8 +337,8 @@ app.post('/webhooks/stripe', async (c) => {
               const { sendMail } = await import('../utils/mailer.js');
               await sendMail({
                 to: t.email,
-                subject: 'Falha na cobrança — CRM Território Próprio',
-                text: `Olá ${t.full_name || t.name},\n\nA cobrança automática da sua assinatura falhou (tentativa ${inv.attempt_count || 1}). O Stripe vai retentar nos próximos dias.\n\nSe quiser atualizar o cartão, acesse o Portal de Cobrança no painel.\n\n— CRM Território Próprio`,
+                subject: 'Falha na cobrança — CRM Vector',
+                text: `Olá ${t.full_name || t.name},\n\nA cobrança automática da sua assinatura falhou (tentativa ${inv.attempt_count || 1}). O Stripe vai retentar nos próximos dias.\n\nSe quiser atualizar o cartão, acesse o Portal de Cobrança no painel.\n\n— CRM Vector`,
               });
             } catch { /* email opcional */ }
           }
@@ -369,8 +369,8 @@ app.post('/webhooks/stripe', async (c) => {
             const { sendMail } = await import('../utils/mailer.js');
             await sendMail({
               to: t.email,
-              subject: 'Seu trial termina em 3 dias — CRM Território Próprio',
-              text: `Olá ${t.full_name || t.name},\n\nSeu período de avaliação termina em 3 dias. A primeira cobrança será feita automaticamente no cartão cadastrado.\n\nQuer atualizar o cartão ou cancelar? Acesse o Portal de Cobrança no painel.\n\n— CRM Território Próprio`,
+              subject: 'Seu trial termina em 3 dias — CRM Vector',
+              text: `Olá ${t.full_name || t.name},\n\nSeu período de avaliação termina em 3 dias. A primeira cobrança será feita automaticamente no cartão cadastrado.\n\nQuer atualizar o cartão ou cancelar? Acesse o Portal de Cobrança no painel.\n\n— CRM Vector`,
             });
           } catch { /* email opcional */ }
         }
@@ -506,7 +506,7 @@ app.get('/signup/success', async (c) => {
   const html = [
     '<!DOCTYPE html><html lang="pt-BR"><head>',
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
-    '<title>CRM Território Próprio — Bem-vindo!</title>',
+    '<title>CRM Vector — Bem-vindo!</title>',
     '<link rel="icon" href="/assets/favicon-gold.png">',
     '<style>',
     'body{margin:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px}',
@@ -536,7 +536,7 @@ app.get('/signup/success', async (c) => {
     '.note{font-size:11.5px;color:#6E6E8C;margin-top:16px}',
     '</style></head><body>',
     '<div class="card">',
-    '<div class="logo"><img src="/assets/territorio/icone-192.png" alt="" style="height:56px;width:56px;border-radius:14px;vertical-align:middle"> <b style="font-size:22px;vertical-align:middle">CRM Território Próprio</b></div>',
+    '<div class="logo"><img src="/assets/territorio/icone-192.png" alt="" style="height:56px;width:56px;border-radius:14px;vertical-align:middle"> <b style="font-size:22px;vertical-align:middle">CRM Vector</b></div>',
     '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
     '<h1>Pagamento confirmado!</h1>',
     '<p>Sua conta foi criada. ' + (creds ? 'Aqui estão suas credenciais:' : 'Confira seu email e WhatsApp.') + '</p>',

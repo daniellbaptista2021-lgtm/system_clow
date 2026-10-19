@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
  * CRM — stylesheet
- * Identidade do System Clow de IA: preto, vermelho (#e10600), branco.
+ * Identidade do System Clow de IA: preto, vermelho (#C18638), branco.
  *
  * Os tokens de cor antigos (--purple, --blue e o gradiente roxo→azul)
  * continuam existindo, com valores novos, de propósito: os NOMES estão
@@ -14,28 +14,28 @@
 
 :root {
   /* ── Escala de superfície (4 niveis: pagina < sidebar < card < elevado) ── */
-  --bg: #09090F;
-  --bg-2: #0D0D16;
-  --bg-3: #11111B;
-  --bg-4: #151521;
+  --bg: #0A111B;
+  --bg-2: #0E1828;
+  --bg-3: #142037;
+  --bg-4: #1A2A43;
   --border: rgba(255,255,255,.07);
-  --border-2: rgba(225,6,0,.28);
+  --border-2: rgba(193,134,56,.28);
   --text: #F4F4F5;
   --text-2: #A1A1AA;
   --text-dim: #A1A1AA;
   --text-faint: #71717A;
   /* Eram o roxo e o azul da marca antiga. Hoje são os dois tons do vermelho
    * oficial, pra que todo componente que pede "roxo" nasça na cor certa. */
-  --purple: #e10600;
-  --blue: #ff1f18;
+  --purple: #C18638;
+  --blue: #D9A15A;
   --green: #4ADE80;
   --amber: #FBBF24;
   --red: #F87171;
-  --info: #60A5FA;
+  --info: #6F8FC4;
   --gray: #A1A1AA;
-  --grad: linear-gradient(135deg, #e10600, #ff1f18);
-  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.16), rgba(255,31,24,.10));
-  --primary-soft: rgba(225,6,0,.14);
+  --grad: linear-gradient(135deg, #C18638, #D9A15A);
+  --grad-soft: linear-gradient(135deg, rgba(193,134,56,.16), rgba(217,161,90,.10));
+  --primary-soft: rgba(193,134,56,.14);
   --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 6px 20px rgba(0,0,0,.35);
   --shadow-lg: 0 20px 60px rgba(0,0,0,.5);
@@ -116,7 +116,7 @@ html[data-theme="light"] {
   --amber: #B45309;
   --red: #DC2626;
   --info: #2563EB;
-  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.10), rgba(255,31,24,.06));
+  --grad-soft: linear-gradient(135deg, rgba(193,134,56,.10), rgba(217,161,90,.06));
   --scroll-thumb: #CDD2D9;
   --scroll-thumb-hover: #B6BDC7;
   --overlay: rgba(16,24,40,.42);
@@ -141,13 +141,13 @@ html[data-theme="system"] {
   --bg-3: #F2F4F7;
   --bg-4: #D3D9E1;
   --border: #C2CAD4;
-  --border-2: rgba(225,6,0,.30);
+  --border-2: rgba(193,134,56,.30);
   --text: #1B2430;
   --text-2: #545D6B;
   --text-dim: #545D6B;
   --text-faint: #6E7784;
   --gray: #545D6B;
-  --primary-soft: rgba(225,6,0,.10);
+  --primary-soft: rgba(193,134,56,.10);
   --shadow-sm: 0 1px 2px rgba(27,36,48,.10);
   --shadow-md: 0 4px 14px rgba(27,36,48,.12);
   --shadow-lg: 0 16px 44px rgba(27,36,48,.20);
@@ -157,7 +157,7 @@ html[data-theme="system"] {
   --amber: #B45309;
   --red: #C41C1C;
   --info: #2563EB;
-  --grad-soft: linear-gradient(135deg, rgba(225,6,0,.12), rgba(255,31,24,.07));
+  --grad-soft: linear-gradient(135deg, rgba(193,134,56,.12), rgba(217,161,90,.07));
   --scroll-thumb: #B4BDC9;
   --scroll-thumb-hover: #9AA4B2;
   --overlay: rgba(27,36,48,.46);
@@ -191,7 +191,7 @@ html[data-theme="system"] select option {
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Raleway", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
@@ -277,7 +277,7 @@ body {
   width: 44px; height: 44px;
   border-radius: 12px;
   opacity: .9;
-  filter: drop-shadow(0 6px 20px rgba(225,6,0,.10)) drop-shadow(0 2px 8px rgba(0,0,0,.08));
+  filter: drop-shadow(0 6px 20px rgba(193,134,56,.10)) drop-shadow(0 2px 8px rgba(0,0,0,.08));
   transition: transform .2s ease, filter .2s ease, opacity .2s ease;
 }
 .brand:hover .brand-logo { opacity: 1; transform: scale(1.03); }
@@ -316,7 +316,7 @@ body {
  * paleta, repetido aqui em valores literais porque background-clip: text
  * não herda o gradiente do elemento pai. */
 .brand-word-accent {
-  background: linear-gradient(180deg, #FF6B66 0%, #E10600 60%, #A30400 100%);
+  background: linear-gradient(180deg, #E8C48A 0%, #C18638 60%, #8E6224 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -361,7 +361,7 @@ html[data-theme="system"] .brand-word-main {
 /* Sem gradiente recortado: usa a cor chapada em vez de texto invisível. */
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   .brand-word-main { -webkit-text-fill-color: currentColor; color: var(--text); }
-  .brand-word-accent { -webkit-text-fill-color: currentColor; color: #E10600; }
+  .brand-word-accent { -webkit-text-fill-color: currentColor; color: #C18638; }
 }
 
 /* Relevo é enfeite: quem pediu menos animação não precisa do salto no hover. */

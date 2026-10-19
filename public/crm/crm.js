@@ -586,8 +586,8 @@ async function showColumnContextMenu(col, x, y) {
     }),
 
     ctxItem(ICO_COLOR, 'Mudar cor', async () => {
-      const palette = ['#E10600', '#FF1F18', '#4ADE80', '#FBBF24', '#F87171', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
-      const v = await pickFromPalette(palette, col.color || '#E10600', 'Mudar cor da coluna');
+      const palette = ['#C18638', '#D9A15A', '#4ADE80', '#FBBF24', '#F87171', '#06B6D4', '#EC4899', '#8B5CF6', '#10B981', '#F97316', '#64748B'];
+      const v = await pickFromPalette(palette, col.color || '#C18638', 'Mudar cor da coluna');
       if (!v) return;
       try {
         await api('/columns/' + col.id, { method: 'PATCH', body: { color: v } });
@@ -687,7 +687,7 @@ function showMoveAllSubmenu(col, x, y) {
   } else {
     for (const c of others) {
       menu.append(ctxItem(
-        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#E10600') + '"></span>',
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + (c.color || '#C18638') + '"></span>',
         c.name,
         async () => {
           if (!cardsHere.length) return toast('Coluna já está vazia', 'info');
@@ -726,14 +726,14 @@ function showColumnReport(col, cards) {
   );
   const modal = el('div', { class: 'modal', style: 'max-width:560px' },
     el('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:18px' },
-      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#E10600') }),
+      el('span', { style: 'width:14px;height:14px;border-radius:50%;background:' + (col.color || '#C18638') }),
       el('h3', { style: 'margin:0' }, 'Relatório · ' + col.name),
     ),
     el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px' },
       stat('Total de cards', String(totalCards)),
       stat('Contatos únicos', String(contacts)),
       stat('Valor total', fmtMoney(totalValueCents), '#4ADE80'),
-      stat('Valor ponderado', fmtMoney(weightedCents), '#E10600'),
+      stat('Valor ponderado', fmtMoney(weightedCents), '#C18638'),
       stat('Probabilidade média', avgProb + '%'),
       stat('Vencidos', String(overdue), overdue > 0 ? '#F87171' : 'var(--text)'),
     ),
@@ -1740,7 +1740,7 @@ async function openNewColumnModal() {
   if (!boardId) { toast('Selecione um board primeiro', 'error'); return; }
   await buildModal('Nova coluna', [
     { name: 'name', label: 'Nome da coluna', required: true, placeholder: 'Ex: Aguardando aprovação' },
-    { name: 'color', label: 'Cor (hex)', value: '#E10600', attrs: { type: 'color' } },
+    { name: 'color', label: 'Cor (hex)', value: '#C18638', attrs: { type: 'color' } },
     { name: 'isTerminal', label: 'É coluna terminal? (Ganho/Perdido)', type: 'select', value: 'no', options: [
       { value: 'no', label: 'Não — coluna intermediária' },
       { value: 'yes', label: 'Sim — finaliza o card aqui' },
@@ -1750,7 +1750,7 @@ async function openNewColumnModal() {
     try {
       await api(`/boards/${boardId}/columns`, { method: 'POST', body: {
         name: v.name.trim(),
-        color: v.color || '#E10600',
+        color: v.color || '#C18638',
         isTerminal: v.isTerminal === 'yes',
       }});
       toast('Coluna criada', 'success');
@@ -3440,7 +3440,7 @@ function plotSales(canvasId, rows) {
     data: {
       labels: rows.map(r => r.bucket),
       datasets: [
-        { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#E10600', backgroundColor: 'rgba(225,6,0,.2)', yAxisID: 'y' },
+        { label: 'Vendas (count)', data: rows.map(r => r.dealsWon), borderColor: '#C18638', backgroundColor: 'rgba(193,134,56,.2)', yAxisID: 'y' },
         { label: 'Receita (R$)', data: rows.map(r => r.totalValueCents / 100), borderColor: '#4ADE80', backgroundColor: 'rgba(34,197,94,.2)', yAxisID: 'y1' },
       ],
     },
@@ -3454,7 +3454,7 @@ function plotAgents(canvasId, rows) {
   if (!ctx) return;
   if (rows.length === 0) { emptyMsg(ctx); return; }
   const types = [...new Set(rows.flatMap(r => Object.keys(r.byType)))];
-  const palette = ['#E10600', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899'];
+  const palette = ['#C18638', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899'];
   window._rptCharts[canvasId] = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -3480,7 +3480,7 @@ function plotSources(canvasId, rows) {
       labels: rows.map(r => r.source),
       datasets: [{
         data: rows.map(r => r.contactCount),
-        backgroundColor: ['#E10600', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899', '#64748B'],
+        backgroundColor: ['#C18638', '#4ADE80', '#FBBF24', '#3B82F6', '#F87171', '#06B6D4', '#EC4899', '#64748B'],
       }],
     },
     options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1' } } } },
@@ -4088,7 +4088,7 @@ async function tryAutoLogin() {
 function showLoginRequired() {
   const ls = $('#loginScreen');
   if (!ls) return;
-  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do CRM Território Próprio para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
+  ls.innerHTML = '<div class="login-card" style="text-align:center"><h1>Acesso restrito</h1><p>Você precisa entrar na sua conta do CRM Vector para acessar o CRM.</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Entrar</a></div>';
 }
 
 // ─── Boot ──────────────────────────────────────────────────────────────
@@ -4111,7 +4111,7 @@ function showLoginRequired() {
   } catch (err) {
     console.error('[CRM] boot failed:', err);
     if (ls) {
-      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro CRM Território Próprio</a></div>';
+      ls.innerHTML = '<div class="login-card" style="text-align:center"><h1 style="color:var(--danger)">Erro ao iniciar</h1><p style="color:var(--text-dim)">' + (err && err.message ? err.message : 'desconhecido') + '</p><a href="/" style="display:inline-block;margin-top:14px;padding:12px 24px;background:var(--grad);color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">Voltar pro CRM Vector</a></div>';
     }
   }
 })();
@@ -6576,7 +6576,7 @@ function openImportContactsModal() {
       el('div', { style: 'display:flex;gap:10px;margin-bottom:18px' },
         stat('Total processado', data.total || 0),
         stat('Criados', data.created || 0, '#4ADE80'),
-        stat('Atualizados', data.updated || 0, '#E10600'),
+        stat('Atualizados', data.updated || 0, '#C18638'),
       ),
       // Header mapping (collapsed por padrão se sucesso)
       (data.headerDetected && data.headerDetected.length) ? el('details', { style: 'background:var(--bg-3);padding:10px 14px;border-radius:8px;margin-bottom:10px;cursor:pointer', open: noneCreated },

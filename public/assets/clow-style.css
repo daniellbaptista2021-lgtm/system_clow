@@ -5,8 +5,8 @@
    ═════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --p: var(--accent, #E10600);
-  --bl: var(--blue, #FF1F18);
+  --p: var(--accent, #C18638);
+  --bl: var(--blue, #D9A15A);
   --g: #4ADE80;
   --am: #FBBF24;
   --r: #F87171;
@@ -90,7 +90,7 @@
 .rp h3, .rp h4 { font-family: var(--sans); font-size: 14px; font-weight: 700; color: var(--p); margin: 10px 0 6px; }
 .rp a { color: var(--bl); text-decoration: underline; text-underline-offset: 3px; }
 .rp :not(pre) > code {
-  background: rgba(225, 6, 0, .14);
+  background: rgba(193, 134, 56, .14);
   color: #C4B5FD;
   border: none;
   border-radius: 6px;
@@ -145,7 +145,7 @@
 /* ─── User bubble ──────────────────────────────────────────────────── */
 .u-block {
   background: var(--bg-3) !important;
-  border: 1px solid rgba(225, 6, 0, .12) !important;
+  border: 1px solid rgba(193, 134, 56, .12) !important;
   border-radius: 12px 12px 4px 12px !important;
   padding: 12px 16px !important;
   box-shadow: none !important;
