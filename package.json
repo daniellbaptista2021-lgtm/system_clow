@@ -44,6 +44,7 @@
     "lodash-es": "^4.17.21",
     "marked": "^18.0.2",
     "nodemailer": "^8.0.6",
+    "pdf-lib": "^1.17.1",
     "pdfkit": "^0.18.0",
     "picomatch": "^4.0.0",
     "pino": "^10.3.1",

@@ -51,6 +51,23 @@ if [ ! -d node_modules ]; then
   # o better-sqlite3 (binário nativo) e baixar tudo de novo.
   cp -a "$ORIGEM/node_modules" ./
 fi
+# pdf-lib (monta o PDF da Apresentação) não existe no CRM de origem. Instala
+# numa pasta à parte e copia só ele: um `npm install` aqui reconciliaria a
+# árvore inteira e poderia trocar o better-sqlite3 (binário nativo) no meio.
+if [ ! -d node_modules/pdf-lib ]; then
+  TMPN=$(mktemp -d)
+  (cd "$TMPN" && npm init -y >/dev/null && npm install --no-audit --no-fund pdf-lib@1.17.1 >/dev/null 2>&1) || falha "não consegui baixar o pdf-lib"
+  # As dependências dele vão ANINHADAS (node_modules/pdf-lib/node_modules):
+  # ele quer tslib 1.x e pako 1.x, e o CRM pode ter outras versões no topo.
+  cp -a "$TMPN/node_modules/pdf-lib" node_modules/
+  mkdir -p node_modules/pdf-lib/node_modules
+  for m in @pdf-lib pako tslib; do
+    [ -e "$TMPN/node_modules/$m" ] && cp -a "$TMPN/node_modules/$m" node_modules/pdf-lib/node_modules/
+  done
+  rm -rf "$TMPN"
+  [ -d node_modules/pdf-lib ] || falha "pdf-lib não ficou instalado"
+  echo "pdf-lib instalado"
+fi
 npm run build >/tmp/crm-vector-build.log 2>&1 || { tail -20 /tmp/crm-vector-build.log; falha "build"; }
 [ -s dist/server/server.js ] || falha "build não gerou dist/server/server.js"
 
