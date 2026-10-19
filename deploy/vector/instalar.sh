@@ -90,7 +90,7 @@ else
 fi
 
 passo "5/8 processo PM2 ($NOME)"
-cat >"$APP/ecosystem.vector.cjs" <<'EOF'
+cat >"$APP/vector.config.cjs" <<'EOF'
 // O daemon do PM2 desta máquina carrega env de outros apps (incidente de
 // 20/08: CLOW_HOME vazado), e o dotenv NÃO sobrescreve variável que já
 // existe. Por isso o .env é lido aqui e passado inteiro ao processo: ele
@@ -118,10 +118,17 @@ module.exports = { apps: [{
   kill_timeout: 8000, listen_timeout: 10000, exp_backoff_restart_delay: 200,
 }] };
 EOF
+# A 1ª versão deste script chamava o arquivo de "ecosystem.vector.cjs", nome
+# que o PM2 não reconhece como configuração: ele RODOU o arquivo como se fosse
+# o app, com o nome "ecosystem.vector". Limpa essa sobra.
+pm2 delete ecosystem.vector >/dev/null 2>&1 || true
+rm -f "$APP/ecosystem.vector.cjs"
+# O PM2 só lê como configuração arquivo terminado em ".config.cjs" (ou
+# "ecosystem.config.cjs"); qualquer outro nome vira script.
 if pm2 describe "$NOME" >/dev/null 2>&1; then
-  pm2 reload "$APP/ecosystem.vector.cjs" --update-env >/dev/null
+  pm2 reload "$APP/vector.config.cjs" --update-env >/dev/null
 else
-  pm2 start "$APP/ecosystem.vector.cjs" >/dev/null
+  pm2 start "$APP/vector.config.cjs" >/dev/null
 fi
 pm2 save >/dev/null
 for i in $(seq 1 30); do
