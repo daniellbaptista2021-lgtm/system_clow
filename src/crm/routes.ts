@@ -28,6 +28,7 @@ import { registerMediaRoutes } from './routes/media.js';
 import { registerAutomationsRoutes } from './routes/automations.js';
 import { registerMcpRoutes } from './routes/mcp.js';
 import { registerApresentacoesRoutes } from './routes/apresentacoes.js';
+import { registerDatasRoutes } from './routes/datas.js';
 
 const app = new Hono();
 
@@ -48,5 +49,6 @@ registerMediaRoutes(app);
 registerAutomationsRoutes(app);
 registerMcpRoutes(app);
 registerApresentacoesRoutes(app);
+registerDatasRoutes(app);
 
 export default app;

@@ -326,3 +326,85 @@ html[data-theme="system"] .brand-word-main.vector-word {
   background-repeat: no-repeat; background-position: right 10px center;
 }
 .apr-campo input { height: 40px; }
+
+/* ─── Datas de relacionamento (datas.js) ───────────────────────────────── */
+.dt-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: #C18638; color: #0A111B; font-size: 11px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dt-grupo {
+  font-family: var(--titulo); font-weight: 400; text-transform: uppercase; letter-spacing: .2em;
+  font-size: 14px; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(10,17,27,.25);
+}
+.dt-grupo small { letter-spacing: 0; color: var(--text-dim); text-transform: none; font-family: "Raleway", sans-serif; }
+.dt-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.dt-cartao {
+  text-align: left; font: inherit; color: #0A111B; cursor: pointer;
+  background: #FFFFFF; border: 1px solid rgba(10,17,27,.14); border-left: 5px solid var(--dt-cor);
+  border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.dt-cartao:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(10,17,27,.12); }
+.dt-cartao.dt-hoje { box-shadow: 0 0 0 2px #C18638 inset; }
+.dt-cartao-topo { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.dt-icone { font-size: 18px; }
+.dt-tipo { text-transform: uppercase; letter-spacing: .1em; color: var(--text-dim); font-weight: 700; font-size: 10.5px; }
+.dt-quando { margin-left: auto; font-weight: 700; color: #1A2A43; text-transform: capitalize; }
+.dt-titulo { font-weight: 700; font-size: 15px; }
+.dt-desc { font-size: 12.5px; color: var(--text-2); }
+.dt-pessoas { font-size: 12px; color: #8E6224; font-weight: 600; }
+
+.dt-fundo { position: fixed; inset: 0; background: rgba(10,17,27,.55); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dt-janela {
+  background: #FFFFFF; color: #0A111B; width: min(920px, 100%); max-height: 92dvh; overflow: auto;
+  border-radius: 12px; border: 1px solid #0A111B; border-top: 3px solid #C18638; box-shadow: 0 24px 70px rgba(0,0,0,.35);
+}
+.dt-janela-topo { display: flex; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid rgba(10,17,27,.15); }
+.dt-janela-topo h3 { margin: 4px 0 2px; font-family: var(--titulo); font-weight: 400; text-transform: uppercase; letter-spacing: .14em; font-size: 20px; }
+.dt-janela-topo p { margin: 0; font-size: 13px; color: var(--text-dim); }
+.dt-fechar { background: none; border: none; font-size: 28px; line-height: 1; cursor: pointer; color: #0A111B; }
+.dt-janela-corpo { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; padding: 18px 20px; }
+.dt-janela-corpo > :only-child { grid-column: 1 / -1; }
+.dt-opcoes { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.dt-opcao { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(10,17,27,.25); background: #FFFFFF; cursor: pointer; }
+.dt-opcao.ativa { background: #1A2A43; color: #FFFFFF; border-color: #1A2A43; }
+.dt-texto {
+  width: 100%; font: inherit; font-size: 14px; line-height: 1.5; color: #0A111B;
+  border: 1px solid rgba(10,17,27,.25); border-radius: 8px; padding: 12px; resize: vertical; background: #FBFAF8;
+}
+.dt-destino { font-size: 12.5px; font-weight: 600; margin: 8px 0 10px; }
+.dt-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.dt-whats { text-decoration: none; display: inline-flex; align-items: center; background: #1A2A43; }
+.dt-dest h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-dim); }
+.dt-busca {
+  width: 100%; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid rgba(10,17,27,.25); background: #FFFFFF; margin-bottom: 10px;
+}
+.dt-lista { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow: auto; }
+.dt-pessoa { display: flex; align-items: center; gap: 8px; border: 1px solid rgba(10,17,27,.12); border-radius: 8px; padding: 6px 8px; }
+.dt-pessoa.ativa { border-color: #C18638; background: #FBF6EE; }
+.dt-pessoa-nome { flex: 1; text-align: left; background: none; border: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; color: #0A111B; }
+.dt-pessoa-nome small { font-weight: 400; color: var(--text-faint); font-size: 11px; }
+.dt-mini-whats { font-size: 11px; font-weight: 700; text-decoration: none; color: #FFFFFF; background: #1A2A43; padding: 6px 10px; border-radius: 6px; box-shadow: inset 0 -2px 0 #C18638; }
+
+.dt-tabela { display: flex; flex-direction: column; gap: 8px; }
+.dt-cliente {
+  display: grid; grid-template-columns: minmax(150px, 1.1fr) 160px minmax(160px, 1fr) minmax(260px, 2fr); gap: 12px; align-items: start;
+  background: #FFFFFF; border: 1px solid rgba(10,17,27,.14); border-radius: 10px; padding: 12px;
+}
+.dt-cliente-nome { font-weight: 700; font-size: 14px; display: flex; flex-direction: column; padding-top: 4px; }
+.dt-cliente-nome small { font-weight: 400; font-size: 11.5px; color: var(--text-faint); }
+.dt-reconhecida { font-size: 11px; color: #8E6224; font-weight: 600; min-height: 14px; }
+.dt-apolices { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dt-chip { display: inline-flex; align-items: center; gap: 4px; background: #EEF1F6; border-radius: 14px; padding: 4px 6px 4px 10px; font-size: 12px; }
+.dt-chip button { border: none; background: none; cursor: pointer; color: #B42318; font-size: 15px; }
+.dt-nova-apolice { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
+.dt-nova-apolice input { font: inherit; font-size: 12.5px; border: 1px solid rgba(10,17,27,.25); border-radius: 8px; padding: 6px 8px; flex: 1; min-width: 120px; }
+.dt-cliente-apol .apr-rotulo { display: block; margin-bottom: 4px; }
+
+@media (max-width: 1000px) {
+  .dt-janela-corpo { grid-template-columns: 1fr; }
+  .dt-cliente { grid-template-columns: 1fr 1fr; }
+  .dt-cliente-apol { grid-column: 1 / -1; }
+}
