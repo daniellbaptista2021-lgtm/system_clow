@@ -53,22 +53,22 @@
     const style = document.createElement('style');
     style.id = 'agent-config-modal-styles';
     style.textContent = `
-      .agent-config-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; display:flex; align-items:center; justify-content:center; }
-      .agent-config-modal { background:#1A2A43; color:var(--text); padding:24px; border-radius:12px; max-width:680px; width:92vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family: ui-sans-serif, system-ui, sans-serif; }
+      .agent-config-modal-bg { position:fixed; inset:0; background:var(--overlay, rgba(0,0,0,0.6)); z-index:9999; display:flex; align-items:center; justify-content:center; }
+      .agent-config-modal { background:var(--bg-3); color:var(--text); padding:24px; border-radius:12px; max-width:680px; width:92vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family: inherit; }
       .agent-config-modal h2 { margin:0 0 16px 0; font-size:18px; }
       .agent-config-modal label { display:block; margin-top:12px; font-size:13px; font-weight:600; color:var(--text-2); }
       .agent-config-modal input[type="text"], .agent-config-modal input[type="number"], .agent-config-modal select, .agent-config-modal textarea {
         width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:6px;
-        background:#0A111B; color:var(--text); margin-top:4px; font-family: ui-monospace, monospace; font-size:13px;
+        background:var(--input-bg); color:var(--text); margin-top:4px; font-family: ui-monospace, monospace; font-size:13px;
       }
       .agent-config-modal textarea { min-height:120px; resize:vertical; font-family: ui-monospace, monospace; font-size:12px; }
       .agent-config-modal .row { display:flex; gap:12px; }
       .agent-config-modal .row > * { flex:1; }
       .agent-config-modal .footer { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
       .agent-config-modal button { padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-size:14px; }
-      .agent-config-modal .btn-save { background:var(--success); color:white; }
+      .agent-config-modal .btn-save { background:var(--purple); color:var(--on-primary); }
       .agent-config-modal .btn-cancel { background:var(--bg-4); color:var(--text); }
-      .agent-config-modal .btn-default { background:#395988; color:white; margin-right:auto; }
+      .agent-config-modal .btn-default { background:transparent; color:var(--info); border:1px solid var(--info) !important; margin-right:auto; }
       .agent-config-modal .err { color:var(--danger); font-size:12px; margin-top:6px; }
       .agent-config-modal .hint { color:var(--text-dim); font-size:11px; font-weight:400; margin-left:6px; }
 
@@ -77,9 +77,9 @@
       .agent-config-modal .switch-row label { margin-top:0; }
       .agent-config-modal .toggle { position:relative; display:inline-block; width:44px; height:24px; vertical-align:middle; flex-shrink:0; }
       .agent-config-modal .toggle input { opacity:0; width:0; height:0; }
-      .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:var(--bg-4); border-radius:24px; transition:.2s; }
+      .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:var(--text-faint); border-radius:24px; transition:.2s; }
       .agent-config-modal .toggle .slider::before { content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
-      .agent-config-modal .toggle input:checked + .slider { background:var(--success); }
+      .agent-config-modal .toggle input:checked + .slider { background:#C18638; }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
       /* Botão integrado ao tema do System Clow — vai dentro de .col-head */

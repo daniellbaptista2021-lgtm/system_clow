@@ -9,17 +9,17 @@
 <script>
 // Aplica o tema salvo (mesma chave do CRM, mesma origem) antes do primeiro
 // paint, pra nao piscar o tema errado.
-(function(){try{var t=window.clowStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}})();
+(function(){try{var t=window.clowStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme','light');}catch(e){}})();
 </script>
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="shortcut icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#050510">
+<meta name="theme-color" content="#0A111B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="/assets/clow-style.css?v=clow-v506">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Oswald:wght@300;400;500&family=Raleway:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
   /* Mesmos valores do design system do CRM (public/crm/crm.css) — o Agente
@@ -186,6 +186,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 
 </style>
 <script src="https://js.stripe.com/v3/"></script>
+<link rel="stylesheet" href="/crm/vector-agente.css?v=1">
 </head>
 <body>
 <div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/territorio/icone-192.png" alt="CRM Vector" style="height:64px;width:64px;border-radius:16px"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM, os agentes e as conversas.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>

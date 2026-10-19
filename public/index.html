@@ -15,13 +15,13 @@
 <meta name="theme-color" content="#0A111B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Raleway:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Oswald:wght@300;400;500&family=Raleway:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg-0:#0A111B;--bg-1:#0E1828;--bg-2:#142037;--bg-3:#21395D;
-  --t1:#F4F4F5;--t2:#A9B4C6;--tm:#6B7A93;
+  --bg-0:#ECEBE8;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:rgba(10,17,27,.22);
+  --t1:#0A111B;--t2:#4A5872;--tm:#6B7A93;
   --p:#C18638;--bl:#D9A15A;--r:#F87171;
-  --gp:linear-gradient(135deg,#C18638 0%,#D9A15A 100%);
+  --gp:#1A2A43;
 }
 html[data-theme="light"], html[data-theme="system"] { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
@@ -39,21 +39,21 @@ html[data-theme="light"]{
 html,body{height:100%;min-height:100dvh}
 body{
   font-family:'Raleway',system-ui,sans-serif;color:var(--t1);background:var(--bg-0);
-  background-image:radial-gradient(ellipse at 20% 10%,rgba(57,89,136,.35),transparent 60%),radial-gradient(ellipse at 90% 100%,rgba(193,134,56,.10),transparent 55%);
+  background-image:url('/assets/vector/textura-pedra.jpg');background-size:cover;background-position:center;background-attachment:fixed;
   display:flex;align-items:center;justify-content:center;padding:20px;
   -webkit-font-smoothing:antialiased;
 }
 .login-wrap{width:100%;max-width:400px}
 .login-card{
-  background:var(--bg-1);border:1px solid rgba(193,134,56,.18);border-radius:24px;
-  padding:36px 30px;box-shadow:0 30px 80px rgba(0,0,0,.5);
+  background:var(--bg-1);border:1px solid #0A111B;border-top:3px solid #C18638;border-radius:14px;
+  padding:36px 30px;box-shadow:0 24px 60px rgba(10,17,27,.16);
 }
 .login-brand{display:flex;justify-content:center;margin-bottom:18px}
 .login-brand{flex-direction:column;align-items:center;gap:6px}
 .login-brand img{height:96px;width:96px}
 .login-nome{font-family:'Merriweather',serif;font-weight:900;font-size:30px;color:#C18638;letter-spacing:-.01em}
 .login-nome span{color:#395988}
-.login-title{font-family:'Merriweather',serif;font-size:20px;font-weight:700;text-align:center;letter-spacing:-.01em;margin-bottom:8px}
+.login-title{font-family:'Oswald',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:.22em;font-size:18px;text-align:center;margin-bottom:8px}
 .login-sub{font-size:13px;color:var(--t2);text-align:center;line-height:1.5;margin-bottom:26px}
 .login-f{
   width:100%;height:52px;border-radius:14px;border:1px solid var(--bg-3);background:var(--bg-2);
@@ -64,7 +64,7 @@ body{
 .login-f:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(193,134,56,.12)}
 .login-b{
   width:100%;height:52px;border:none;border-radius:14px;background:var(--gp);color:#fff;
-  font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;
+  font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;box-shadow:inset 0 -3px 0 #C18638;letter-spacing:.08em;
   transition:filter .15s ease,transform .15s ease;
 }
 .login-b:hover{filter:brightness(1.06)}

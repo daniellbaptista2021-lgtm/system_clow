@@ -1,21 +1,183 @@
 /* CRM Vector — identidade da equipe Pulse (manual da Amarelo Limão).
- * Paleta: #0A111B #1A2A43 #21395D #395988 (azuis) + #C18638 (dourado).
- * Títulos em Merriweather, texto em Raleway. Carregado DEPOIS do crm.css. */
+ *
+ * Um tema só, e ele é o do manual: pedra clara com textura (a mesma das
+ * capas do PDF), letra preta, filete preto fino, títulos em caixa alta
+ * espaçada, e o azul-marinho com as ondas das peças complementares na
+ * barra lateral. Dourado (#C18638) é destaque, nunca fundo de página.
+ *
+ * Paleta oficial: #0A111B #1A2A43 #21395D #395988 #FFFFFF #000000 #C18638.
+ * O index.html força data-theme="light"; aqui os tokens desse tema são
+ * reescritos. Carregado DEPOIS do crm.css, então vence pela ordem. */
+
+html[data-theme],
+html[data-theme="light"],
+html[data-theme="system"],
+html[data-theme="dark"] {
+  color-scheme: light;
+  --bg: #ECEBE8;
+  --bg-2: rgba(255,255,255,.62);
+  --bg-3: #FFFFFF;
+  --bg-4: #F3F2EF;
+  --border: rgba(10,17,27,.14);
+  --border-2: rgba(10,17,27,.55);
+  --text: #0A111B;
+  --text-2: #33405A;
+  --text-dim: #4A5872;
+  --text-faint: #6B7A93;
+  --gray: #4A5872;
+  --purple: #1A2A43;
+  --blue: #21395D;
+  --green: #8E6224;
+  --amber: #8E6224;
+  --red: #B42318;
+  --info: #395988;
+  --grad: linear-gradient(135deg, #1A2A43, #21395D);
+  --grad-soft: linear-gradient(135deg, rgba(193,134,56,.10), rgba(57,89,136,.06));
+  --primary-soft: rgba(193,134,56,.14);
+  --shadow-sm: 0 1px 2px rgba(10,17,27,.06);
+  --shadow-md: 0 6px 18px rgba(10,17,27,.10);
+  --shadow-lg: 0 18px 50px rgba(10,17,27,.18);
+  --scroll-thumb: rgba(10,17,27,.18);
+  --scroll-thumb-hover: rgba(10,17,27,.32);
+  --overlay: rgba(10,17,27,.55);
+  --shadow-color: rgba(10,17,27,.16);
+  --input-bg: #FFFFFF;
+  --code-bg: #F3F2EF;
+  --on-primary: #FFFFFF;
+  --titulo: "Oswald", "Raleway", sans-serif;
+}
+
+/* ─── Fundo: a pedra do manual ─────────────────────────────────────────── */
+body {
+  background-color: #ECEBE8;
+  background-image: url("/assets/vector/textura-pedra.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+.main, .view { background: transparent; }
+
+/* ─── Títulos: caixa alta espaçada, como a capa ───────────────────────── */
+.top-bar h2,
+.modal h3,
+.agent-config-modal h2 {
+  font-family: var(--titulo);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: .22em;
+  color: #0A111B;
+}
+.top-bar h2 { font-size: 20px; }
+.col-head .col-title {
+  font-family: var(--titulo);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-size: 13px;
+}
+
+/* Barra do topo: transparente sobre a pedra, com o filete preto do manual. */
+.top-bar {
+  background: transparent;
+  border-bottom: 1px solid #0A111B;
+  margin: 0 20px;
+  padding: 18px 0 14px;
+}
+
+/* Botões principais: azul-marinho com letra branca e filete dourado. */
+.top-bar button:not(.secondary),
+.modal-actions .confirm {
+  background: #1A2A43;
+  color: #FFFFFF;
+  border: 1px solid #1A2A43;
+  box-shadow: inset 0 -2px 0 #C18638;
+}
+.top-bar button.secondary {
+  background: rgba(255,255,255,.7);
+  color: #0A111B;
+  border: 1px solid rgba(10,17,27,.35);
+}
+.top-bar select, .top-bar input {
+  background: rgba(255,255,255,.8);
+  border: 1px solid rgba(10,17,27,.25);
+  color: #0A111B;
+}
+
+/* Colunas e cards: papel branco translúcido sobre a pedra. */
+.kanban-col,
+html[data-theme="light"] .kanban-col {
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(10,17,27,.16);
+  backdrop-filter: blur(2px);
+}
+.col-head { border-bottom: 1px solid rgba(10,17,27,.18); }
+.card { background: #FFFFFF; border: 1px solid rgba(10,17,27,.12); }
+.card:hover { border-color: #C18638; }
+.card-value { color: #8E6224; }
+
+/* ─── Barra lateral: azul-marinho com as ondas das peças da marca ──────── */
+.sidebar {
+  --text: #F4F4F5;
+  --text-2: #C9D2DF;
+  --text-dim: #A9B4C6;
+  --text-faint: #7D8BA3;
+  --border: rgba(255,255,255,.10);
+  --bg-4: rgba(255,255,255,.06);
+  --primary-soft: rgba(193,134,56,.16);
+  --purple: #C18638;
+  background-color: #0A111B;
+  background-image:
+    url("/assets/vector/ondas.svg"),
+    linear-gradient(170deg, #1A2A43 0%, #0A111B 70%);
+  background-size: cover, cover;
+  background-position: center, center;
+  border-right: 1px solid #000000;
+  color: var(--text);
+}
+.sidebar .nav-item { letter-spacing: .02em; }
+.sidebar .nav-item.active { color: #C18638; }
+.sidebar .nav-item.active::before { background: #C18638; }
+
+/* Logo e nome na barra lateral */
 .brand-word { gap: 4px; }
 .vector-logo { width: 56px; height: 56px; display: block; margin-bottom: 2px; }
-.brand-word-main.vector-word {
+.brand-word-main.vector-word,
+html[data-theme="light"] .brand-word-main.vector-word,
+html[data-theme="system"] .brand-word-main.vector-word {
   font-family: "Merriweather", Georgia, serif;
   font-weight: 900;
   font-size: 22px;
   letter-spacing: 0;
   text-shadow: none;
+  background: none;
+  -webkit-text-fill-color: #C18638;
+  color: #C18638;
 }
 .brand-word-main.vector-word .brand-word-accent {
-  background: linear-gradient(180deg, #E3B574 0%, #C18638 60%, #8E6224 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: none;
+  -webkit-text-fill-color: #C18638;
+  color: #C18638;
 }
 .vector-ponto { color: #395988; -webkit-text-fill-color: #395988; }
-.brand-word-sub { margin-top: 2px; }
-.top-bar h2, .login-card h1, .modal h3 { font-family: "Merriweather", Georgia, serif; }
+.sidebar .brand-word-sub {
+  margin-top: 2px;
+  font-family: var(--titulo);
+  font-weight: 300;
+  font-size: 10px;
+  letter-spacing: .5em;
+  color: #A9B4C6;
+}
+
+/* Um tema só: o botão de trocar tema não tem o que trocar. */
+#themeBtn { display: none !important; }
+
+/* ─── Janelas (modais) ─────────────────────────────────────────────────── */
+.modal,
+.agent-config-modal {
+  background: #FFFFFF;
+  color: #0A111B;
+  border: 1px solid #0A111B;
+  border-top: 3px solid #C18638;
+  border-radius: 10px;
+}
+.agent-config-modal h2 { font-size: 17px; padding-bottom: 12px; border-bottom: 1px solid rgba(10,17,27,.18); }
