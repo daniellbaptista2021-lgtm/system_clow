@@ -4,10 +4,13 @@
 # e endereço próprios. Só reaproveita a Evolution API (WhatsApp), que já é
 # multi-instância; as instâncias do Vector nascem com prefixo "vector-".
 #
-# Uso (no Mac):
+# Uso (no Mac), para ATUALIZAR — o caso de todo dia, sem senha:
+#   ssh tp1 'bash /root/instalar-crm-vector.sh' </dev/null
+# Só a PRIMEIRA instalação (sem .env ou sem a conta do admin) precisa de senha:
 #   printf '%s' 'SENHA' | ssh tp1 'bash /root/instalar-crm-vector.sh'
 # A senha vem pela entrada padrão, nunca por argumento (linha de comando é
-# pública em `ps`). Ela vira o login de admin E a senha da conta do Daniel.
+# pública em `ps`). Ela vira o login de admin E a senha da conta do Daniel, e
+# NUNCA troca a senha de uma conta que já existe.
 #
 # Idempotente: rodar de novo atualiza o código e preserva .env e dados.
 set -euo pipefail
@@ -27,8 +30,11 @@ export PATH=/opt/node26/bin:$PATH
 passo() { printf '\n== %s\n' "$*"; }
 falha() { printf '\nFALHOU: %s\n' "$*" >&2; exit 1; }
 
-SENHA="$(cat)"
-[ "${#SENHA}" -ge 8 ] || falha "senha ausente ou curta (mande pela entrada padrão)"
+# Senha é opcional: atualizar não precisa dela. `timeout` porque, sem nada
+# na entrada, um `cat` puro ficaria esperando para sempre.
+SENHA=""
+[ -t 0 ] || SENHA="$(timeout 5 cat 2>/dev/null || true)"
+precisa_senha() { [ "${#SENHA}" -ge 8 ] || falha "$1 — mande a senha pela entrada padrão (8+ caracteres)"; }
 
 # Trava: a porta não pode estar com outro processo que não seja o nosso.
 if ss -ltnp | grep -q "127.0.0.1:$PORTA " && ! pm2 describe "$NOME" >/dev/null 2>&1; then
@@ -76,6 +82,7 @@ install -d -m 700 "$DADOS"
 
 passo "4/8 .env (só cria se não existir)"
 if [ ! -f "$APP/.env" ]; then
+  precisa_senha "primeira instalação: o .env ainda não existe"
   gerar() { openssl rand -hex 32; }
   EVO_URL=$(grep -E '^EVOLUTION_BASE_URL=' "$ORIGEM/.env" | cut -d= -f2-)
   EVO_KEY=$(grep -E '^EVOLUTION_API_KEY=' "$ORIGEM/.env" | cut -d= -f2-)
@@ -181,6 +188,10 @@ const { bootstrapTenantRBAC } = await import('./dist/auth/authRoutes.js');
 const email = process.env.EMAIL;
 let t = ts.listTenants().find((x) => x.email === email);
 if (!t) {
+  if (!process.env.SENHA || process.env.SENHA.length < 8) {
+    console.error('a conta do admin ainda não existe — mande a senha pela entrada padrão (8+ caracteres)');
+    process.exit(1);
+  }
   t = ts.createTenant({ email, name: process.env.NOME, tier: 'empresarial' }).tenant;
   ts.updateTenant(t.id, { password_hash: bcrypt.hashSync(process.env.SENHA, 10), full_name: process.env.NOME });
   console.log('conta criada', t.id.slice(0, 8));
@@ -253,11 +264,23 @@ else
 fi
 
 passo "conferência"
-CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$PORTA/auth/login" \
-  -H 'Content-Type: application/json' \
-  --data "$(SENHA="$SENHA" EMAIL="$EMAIL_ADMIN" node -e "console.log(JSON.stringify({username:process.env.EMAIL,password:process.env.SENHA}))")")
-echo "login do admin: HTTP $CODIGO"
-[ "$CODIGO" = "200" ] || falha "login recusado"
+if [ -n "$SENHA" ]; then
+  CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$PORTA/auth/login" \
+    -H 'Content-Type: application/json' \
+    --data "$(SENHA="$SENHA" EMAIL="$EMAIL_ADMIN" node -e "console.log(JSON.stringify({username:process.env.EMAIL,password:process.env.SENHA}))")")
+  echo "login do admin: HTTP $CODIGO"
+  [ "$CODIGO" = "200" ] || falha "login recusado com a senha enviada"
+else
+  # Sem senha não dá para entrar — mas dá para provar que o login está vivo:
+  # uma senha errada de propósito tem de voltar 401 (recusou), não 5xx/000.
+  CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$PORTA/auth/login" \
+    -H 'Content-Type: application/json' \
+    --data "{\"username\":\"$EMAIL_ADMIN\",\"password\":\"conferencia-sem-senha\"}")
+  echo "tela de login respondendo: HTTP $CODIGO (401 = recusou a senha de teste, como devia)"
+  case "$CODIGO" in 400|401|403|429) ;; *) falha "o login não respondeu como devia" ;; esac
+fi
+PUBLICO=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/" || true)
+echo "site público: HTTP $PUBLICO"
 echo "CRM atual (clow) continua: HTTP $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3021/)"
 echo
 echo "OK. O certificado HTTPS sai em 1-3 min; depois abra https://$DOMINIO"
