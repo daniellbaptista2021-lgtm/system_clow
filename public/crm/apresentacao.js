@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * CRM Vector — Apresentação MetLife
+ * CRM Pulse — Apresentação MetLife
  *
  * O corretor preenche o perfil uma vez (nome, SUSEP, foto, logo da
  * corretora) e, para cada cliente, poucos números + a cotação. O servidor

@@ -1,6 +1,6 @@
 {
-  "name": "CRM Vector",
-  "short_name": "CRM Vector",
+  "name": "CRM Pulse",
+  "short_name": "CRM Pulse",
   "description": "CRM completo + Agente IA via WhatsApp + Automações n8n. Gerencie carteira de clientes, pipeline de vendas e atendimento por WhatsApp em uma única plataforma.",
   "start_url": "/?source=pwa",
   "id": "/",
@@ -15,11 +15,10 @@
   "categories": ["business", "productivity", "communication"],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/assets/icon-192-gold.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/icon-512-gold.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/assets/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/assets/logo-new.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+    { "src": "/assets/vector/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/vector/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/vector/icone-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/vector/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ],
   "screenshots": [
     {
@@ -27,7 +26,7 @@
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Tela de login do CRM Vector"
+      "label": "Tela de login do CRM Pulse"
     },
     {
       "src": "/assets/screenshots/screenshot-02-agente-ia.png",
@@ -85,21 +84,21 @@
       "short_name": "Pipeline",
       "description": "Abrir pipeline de vendas",
       "url": "/crm/?view=pipeline",
-      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Contatos",
       "short_name": "Contatos",
       "description": "Lista de contatos",
       "url": "/crm/?view=contacts",
-      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Tarefas",
       "short_name": "Tarefas",
       "description": "Tarefas de hoje",
       "url": "/crm/?view=tasks",
-      "icons": [{ "src": "/assets/icon-192-gold.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
     }
   ]
 }

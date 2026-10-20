@@ -123,7 +123,7 @@ export function validateBashCommand(
     if (pattern.test(trimmed)) {
       return {
         allowed: false,
-        reason: `Bloqueado: comando afeta o CRM Vector ou escala privilegio (${pattern.source.slice(0, 40)}). Voce pode rodar qualquer outra coisa no seu workspace.`,
+        reason: `Bloqueado: comando afeta o CRM Pulse ou escala privilegio (${pattern.source.slice(0, 40)}). Voce pode rodar qualquer outra coisa no seu workspace.`,
       };
     }
   }
@@ -132,7 +132,7 @@ export function validateBashCommand(
     if (trimmed.includes(blockedPath)) {
       return {
         allowed: false,
-        reason: `Bloqueado: caminho pertence ao CRM Vector ou ao sistema operacional (${blockedPath}).`,
+        reason: `Bloqueado: caminho pertence ao CRM Pulse ou ao sistema operacional (${blockedPath}).`,
       };
     }
   }

@@ -1,4 +1,4 @@
-/* CRM Vector — identidade da equipe Pulse (manual da Amarelo Limão).
+/* CRM Pulse — identidade da equipe Pulse (manual da Amarelo Limão).
  *
  * Um tema só, e ele é o do manual: pedra clara com textura (a mesma das
  * capas do PDF), letra preta, filete preto fino, títulos em caixa alta
@@ -140,7 +140,7 @@ html[data-theme="light"] .kanban-col {
 
 /* Logo e nome na barra lateral */
 .brand-word { gap: 4px; }
-.vector-logo { width: 56px; height: 56px; display: block; margin-bottom: 2px; }
+.pulse-logo { width: 132px; max-width: 100%; height: auto; display: block; margin: 0 auto 4px; }
 .brand-word-main.vector-word,
 html[data-theme="light"] .brand-word-main.vector-word,
 html[data-theme="system"] .brand-word-main.vector-word {

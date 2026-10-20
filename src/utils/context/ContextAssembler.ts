@@ -123,7 +123,7 @@ export class ContextAssembler {
   // ── Persona ───────────────────────────────────────────────────
 
   private buildPersona(model: string): string {
-    return `You are the CRM Vector agent, an autonomous coding agent powered by ${model}.
+    return `You are the CRM Pulse agent, an autonomous coding agent powered by ${model}.
 
 ## REGRAS DE CONCLUSAO DE TAREFA (OBRIGATORIO)
 

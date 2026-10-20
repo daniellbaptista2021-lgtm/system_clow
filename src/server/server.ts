@@ -647,7 +647,7 @@ async function main(): Promise<void> {
       const html = fs.readFileSync(htmlPath, 'utf-8');
       return c.html(html);
     }
-    return c.text('CRM Vector API', 200);
+    return c.text('CRM Pulse API', 200);
   });
 
   // Graceful shutdown
@@ -668,7 +668,7 @@ async function main(): Promise<void> {
 
   // Start
   logger.info(`\n  ╔═══════════════════════════════════════╗`);
-  logger.info(`  ║   CRM Vector API — port ${PORT}         ║`);
+  logger.info(`  ║   CRM Pulse API — port ${PORT}         ║`);
   logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate

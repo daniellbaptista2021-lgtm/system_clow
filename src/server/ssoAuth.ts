@@ -104,7 +104,7 @@ export function buildSSORoutes(): Hono {
     }
 
     if (!payload.hasSystemClow) {
-      return c.json({ ok: false, error: 'CRM Vector not active for this account. Contrate em https://clow.pvcorretor01.com.br' }, 403);
+      return c.json({ ok: false, error: 'CRM Pulse not active for this account. Contrate em https://clow.pvcorretor01.com.br' }, 403);
     }
 
     // Create admin session token for the SSO user

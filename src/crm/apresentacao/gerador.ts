@@ -519,7 +519,7 @@ function paginaObrigado(doc: Doc, pasta: string, perfil: PerfilCorretor) {
 /** Gera só as páginas desenhadas. Devolve o PDF e quantas vêm antes da cotação. */
 function gerarPaginas(dados: DadosApresentacao, perfil: PerfilCorretor, c: Calculo, pasta: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: [LARG, ALT], margin: 0, autoFirstPage: false, info: { Title: `Apresentação — ${dados.cliente.nome}`, Author: perfil.nome || 'CRM Vector' } });
+    const doc = new PDFDocument({ size: [LARG, ALT], margin: 0, autoFirstPage: false, info: { Title: `Apresentação — ${dados.cliente.nome}`, Author: perfil.nome || 'CRM Pulse' } });
     const partes: Buffer[] = [];
     doc.on('data', (b: Buffer) => partes.push(b));
     doc.on('end', () => resolve(Buffer.concat(partes)));
@@ -548,7 +548,7 @@ export async function gerarApresentacao(dados: DadosApresentacao, perfil: Perfil
   const geradas = await PdfLib.load(await gerarPaginas(dados, perfil, c, pasta));
   const final = await PdfLib.create();
   final.setTitle(`Apresentação — ${dados.cliente.nome}`);
-  final.setAuthor(perfil.nome || 'CRM Vector');
+  final.setAuthor(perfil.nome || 'CRM Pulse');
 
   const total = geradas.getPageCount();
   const [capa] = await final.copyPages(geradas, [0]);

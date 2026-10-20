@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CRM Vector</title>
+<title>CRM Pulse</title>
 <script>
 // Aplica o tema salvo (mesma chave do CRM, mesma origem) antes do primeiro
 // paint, pra nao piscar o tema errado.
 (function(){try{var t=localStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}})();
 </script>
-<link rel="icon" href="/assets/territorio/icone-192.png">
-<link rel="apple-touch-icon" href="/assets/territorio/apple-touch-icon.png">
+<link rel="icon" href="/assets/vector/icone-192.png">
+<link rel="apple-touch-icon" href="/assets/vector/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0A111B">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -50,7 +50,7 @@ body{
 }
 .login-brand{display:flex;justify-content:center;margin-bottom:18px}
 .login-brand{flex-direction:column;align-items:center;gap:6px}
-.login-brand img{height:96px;width:96px}
+.login-brand img{height:auto;width:200px;max-width:70%}
 .login-nome{font-family:'Merriweather',serif;font-weight:900;font-size:30px;color:#C18638;letter-spacing:-.01em}
 .login-nome span{color:#395988}
 .login-title{font-family:'Oswald',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:.22em;font-size:18px;text-align:center;margin-bottom:8px}
@@ -87,7 +87,7 @@ body{
       <div class="login-loading-text">Verificando sessão...</div>
     </div>
     <div id="loginScreen" class="hide">
-      <div class="login-brand"><img src="/assets/vector/logo.svg" alt=""><div class="login-nome" role="img" aria-label="CRM Vector">Vector<span>.</span></div></div>
+      <div class="login-brand"><img src="/assets/vector/pulse.svg" alt="CRM Pulse"></div>
       <div class="login-title">Entre para continuar</div>
       <div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM.</div>
       <input class="login-f" id="loginUser" type="text" placeholder="Usuário ou email" autocomplete="username" autofocus>
