@@ -260,6 +260,9 @@ html[data-theme="system"] .brand-word-main.vector-word {
 .apr-moeda { position: relative; }
 .apr-moeda em { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-style: normal; color: var(--text-faint); font-size: 13px; }
 .apr-moeda input { padding-left: 34px; }
+/* Valor calculado sozinho (soma das coberturas): dourado e em itálico, para
+   o corretor ver que é automático e que pode digitar por cima. */
+.apr-moeda input.apr-auto { color: #A9752F; font-style: italic; background: #FBF6EE; }
 .apr-linhas { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
 .apr-linha {
   display: grid; gap: 10px; align-items: end;

@@ -91,6 +91,14 @@ describe('apresentação MetLife — contas do modelo', () => {
     expect(s.investimentoMensal).toBeCloseTo(1807.62, 2);
   });
 
+  it('anual vazio = 12× o mensal; digitado (desconto da cotação) vale o digitado', () => {
+    const auto = calcular({ ...milena, proposta: { linhas: milena.proposta.linhas } });
+    expect(auto.investimentoAnual).toBeCloseTo(1807.62 * 12, 2);
+    expect(auto.automatico).toEqual({ investimentoMensal: true, investimentoAnual: true, capitalDisponibilizado: true });
+    expect(r.investimentoAnual).toBeCloseTo(20824.87, 2);
+    expect(r.automatico.investimentoAnual).toBe(false);
+  });
+
   it('cobertura desconhecida vira "outra" em vez de quebrar', () => {
     const s = calcular({ ...milena, proposta: { linhas: [{ cobertura: 'xyz', nome: 'Seguro viagem', capital: 10, valor: 1 }] } });
     expect(s.linhas[0]).toMatchObject({ chave: 'outra', nome: 'Seguro viagem' });

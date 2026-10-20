@@ -148,8 +148,15 @@ export function calcular(d: DadosApresentacao) {
     });
   const capitalDisponibilizado = n(d.proposta?.capitalDisponibilizado) || centavos(linhas.reduce((s, l) => s + l.capital, 0));
   const somaValores = centavos(linhas.reduce((s, l) => s + l.valor, 0));
+  // Vazio = automático: mensal é a soma das coberturas, anual é 12× o mensal
+  // (o corretor digita o anual da cotação quando a MetLife dá desconto à vista).
   const investimentoMensal = n(d.proposta?.investimentoMensal) || somaValores;
-  const investimentoAnual = n(d.proposta?.investimentoAnual);
+  const investimentoAnual = n(d.proposta?.investimentoAnual) || centavos(investimentoMensal * 12);
+  const automatico = {
+    investimentoMensal: !n(d.proposta?.investimentoMensal),
+    investimentoAnual: !n(d.proposta?.investimentoAnual),
+    capitalDisponibilizado: !n(d.proposta?.capitalDisponibilizado),
+  };
   const investimentoDiario = centavos(investimentoMensal / 30);
 
   // Páginas fixas da MetLife: só as das coberturas que estão na proposta,
@@ -163,7 +170,7 @@ export function calcular(d: DadosApresentacao) {
     comprometimento,
     patrimonio, totalPatrimonio, pctInventario, inventario,
     garantias: { rendaTitular, gap, aplicacao, meses, necessarioInvalidez, necessarioDoenca },
-    linhas, capitalDisponibilizado, investimentoMensal, investimentoAnual, investimentoDiario,
+    linhas, capitalDisponibilizado, investimentoMensal, investimentoAnual, investimentoDiario, automatico,
     temDoencaGrave: linhas.some((l) => l.chave === 'doenca_grave'),
     explicacoes,
   };

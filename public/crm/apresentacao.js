@@ -90,6 +90,8 @@
   let coberturas = [];
   let editando = null; // { id, dados, cotacao }
   let previaTimer = null;
+  let ultimoCalculo = null;   // último retorno de /apresentacao/calcular
+  let camposAuto = [];        // campos que mostram o valor calculado
 
   const dadosVazios = () => ({
     cliente: { nome: '', idade: '', rendaFamiliar: 0, despesaMensal: 0, rendaConjuge: 0, idadeAposentadoria: 65 },
@@ -280,20 +282,31 @@
   }
 
   function desenharEditor() {
+    camposAuto = [];
+    ultimoCalculo = null;
     const d = editando.dados;
     const c = corpo();
     c.innerHTML = '';
 
     const num = (rot, obj, chave, opts = {}) => {
       const dinheiro = opts.dinheiro !== false;
+      // Campo automático: vazio no dado, mostra o valor calculado (classe
+      // apr-auto) até o corretor digitar o dele.
+      const autoVal = () => (opts.auto && !Number(obj[chave]) && ultimoCalculo ? mostrarValor(ultimoCalculo[chave]) : '');
       const i = el('input', {
         type: 'text', inputmode: 'decimal', placeholder: opts.ph || (dinheiro ? '0,00' : ''),
-        value: dinheiro ? mostrarValor(obj[chave]) : (obj[chave] ?? ''),
+        value: dinheiro ? (mostrarValor(obj[chave]) || autoVal()) : (obj[chave] ?? ''),
         on: {
+          focus: () => { if (opts.auto && i.classList.contains('apr-auto')) { i.value = ''; i.classList.remove('apr-auto'); } },
           input: () => { obj[chave] = dinheiro ? lerValor(i.value) : (i.value === '' ? '' : Number(i.value)); agendarPrevia(); },
-          blur: () => { if (dinheiro) i.value = mostrarValor(obj[chave]); },
+          blur: () => { if (dinheiro) i.value = mostrarValor(obj[chave]); if (opts.auto) pintarAuto(); },
         },
       });
+      const pintarAuto = () => {
+        if (document.activeElement === i || Number(obj[chave])) { i.classList.remove('apr-auto'); return; }
+        i.value = autoVal(); i.classList.toggle('apr-auto', !!i.value);
+      };
+      if (opts.auto) { camposAuto.push(pintarAuto); pintarAuto(); }
       return el('label', { class: 'apr-campo' + (opts.curto ? ' apr-curto' : '') }, el('span', {}, rot), dinheiro ? el('div', { class: 'apr-moeda' }, el('em', {}, 'R$'), i) : i);
     };
     const texto = (rot, obj, chave, ph) => {
@@ -411,9 +424,10 @@
         desenharLinhas();
       } } }, '+ Adicionar cobertura'),
       el('div', { class: 'apr-grade apr-mt' },
-        num('Investimento mensal', d.proposta, 'investimentoMensal', { ph: 'vazio = soma dos valores' }),
-        num('Investimento anual', d.proposta, 'investimentoAnual', { ph: 'opcional' }),
-        num('Capital disponibilizado', d.proposta, 'capitalDisponibilizado', { ph: 'vazio = soma dos capitais' })));
+        num('Investimento mensal', d.proposta, 'investimentoMensal', { ph: 'soma automática dos valores', auto: true }),
+        num('Investimento anual', d.proposta, 'investimentoAnual', { ph: 'automático: 12× o mensal', auto: true }),
+        num('Capital disponibilizado', d.proposta, 'capitalDisponibilizado', { ph: 'soma automática dos capitais', auto: true })),
+      el('p', { class: 'apr-ajuda' }, 'Esses três se calculam sozinhos a partir das coberturas. Digite um valor só se quiser outro (ex.: o anual com desconto da cotação); apague para voltar ao automático.'));
 
     // 6. Páginas
     const paginas = [
@@ -462,6 +476,8 @@
     let r;
     try { r = (await api('/apresentacao/calcular', { method: 'POST', body: { dados: editando.dados } })).calculo; }
     catch { return; }
+    ultimoCalculo = r;
+    camposAuto.forEach((f) => f());
     const linha = (rot, v, destaque) => el('div', { class: 'apr-res' + (destaque ? ' apr-res-forte' : '') }, el('span', {}, rot), el('b', {}, v));
     alvo.innerHTML = '';
     alvo.append(
@@ -476,6 +492,7 @@
       el('hr'),
       linha('Capital disponibilizado', brl(r.capitalDisponibilizado), true),
       linha('Investimento mensal', brl(r.investimentoMensal)),
+      linha('Investimento anual', brl(r.investimentoAnual)),
       linha('Investimento diário', brl(r.investimentoDiario), true),
       el('small', {}, r.explicacoes.length ? `+ ${r.explicacoes.length} páginas de explicação da MetLife` : 'Sem páginas de explicação (nenhuma cobertura com explicação).'),
     );

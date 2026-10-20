@@ -323,12 +323,16 @@ function paginaGrafico(doc: Doc, pasta: string, c: Calculo, l1: string, l2: stri
   doc.lineWidth(P(3)).dash(P(10), { space: P(6) }).stroke('#5B6FE0');
   doc.undash();
 
+  // Rótulos: o de cima vai ACIMA da sua linha e o de baixo ABAIXO da dele.
+  // Antes os dois iam abaixo, e com renda do cônjuge perto da despesa
+  // (8.000 contra 6.500) um valor escrevia por cima do outro.
   xs.forEach((x, i) => {
     const w = 120;
     texto(doc, marcos[i], x - 30, yBase + 8, { tam: 14, cor: '#333333', largura: 60, alinhar: 'center' });
-    texto(doc, brl(c.despesa), x - w / 2, yD + 22, { fonte: 'B', tam: 14, cor: '#4CAF50', largura: w, alinhar: 'center' });
     const yr = yv(rendaPts[i]);
-    if (Math.abs(yr - yD) > 25) texto(doc, brl(rendaPts[i]), x - w / 2, yr + 24, { fonte: 'B', tam: 14, cor: '#6C7FE0', largura: w, alinhar: 'center' });
+    const rendaEmCima = yr <= yD;
+    texto(doc, brl(c.despesa), x - w / 2, rendaEmCima ? yD + 10 : yD - 28, { fonte: 'B', tam: 14, cor: '#4CAF50', largura: w, alinhar: 'center' });
+    if (Math.abs(yr - yD) > 3) texto(doc, brl(rendaPts[i]), x - w / 2, rendaEmCima ? yr - 32 : yr + 10, { fonte: 'B', tam: 14, cor: '#6C7FE0', largura: w, alinhar: 'center' });
   });
   texto(doc, `Considera-se a renda do(a) cônjuge: ${brl(c.conjuge)}.`, 45, 580, { fonte: 'I', tam: 14, cor: '#222222' });
 }
@@ -476,7 +480,7 @@ function paginaProtecao(doc: Doc, pasta: string, c: Calculo, nomeCliente: string
   caixa(doc, 787, 207, 296, 29, '#DCDCDC', 8);
   noCentro(doc, 'INVESTIMENTO', 787, 207, 296, 29, { fonte: 'SB', tam: 17, cor: '#333333' });
   const primeiro = (nomeCliente || '').trim().split(/\s+/)[0]?.toUpperCase() || '';
-  const temAnual = c.investimentoAnual > 0;
+  const temAnual = c.investimentoAnual > 0; // anual vazio = 12× o mensal
   const blocos: Array<[number, string, number]> = temAnual
     ? [[787, 'mensal', c.investimentoMensal], [943, 'anual', c.investimentoAnual]]
     : [[865, 'mensal', c.investimentoMensal]];
