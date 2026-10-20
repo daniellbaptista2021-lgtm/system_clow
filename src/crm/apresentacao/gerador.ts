@@ -316,25 +316,27 @@ function paginaGrafico(doc: Doc, pasta: string, c: Calculo, l1: string, l2: stri
   doc.moveTo(P(x0), P(yD)).lineTo(P(x1), P(yD)).lineWidth(P(2.5)).stroke('#58B25D');
   doc.moveTo(P(x0), P(yTopo)).lineTo(P(x0), P(yBase)).lineTo(P(x1), P(yBase)).lineWidth(P(1.5)).stroke('#333333');
 
-  // Renda: igual até a idade atual, cai para a renda do cônjuge no ano seguinte.
-  const rendaPts = [c.renda, c.renda, c.conjuge, c.conjuge, c.conjuge];
+  // Renda: igual até a idade atual e zera no ano seguinte — o seguro é
+  // individual, então não se conta com a renda de mais ninguém.
+  const rendaPts = [c.renda, c.renda, 0, 0, 0];
   doc.moveTo(P(xs[0]), P(yv(rendaPts[0])));
   for (let i = 1; i < 5; i++) doc.lineTo(P(xs[i]), P(yv(rendaPts[i])));
   doc.lineWidth(P(3)).dash(P(10), { space: P(6) }).stroke('#5B6FE0');
   doc.undash();
 
   // Rótulos: o de cima vai ACIMA da sua linha e o de baixo ABAIXO da dele.
-  // Antes os dois iam abaixo, e com renda do cônjuge perto da despesa
-  // (8.000 contra 6.500) um valor escrevia por cima do outro.
+  // Antes os dois iam abaixo, e com valores próximos um escrevia por cima
+  // do outro.
   xs.forEach((x, i) => {
     const w = 120;
     texto(doc, marcos[i], x - 30, yBase + 8, { tam: 14, cor: '#333333', largura: 60, alinhar: 'center' });
     const yr = yv(rendaPts[i]);
     const rendaEmCima = yr <= yD;
     texto(doc, brl(c.despesa), x - w / 2, rendaEmCima ? yD + 10 : yD - 28, { fonte: 'B', tam: 14, cor: '#4CAF50', largura: w, alinhar: 'center' });
-    if (Math.abs(yr - yD) > 3) texto(doc, brl(rendaPts[i]), x - w / 2, rendaEmCima ? yr - 32 : yr + 10, { fonte: 'B', tam: 14, cor: '#6C7FE0', largura: w, alinhar: 'center' });
+    // Renda zerada não ganha rótulo: a linha no chão já diz, e o "R$ 0,00"
+    // cairia em cima das idades do eixo.
+    if (rendaPts[i] > 0 && Math.abs(yr - yD) > 3) texto(doc, brl(rendaPts[i]), x - w / 2, rendaEmCima ? yr - 32 : yr + 10, { fonte: 'B', tam: 14, cor: '#6C7FE0', largura: w, alinhar: 'center' });
   });
-  texto(doc, `Considera-se a renda do(a) cônjuge: ${brl(c.conjuge)}.`, 45, 580, { fonte: 'I', tam: 14, cor: '#222222' });
 }
 
 function paginaSucessorio(doc: Doc, pasta: string, c: Calculo) {
@@ -427,11 +429,10 @@ function paginaGarantias(doc: Doc, pasta: string, c: Calculo) {
   };
   linha(122, 33, 'PADRÃO DE VIDA', brl(c.despesa), brl(c.despesa), 'normal');
   linha(160, 32, 'RENDA DO TITULAR', brl(g.rendaTitular), brl(g.rendaTitular), 'riscado');
-  linha(198, 32, 'RENDA DO CÔNJUGE', brl(c.conjuge), brl(c.conjuge), 'normal');
-  linha(236, 32, 'GAP FINANCEIRO', brl(g.gap), brl(g.gap), 'gap');
-  linha(275, 31, 'ESTRATÉGIA FINANCEIRA', `APLICAÇÃO FINANCEIRA ${String(g.aplicacao).replace('.', ',')}%`, `${g.meses} MESES DE AFASTAMENTO`, 'estrategia');
-  linha(313, 32, 'VALOR NECESSÁRIO', brl(g.necessarioInvalidez), brl(g.necessarioDoenca), 'normal');
-  linha(351, 32, 'CAPITAL NECESSÁRIO', brl(g.necessarioInvalidez), brl(g.necessarioDoenca), 'capital');
+  linha(198, 32, 'GAP FINANCEIRO', brl(g.gap), brl(g.gap), 'gap');
+  linha(237, 31, 'ESTRATÉGIA FINANCEIRA', `APLICAÇÃO FINANCEIRA ${String(g.aplicacao).replace('.', ',')}%`, `${g.meses} MESES DE AFASTAMENTO`, 'estrategia');
+  linha(275, 32, 'VALOR NECESSÁRIO', brl(g.necessarioInvalidez), brl(g.necessarioDoenca), 'normal');
+  linha(313, 32, 'CAPITAL NECESSÁRIO', brl(g.necessarioInvalidez), brl(g.necessarioDoenca), 'capital');
 }
 
 function paginaProtecao(doc: Doc, pasta: string, c: Calculo, nomeCliente: string) {

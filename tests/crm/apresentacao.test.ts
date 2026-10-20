@@ -50,11 +50,20 @@ describe('apresentação MetLife — contas do modelo', () => {
     expect(r.inventario).toBe(140250);
   });
 
-  it('pág. 9: gap de 10 mil vira 1 milhão (invalidez) e 240 mil (doença grave)', () => {
-    expect(r.garantias.rendaTitular).toBe(25000);
-    expect(r.garantias.gap).toBe(10000);
-    expect(r.garantias.necessarioInvalidez).toBe(1000000);
-    expect(r.garantias.necessarioDoenca).toBe(240000);
+  // Diverge do modelo de propósito (20/10/2026): na Milena o gap era
+  // 35 mil − 25 mil do cônjuge = 10 mil. Seguro de vida é individual, então
+  // a renda do cônjuge não abate — o gap é o padrão de vida inteiro.
+  it('pág. 9: gap = padrão de vida inteiro (35 mil), sem abater o cônjuge', () => {
+    expect(r.garantias.rendaTitular).toBe(50000);
+    expect(r.garantias.gap).toBe(35000);
+    expect(r.garantias.necessarioInvalidez).toBe(3500000);
+    expect(r.garantias.necessarioDoenca).toBe(840000);
+  });
+
+  it('renda do cônjuge (de apresentação antiga) não zera o quadro', () => {
+    const luana = calcular({ ...milena, cliente: { nome: 'Luana', idade: 42, rendaFamiliar: 12800, despesaMensal: 6500, rendaConjuge: 8000 } });
+    expect(luana.garantias.gap).toBe(6500);
+    expect(luana.garantias.necessarioInvalidez).toBe(650000);
   });
 
   it('pág. 10: capital disponibilizado é a soma das linhas, e o diário é o mensal / 30', () => {

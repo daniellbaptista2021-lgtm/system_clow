@@ -94,7 +94,7 @@
   let camposAuto = [];        // campos que mostram o valor calculado
 
   const dadosVazios = () => ({
-    cliente: { nome: '', idade: '', rendaFamiliar: 0, despesaMensal: 0, rendaConjuge: 0, idadeAposentadoria: 65 },
+    cliente: { nome: '', idade: '', rendaFamiliar: 0, despesaMensal: 0, idadeAposentadoria: 65 },
     filhos: [],
     educacaoPercentual: 23, educacaoAteIdade: 22,
     patrimonio: { imoveis: 0, veiculos: 0, financeiro: 0 },
@@ -326,7 +326,6 @@
         num('Idade', d.cliente, 'idade', { dinheiro: false, curto: true, ph: '37' }),
         num('Renda familiar (mês)', d.cliente, 'rendaFamiliar'),
         num('Despesa mensal da família', d.cliente, 'despesaMensal'),
-        num('Renda do cônjuge (mês)', d.cliente, 'rendaConjuge'),
         num('Aposentadoria aos', d.cliente, 'idadeAposentadoria', { dinheiro: false, curto: true, ph: '65' })));
 
     // 2. Filhos

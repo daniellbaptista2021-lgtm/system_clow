@@ -29,7 +29,8 @@ export interface DadosApresentacao {
     idade: number;
     rendaFamiliar: number;
     despesaMensal: number;
-    rendaConjuge: number;
+    /** Ignorada desde 20/10/2026: o seguro de vida é individual (ver calcular). */
+    rendaConjuge?: number;
     idadeAposentadoria?: number;
   };
   filhos?: Filho[];
@@ -88,7 +89,6 @@ export function calcular(d: DadosApresentacao) {
   const idade = Math.max(0, Math.floor(n(c.idade)));
   const despesa = n(c.despesaMensal);
   const renda = n(c.rendaFamiliar);
-  const conjuge = n(c.rendaConjuge);
   const aposentadoria = Math.floor(n(c.idadeAposentadoria, 65)) || 65;
 
   // Padrão de vida: despesa × 12 × anos até a aposentadoria.
@@ -118,13 +118,17 @@ export function calcular(d: DadosApresentacao) {
   const pctInventario = n(d.inventarioPercentual, 11);
   const inventario = centavos(totalPatrimonio * pctInventario / 100);
 
-  // Garantias: se o titular para de render, a família vive da renda do
-  // cônjuge e falta a diferença (o "gap"). Invalidez cobre o gap com um
-  // capital que, aplicado a 1% ao mês, rende o gap; doença grave cobre
-  // 24 meses de afastamento.
+  // Garantias: se o cliente para de render, falta o padrão de vida inteiro
+  // (o "gap"). Invalidez cobre o gap com um capital que, aplicado a 1% ao
+  // mês, rende o gap; doença grave cobre 24 meses de afastamento.
+  //
+  // DIVERGE DO MODELO DA MILENA, de propósito (decisão do Daniel, 20/10/2026):
+  // lá o gap era despesa − renda do cônjuge. Seguro de vida é individual —
+  // cada pessoa tem o seu —, então a renda do cônjuge não abate nada. Com o
+  // abatimento, um cônjuge que ganhasse mais que a despesa zerava o quadro.
   const g = d.garantias || {};
-  const rendaTitular = Math.max(0, renda - conjuge);
-  const gap = Math.max(0, despesa - conjuge);
+  const rendaTitular = renda;
+  const gap = despesa;
   const aplicacao = n(g.aplicacaoPercentual, 1);
   const meses = Math.floor(n(g.mesesAfastamento, 24)) || 24;
   const necessarioInvalidez = aplicacao > 0 ? centavos(gap / (aplicacao / 100)) : 0;
@@ -164,7 +168,7 @@ export function calcular(d: DadosApresentacao) {
   const explicacoes = [...new Set(linhas.flatMap((l) => (COBERTURAS[l.chave]?.explicacao || [])))].sort((a, b) => a - b);
 
   return {
-    idade, despesa, renda, conjuge, aposentadoria,
+    idade, despesa, renda, aposentadoria,
     anosProdutivos, responsabilidade,
     educacao: { pct, ate, filhos, total: totalFilhos },
     comprometimento,
