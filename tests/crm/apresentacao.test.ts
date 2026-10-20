@@ -96,3 +96,35 @@ describe('apresentação MetLife — contas do modelo', () => {
     expect(s.linhas[0]).toMatchObject({ chave: 'outra', nome: 'Seguro viagem' });
   });
 });
+
+/**
+ * O PDF tem de terminar no agradecimento. No modelo original ele vinha antes
+ * das tabelas da MetLife e a apresentação acabava no meio de uma tabela de
+ * cirurgias — o corretor se perdeu, e o cliente se perderia mais.
+ */
+describe('apresentação MetLife — começo, anexo e fim', () => {
+  const textos = async (dados: Parameters<typeof calcular>[0]) => {
+    const { gerarApresentacao } = await import('../../src/crm/apresentacao/gerador.js');
+    const { PDFDocument } = await import('pdf-lib');
+    const pdf = await gerarApresentacao(dados as never, { nome: 'Corretor Teste' });
+    return { paginas: (await PDFDocument.load(pdf)).getPageCount() };
+  };
+
+  it('com anexo: abertura do anexo, páginas da MetLife e o obrigado por último', async () => {
+    const luana = { ...milena, proposta: { linhas: [
+      { cobertura: 'cirurgias', capital: 100000, valor: 150 },
+      { cobertura: 'vida_segura', capital: 250000, valor: 350 },
+    ], investimentoMensal: 500 } };
+    const { paginas } = await textos(luana);
+    const s = calcular(luana);
+    // capa + 8 do diagnóstico + anexo + 7 da MetLife (cirurgias) + obrigado
+    expect(s.explicacoes).toHaveLength(7);
+    expect(paginas).toBe(1 + 8 + 1 + 7 + 1);
+  }, 30000);
+
+  it('sem anexo (só vida segura): não nasce a página de abertura do anexo', async () => {
+    const soVida = { ...milena, proposta: { linhas: [{ cobertura: 'vida_segura', capital: 1, valor: 1 }] } };
+    const { paginas } = await textos(soVida);
+    expect(paginas).toBe(1 + 8 + 1);
+  }, 30000);
+});

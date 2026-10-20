@@ -6,9 +6,15 @@
  *   1  capa do corretor                 (gerada)
  *   2  cotação que o corretor subiu     (imagem ou PDF dele, como veio)
  *   3-10 diagnóstico do cliente         (geradas a partir de calculos.ts)
- *   11 "muito obrigado"                 (gerada)
+ *   11 abertura do anexo               (gerada, só se houver explicações)
  *   12+ explicação das coberturas       (páginas fixas da MetLife, só as
  *                                        das coberturas que estão na proposta)
+ *   fim "muito obrigado" + encerramento (gerada, SEMPRE a última página)
+ *
+ * No modelo original o "obrigado" vinha antes das tabelas da MetLife, e o PDF
+ * terminava numa tabela de cirurgias: nem o cliente nem o corretor sabiam que
+ * tinha acabado. Por isso o anexo ganhou uma página que o anuncia e o
+ * agradecimento passou para o fim.
  *
  * As páginas geradas são desenhadas com pdfkit e costuradas com as fixas e a
  * cotação via pdf-lib — assim as páginas da MetLife e o PDF da cotação entram
@@ -23,7 +29,7 @@ import fs from 'fs';
 import path from 'path';
 import PDFDocument from 'pdfkit';
 import { PDFDocument as PdfLib } from 'pdf-lib';
-import { calcular, brl, type DadosApresentacao, type Calculo } from './calculos.js';
+import { calcular, brl, COBERTURAS, type DadosApresentacao, type Calculo } from './calculos.js';
 
 export interface PerfilCorretor {
   nome: string;
@@ -490,7 +496,31 @@ function paginaProtecao(doc: Doc, pasta: string, c: Calculo, nomeCliente: string
   }
 }
 
-function paginaObrigado(doc: Doc, pasta: string, perfil: PerfilCorretor) {
+/** Separa a apresentação do anexo: diz o que vem e que o fim vem depois. */
+function paginaAnexo(doc: Doc, c: Calculo) {
+  faixaEsquerda(doc);
+  titulo(doc, 'ANEXO', 'DETALHES DAS COBERTURAS');
+  const intro = 'Nas próximas páginas estão as condições da MetLife para cada cobertura da sua proposta: '
+    + 'como funciona, carências e a tabela de percentuais sobre o capital. São material de consulta — '
+    + 'a sua proposta é a que você acabou de ver.';
+  doc.font('R').fontSize(P(17)).fillColor(CINZA_TEXTO)
+    .text(intro, P(38), P(132), { width: P(700), lineGap: P(4) });
+  texto(doc, 'COBERTURAS DETALHADAS', 38, 262, { fonte: 'SB', tam: 15, cor: '#222222', espaco: 1 });
+  const vistas = new Set<string>();
+  let y = 296;
+  for (const l of c.linhas) {
+    if (vistas.has(l.chave) || !COBERTURAS[l.chave]?.explicacao.length) continue;
+    vistas.add(l.chave);
+    caixa(doc, 38, y, 10, 36, l.cor, 2);
+    caixa(doc, 48, y, 560, 36, l.fundo);
+    noCentro(doc, l.nome, 62, y, 540, 36, { fonte: 'SB', tam: 15, cor: '#222222', alinhar: 'left' });
+    y += 46;
+    if (y > 560) break;
+  }
+  texto(doc, 'Ao final, o encerramento com os contatos do seu consultor.', 38, 588, { fonte: 'I', tam: 13, cor: '#6B6B6B', largura: 760 });
+}
+
+function paginaObrigado(doc: Doc, pasta: string, perfil: PerfilCorretor, cliente: string) {
   doc.image(path.join(pasta, 'fundo-obrigado.jpg'), 0, 0, { width: LARG, height: ALT });
   // Cartão com o degradê do modelo, redesenhado por cima do original.
   const g = doc.linearGradient(P(290), 0, P(772), 0);
@@ -512,9 +542,19 @@ function paginaObrigado(doc: Doc, pasta: string, perfil: PerfilCorretor) {
     texto(doc, perfil.email, 460, y, { tam: 19, cor: '#FFFFFF', largura: 300 });
   }
   fotoCircular(doc, perfil.foto, 235, 308, 150, 9);
+  // Encerramento explícito: a última página tem de dizer que é a última.
+  const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const para = cliente.trim() ? `Proposta preparada para ${cliente.trim()} · ${hoje}` : `Proposta preparada em ${hoje}`;
+  caixa(doc, 290, 500, 482, 58, '#FFFFFF', 12);
+  texto(doc, 'FIM DA APRESENTAÇÃO', 290, 508, { fonte: 'B', tam: 15, cor: '#3D63B5', largura: 482, alinhar: 'center', espaco: 2 });
+  texto(doc, para, 290, 532, { tam: 12, cor: '#4A4A4A', largura: 482, alinhar: 'center' });
 }
 
 // ─── Montagem ────────────────────────────────────────────────────────────
+
+function temAnexo(dados: DadosApresentacao, c: Calculo): boolean {
+  return dados.paginas?.explicacoes !== false && c.explicacoes.length > 0;
+}
 
 /** Gera só as páginas desenhadas. Devolve o PDF e quantas vêm antes da cotação. */
 function gerarPaginas(dados: DadosApresentacao, perfil: PerfilCorretor, c: Calculo, pasta: string): Promise<Buffer> {
@@ -537,7 +577,8 @@ function gerarPaginas(dados: DadosApresentacao, perfil: PerfilCorretor, c: Calcu
     if (liga('sucessorio') && c.totalPatrimonio > 0) { nova(); paginaSucessorio(doc, pasta, c); }
     if (liga('garantias')) { nova(); paginaGarantias(doc, pasta, c); }
     if (liga('protecao') && c.linhas.length) { nova(); paginaProtecao(doc, pasta, c, dados.cliente.nome); }
-    nova(); paginaObrigado(doc, pasta, perfil);
+    if (temAnexo(dados, c)) { nova(); paginaAnexo(doc, c); }
+    nova(); paginaObrigado(doc, pasta, perfil, dados.cliente.nome || '');
     doc.end();
   });
 }
@@ -568,13 +609,17 @@ export async function gerarApresentacao(dados: DadosApresentacao, perfil: Perfil
     }
   }
 
-  const resto = await final.copyPages(geradas, Array.from({ length: total - 1 }, (_, i) => i + 1));
-  resto.forEach((p) => final.addPage(p));
+  // Diagnóstico (e a abertura do anexo, se houver) — tudo menos capa e obrigado.
+  const meio = await final.copyPages(geradas, Array.from({ length: total - 2 }, (_, i) => i + 1));
+  meio.forEach((p) => final.addPage(p));
 
-  if (dados.paginas?.explicacoes !== false && c.explicacoes.length) {
+  if (temAnexo(dados, c)) {
     const fixas = await PdfLib.load(fs.readFileSync(path.join(pasta, 'metlife-coberturas.pdf')));
     const pags = await final.copyPages(fixas, c.explicacoes.filter((i) => i < fixas.getPageCount()));
     pags.forEach((p) => final.addPage(p));
   }
+
+  const [obrigado] = await final.copyPages(geradas, [total - 1]);
+  final.addPage(obrigado);
   return Buffer.from(await final.save());
 }
