@@ -279,8 +279,13 @@ else
   echo "tela de login respondendo: HTTP $CODIGO (401 = recusou a senha de teste, como devia)"
   case "$CODIGO" in 400|401|403|429) ;; *) falha "o login não respondeu como devia" ;; esac
 fi
-# Pelo Traefik local (--resolve): a tp1 pedindo o próprio IP público volta 404.
-PUBLICO=$(curl -s -o /dev/null -w '%{http_code}' --resolve "$DOMINIO:443:127.0.0.1" "https://$DOMINIO/" || true)
+# Pelo Traefik local (--resolve). Com novas tentativas: o passo 7 acabou de
+# regravar a rota, e o Traefik responde 404 nos segundos em que a relê.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  PUBLICO=$(curl -s -o /dev/null -w '%{http_code}' --resolve "$DOMINIO:443:127.0.0.1" "https://$DOMINIO/" || true)
+  [ "$PUBLICO" = "200" ] && break
+  sleep 2
+done
 echo "site público: HTTP $PUBLICO"
 echo "CRM atual (clow) continua: HTTP $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3021/)"
 echo
