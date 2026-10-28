@@ -98,11 +98,23 @@ export async function sendMessage(channel: Channel2, opts: SendOptions): Promise
   const numero = opts.to.replace(/\D/g, '');
   if (!numero) return { ok: false, error: { message: 'numero_vazio' } };
   const ehMidia = !!opts.mediaUrl;
-  const caminho = ehMidia
-    ? `/message/sendMedia/${encodeURIComponent(creds.instance)}`
-    : `/message/sendText/${encodeURIComponent(creds.instance)}`;
+  // Áudio vai pela rota de MENSAGEM DE VOZ, nunca pelo sendMedia. O navegador
+  // grava em webm (o Chrome não grava ogg), e o sendMedia repassa o arquivo
+  // cru: o CRM mostrava "enviado" e o áudio nunca chegava ao telefone. O
+  // sendWhatsAppAudio converte qualquer formato para ogg/opus no ffmpeg da
+  // própria Evolution e manda como nota de voz (ptt).
+  const ehAudio = ehMidia && opts.mediaType === 'audio';
+  const caminho = ehAudio
+    ? `/message/sendWhatsAppAudio/${encodeURIComponent(creds.instance)}`
+    : ehMidia
+      ? `/message/sendMedia/${encodeURIComponent(creds.instance)}`
+      : `/message/sendText/${encodeURIComponent(creds.instance)}`;
   const corpo: any = { number: numero };
-  if (ehMidia) {
+  if (ehAudio) {
+    const local = mediaLocalComoBase64(opts.mediaUrl!);
+    corpo.audio = local ? local.base64 : opts.mediaUrl;
+    corpo.encoding = true;
+  } else if (ehMidia) {
     corpo.mediatype = opts.mediaType === 'audio' ? 'audio' : opts.mediaType || 'image';
     const local = mediaLocalComoBase64(opts.mediaUrl!);
     corpo.media = local ? local.base64 : opts.mediaUrl;
