@@ -41,6 +41,76 @@
     return d;
   }
 
+  const MODELO_DEEPSEEK = 'deepseek-flash';
+
+  /**
+   * Passo a passo do DeepSeek, para o cliente leigo conseguir sozinho: criar
+   * a conta, pôr saldo, gerar a chave e escolher o modelo. Aberto para quem
+   * ainda não conectou; fechado (mas à mão) para quem já está rodando e só
+   * precisa lembrar onde recarregar.
+   */
+  function guiaDeepSeek(el, aberto) {
+    const link = (href, texto) => el('a', {
+      href, target: '_blank', rel: 'noopener',
+      style: 'color:var(--blue);font-weight:600;text-decoration:underline',
+    }, texto);
+    const passo = (n, titulo, ...corpo) => el('div', { style: 'display:flex;gap:12px;margin-top:14px' },
+      el('div', {
+        style: 'flex:none;width:24px;height:24px;border-radius:50%;background:var(--grad);color:#fff;' +
+          'font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center',
+      }, String(n)),
+      el('div', { style: 'font-size:13px;line-height:1.6' },
+        el('div', { style: 'font-weight:600' }, titulo),
+        el('div', { style: 'color:var(--text-dim)' }, ...corpo)),
+    );
+    const codigo = (t) => el('code', {
+      style: 'background:var(--bg-3);border:1px solid var(--border);border-radius:5px;padding:1px 6px;' +
+        'font-size:12px;color:var(--text)',
+    }, t);
+
+    const caixa = el('details', {
+      style: 'margin-bottom:18px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.07);' +
+        'border-radius:12px;padding:14px 16px',
+    });
+    if (aberto) caixa.open = true;
+    caixa.append(
+      el('summary', { style: 'cursor:pointer;font-size:13.5px;font-weight:700;line-height:1.5' },
+        '⭐ Recomendado: DeepSeek — a melhor IA para o seu agente, e a mais barata'),
+      el('div', { style: 'font-size:13px;line-height:1.6;color:var(--text-dim);margin-top:10px' },
+        'O DeepSeek responde muito bem os seus clientes no WhatsApp e custa uma fração ' +
+        'do ChatGPT e do Claude. Com poucos dólares de saldo o agente atende por muito ' +
+        'tempo. É o que nós usamos e recomendamos. Leva uns 5 minutos:'),
+      passo(1, 'Crie sua conta no DeepSeek',
+        'Entre em ', link('https://platform.deepseek.com', 'platform.deepseek.com'),
+        ' e cadastre-se com seu e-mail ou com a conta Google.'),
+      passo(2, 'Coloque saldo',
+        'Acesse ', link('https://platform.deepseek.com/top_up', 'platform.deepseek.com/top_up'),
+        ' (menu “Top up”), escolha o valor e pague com cartão de crédito. ' +
+        'Para começar, US$ 5 a US$ 10 já dão bastante uso. O saldo só é gasto quando o agente conversa.'),
+      passo(3, 'Crie a sua chave',
+        'Vá em ', link('https://platform.deepseek.com/api_keys', 'API keys'),
+        ', clique em “Create new API key”, dê um nome (ex: CRM) e copie a chave, que começa com ',
+        codigo('sk-'), '. Guarde: ela só aparece uma vez.'),
+      passo(4, 'Conecte aqui embaixo',
+        'Em “Serviço de IA” escolha ', codigo('DeepSeek'), ', cole a chave, clique em ',
+        '“Testar chave” e, no modelo, escolha ', codigo(MODELO_DEEPSEEK),
+        '. Depois clique em “Conectar”. Pronto!'),
+      el('div', {
+        style: 'font-size:12.5px;line-height:1.6;color:var(--text-dim);margin-top:16px;padding-top:12px;' +
+          'border-top:1px solid var(--border)',
+      },
+        el('div', {}, el('b', {}, 'Qual modelo usar? '), codigo(MODELO_DEEPSEEK),
+          ' é o rápido e barato, ideal para atendimento. Quer respostas mais caprichadas e topa pagar mais? Use ',
+          codigo('deepseek-v4-pro'), '.'),
+        el('div', { style: 'margin-top:6px' }, el('b', {}, 'O agente parou de responder? '),
+          'Quase sempre é saldo acabando. Confira em ',
+          link('https://platform.deepseek.com/usage', 'platform.deepseek.com/usage'),
+          ' e recarregue pelo mesmo “Top up”. Não precisa mexer em nada aqui.'),
+      ),
+    );
+    return caixa;
+  }
+
   async function montar(destino, deps) {
     const el = deps.el;
     const toast = deps.toast || (() => {});
@@ -80,6 +150,7 @@
           'O agente usa a SUA conta de IA. Escolha o serviço, cole sua chave e ' +
           'diga qual modelo quer usar. O consumo é cobrado direto na sua conta ' +
           'do provedor — nada passa por nós.'),
+        guiaDeepSeek(el, !estado.conectado),
       );
 
       // Estado atual
@@ -130,8 +201,11 @@
 
       const selProvedor = el('select', { style: campo });
       for (const p of provedores) {
-        const o = el('option', { value: p.id }, p.label);
-        if (cred && cred.provider === p.id) o.selected = true;
+        const o = el('option', { value: p.id },
+          p.id === 'deepseek' ? p.label + ' — recomendado' : p.label);
+        // Quem ainda não conectou nada já começa no DeepSeek, que é o que o
+        // guia acima ensina a configurar.
+        if (cred ? cred.provider === p.id : p.id === 'deepseek') o.selected = true;
         selProvedor.append(o);
       }
 
@@ -172,7 +246,10 @@
         const p = provedores.find((x) => x.id === selProvedor.value);
         dica.textContent = p ? p.ajuda : '';
         linhaUrl.style.display = p && p.precisaUrl ? '' : 'none';
-        if (p && p.modelSugerido && !inpModelo.value) inpModelo.placeholder = 'ex: ' + p.modelSugerido;
+        // O nome sugerido pelo servidor para o DeepSeek (deepseek-chat) é o
+        // antigo; o atual é deepseek-flash (conferido na doc oficial, 28/10/2026).
+        const sugerido = p && p.id === 'deepseek' ? MODELO_DEEPSEEK : p && p.modelSugerido;
+        if (sugerido && !inpModelo.value) inpModelo.placeholder = 'ex: ' + sugerido;
       }
       selProvedor.addEventListener('change', ajustar);
 
