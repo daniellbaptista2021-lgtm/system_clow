@@ -584,3 +584,21 @@ input:focus, select:focus, textarea:focus {
 /* Quadro do Agente IA com a mesma moldura dos outros blocos */
 #agenteView .agente-frame-wrap { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--bg-3); }
 @media (max-width: 768px) { #agenteView .agente-frame-wrap { border-radius: 0; border: none; } }
+
+/* Foto de perfil */
+.evox-usuario { position: relative; }
+.evox-avatar { border: none !important; padding: 0 !important; cursor: pointer; background-size: cover !important; background-position: center !important; box-shadow: 0 0 0 2px var(--bg-3), 0 0 0 3px var(--border) !important; }
+.evox-avatar.com-foto { color: transparent !important; }
+.evox-avatar.enviando { opacity: .5; }
+.evox-avatar:hover { box-shadow: 0 0 0 2px var(--bg-3), 0 0 0 3px var(--purple) !important; }
+.evox-foto-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 1000; min-width: 170px;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 6px;
+}
+.evox-foto-menu[hidden] { display: none; }
+.evox-foto-menu button {
+  display: block; width: 100%; text-align: left; background: transparent !important; border: none !important; box-shadow: none !important;
+  color: var(--text) !important; padding: 10px 12px !important; border-radius: 10px !important; font-size: 14px !important;
+}
+.evox-foto-menu button:hover { background: var(--bg-4) !important; }
+.evox-foto-menu button[data-acao="remover"] { color: var(--red) !important; }

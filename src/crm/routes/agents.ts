@@ -355,6 +355,26 @@ export function registerAgentsRoutes(app: Hono): void {
     const ok2 = store.deleteAgent(tenantOf(c), c.req.param('id'));
     return ok2 ? c.body(null, 204) : notFound(c, 'agent');
   });
+  // Foto de perfil da conta (EVOX, 29/10/2026). Chega como data URL ja
+  // reduzida pelo navegador; aqui so aceita imagem e ate 2 MB.
+  app.post('/perfil/foto', async (c) => {
+    const tid = tenantOf(c);
+    const body = await c.req.json().catch(() => ({} as any));
+    const m = /^data:(image\/(png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(body?.imagem || ''));
+    if (!m) return c.json({ ok: false, error: 'imagem_invalida', message: 'Envie uma imagem PNG, JPG ou WEBP.' }, 400);
+    const bytes = Buffer.from(m[3], 'base64');
+    if (bytes.length > 2 * 1024 * 1024) return c.json({ ok: false, error: 'imagem_grande', message: 'A foto passou de 2 MB.' }, 413);
+    const { saveMedia } = await import('../media.js');
+    const { updateTenant } = await import('../../tenancy/tenantStore.js');
+    const salvo = saveMedia(tid, bytes, { mime: m[1], mediaType: 'image', suggestedFilename: 'perfil.' + (m[2] === 'jpeg' ? 'jpg' : m[2]) });
+    updateTenant(tid, { foto_perfil: salvo.publicUrl });
+    return c.json({ ok: true, foto: salvo.publicUrl });
+  });
+  app.delete('/perfil/foto', async (c) => {
+    const { updateTenant } = await import('../../tenancy/tenantStore.js');
+    updateTenant(tenantOf(c), { foto_perfil: undefined });
+    return c.json({ ok: true });
+  });
   app.get('/me', async (c) => {
     const tid = tenantOf(c);
     try {
@@ -406,6 +426,7 @@ export function registerAgentsRoutes(app: Hono): void {
           tier: t.tier,
           status: t.status,
           hasStripe: !!t.stripe_customer_id,
+          foto: t.foto_perfil || null,
         },
         whatsapp: {
           included,

@@ -47,6 +47,8 @@ export interface Tenant {
   stripe_subscription_id?: string;
   password_hash?: string;
   full_name?: string;
+  /** Foto de perfil da conta (EVOX): endereco em /v1/crm/media/... */
+  foto_perfil?: string;
   cpf?: string;
   phone_e164?: string;
   authorized_phones?: string[];
