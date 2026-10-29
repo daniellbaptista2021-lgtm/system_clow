@@ -1302,14 +1302,15 @@ function renderMessages() {
     const bubble = el('div', { class: `msg ${isIn ? 'in' : 'out'}` });
     if (a.mediaUrl && a.mediaType === 'image') {
       const imgEl = el('img', {
-        loading: 'lazy',
+        loading: 'eager',
+        decoding: 'async',
         title: 'Clique para ampliar',
         on: { click: () => abrirMidia(a.mediaUrl) },
       });
       bubble.append(el('div', { class: 'msg-media' }, imgEl));
       loadMediaWithAuth(a.mediaUrl, imgEl);
     } else if (a.mediaUrl && a.mediaType === 'audio') {
-      const audioEl = el('audio', { controls: '' });
+      const audioEl = el('audio', { controls: '', preload: 'auto' });
       bubble.append(el('div', { class: 'msg-media' }, audioEl));
       loadMediaWithAuth(a.mediaUrl, audioEl);
     } else if (a.mediaUrl && a.mediaType === 'video') {
@@ -1317,6 +1318,8 @@ function renderMessages() {
       // que abre em tela cheia — mesma divisão do WhatsApp.
       const videoEl = el('video', {
         controls: '',
+        preload: 'auto',
+        playsinline: '',
         title: 'Clique para ampliar',
         on: { click: (e) => { if (e.offsetY < e.target.clientHeight - 34) abrirMidia(a.mediaUrl); } },
       });
@@ -5420,8 +5423,17 @@ window.toast = toast;
 
 async function loadMediaWithAuth(mediaUrl, el) {
   if (!mediaUrl || !el) return;
+  const mostrar = (url) => {
+    // iOS pode deixar o vídeo preto até o play. O fragmento já decodifica
+    // o primeiro quadro, sem iniciar reprodução nem som.
+    el.src = el.tagName === 'VIDEO' ? url + '#t=0.001' : url;
+    if (el.tagName === 'AUDIO' || el.tagName === 'VIDEO') {
+      el.preload = 'auto';
+      el.load();
+    }
+  };
   if (_mediaBlobCache.has(mediaUrl)) {
-    el.src = _mediaBlobCache.get(mediaUrl);
+    mostrar(_mediaBlobCache.get(mediaUrl));
     return;
   }
   // Strip /v1/crm prefix if present (api() prepends API_BASE)
@@ -5432,7 +5444,7 @@ async function loadMediaWithAuth(mediaUrl, el) {
     const blob = await r.blob();
     const url = URL.createObjectURL(blob);
     _mediaBlobCache.set(mediaUrl, url);
-    el.src = url;
+    mostrar(url);
   } catch (e) {
     console.warn('[media-load]', mediaUrl, e.message);
     if (el.tagName === 'IMG') el.alt = 'Erro carregando midia';
