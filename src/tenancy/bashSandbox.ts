@@ -144,8 +144,14 @@ export function validateBashCommand(
  * Get the working directory for a tenant's Bash execution.
  * Always forces execution within the tenant's workspace.
  */
+/** Raiz das pastas das contas. CLOW_WORKSPACES_DIR sobrepoe (o prototipo do
+ *  EVOX no Mac nao tem /opt gravavel). */
+export function pastaDasContas(): string {
+  return (process.env.CLOW_WORKSPACES_DIR || '/opt/clow-workspaces').replace(/\/+$/, '');
+}
+
 export function getTenantWorkspaceDir(tenantId: string): string {
-  return `/opt/clow-workspaces/${sanitizeTenantId(tenantId)}`;
+  return `${pastaDasContas()}/${sanitizeTenantId(tenantId)}`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

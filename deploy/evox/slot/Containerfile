@@ -1,0 +1,11 @@
+# Slot de cada conta do EVOX: a maquina onde o terminal do Agente IA roda.
+# Isolada do servidor do CRM e das outras contas. A pasta da conta entra em
+# /workspace; o resto e desta maquina e some se o slot for recriado.
+FROM docker.io/library/ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=America/Sao_Paulo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl wget jq git unzip zip less nano tzdata \
+      python3 python3-pip python3-venv nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+CMD ["sleep", "infinity"]

@@ -22,6 +22,8 @@ import { assembleFullContext } from '../utils/context/context.js';
 import { createCanUseTool, type LegacyPermissionContext } from '../utils/permissions/permissions.js';
 import { filterToolsForTier } from '../tenancy/quotaGuard.js';
 import { podeUsarTerminal } from '../tenancy/terminalPermitido.js';
+import { slotsDisponiveis } from '../tenancy/slotConta.js';
+import { pastaDasContas } from '../tenancy/bashSandbox.js';
 import { registerSession, unregisterSession } from '../tenancy/tenantStore.js';
 import {
   loadTranscriptFile,
@@ -153,7 +155,7 @@ export class SessionPool {
     const mode = options.mode || 'server';
     // Garante que o workspace do tenant existe (mkdirp). Sem isso, bash cwd
     // pode falhar ao spawn em workspace recem-criado de tenant novo.
-    if (tenantId && workspaceRoot && workspaceRoot.startsWith('/opt/clow-workspaces/')) {
+    if (tenantId && workspaceRoot && workspaceRoot.startsWith(pastaDasContas() + '/')) {
       try { fs.mkdirSync(workspaceRoot, { recursive: true }); } catch { /* noop */ }
     }
     const baseToolPool = tenantTier
@@ -169,7 +171,7 @@ export class SessionPool {
     const configRoot = terminal ? workspaceRoot : pastaSemConfig();
     const baseTools = baseToolPool.filter((tool) => (
       tool.name !== 'EnterPlanMode' && tool.name !== 'ExitPlanMode'
-      && (terminal || tool.name !== 'Bash')
+      && (terminal || slotsDisponiveis() || tool.name !== 'Bash')
     ));
     const pluginSystem = new PluginSystem();
     await pluginSystem.initialize(configRoot);

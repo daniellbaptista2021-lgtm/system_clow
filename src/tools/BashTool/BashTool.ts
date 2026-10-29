@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 import {
   buildTool, type ToolResult, type ToolUseContext,
   type ValidationResult, type RenderOptions,
@@ -19,7 +20,11 @@ import { OutputProcessor } from './outputProcessor.js';
 import { SandboxRunner } from './sandboxRunner.js';
 import { validateBashCommand } from '../../tenancy/bashSandbox.js';
 import { podeUsarTerminal, MENSAGEM_TERMINAL_BLOQUEADO } from '../../tenancy/terminalPermitido.js';
+import { slotsDisponiveis, garantirSlot, comandoNoSlot, caminhoNoSlot, PASTA_NO_SLOT } from '../../tenancy/slotConta.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
+
+// No Mac o bash mora em /bin (o prototipo do EVOX roda la).
+const BASH_DO_HOST = existsSync('/usr/bin/bash') ? '/usr/bin/bash' : '/bin/bash';
 
 // ─── Shared instances (per-session via registry) ────────────────────────────
 
@@ -57,7 +62,7 @@ async function runOneShotCommand(
 }> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
-    const child = spawn('/usr/bin/bash', ['-lc', command], {
+    const child = spawn(BASH_DO_HOST, ['-lc', command], {
       cwd: opts.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -172,6 +177,10 @@ Commands timeout after 120 seconds by default.`,
       // (sessionPool.ts), mas subagente, missao e sessao reidratada montam a
       // lista de ferramentas por outros caminhos. Ver terminalPermitido.ts.
       if (!podeUsarTerminal(_ctx.tenantId)) {
+        // Conta comum: o comando vai para o slot dela (slotConta.ts), que e
+        // uma maquina separada — ali tudo e permitido, inclusive o que a lista
+        // negra abaixo barra no servidor. Sem slot, nada roda.
+        if (slotsDisponiveis()) return { valid: true };
         return { valid: false, message: MENSAGEM_TERMINAL_BLOQUEADO, errorCode: 'BASH_NOT_ALLOWED_FOR_TENANT' };
       }
       const sandbox = validateBashCommand(input.command, _ctx.workspaceRoot!, false);
@@ -259,9 +268,11 @@ Commands timeout after 120 seconds by default.`,
     const isMultiTenantContext = Boolean(context.tenantId && context.workspaceRoot);
     // Terceira trava, no ponto em que o comando sai: quem chegar aqui sem
     // passar pelo validateInput (chamada direta de outra ferramenta) para aqui.
-    if (isMultiTenantContext && !podeUsarTerminal(context.tenantId)) {
+    const noSlot = isMultiTenantContext && !podeUsarTerminal(context.tenantId);
+    if (noSlot && !slotsDisponiveis()) {
       return { output: '', outputText: MENSAGEM_TERMINAL_BLOQUEADO, isError: true };
     }
+    if (noSlot) return rodarNoSlot(input, context.tenantId!, workspaceRoot, cwd, timeoutMs);
     const sandboxBackend = isMultiTenantContext ? SandboxRunner.detect() : 'none';
     const commandToRun = isMultiTenantContext
       ? SandboxRunner.wrap(command, sandboxBackend, {
@@ -373,3 +384,42 @@ export { OutputProcessor } from './outputProcessor.js';
 export { PersistentShell } from './persistentShell.js';
 export { BackgroundProcessManager } from './backgroundProcessManager.js';
 export { SandboxRunner } from './sandboxRunner.js';
+
+/** Terminal de conta comum: tudo roda no slot dela, nunca no servidor. */
+async function rodarNoSlot(
+  input: BashInput, tenantId: string, workspaceRoot: string, cwd: string, timeoutMs: number,
+): Promise<ToolResult> {
+  let nome: string;
+  try {
+    nome = await garantirSlot(tenantId, workspaceRoot);
+  } catch (err: any) {
+    return { output: null, outputText: `Nao consegui ligar a sua maquina agora: ${err?.message || err}`, isError: true };
+  }
+  const dentro = caminhoNoSlot(cwd, workspaceRoot);
+  // Segundo plano tambem fica no slot: o log vai para a pasta da conta, que
+  // o proprio slot enxerga em /workspace/.evox-bg.
+  if (input.run_in_background) {
+    const id = `bg-${Date.now().toString(36)}`;
+    const log = `${PASTA_NO_SLOT}/.evox-bg/${id}.log`;
+    const q = (t: string) => `'${t.replace(/'/g, "'\\''")}'`;
+    const lancar = `mkdir -p ${PASTA_NO_SLOT}/.evox-bg && nohup bash -lc ${q(input.command)} > ${log} 2>&1 & echo $!`;
+    const r = await runOneShotCommand(comandoNoSlot(nome, lancar, dentro), { cwd: workspaceRoot, timeoutMs: 60_000 });
+    return {
+      output: { background: true, id, pid: r.stdout.trim() },
+      outputText: `Rodando em segundo plano na sua maquina (${id}). Para ver: cat ${log}`,
+      isError: r.exitCode !== 0,
+    };
+  }
+  const result = await runOneShotCommand(comandoNoSlot(nome, input.command, dentro), { cwd: workspaceRoot, timeoutMs });
+  const processed = OutputProcessor.process(result.stdout + (result.stderr ? '\n' + result.stderr : ''));
+  let outputText = processed.output;
+  if (result.timedOut) outputText += '\n[Command timed out]';
+  if (!outputText.trim() && result.exitCode === 0) outputText = '(No output)';
+  if (processed.truncated) outputText += `\n[Output truncated. Original: ${processed.originalLength} chars]`;
+  return {
+    output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, timedOut: result.timedOut, durationMs: result.durationMs },
+    outputText: result.exitCode !== 0 ? `Exit code ${result.exitCode}\n${outputText}` : outputText,
+    isError: result.exitCode !== 0,
+    metadata: { durationMs: result.durationMs },
+  };
+}
