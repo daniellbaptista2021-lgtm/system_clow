@@ -358,3 +358,10 @@ input:focus, select:focus, textarea:focus {
 .evox-kpi-graf { position: static !important; transform: none !important; flex: 0 1 84px; width: 84px; height: 30px; min-width: 40px; }
 @media (max-width: 1280px) { .evox-kpi-graf { display: block !important; } }
 @media (max-width: 560px) { .evox-kpi-graf { display: none !important; } }
+
+/* Celular: o pipeline mostra só o funil. Os números ficam em Relatórios,
+ * pelo menu (pedido do Daniel, 29/10/2026). */
+@media (max-width: 768px) { #kanbanView > .evox-kpis { display: none !important; } }
+@media (max-width: 768px) {
+  #kanbanView .evox-filtros, #kanbanView .evox-filtros .top-bar-left { padding-left: 0 !important; margin-left: 0 !important; }
+}
