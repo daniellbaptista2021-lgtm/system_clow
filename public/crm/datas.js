@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
- * CRM Pulse — Datas de relacionamento
+ * EVOX — Datas de relacionamento
  *
  * Aniversário do cliente, aniversário de apólice, datas comemorativas e
  * dias das profissões, em cartões. Cada cartão abre mensagens prontas com

@@ -1,6 +1,6 @@
 {
-  "name": "CRM Pulse",
-  "short_name": "CRM Pulse",
+  "name": "EVOX",
+  "short_name": "EVOX",
   "description": "CRM completo + Agente IA via WhatsApp + Automações n8n. Gerencie carteira de clientes, pipeline de vendas e atendimento por WhatsApp em uma única plataforma.",
   "start_url": "/?source=pwa",
   "id": "/",
@@ -8,17 +8,17 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#0F0E14",
-  "theme_color": "#1f1d1a",
+  "background_color": "#F6F8FB",
+  "theme_color": "#F6F8FB",
   "lang": "pt-BR",
   "dir": "ltr",
   "categories": ["business", "productivity", "communication"],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/assets/vector/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/vector/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/vector/icone-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/assets/vector/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+    { "src": "/assets/evox/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/evox/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/evox/icone-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/assets/evox/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ],
   "screenshots": [
     {
@@ -26,7 +26,7 @@
       "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Tela de login do CRM Pulse"
+      "label": "Tela de login do EVOX"
     },
     {
       "src": "/assets/screenshots/screenshot-02-agente-ia.png",
@@ -84,21 +84,21 @@
       "short_name": "Pipeline",
       "description": "Abrir pipeline de vendas",
       "url": "/crm/?view=pipeline",
-      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/evox/icone-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Contatos",
       "short_name": "Contatos",
       "description": "Lista de contatos",
       "url": "/crm/?view=contacts",
-      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/evox/icone-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Tarefas",
       "short_name": "Tarefas",
       "description": "Tarefas de hoje",
       "url": "/crm/?view=tasks",
-      "icons": [{ "src": "/assets/vector/icone-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/assets/evox/icone-192.png", "sizes": "192x192" }]
     }
   ]
 }

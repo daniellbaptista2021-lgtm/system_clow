@@ -79,7 +79,7 @@
       .agent-config-modal .toggle input { opacity:0; width:0; height:0; }
       .agent-config-modal .toggle .slider { position:absolute; cursor:pointer; inset:0; background:var(--text-faint); border-radius:24px; transition:.2s; }
       .agent-config-modal .toggle .slider::before { content:""; position:absolute; height:18px; width:18px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
-      .agent-config-modal .toggle input:checked + .slider { background:#C18638; }
+      .agent-config-modal .toggle input:checked + .slider { background:var(--purple); }
       .agent-config-modal .toggle input:checked + .slider::before { transform:translateX(20px); }
 
       /* Botão integrado ao tema do System Clow — vai dentro de .col-head */
@@ -329,7 +329,7 @@
   function paintButton(btn, enabled) {
     if (btn.dataset.opening) return; // "Abrindo..." manda enquanto carrega
     enabled = !!enabled;
-    const text = enabled ? '🟢 Agente' : '⚙️ Agente';
+    const text = 'Agente';
     const title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
     if (btn.classList.contains('active') !== enabled) btn.classList.toggle('active', enabled);
     if (btn.title !== title) btn.title = title;
@@ -395,7 +395,7 @@
       btn.dataset.colId = colId;
       if (boardId) btn.dataset.boardId = boardId;
       btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
-      btn.textContent = enabled ? '🟢 Agente' : '⚙️ Agente';
+      btn.textContent = 'Agente';
       // Inserir ANTES do menu (⋯) — fica [...title...] [count] [⚙️ Agente] [⋯]
       const menu = head.querySelector('.col-menu-btn');
       if (menu) head.insertBefore(btn, menu);

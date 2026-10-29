@@ -1,0 +1,202 @@
+/* EVOX — identidade visual (29/10/2026).
+ *
+ * Minimalista: superfícies brancas, uma cor de ação (o azul do "E" da logo),
+ * borda fina no lugar de sombra pesada, letra Inter em caixa normal.
+ * Tema CLARO é o padrão; o ESCURO é opção (botão "Tema" no menu).
+ *
+ * Paleta, medida na logo oficial:
+ *   azul #0A66F5 · azul profundo #004BCA · ciano #1CBEFF · tinta #071221
+ *
+ * Carregado DEPOIS do crm.css: reescreve os tokens dele. --purple é o nome
+ * histórico da cor de ação no crm.css (era o roxo da marca original), por
+ * isso ele recebe o azul do EVOX. */
+
+html[data-theme="light"],
+html[data-theme="system"] {
+  color-scheme: light;
+  --bg: #F6F8FB;
+  --bg-2: #FFFFFF;
+  --bg-3: #FFFFFF;
+  --bg-4: #F1F4F9;
+  --border: #E6EAF0;
+  --border-2: #CBD3DF;
+  --text: #071221;
+  --text-2: #3B4658;
+  --text-dim: #5B6678;
+  --text-faint: #8A94A6;
+  --gray: #5B6678;
+  --purple: #0A66F5;
+  --blue: #004BCA;
+  --green: #12A150;
+  --amber: #C27C0E;
+  --red: #D92D20;
+  --info: #0A66F5;
+  --grad: linear-gradient(135deg, #004BCA, #0A66F5 55%, #1CBEFF);
+  --grad-soft: linear-gradient(135deg, rgba(10,102,245,.08), rgba(28,190,255,.06));
+  --primary-soft: rgba(10,102,245,.08);
+  --shadow-sm: 0 1px 2px rgba(7,18,33,.05);
+  --shadow-md: 0 4px 14px rgba(7,18,33,.07);
+  --shadow-lg: 0 16px 40px rgba(7,18,33,.12);
+  --scroll-thumb: rgba(7,18,33,.14);
+  --scroll-thumb-hover: rgba(7,18,33,.26);
+  --overlay: rgba(7,18,33,.40);
+  --shadow-color: rgba(7,18,33,.10);
+  --input-bg: #FFFFFF;
+  --code-bg: #F1F4F9;
+  --on-primary: #FFFFFF;
+  --evox-msg-out: #0A66F5;
+  --evox-logo: url("/assets/evox/evox-logo.png");
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #080C14;
+  --bg-2: #0D1320;
+  --bg-3: #111A2B;
+  --bg-4: #172236;
+  --border: rgba(255,255,255,.08);
+  --border-2: rgba(255,255,255,.16);
+  --text: #E9EEF7;
+  --text-2: #B4BFD1;
+  --text-dim: #8E9AB0;
+  --text-faint: #66738A;
+  --gray: #8E9AB0;
+  --purple: #3D8BFF;
+  --blue: #1CBEFF;
+  --green: #34D27A;
+  --amber: #F2B441;
+  --red: #F97066;
+  --info: #3D8BFF;
+  --grad: linear-gradient(135deg, #0A66F5, #1CBEFF);
+  --grad-soft: linear-gradient(135deg, rgba(61,139,255,.14), rgba(28,190,255,.08));
+  --primary-soft: rgba(61,139,255,.14);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 6px 18px rgba(0,0,0,.45);
+  --shadow-lg: 0 20px 50px rgba(0,0,0,.55);
+  --scroll-thumb: rgba(255,255,255,.14);
+  --scroll-thumb-hover: rgba(255,255,255,.26);
+  --overlay: rgba(0,0,0,.6);
+  --shadow-color: rgba(0,0,0,.5);
+  --input-bg: #0D1320;
+  --code-bg: #0D1320;
+  --on-primary: #FFFFFF;
+  --evox-msg-out: #0A66F5;
+  --evox-logo: url("/assets/evox/evox-logo-escuro.png");
+}
+
+html, body, button, input, select, textarea {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+body {
+  background: var(--bg);
+  background-image: none;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+.main, .view { background: transparent; }
+
+/* ─── Títulos: caixa normal, peso firme ─────────────────────────────────── */
+.top-bar h2, .modal h3, .agent-config-modal h2 {
+  font-family: inherit; font-weight: 650; text-transform: none; letter-spacing: -.01em; color: var(--text);
+}
+.top-bar h2 { font-size: 20px; }
+.col-head .col-title {
+  font-family: inherit; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text);
+}
+
+/* ─── Barra do topo ─────────────────────────────────────────────────────── */
+.top-bar {
+  background: transparent; border-bottom: 1px solid var(--border); box-shadow: none;
+}
+.top-bar select, .top-bar input {
+  background: var(--bg-3); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+}
+
+/* ─── Botões: um azul só, sem filete ────────────────────────────────────── */
+button, .btn, .modal-actions .confirm {
+  border-radius: 10px;
+}
+.top-bar button:not(.secondary), .modal-actions .confirm, #newCardBtn, #newChannelBtn, #newContactBtn {
+  background: var(--purple) !important; color: var(--on-primary) !important;
+  border: 1px solid transparent !important; box-shadow: none !important; font-weight: 600;
+}
+.top-bar button:not(.secondary):hover, .modal-actions .confirm:hover, #newCardBtn:hover {
+  background: var(--blue) !important;
+}
+.top-bar button.secondary {
+  background: var(--bg-3); color: var(--text); border: 1px solid var(--border); box-shadow: none;
+}
+.top-bar button.secondary:hover { border-color: var(--border-2); }
+
+/* ─── Funil: colunas leves, cards brancos ───────────────────────────────── */
+.kanban-col, html[data-theme="light"] .kanban-col {
+  background: var(--bg-4); border: 1px solid var(--border); border-radius: 14px; box-shadow: none;
+}
+.col-head { border-bottom: 1px solid var(--border); }
+.card {
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-sm);
+}
+.card:hover { border-color: var(--purple); box-shadow: var(--shadow-md); }
+.card-value { color: var(--purple); }
+
+/* ─── Barra lateral: branca (clara) ou grafite (escura), sem textura ──── */
+.sidebar {
+  background: var(--bg-2); background-image: none;
+  border-right: 1px solid var(--border); color: var(--text);
+}
+.sidebar .nav-item { letter-spacing: 0; color: var(--text-2); border-radius: 10px; font-weight: 500; }
+.sidebar .nav-item:hover { background: var(--bg-4); color: var(--text); }
+.sidebar .nav-item.active { color: var(--purple); background: var(--primary-soft); }
+.sidebar .nav-item.active::before { display: none; }
+.sidebar .nav-item.active .nav-icon, .nav-item:hover .nav-icon { color: var(--purple); }
+.sidebar .tenant-info .name { color: var(--text); font-size: 12.5px; }
+.sidebar .tenant-info .tier { text-transform: none; letter-spacing: 0; color: var(--text-faint); font-size: 11px; word-break: break-all; }
+.sidebar .logout-btn { background: transparent; border: 1px solid var(--border); color: var(--text-2); border-radius: 10px; }
+
+/* Logo no lugar do wordmark antigo: a imagem muda com o tema. */
+.brand { padding: 22px 16px 20px !important; }
+.brand-word { gap: 0; }
+.evox-logo {
+  display: block; width: 140px; height: 30px; margin: 0 auto;
+  background: var(--evox-logo) center / contain no-repeat;
+}
+.brand-word-sub { display: none; }
+
+/* O botão "Tema" volta: claro é o padrão, escuro é opção. */
+#themeBtn { display: flex !important; }
+
+/* ─── Janelas ───────────────────────────────────────────────────────────── */
+.modal, .agent-config-modal {
+  background: var(--bg-3); color: var(--text);
+  border: 1px solid var(--border); border-top: 1px solid var(--border);
+  border-radius: 16px; box-shadow: var(--shadow-lg);
+}
+.agent-config-modal h2 { font-size: 17px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+input, select, textarea { border-radius: 10px; }
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--purple) !important; box-shadow: 0 0 0 3px var(--primary-soft) !important;
+}
+
+/* ─── Painel do lead ────────────────────────────────────────────────────── */
+.side-panel { background: var(--bg-2); border-left: 1px solid var(--border); backdrop-filter: none; }
+.side-panel .panel-head { border-bottom: 1px solid var(--border); }
+.side-panel .panel-tab { font-family: inherit; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.side-panel .panel-tab.active { border-bottom-color: var(--purple); color: var(--purple); }
+.side-panel .composer { background: var(--bg-2); border-top: 1px solid var(--border); }
+.side-panel .msg.in { background: var(--bg-4); color: var(--text); border: 1px solid var(--border); }
+.side-panel .msg.out { background: var(--evox-msg-out); color: #FFFFFF; }
+
+/* ─── Botão "Agente" das colunas: discreto, com bolinha de status ──────── */
+.col-head .col-agent-btn {
+  background: transparent !important; border: 1px solid var(--border) !important; box-shadow: none !important;
+  color: var(--text-dim) !important; border-radius: 999px !important;
+  padding: 4px 10px 4px 8px !important; font-size: 11.5px !important; font-weight: 500 !important; gap: 6px !important;
+}
+.col-head .col-agent-btn::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint);
+}
+.col-head .col-agent-btn.active { color: var(--purple) !important; border-color: color-mix(in srgb, var(--purple) 35%, transparent) !important; background: var(--primary-soft) !important; }
+.col-head .col-agent-btn.active::before { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent); }
+.col-head .col-agent-btn:hover { border-color: var(--border-2) !important; color: var(--text) !important; }
+.col-head .col-count { color: var(--text-faint); font-weight: 500; }
+.col-head .col-menu-btn { color: var(--text-faint); background: transparent; border: none; }

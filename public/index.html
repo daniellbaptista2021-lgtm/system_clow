@@ -3,76 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CRM Pulse</title>
+<title>EVOX</title>
 <script>
-// Aplica o tema salvo (mesma chave do CRM, mesma origem) antes do primeiro
-// paint, pra nao piscar o tema errado.
-(function(){try{var t=localStorage.getItem('clow_theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}})();
+// EVOX: claro e o padrao; escuro so se a pessoa escolheu no CRM (mesma chave).
+(function(){var t='light';try{if(localStorage.getItem('evox_tema')==='dark')t='dark';}catch(e){}document.documentElement.setAttribute('data-theme',t);})();
 </script>
-<link rel="icon" href="/assets/vector/icone-192.png">
-<link rel="apple-touch-icon" href="/assets/vector/apple-touch-icon.png">
+<link rel="icon" href="/assets/evox/favicon.png">
+<link rel="apple-touch-icon" href="/assets/evox/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0A111B">
+<meta name="theme-color" content="#F6F8FB">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700;900&family=Oswald:wght@300;400;500&family=Raleway:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg-0:#ECEBE8;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:rgba(10,17,27,.22);
-  --t1:#0A111B;--t2:#4A5872;--tm:#6B7A93;
-  --p:#C18638;--bl:#D9A15A;--r:#F87171;
-  --gp:#1A2A43;
+  --bg:#F6F8FB;--card:#FFFFFF;--line:#E6EAF0;--t1:#071221;--t2:#5B6678;--tm:#8A94A6;
+  --p:#0A66F5;--p2:#004BCA;--r:#D92D20;--logo:url('/assets/evox/evox-logo.png');
 }
-html[data-theme="light"], html[data-theme="system"] { color-scheme: light; }
-html[data-theme="dark"] { color-scheme: dark; }
-html[data-theme="light"]{
-  --bg-0:#F7F7FA;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:#ECECF2;
-  --t1:#142037;--t2:#5F6E88;--tm:#7D8BA3;
-}
-@media (prefers-color-scheme: light){
-  html[data-theme="system"]{
-    --bg-0:#F7F7FA;--bg-1:#FFFFFF;--bg-2:#FFFFFF;--bg-3:#ECECF2;
-    --t1:#142037;--t2:#5F6E88;--tm:#7D8BA3;
-  }
+html[data-theme="dark"]{
+  color-scheme:dark;--bg:#080C14;--card:#111A2B;--line:rgba(255,255,255,.08);--t1:#E9EEF7;--t2:#8E9AB0;--tm:#66738A;
+  --p:#3D8BFF;--p2:#0A66F5;--r:#F97066;--logo:url('/assets/evox/evox-logo-escuro.png');
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;min-height:100dvh}
 body{
-  font-family:'Raleway',system-ui,sans-serif;color:var(--t1);background:var(--bg-0);
-  background-image:url('/assets/vector/textura-pedra.jpg');background-size:cover;background-position:center;background-attachment:fixed;
-  display:flex;align-items:center;justify-content:center;padding:20px;
+  font-family:'Inter',system-ui,sans-serif;color:var(--t1);background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:20px 16px;
   -webkit-font-smoothing:antialiased;
 }
-.login-wrap{width:100%;max-width:400px}
-.login-card{
-  background:var(--bg-1);border:1px solid #0A111B;border-top:3px solid #C18638;border-radius:14px;
-  padding:36px 30px;box-shadow:0 24px 60px rgba(10,17,27,.16);
-}
-.login-brand{display:flex;justify-content:center;margin-bottom:18px}
-.login-brand{flex-direction:column;align-items:center;gap:6px}
-.login-brand img{height:auto;width:200px;max-width:70%}
-.login-nome{font-family:'Merriweather',serif;font-weight:900;font-size:30px;color:#C18638;letter-spacing:-.01em}
-.login-nome span{color:#395988}
-.login-title{font-family:'Oswald',sans-serif;font-weight:400;text-transform:uppercase;letter-spacing:.22em;font-size:18px;text-align:center;margin-bottom:8px}
-.login-sub{font-size:13px;color:var(--t2);text-align:center;line-height:1.5;margin-bottom:26px}
+.login-wrap{width:100%;max-width:380px}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:36px 28px 28px;box-shadow:0 12px 40px rgba(7,18,33,.06)}
+.login-brand{height:34px;margin:0 auto 28px;background:var(--logo) center/contain no-repeat}
+.login-brand img{display:none}
+.login-title{font-weight:650;font-size:20px;letter-spacing:-.01em;text-align:center;margin-bottom:6px}
+.login-sub{font-size:13.5px;color:var(--t2);text-align:center;line-height:1.5;margin-bottom:24px}
 .login-f{
-  width:100%;height:52px;border-radius:14px;border:1px solid var(--bg-3);background:var(--bg-2);
-  color:var(--t1);padding:0 16px;margin-bottom:12px;outline:none;font:inherit;font-size:14px;
+  width:100%;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--t1);padding:0 14px;margin-bottom:10px;outline:none;font:inherit;font-size:14.5px;
   transition:border-color .15s ease,box-shadow .15s ease;
 }
 .login-f::placeholder{color:var(--tm)}
-.login-f:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(193,134,56,.12)}
+.login-f:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(10,102,245,.12)}
 .login-b{
-  width:100%;height:52px;border:none;border-radius:14px;background:var(--gp);color:#fff;
-  font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;box-shadow:inset 0 -3px 0 #C18638;letter-spacing:.08em;
-  transition:filter .15s ease,transform .15s ease;
+  width:100%;height:48px;border:none;border-radius:12px;background:var(--p);color:#fff;
+  font:inherit;font-size:15px;font-weight:600;cursor:pointer;margin-top:6px;
+  transition:background .15s ease,transform .15s ease;
 }
-.login-b:hover{filter:brightness(1.06)}
+.login-b:hover{background:var(--p2)}
 .login-b:active{transform:translateY(1px)}
 .login-b:disabled{opacity:.6;cursor:default}
 .login-e{min-height:20px;color:var(--r);font-size:13px;margin-top:12px;text-align:center}
 .login-loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 0}
-.login-spin{width:36px;height:36px;border:3px solid rgba(193,134,56,.25);border-top-color:var(--p);border-radius:50%;animation:spin .9s linear infinite}
+.login-spin{width:32px;height:32px;border:3px solid rgba(10,102,245,.18);border-top-color:var(--p);border-radius:50%;animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .login-loading-text{font-size:13px;color:var(--t2)}
 .hide{display:none !important}
@@ -87,9 +69,9 @@ body{
       <div class="login-loading-text">Verificando sessão...</div>
     </div>
     <div id="loginScreen" class="hide">
-      <div class="login-brand"><img src="/assets/vector/pulse.svg" alt="CRM Pulse"></div>
+      <div class="login-brand" role="img" aria-label="EVOX"></div>
       <div class="login-title">Entre para continuar</div>
-      <div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM.</div>
+      <div class="login-sub">Acesse sua conta para continuar.</div>
       <input class="login-f" id="loginUser" type="text" placeholder="Usuário ou email" autocomplete="username" autofocus>
       <input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password">
       <button class="login-b" id="loginBtn" onclick="doLogin()">Entrar</button>
