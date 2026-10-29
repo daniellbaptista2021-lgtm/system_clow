@@ -18,6 +18,7 @@ import { CommandValidator } from './commandValidator.js';
 import { OutputProcessor } from './outputProcessor.js';
 import { SandboxRunner } from './sandboxRunner.js';
 import { validateBashCommand } from '../../tenancy/bashSandbox.js';
+import { podeUsarTerminal, MENSAGEM_TERMINAL_BLOQUEADO } from '../../tenancy/terminalPermitido.js';
 import { DEFAULT_TIMEOUT_MS } from './constants.js';
 
 // ─── Shared instances (per-session via registry) ────────────────────────────
@@ -167,6 +168,12 @@ Commands timeout after 120 seconds by default.`,
 
     const isMultiTenantContext = Boolean(_ctx.tenantId && _ctx.tenantId !== 'default' && _ctx.workspaceRoot);
     if (isMultiTenantContext) {
+      // Segunda trava: a sessao ja nasce sem Bash para quem nao pode
+      // (sessionPool.ts), mas subagente, missao e sessao reidratada montam a
+      // lista de ferramentas por outros caminhos. Ver terminalPermitido.ts.
+      if (!podeUsarTerminal(_ctx.tenantId)) {
+        return { valid: false, message: MENSAGEM_TERMINAL_BLOQUEADO, errorCode: 'BASH_NOT_ALLOWED_FOR_TENANT' };
+      }
       const sandbox = validateBashCommand(input.command, _ctx.workspaceRoot!, false);
       if (!sandbox.allowed) {
         return {
@@ -250,6 +257,11 @@ Commands timeout after 120 seconds by default.`,
     const sessionId = context.sessionId || 'default';
     const timeoutMs = input.timeout || DEFAULT_TIMEOUT_MS;
     const isMultiTenantContext = Boolean(context.tenantId && context.workspaceRoot);
+    // Terceira trava, no ponto em que o comando sai: quem chegar aqui sem
+    // passar pelo validateInput (chamada direta de outra ferramenta) para aqui.
+    if (isMultiTenantContext && !podeUsarTerminal(context.tenantId)) {
+      return { output: '', outputText: MENSAGEM_TERMINAL_BLOQUEADO, isError: true };
+    }
     const sandboxBackend = isMultiTenantContext ? SandboxRunner.detect() : 'none';
     const commandToRun = isMultiTenantContext
       ? SandboxRunner.wrap(command, sandboxBackend, {

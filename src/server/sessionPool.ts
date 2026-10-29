@@ -21,6 +21,7 @@ import { getTools } from '../tools/tools.js';
 import { assembleFullContext } from '../utils/context/context.js';
 import { createCanUseTool, type LegacyPermissionContext } from '../utils/permissions/permissions.js';
 import { filterToolsForTier } from '../tenancy/quotaGuard.js';
+import { podeUsarTerminal } from '../tenancy/terminalPermitido.js';
 import { registerSession, unregisterSession } from '../tenancy/tenantStore.js';
 import {
   loadTranscriptFile,
@@ -31,7 +32,17 @@ import {
 import type { ClovMessage } from '../api/anthropic.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { logger } from '../utils/logger.js';
+
+/** Pasta vazia, fora de qualquer workspace, de onde contas sem terminal leem
+ *  ganchos e plugins — ou seja, nenhum. */
+function pastaSemConfig(): string {
+  const dir = path.join(os.tmpdir(), 'clow-sem-config-do-cliente');
+  try { fs.mkdirSync(dir, { recursive: true, mode: 0o755 }); } catch { /* noop */ }
+  return dir;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -150,11 +161,18 @@ export class SessionPool {
       : getTools(undefined, this.mcpManager || undefined);
     // Plan-mode approval depends on interactive stdin/stdout, which does not exist
     // for HTTP/SSE sessions. Excluding these tools prevents dead-end loops in the web UI.
+    // Terminal, ganchos e plugins do workspace executam comando no HOST — so
+    // para as contas liberadas (terminalPermitido.ts). Para as outras, a
+    // configuracao vem de uma pasta vazia que o cliente nao alcanca: o
+    // .clow/hooks.json que o agente escrever no workspace nao e lido.
+    const terminal = podeUsarTerminal(tenantId, options.isAdmin ?? false);
+    const configRoot = terminal ? workspaceRoot : pastaSemConfig();
     const baseTools = baseToolPool.filter((tool) => (
       tool.name !== 'EnterPlanMode' && tool.name !== 'ExitPlanMode'
+      && (terminal || tool.name !== 'Bash')
     ));
     const pluginSystem = new PluginSystem();
-    await pluginSystem.initialize(workspaceRoot);
+    await pluginSystem.initialize(configRoot);
     const pluginRuntimeTools = await buildPluginRuntimeTools(pluginSystem);
     const pluginOutputStyles = await buildPluginRuntimeOutputStyles(pluginSystem);
     const fullTools = [...baseTools, ...pluginRuntimeTools];
@@ -212,7 +230,7 @@ export class SessionPool {
       toolRegistry,
       spawnSubagent: async () => 'ok',
     });
-    await hookEngine.initialize(workspaceRoot, false);
+    await hookEngine.initialize(configRoot, false);
     for (const pluginHook of pluginSystem.getHooks()) {
       hookEngine.addHook(pluginHook);
     }
