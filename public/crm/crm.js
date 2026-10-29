@@ -92,6 +92,62 @@ function avatarEl(person, opts) {
 function fmtMoney(cents) {
   return `R$ ${((cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+// EVOX: valor sem centavos (R$ 25.000) — para cards, colunas e indicadores.
+function fmtMoneyCurto(cents) {
+  return `R$ ${Math.round((cents || 0) / 100).toLocaleString('pt-BR')}`;
+}
+// Cor estavel por texto: a mesma etiqueta sai sempre da mesma cor.
+const PALETA_ETIQUETAS = ['#0A66F5', '#12A150', '#7A5AF8', '#E8590C', '#0E9384', '#C11574', '#1CBEFF', '#B54708'];
+function corDaEtiqueta(t) {
+  let h = 0; for (const ch of String(t)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return PALETA_ETIQUETAS[h % PALETA_ETIQUETAS.length];
+}
+function haQuanto(ts) {
+  if (!ts) return '';
+  const min = Math.floor((Date.now() - ts) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60); if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24); if (d === 1) return 'ontem';
+  if (d < 30) return `há ${d} dias`;
+  const m = Math.floor(d / 30); return m === 1 ? 'há 1 mês' : `há ${m} meses`;
+}
+
+// Indicadores do topo do funil — so dado real do funil aberto. "Ganho" e
+// coluna final que nao e de perda; sem coluna assim, conversao fica em "—".
+function renderPainelEvox(columns, cardsByColumn) {
+  const alvo = $('#evoxPainel'); if (!alvo) return;
+  const todos = columns.flatMap((c) => cardsByColumn[c.id] || []);
+  const ehPerda = (c) => /perd|lost|cancel/i.test(c.name || '');
+  const ganhas = columns.filter((c) => c.isTerminal && !ehPerda(c));
+  const abertas = columns.filter((c) => !c.isTerminal);
+  const cardsDe = (cols) => cols.flatMap((c) => cardsByColumn[c.id] || []);
+  const soma = (cs) => cs.reduce((s, c) => s + (c.valueCents || 0), 0);
+  const ganhos = cardsDe(ganhas), emAberto = cardsDe(abertas);
+  const dia = 86400000, agora = Date.now();
+  const porDia = (lista) => Array.from({ length: 14 }, (_, i) => {
+    const ini = agora - (14 - i) * dia; return lista.filter((c) => c.createdAt >= ini && c.createdAt < ini + dia).length;
+  });
+  const novos30 = todos.filter((c) => c.createdAt > agora - 30 * dia).length;
+  const conv = todos.length && ganhas.length ? (ganhos.length / todos.length) * 100 : null;
+  const linha = (vals, cor) => {
+    const max = Math.max(1, ...vals), w = 92, h = 34;
+    const pts = vals.map((v, i) => `${(i * w / (vals.length - 1)).toFixed(1)},${(h - 3 - (v / max) * (h - 8)).toFixed(1)}`).join(' ');
+    return `<svg class="evox-kpi-graf" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  };
+  const icone = {
+    leads: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    conv: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
+    receita: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    abertos: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  };
+  const kpi = (ic, rotulo, valor, sub, graf) => `<div class="evox-kpi"><div class="evox-kpi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icone[ic]}</svg></div><div class="evox-kpi-txt"><div class="evox-kpi-rot">${rotulo}</div><div class="evox-kpi-linha"><div class="evox-kpi-val">${valor}</div>${graf}</div><div class="evox-kpi-sub">${sub}</div></div></div>`;
+  alvo.innerHTML =
+    kpi('leads', 'Leads no funil', todos.length.toLocaleString('pt-BR'), `${novos30} nos últimos 30 dias`, linha(porDia(todos), '#0A66F5')) +
+    kpi('conv', 'Taxa de conversão', conv == null ? '—' : conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', ganhas.length ? `${ganhos.length} negócio(s) ganho(s)` : 'crie uma coluna final de ganho', linha(porDia(ganhos), '#12A150')) +
+    kpi('receita', 'Valor ganho', fmtMoneyCurto(soma(ganhos)), 'soma dos negócios ganhos', linha(porDia(ganhos), '#1CBEFF')) +
+    kpi('abertos', 'Negócios abertos', emAberto.length.toLocaleString('pt-BR'), fmtMoneyCurto(soma(emAberto)) + ' em negociação', linha(porDia(emAberto), '#7A5AF8'));
+}
 function fmtDate(ts) {
   if (!ts) return '';
   const d = new Date(ts);
@@ -268,9 +324,11 @@ function renderKanban() {
   k.innerHTML = '';
   if (!state.pipeline) { k.append(el('div', { class: 'empty' }, 'Crie uma board pra começar.')); return; }
   const { columns, cardsByColumn } = state.pipeline;
+  renderPainelEvox(columns, cardsByColumn);
   for (const col of columns) {
     const cards = cardsByColumn[col.id] || [];
-    const colEl = el('div', { class: 'kanban-col', data: { columnId: col.id } },
+    const totalCol = cards.reduce((s, c) => s + (c.valueCents || 0), 0);
+    const colEl = el('div', { class: 'kanban-col', style: `--col-cor:${col.color || 'var(--purple)'}`, data: { columnId: col.id } },
       el('div', { class: 'col-head', style: 'cursor:pointer', title: 'Botão direito (ou clique longo) para opções da coluna',
         on: { contextmenu: (e) => { e.preventDefault(); showColumnContextMenu(col, e.clientX, e.clientY); } } },
         el('div', { class: 'col-title' },
@@ -278,6 +336,7 @@ function renderKanban() {
           col.name,
         ),
         el('span', { class: 'col-count' }, String(cards.length)),
+        el('div', { class: 'col-total' }, fmtMoneyCurto(totalCol)),
         el('button', { class: 'col-menu-btn', title: 'Opções da coluna',
           style: 'background:transparent;border:none;color:var(--text-dim);cursor:pointer;padding:4px 8px;border-radius:6px;margin-left:auto;font-size:18px;line-height:1;font-weight:700',
           on: { click: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); showColumnContextMenu(col, r.right, r.bottom); } } }, '⋯'),
@@ -319,6 +378,7 @@ function cardEl(card) {
   const over = card.dueDate && card.dueDate < Date.now();
   const c = el('div', { class: 'card', draggable: 'true', data: { cardId: card.id, columnId: card.columnId } },
     el('div', { class: 'card-title-row', style: 'display:flex;align-items:flex-start;gap:6px;justify-content:space-between' },
+      el('div', { class: 'card-selo', style: `--selo:${corDaEtiqueta(card.title || '')}` }, initials(card.title)),
       el('div', { class: 'card-title', style: 'flex:1;min-width:0' }, card.title),
       (card.unreadCount || 0) > 0 ? el('div', { class: 'card-wa-badge card-wa-badge--inline', title: card.unreadCount + ' mensagem(ns) aguardando resposta' },
         el('span', { class: 'wa-icon', html: '<svg viewBox="0 0 32 32" width="14" height="14" fill="#fff"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>' }),
@@ -340,17 +400,16 @@ function cardEl(card) {
         }
       }, '⋯'),
     ),
-    contact.name ? el('div', { class: 'card-contact' },
-      avatarEl(contact, { class: 'card-avatar' }),
-      contact.name,
-    ) : null,
-    el('div', { class: 'card-meta' },
-      card.valueCents > 0 ? el('span', { class: 'card-value' }, fmtMoney(card.valueCents)) : el('span'),
-      card.probability > 0 ? el('span', { class: 'card-probability' }, `${card.probability}%`) : el('span'),
-    ),
+    contact.name ? el('div', { class: 'card-sub' }, contact.name) : null,
     (card.labels || []).length ? el('div', { class: 'card-labels' },
-      ...card.labels.map(l => el('span', { class: 'card-label' }, l)),
+      ...card.labels.map(l => el('span', { class: 'card-label', style: `--etq:${corDaEtiqueta(l)}` }, l)),
     ) : null,
+    el('div', { class: 'card-foot' },
+      contact.name ? avatarEl(contact, { class: 'card-avatar' }) : null,
+      el('span', { class: 'card-ago' }, haQuanto(card.lastActivityAt || card.updatedAt || card.createdAt)),
+      card.probability > 0 ? el('span', { class: 'card-probability' }, `${card.probability}%`) : null,
+      card.valueCents > 0 ? el('span', { class: 'card-value' }, fmtMoneyCurto(card.valueCents)) : null,
+    ),
     card.dueDate ? el('div', { class: over ? 'card-due overdue' : 'card-due' },
       over ? '⚠ ' : '📅 ',
       new Date(card.dueDate).toLocaleDateString('pt-BR'),
