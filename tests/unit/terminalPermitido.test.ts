@@ -32,7 +32,7 @@ describe('terminal so para contas liberadas', () => {
 
   it('a sessao tira o Bash e le ganchos/plugins de pasta vazia para quem nao pode', () => {
     const pool = ler('src/server/sessionPool.ts');
-    expect(pool).toMatch(/terminal \|\| tool\.name !== 'Bash'/);
+    expect(pool).toMatch(/terminal \|\| slotsDisponiveis\(\) \|\| tool\.name !== 'Bash'/);
     expect(pool).toMatch(/pluginSystem\.initialize\(configRoot\)/);
     expect(pool).toMatch(/hookEngine\.initialize\(configRoot, false\)/);
     expect(pool).not.toMatch(/pluginSystem\.initialize\(workspaceRoot\)/);

@@ -19,7 +19,7 @@ describe('slot de cada conta', () => {
   });
 
   it('nome do slot so tem letras e numeros da conta', () => {
-    expect(nomeDoSlot('E556F5DE-aa9e;rm -rf /')).toBe('evox-e556f5deaa9erm');
+    expect(nomeDoSlot('E556F5DE-aa9e;rm -rf /')).toBe('evox-e556f5deaa9ermrf');
     expect(() => nomeDoSlot(';;;')).toThrow();
   });
 
