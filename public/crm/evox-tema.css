@@ -580,3 +580,7 @@ input:focus, select:focus, textarea:focus {
 .pr-bloco { overflow: hidden; }
 .pr-bloco > div { flex: 1; min-width: 0; }
 .pr-etapa { width: 100% !important; text-overflow: ellipsis; }
+
+/* Quadro do Agente IA com a mesma moldura dos outros blocos */
+#agenteView .agente-frame-wrap { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--bg-3); }
+@media (max-width: 768px) { #agenteView .agente-frame-wrap { border-radius: 0; border: none; } }

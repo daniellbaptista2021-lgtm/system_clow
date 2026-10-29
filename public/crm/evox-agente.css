@@ -1,0 +1,57 @@
+/* EVOX — a página do Agente IA no mesmo visual do CRM (evox-tema.css):
+ * fundo limpo, superfícies brancas, azul da marca, Inter. Claro por padrão,
+ * escuro quando a pessoa escolheu no menu (chave evox_tema). */
+html[data-theme="light"], html[data-theme="system"] {
+  color-scheme: light;
+  --bg: #F6F8FB; --bg-soft: #F1F4F9; --bg-panel: #FFFFFF; --bg-card: #FFFFFF;
+  --line: #E6EAF0; --line-soft: #EEF1F6;
+  --text: #071221; --muted: #5B6678; --muted-2: #8A94A6;
+  --accent: #0A66F5; --blue: #004BCA; --danger: #D92D20;
+  --shadow: 0 16px 40px rgba(7,18,33,.10);
+  --rp-bg: #FFFFFF; --rp-border: #E6EAF0;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #080C14; --bg-soft: #0D1320; --bg-panel: #111A2B; --bg-card: #111A2B;
+  --line: rgba(255,255,255,.08); --line-soft: rgba(255,255,255,.05);
+  --text: #E9EEF7; --muted: #8E9AB0; --muted-2: #66738A;
+  --accent: #3D8BFF; --blue: #0A66F5; --danger: #F97066;
+  --shadow: 0 20px 50px rgba(0,0,0,.5);
+  --rp-bg: #111A2B; --rp-border: rgba(255,255,255,.08);
+}
+html { --font: 'Inter', system-ui, sans-serif; --serif: 'Inter', system-ui, sans-serif; }
+body { background: var(--bg) !important; background-image: none !important; font-family: var(--font); }
+
+/* Tela de boas-vindas */
+.welc-tagline {
+  font-family: var(--font) !important; letter-spacing: .02em !important; text-transform: none !important;
+  font-size: 13px; font-weight: 600; color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 9%, transparent); padding: 6px 14px; border-radius: 999px;
+}
+.hero h1, .welcome h1 {
+  font-family: var(--font) !important; text-transform: none !important; letter-spacing: -.035em !important;
+  font-weight: 750 !important; color: var(--text) !important; -webkit-text-fill-color: var(--text) !important;
+  background: none !important; opacity: 1 !important; font-size: clamp(36px, 5vw, 56px) !important;
+}
+.hero h1 .gp {
+  background: linear-gradient(135deg, #004BCA, #0A66F5 50%, #1CBEFF) !important;
+  -webkit-background-clip: text !important; background-clip: text !important;
+  -webkit-text-fill-color: transparent !important; color: transparent !important;
+}
+
+/* Caixa de mensagem e botões */
+.dock .composer, .dock form, .compose-box, .dock > div {
+  border-radius: 20px !important;
+}
+.send-btn { background: var(--accent) !important; border-radius: 14px !important; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent) !important; }
+.send-btn:hover { background: var(--blue) !important; }
+.u-block { background: var(--accent) !important; box-shadow: none !important; }
+.side-primary { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; font-weight: 600; }
+.side-primary:hover { background: var(--blue) !important; }
+.recent-item { border-radius: 14px !important; }
+.recent-item.active { background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)) !important; border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important; box-shadow: none !important; }
+.avatar { background: linear-gradient(135deg, #004BCA, #1CBEFF) !important; }
+.model-pill { background: color-mix(in srgb, var(--accent) 9%, transparent) !important; color: var(--accent) !important; }
+
+/* Dentro do CRM a página vai num quadro: o "Sair" daqui duplicaria o do menu. */
+html.no-quadro .top-right .outline-btn { display: none; }
