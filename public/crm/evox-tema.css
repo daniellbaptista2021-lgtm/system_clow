@@ -602,3 +602,68 @@ input:focus, select:focus, textarea:focus {
 }
 .evox-foto-menu button:hover { background: var(--bg-4) !important; }
 .evox-foto-menu button[data-acao="remover"] { color: var(--red) !important; }
+
+/* ═══ Botão do Agente IA de cada coluna: em 3D, com o peso que ele tem ═══ */
+.col-head { display: grid !important; grid-template-columns: auto auto 1fr auto; grid-template-areas: "t c . m" "v v a a"; align-items: center; row-gap: 10px !important; column-gap: 8px !important; }
+.col-head .col-title { grid-area: t; margin: 0 !important; }
+.col-head .col-count { grid-area: c; }
+.col-head .col-menu-btn { grid-area: m; }
+.col-head .col-total { grid-area: v; flex-basis: auto; }
+.col-head .col-agent-btn { grid-area: a; justify-self: end; }
+
+.col-head .col-agent-btn {
+  position: relative; display: inline-flex !important; align-items: center; gap: 7px !important;
+  padding: 8px 13px 8px 11px !important; border-radius: 12px !important;
+  font-size: 12.5px !important; font-weight: 700 !important; letter-spacing: .01em; line-height: 1 !important; cursor: pointer;
+  color: #fff !important; border: 1px solid #0046C0 !important;
+  background: linear-gradient(180deg, #3A86FF 0%, #0A66F5 55%, #0057DF 100%) !important;
+  box-shadow: 0 4px 0 #003A9E, 0 8px 16px rgba(10,102,245,.35), inset 0 1px 0 rgba(255,255,255,.35) !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.18);
+  transform: translateY(0); transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
+}
+/* ícone de "faísca" (IA) */
+.col-head .col-agent-btn::after {
+  content: ""; order: -1; width: 15px; height: 15px; flex: 0 0 15px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l1 2.7 2.7 1-2.7 1L19 22.5l-1-2.8-2.7-1 2.7-1z'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l1 2.7 2.7 1-2.7 1L19 22.5l-1-2.8-2.7-1 2.7-1z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+/* bolinha de status: cinza desligado, verde pulsando ligado */
+.col-head .col-agent-btn::before {
+  content: ""; order: 2; width: 8px; height: 8px; border-radius: 50%; margin-left: 2px;
+  background: rgba(255,255,255,.55) !important; box-shadow: 0 0 0 2px rgba(255,255,255,.2) !important;
+}
+.col-head .col-agent-btn.active::before { background: #3BE37F !important; box-shadow: 0 0 0 0 rgba(59,227,127,.7) !important; animation: evox-pulso 1.8s ease-out infinite; }
+@keyframes evox-pulso { 0% { box-shadow: 0 0 0 0 rgba(59,227,127,.65); } 70% { box-shadow: 0 0 0 7px rgba(59,227,127,0); } 100% { box-shadow: 0 0 0 0 rgba(59,227,127,0); } }
+
+.col-head .col-agent-btn:hover { filter: brightness(1.07); color: #fff !important; border-color: #0046C0 !important; background: linear-gradient(180deg, #3A86FF 0%, #0A66F5 55%, #0057DF 100%) !important; }
+.col-head .col-agent-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #003A9E, 0 3px 8px rgba(10,102,245,.3), inset 0 1px 0 rgba(255,255,255,.25) !important; }
+.col-head .col-agent-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--purple) 40%, transparent); outline-offset: 2px; }
+
+/* Desligado: o mesmo botão em 3D, branco com borda azul — chama para ligar */
+.col-head .col-agent-btn:not(.active) {
+  color: #0A66F5 !important; border-color: #BFD5FB !important; text-shadow: none;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F2F7FF 100%) !important;
+  box-shadow: 0 4px 0 #BFD5FB, 0 8px 14px rgba(10,102,245,.14), inset 0 1px 0 #fff !important;
+}
+.col-head .col-agent-btn:not(.active)::before { background: #9AA6B8 !important; box-shadow: none !important; }
+.col-head .col-agent-btn:not(.active):hover { color: #0A66F5 !important; border-color: #8DB4F7 !important; background: linear-gradient(180deg, #FFFFFF 0%, #E9F1FF 100%) !important; }
+.col-head .col-agent-btn:not(.active):active { box-shadow: 0 1px 0 #BFD5FB, 0 3px 6px rgba(10,102,245,.12) !important; }
+html[data-theme="dark"] .col-head .col-agent-btn:not(.active) {
+  color: #8FB8FF !important; border-color: #2A4A80 !important; background: linear-gradient(180deg, #1A2A47 0%, #14213A 100%) !important;
+  box-shadow: 0 4px 0 #0B1630, 0 8px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+/* (vence a regra antiga do botão discreto, que tinha seletor mais forte) */
+.col-head .col-agent-btn, .col-head .col-total { white-space: nowrap; }
+.col-head .col-agent-btn.active {
+  color: #fff !important; border: 1px solid #0046C0 !important;
+  background: linear-gradient(180deg, #3A86FF 0%, #0A66F5 55%, #0057DF 100%) !important;
+  box-shadow: 0 4px 0 #003A9E, 0 8px 16px rgba(10,102,245,.35), inset 0 1px 0 rgba(255,255,255,.35) !important;
+}
+.col-head .col-agent-btn.active:hover { color: #fff !important; border-color: #0046C0 !important; filter: brightness(1.07); }
+.col-head .col-agent-btn.active:active { box-shadow: 0 1px 0 #003A9E, 0 3px 8px rgba(10,102,245,.3) !important; }
+
+/* Padrão único em todas as colunas: título | total | botão do agente na
+ * largura inteira. Mesmo tamanho, mesma posição, nenhum texto quebra. */
+.col-head { grid-template-columns: auto auto 1fr auto !important; grid-template-areas: "t c . m" "v v v v" "a a a a" !important; row-gap: 8px !important; }
+.col-head .col-agent-btn { justify-self: stretch !important; justify-content: center !important; width: 100%; height: 38px; padding: 0 14px !important; font-size: 13px !important; box-sizing: border-box; }
+.col-head .col-agent-btn::before { position: absolute; right: 14px; top: 50%; margin: -4px 0 0 0 !important; }

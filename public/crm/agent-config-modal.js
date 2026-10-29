@@ -329,7 +329,7 @@
   function paintButton(btn, enabled) {
     if (btn.dataset.opening) return; // "Abrindo..." manda enquanto carrega
     enabled = !!enabled;
-    const text = 'Agente';
+    const text = enabled ? 'Agente IA ligado' : 'Ligar agente IA';
     const title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
     if (btn.classList.contains('active') !== enabled) btn.classList.toggle('active', enabled);
     if (btn.title !== title) btn.title = title;
@@ -395,7 +395,7 @@
       btn.dataset.colId = colId;
       if (boardId) btn.dataset.boardId = boardId;
       btn.title = enabled ? 'Agente ativo — clique pra configurar' : 'Configurar agente';
-      btn.textContent = 'Agente';
+      btn.textContent = enabled ? 'Agente IA ligado' : 'Ligar agente IA';
       // Inserir ANTES do menu (⋯) — fica [...title...] [count] [⚙️ Agente] [⋯]
       const menu = head.querySelector('.col-menu-btn');
       if (menu) head.insertBefore(btn, menu);
