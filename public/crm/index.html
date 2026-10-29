@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/crm/crm.css?v=vector3">
 <link rel="stylesheet" href="/crm/evox-recursos.css?v=2">
-<link rel="stylesheet" href="/crm/evox-tema.css?v=10">
+<link rel="stylesheet" href="/crm/evox-tema.css?v=14">
 </head>
 <body>
 
@@ -82,6 +82,7 @@
   <!-- MAIN -->
   <main class="main">
     <div class="evox-topo">
+      <span class="evox-topo-logo evox-logo" role="img" aria-label="EVOX"></span>
       <label class="evox-busca"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="evoxBusca" type="search" placeholder="Buscar leads, contatos, negócios..." autocomplete="off"></label>
       <div class="evox-usuario"><div class="evox-avatar" id="evoxAvatar">—</div><div><div class="evox-usuario-nome" id="evoxUsuarioNome">—</div><div class="evox-usuario-papel">Corretor</div></div></div>
     </div>
@@ -119,6 +120,7 @@
         </div>
       </header>
       <div id="evoxPainel" class="evox-kpis"></div>
+      <div id="evoxMovel" class="evox-movel"></div>
       <div id="kanban" class="kanban-board"></div>
     </div>
 
@@ -381,13 +383,14 @@
           <div class="contact-phone" id="pPhone">—</div>
         </div>
       </div>
-      <button class="close-panel" id="closePanelBtn">×</button>
+      <button class="close-panel" id="closePanelBtn" title="Fechar" aria-label="Fechar"><svg class="cp-x" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg><svg class="cp-voltar" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
     </div>
+    <div class="p-resumo" id="pResumo"></div>
     <div class="panel-tabs">
       <button class="panel-tab active" data-tab="conversation">Conversa</button>
-      <button class="panel-tab" data-tab="info">Info</button>
-      <button class="panel-tab" data-tab="links">📎 Vínculos</button>
-      <button class="panel-tab" data-tab="comments">💬 Comentários</button>
+      <button class="panel-tab" data-tab="info">Dados</button>
+      <button class="panel-tab" data-tab="links">Vínculos</button>
+      <button class="panel-tab" data-tab="comments">Notas</button>
     </div>
     <div class="panel-body">
       <!-- CONVERSATION -->
@@ -399,11 +402,10 @@
             <div style="display:flex;align-items:center;gap:6px"><label style="margin:0">Agente:</label><select id="ownerAgentSelect" title="Agente responsavel pelo atendimento"></select></div>
           </div>
           <div class="composer-row">
-            <button class="icon-btn emoji" id="emojiBtn" title="Emoji" type="button">😀</button>
-            <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo">📎</button>
-            <button class="icon-btn rec" id="recordBtn" title="Gravar áudio">🎤</button>
-            <textarea id="composerText" placeholder="Digite uma mensagem..." rows="1"></textarea>
-            <button class="icon-btn send" id="sendMsgBtn" title="Enviar">➤</button>
+            <button class="icon-btn attach" id="attachBtn" title="Anexar arquivo" type="button"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button>
+            <div class="composer-campo"><textarea id="composerText" placeholder="Digite uma mensagem..." rows="1"></textarea><button class="icon-btn emoji" id="emojiBtn" title="Emoji" type="button"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="2.6"/></svg></button></div>
+            <button class="icon-btn rec" id="recordBtn" title="Gravar áudio" type="button"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+            <button class="icon-btn send" id="sendMsgBtn" title="Enviar" type="button"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
           </div>
           <div id="emojiPicker" class="emoji-picker" hidden></div>
           <div id="audioPreview" class="audio-preview" hidden></div>
@@ -499,14 +501,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/crm/clow-dialog.js?v=vector3"></script>
 <script src="/crm/media-viewer.js?v=vector3"></script>
-<script type="module" src="/crm/crm.js?v=evox3"></script>
+<script type="module" src="/crm/crm.js?v=evox7"></script>
 <script src="/crm/crm-extras.js?v=vector3"></script>
 <!-- Antes do settings-ext: ele procura window.CartaoIA ao desenhar as configurações. -->
 <script src="/crm/ia-credenciais.js?v=vector3"></script>
 <script src="/crm/whatsapp-qr.js?v=vector3"></script>
 <script src="/crm/crm-settings-ext.js?v=vector3"></script>
 <script src="/crm/agent-config-modal.js?v=evox2"></script>
-<script src="/crm/evox-ui.js?v=1"></script>
+<script src="/crm/evox-ui.js?v=4"></script>
 <script src="/crm/mcp-panel.js?v=vector3"></script>
 <script src="/crm/apresentacao.js?v=4"></script>
 <script src="/crm/datas.js?v=1"></script>
@@ -538,5 +540,12 @@ document.getElementById('themeBtn')?.addEventListener('click',function(){
   var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#080C14':'#F6F8FB');
 });
 </script>
+<nav class="evox-abas-baixo" id="evoxAbasBaixo" aria-label="Navegação">
+  <button data-ir="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Painel</span></button>
+  <button data-ir="kanban"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 8.5c-.6-.9-1.7-1.5-3-1.5-1.9 0-3 1-3 2.3 0 3.1 6 1.7 6 4.9 0 1.3-1.2 2.3-3 2.3-1.4 0-2.6-.6-3.2-1.6M12 5.5v13"/></svg><span>Vendas</span></button>
+  <button data-ir="agente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg><span>Agente IA</span></button>
+  <button data-ir="contacts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg><span>Clientes</span></button>
+  <button data-ir="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Mais</span></button>
+</nav>
 </body>
 </html>

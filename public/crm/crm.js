@@ -148,6 +148,76 @@ function renderPainelEvox(columns, cardsByColumn) {
     kpi('receita', 'Valor ganho', fmtMoneyCurto(soma(ganhos)), 'soma dos negócios ganhos', linha(porDia(ganhos), '#1CBEFF')) +
     kpi('abertos', 'Negócios abertos', emAberto.length.toLocaleString('pt-BR'), fmtMoneyCurto(soma(emAberto)) + ' em negociação', linha(porDia(emAberto), '#7A5AF8'));
 }
+// Celular (referencia do Daniel, 29/10/2026): uma etapa por vez, em lista,
+// com abas no topo. Mesmos dados e mesmos cliques do funil do computador —
+// tocar abre o mesmo painel do lead, os tres pontos abrem o mesmo menu.
+const ICO_WA_MOVEL = '<svg viewBox="0 0 32 32" width="22" height="22" fill="#25D366" aria-hidden="true"><path d="M16 .4C7.4.4.4 7.4.4 16c0 3 .8 5.9 2.4 8.4L.4 31.6l7.4-2.4c2.4 1.4 5.2 2.1 8.2 2.1 8.6 0 15.6-7 15.6-15.6S24.6.4 16 .4zm0 28.5c-2.7 0-5.3-.7-7.5-2.1l-.5-.3-5.5 1.8 1.8-5.4-.4-.5C2.4 20.2 1.6 18.1 1.6 16 1.6 8.1 8.1 1.6 16 1.6S30.4 8.1 30.4 16 23.9 28.9 16 28.9zm8.1-10.8c-.4-.2-2.6-1.3-3-1.4-.4-.1-.7-.2-1 .2s-1.2 1.4-1.4 1.7c-.3.3-.5.3-.9.1-2.4-1.2-4-2.1-5.5-4.8-.4-.7.4-.7 1.2-2.2.1-.3 0-.5-.1-.7-.1-.2-.9-2.1-1.2-2.9-.3-.8-.7-.7-.9-.7H10c-.3 0-.7.1-1.1.5-.4.4-1.4 1.4-1.4 3.4 0 2 1.4 3.9 1.6 4.2.2.3 2.8 4.3 6.8 6.1 2.6 1.1 3.6 1.2 4.9 1 .8-.1 2.6-1.1 3-2.1.4-1 .4-1.9.3-2.1-.1-.2-.4-.3-.8-.5z"/></svg>';
+function renderMovelEvox(columns, cardsByColumn) {
+  const alvo = $('#evoxMovel'); if (!alvo) return;
+  alvo.innerHTML = '';
+  if (!columns.length) return;
+  let atual = state.evoxColunaMovel;
+  if (!columns.some((c) => c.id === atual)) atual = columns[0].id;
+  state.evoxColunaMovel = atual;
+  const col = columns.find((c) => c.id === atual);
+  const cards = cardsByColumn[col.id] || [];
+  const total = cards.reduce((s, c) => s + (c.valueCents || 0), 0);
+
+  // indicadores do celular (os do desenho): em negociacao, ativos, previsao, conversao
+  const abertas = columns.filter((c) => !c.isTerminal);
+  const emAberto = abertas.flatMap((c) => cardsByColumn[c.id] || []);
+  const ganhas = columns.filter((c) => c.isTerminal && !/perd|lost|cancel/i.test(c.name || ''));
+  const todos = columns.flatMap((c) => cardsByColumn[c.id] || []);
+  const ganhos = ganhas.flatMap((c) => cardsByColumn[c.id] || []);
+  const valorAberto = emAberto.reduce((s, c) => s + (c.valueCents || 0), 0);
+  const previsao = emAberto.reduce((s, c) => s + (c.valueCents || 0) * ((c.probability || 0) / 100), 0);
+  const conv = todos.length && ganhas.length ? (ganhos.length / todos.length) * 100 : null;
+  const ic = (cor, path) => `<div class="mk-ic" style="--mk:${cor}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${path}</svg></div>`;
+  const mk = (icone, valor, rotulo) => `<div class="mk">${icone}<div><div class="mk-val">${valor}</div><div class="mk-rot">${rotulo}</div></div></div>`;
+  alvo.append(el('div', { class: 'mk-grade', html:
+    mk(ic('#0A66F5', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'), fmtMoneyCurto(valorAberto), 'Em negociação') +
+    mk(ic('#0A66F5', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>'), emAberto.length.toLocaleString('pt-BR'), 'Negócios ativos') +
+    mk(ic('#12A150', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M21 3l-7.5 7.5"/>'), fmtMoneyCurto(previsao), 'Previsão de fechamento') +
+    mk(ic('#12A150', '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>'), conv == null ? '—' : conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', 'Taxa de conversão') }));
+
+  const abas = el('div', { class: 'mv-abas' }, ...columns.map((c) =>
+    el('button', { class: 'mv-aba' + (c.id === atual ? ' ativa' : ''), style: `--col-cor:${c.color || 'var(--purple)'}`,
+      on: { click: () => { state.evoxColunaMovel = c.id; renderMovelEvox(columns, cardsByColumn);
+        requestAnimationFrame(() => $('#evoxMovel .mv-aba.ativa')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })); } } },
+      c.name, el('span', { class: 'mv-aba-n' }, String((cardsByColumn[c.id] || []).length)))));
+  const idx = columns.findIndex((c) => c.id === atual);
+  const barra = el('div', { class: 'mv-progresso' }, el('span', { style: `width:${Math.round(((idx + 1) / columns.length) * 100)}%` }));
+  alvo.append(abas, barra);
+
+  alvo.append(el('div', { class: 'mv-etapa' },
+    el('div', {},
+      el('div', { class: 'mv-etapa-nome' }, col.name),
+      el('div', { class: 'mv-etapa-sub', html: `<b>${fmtMoneyCurto(total)}</b> em ${cards.length} ${cards.length === 1 ? 'negócio' : 'negócios'}` })),
+    el('button', { class: 'evox-primario mv-novo', on: { click: () => openNewCardModal(col.id) },
+      html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Novo negócio' })));
+
+  const lista = el('div', { class: 'mv-lista' });
+  if (!cards.length) lista.append(el('div', { class: 'mv-vazio' }, 'Nenhum negócio nesta etapa ainda.'));
+  for (const card of cards) {
+    const contato = card.contact || {};
+    const item = el('div', { class: 'mv-item', on: { click: () => openCardPanel(card.id) } },
+      avatarEl(contato.name ? contato : { name: card.title }, { class: 'mv-avatar' }),
+      el('div', { class: 'mv-txt' },
+        el('div', { class: 'mv-nome' }, contato.name || card.title),
+        contato.name ? el('div', { class: 'mv-sub' }, card.title) : null,
+        card.valueCents > 0 ? el('div', { class: 'mv-valor' }, fmtMoneyCurto(card.valueCents)) : null),
+      el('div', { class: 'mv-lado' },
+        el('button', { class: 'mv-mais', title: 'Opções', html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>',
+          on: { click: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); showCardContextMenu(card, r.right, r.bottom + 4); } } }),
+        el('div', { class: 'mv-quando' },
+          contato.phone ? el('span', { class: 'mv-wa', html: ICO_WA_MOVEL }) : null,
+          (card.unreadCount || 0) > 0 ? el('span', { class: 'mv-naolidas' }, String(card.unreadCount)) : null,
+          el('span', {}, haQuanto(card.lastActivityAt || card.updatedAt || card.createdAt)))));
+    item.querySelector('.mv-avatar')?.style.setProperty('--av', corDaEtiqueta(contato.name || card.title || ''));
+    lista.append(item);
+  }
+  alvo.append(lista);
+}
 function fmtDate(ts) {
   if (!ts) return '';
   const d = new Date(ts);
@@ -325,6 +395,7 @@ function renderKanban() {
   if (!state.pipeline) { k.append(el('div', { class: 'empty' }, 'Crie uma board pra começar.')); return; }
   const { columns, cardsByColumn } = state.pipeline;
   renderPainelEvox(columns, cardsByColumn);
+  renderMovelEvox(columns, cardsByColumn);
   for (const col of columns) {
     const cards = cardsByColumn[col.id] || [];
     const totalCol = cards.reduce((s, c) => s + (c.valueCents || 0), 0);
@@ -1257,6 +1328,7 @@ async function renderPanel() {
     }
   }
   $('#pName').textContent = contact?.name || card.title;
+  renderResumoDoLead(card);
   $('#pPhone').textContent = contact?.phone || '—';
   // Populate channel select
   const sel = $('#sendChannelSelect');
@@ -1332,6 +1404,56 @@ function renderTextHTML(text) {
   return s;
 }
 
+// ─── Conversa no visual EVOX ───────────────────────────────────────────
+function rotuloDoDia(ts) {
+  const d = new Date(ts), hoje = new Date(), ontem = new Date(Date.now() - 86400000);
+  if (d.toDateString() === hoje.toDateString()) return 'Hoje';
+  if (d.toDateString() === ontem.toDateString()) return 'Ontem';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: d.getFullYear() === hoje.getFullYear() ? undefined : 'numeric' });
+}
+function horaCurta(ts) {
+  return ts ? new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+}
+// Player de audio: play/pausa, barra que da para arrastar e tempo. O <audio>
+// de verdade fica escondido ao lado e e ele quem toca.
+function playerDeAudio(audio) {
+  const fmt = (t) => { t = Math.max(0, Math.floor(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  const botao = el('button', { class: 'ap-play', type: 'button', title: 'Ouvir', html: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' });
+  const barra = el('input', { class: 'ap-barra', type: 'range', min: '0', max: '1000', value: '0', 'aria-label': 'Posição do áudio' });
+  const tempo = el('span', { class: 'ap-tempo' }, '0:00');
+  const pintar = () => { const p = audio.duration ? (audio.currentTime / audio.duration) * 1000 : 0; barra.value = String(p); barra.style.setProperty('--p', (p / 10) + '%'); };
+  botao.addEventListener('click', (e) => { e.stopPropagation(); audio.paused ? audio.play() : audio.pause(); });
+  barra.addEventListener('input', () => { if (audio.duration) audio.currentTime = (Number(barra.value) / 1000) * audio.duration; pintar(); });
+  audio.addEventListener('play', () => { botao.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>'; });
+  audio.addEventListener('pause', () => { botao.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'; });
+  const mostrarDuracao = () => { if (isFinite(audio.duration) && audio.duration > 0 && audio.paused) tempo.textContent = fmt(audio.duration); };
+  audio.addEventListener('loadedmetadata', mostrarDuracao);
+  audio.addEventListener('durationchange', mostrarDuracao);
+  audio.addEventListener('timeupdate', () => { pintar(); tempo.textContent = fmt(audio.currentTime || audio.duration); });
+  audio.addEventListener('ended', () => { audio.currentTime = 0; pintar(); if (isFinite(audio.duration)) tempo.textContent = fmt(audio.duration); });
+  return el('div', { class: 'ap' }, botao, barra, tempo);
+}
+// Faixa "etapa do funil + valor" no topo da conversa (usada no celular).
+function renderResumoDoLead(card) {
+  const alvo = $('#pResumo'); if (!alvo) return;
+  alvo.innerHTML = '';
+  const colunas = state.pipeline?.columns || [];
+  const sel = el('select', { class: 'pr-etapa', 'aria-label': 'Etapa do funil' },
+    ...colunas.map((c) => { const o = el('option', { value: c.id }, c.name); if (c.id === card.columnId) o.selected = true; return o; }));
+  sel.addEventListener('change', async () => {
+    try {
+      await api(`/cards/${card.id}/move`, { method: 'POST', body: { toColumnId: sel.value } });
+      card.columnId = sel.value;
+      await loadPipeline(state.currentBoardId); renderKanban();
+      toast('Etapa alterada', 'success');
+    } catch (err) { toast('Erro ao mover: ' + err.message, 'error'); }
+  });
+  alvo.append(
+    el('div', { class: 'pr-bloco' }, el('span', { class: 'pr-ic', html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7"/></svg>' }),
+      el('div', {}, sel, el('div', { class: 'pr-rot' }, 'Etapa do funil'))),
+    el('div', { class: 'pr-bloco' }, el('span', { class: 'pr-ic', html: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' }),
+      el('div', {}, el('div', { class: 'pr-valor' }, fmtMoneyCurto(card.valueCents || 0)), el('div', { class: 'pr-rot' }, 'Valor do negócio'))));
+}
 function renderMessages() {
   const list = $('#messagesList');
   list.innerHTML = '';
@@ -1358,13 +1480,19 @@ function renderMessages() {
     if (i >= 0 && window.clowMediaViewer) window.clowMediaViewer.abrir(midias, i);
   };
 
+  let diaAnterior = '';
   for (const a of activities) {
     const isIn = a.direction === 'in';
     const isOut = a.direction === 'out';
     const isMsg = a.type === 'message_in' || a.type === 'message_out';
+    const dia = a.createdAt ? new Date(a.createdAt).toDateString() : '';
+    if (dia && dia !== diaAnterior) { diaAnterior = dia; list.append(el('div', { class: 'msg-dia' }, el('span', {}, rotuloDoDia(a.createdAt)))); }
     if (!isMsg) {
       // System/stage_change — render as centered system line
-      list.append(el('div', { class: 'msg system' }, `• ${a.content || a.type} — ${fmtDate(a.createdAt)}`));
+      // O registro guarda o id da coluna; quem le precisa do nome dela.
+      const nomes = Object.fromEntries((state.pipeline?.columns || []).map((c) => [c.id, c.name]));
+      const texto = String(a.content || a.type).replace(/crm_col_[a-z0-9]+/gi, (id) => nomes[id] ? `"${nomes[id]}"` : 'outra etapa');
+      list.append(el('div', { class: 'msg system' }, `${texto} · ${horaCurta(a.createdAt)}`));
       continue;
     }
     const bubble = el('div', { class: `msg ${isIn ? 'in' : 'out'}` });
@@ -1377,8 +1505,9 @@ function renderMessages() {
       bubble.append(el('div', { class: 'msg-media' }, imgEl));
       loadMediaWithAuth(a.mediaUrl, imgEl);
     } else if (a.mediaUrl && a.mediaType === 'audio') {
-      const audioEl = el('audio', { controls: '' });
-      bubble.append(el('div', { class: 'msg-media' }, audioEl));
+      const audioEl = el('audio', { preload: 'metadata' });
+      bubble.classList.add('msg-audio');
+      bubble.append(el('div', { class: 'msg-media' }, playerDeAudio(audioEl), audioEl));
       loadMediaWithAuth(a.mediaUrl, audioEl);
     } else if (a.mediaUrl && a.mediaType === 'video') {
       // O player pequeno continua na bolha; o clique fora dos controles é
@@ -1397,7 +1526,10 @@ function renderMessages() {
         class: 'doc',
         href: '#',
         title: ehPdf ? 'Clique para abrir' : 'Clique para baixar',
-      }, '📄 ', docName);
+      },
+        el('span', { class: 'doc-ic' + (ehPdf ? ' pdf' : ''), html: ehPdf ? 'PDF' : '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>' }),
+        el('span', { class: 'doc-nome' }, docName),
+        el('span', { class: 'doc-baixar', html: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>' }));
       docLink.addEventListener('click', (e) => {
         e.preventDefault();
         // PDF dá para ler na hora; o resto o navegador não renderiza, então
@@ -1419,7 +1551,7 @@ function renderMessages() {
         bubble.append(textLine);
       }
     }
-    bubble.append(el('div', { class: 'msg-meta' }, fmtDate(a.createdAt)));
+    bubble.append(el('div', { class: 'msg-meta' }, horaCurta(a.createdAt), isOut ? el('span', { class: 'msg-ok', title: 'Enviada' }, '✓') : null));
     list.append(bubble);
   }
   list.scrollTop = list.scrollHeight;
