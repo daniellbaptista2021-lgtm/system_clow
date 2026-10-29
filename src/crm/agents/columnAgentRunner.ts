@@ -336,7 +336,7 @@ Daniel. Sem pressa, melhor encaminhar do que conduzir errado.
     iteration++;
     let llmMsg: DeepSeekToolMessage;
     try {
-      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat', tenantId);
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, undefined, tenantId);
     } catch (err: any) {
       logger.error('[col-agent.runner] DeepSeek falhou:', err?.message);
       recordAgentMetric({
@@ -586,7 +586,7 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
     iter++;
     let llmMsg: DeepSeekToolMessage;
     try {
-      llmMsg = await callDeepSeekWithTools(messages, llmTools, 'deepseek-chat', tenantId);
+      llmMsg = await callDeepSeekWithTools(messages, llmTools, undefined, tenantId);
     } catch (err: any) {
       logger.error('[col-agent.runFromFire] DeepSeek falhou:', err?.message);
       return { status: 'error', message: err?.message || 'llm_error' };

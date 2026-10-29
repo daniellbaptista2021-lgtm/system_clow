@@ -55,3 +55,9 @@ body { background: var(--bg) !important; background-image: none !important; font
 
 /* Dentro do CRM a página vai num quadro: o "Sair" daqui duplicaria o do menu. */
 html.no-quadro .top-right .outline-btn { display: none; }
+
+/* Nomes destacados nas respostas (`codigo` inline): o lilas herdado do Clow sumia no fundo claro. */
+.rp :not(pre) > code { color: var(--accent); background: rgba(10,102,245,.08); border: none; font-size: 13px; }
+/* Negrito e itálico nas respostas vinham brancos do tema escuro antigo. */
+.rp strong { color: var(--text); font-weight: 700; }
+.rp em { color: var(--muted); }
