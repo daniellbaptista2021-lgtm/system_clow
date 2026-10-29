@@ -5838,7 +5838,7 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
       // Foto de perfil sincronizada sozinha (ver src/crm/inbox.ts). Sem
       // hash-skip aqui de propósito: pipelineHash() não leva avatar em conta,
       // então smartRefresh normal pularia o re-render achando que nada mudou.
-      state48.es.addEventListener('contact.avatar', async () => {
+      const refreshContact = async () => {
         try {
           if (window.state?.currentBoardId && typeof loadPipeline === 'function') {
             await loadPipeline(window.state.currentBoardId);
@@ -5847,6 +5847,9 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
           }
           if (window.state?.currentCard && typeof refreshCurrentCard === 'function') {
             await refreshCurrentCard();
+            if (state.currentCard) {
+              $('#pName').textContent = state.currentCard.contact?.name || state.currentCard.card.title;
+            }
           }
           const contactsActive = document.querySelector('.view[data-view="contacts"].active');
           if (contactsActive && typeof loadContacts === 'function' && typeof renderContactsList === 'function') {
@@ -5854,7 +5857,9 @@ if (_origRenderChannelsList && !_origRenderChannelsList._wrappedV42) {
             renderContactsList();
           }
         } catch {}
-      });
+      };
+      state48.es.addEventListener('contact.avatar', refreshContact);
+      state48.es.addEventListener('contact.updated', refreshContact);
       state48.es.onerror = () => {
         try { state48.es.close(); } catch {}
         setTimeout(connect, 5000); // reconnect

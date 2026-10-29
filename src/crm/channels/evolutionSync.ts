@@ -119,6 +119,12 @@ export async function syncChannel(
     logger.warn(`[evolution-read] canal ${channel.id} falhou:`, err?.message);
   }
 
+  try {
+    await syncContactNames(channel);
+  } catch (err: any) {
+    logger.warn(`[evolution-contacts] canal ${channel.id}: ${err?.message}`);
+  }
+
   const janela = Math.min(opts.desdeMs ?? JANELA_PADRAO_MS, JANELA_MAX_MS);
   const lte = Date.now();
   const gte = lte - janela;
@@ -310,4 +316,54 @@ export async function syncAllChannels(opts: { desdeMs?: number } = {}): Promise<
     _rodando = false;
   }
   return saida;
+}
+
+/** Importa agenda sem criar atendimentos nem disparar agentes. */
+export async function syncContactNames(channel: Channel2): Promise<number> {
+  if (channel.type !== 'evolution') return 0;
+  const entries = await evolution.findContacts(channel);
+  const changed = applyContactNames(channel, entries);
+  if (changed) {
+    const { publish } = await import('../events.js');
+    publish(channel.tenantId, 'contact.updated', { channelId: channel.id, count: changed });
+    logger.info(`[evolution-contacts] canal ${channel.id}: ${changed} contato(s) sincronizado(s)`);
+  }
+  return changed;
+}
+
+export function applyContactNames(channel: Channel2, entries: any[]): number {
+  const db = getCrmDb();
+  let changed = 0;
+  db.transaction(() => {
+    for (const entry of entries) {
+      // IDs internos e LIDs não são números de telefone. Grupos também ficam fora.
+      const jid = String(entry.remoteJid || '');
+      if (!/^\d+(?::\d+)?@(s\.whatsapp\.net|c\.us)$/.test(jid)) continue;
+      const phone = evolution.numeroDoJid(jid);
+      if (phone.length < 8 || phone.length > 15) continue;
+      const saved = entry.isSaved === true || Boolean(entry.name || entry.fullName);
+      const name = String(entry.name || entry.fullName || entry.pushName || '').trim().slice(0, 200);
+      if (!name || name.replace(/\D/g, '') === phone) continue;
+      const existing = store.findContactByPhone(channel.tenantId, phone);
+      // Nome de perfil só preenche um contato existente ainda sem nome.
+      if (!saved && (!existing || (existing.name && existing.name.replace(/\D/g, '') !== phone))) continue;
+      if (!existing) {
+        store.createContact(channel.tenantId, { name, phone, source: 'whatsapp_evolution',
+          customFields: { whatsappSyncedName: name } });
+        changed++;
+        continue;
+      }
+      const marker = existing.customFields?.whatsappSyncedName;
+      if (existing.name === name && marker === name) continue;
+      store.updateContact(channel.tenantId, existing.id, {
+        name, customFields: { ...existing.customFields, whatsappSyncedName: name },
+      });
+      // Conserva títulos comerciais personalizados; corrige só os herdados do contato.
+      db.prepare(`UPDATE crm_cards SET title = ?, updated_at = ?
+        WHERE tenant_id = ? AND contact_id = ? AND (title = ? OR title = ? OR title = ?)`)
+        .run(name, Date.now(), channel.tenantId, existing.id, existing.name, existing.phone || phone, phone);
+      changed++;
+    }
+  })();
+  return changed;
 }

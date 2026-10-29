@@ -189,6 +189,10 @@ export function upsertContactByPhone(tenantId: string, phone: string, input: {
 }): Contact {
   const existing = findContactByPhone(tenantId, phone);
   if (existing) {
+    // A agenda é a referência; pushName da mensagem não desfaz a sincronização.
+    if (existing.customFields?.whatsappSyncedName) {
+      input = { ...input, name: existing.name };
+    }
     if ((input.name && input.name !== existing.name) || input.avatarUrl) {
       return updateContact(tenantId, existing.id, {
         name: input.name ?? existing.name,

@@ -417,6 +417,19 @@ export async function findChats(
   }
 }
 
+/** Agenda disponibilizada pela sessão pareada; nunca trata @lid como telefone. */
+export async function findContacts(channel: Channel2): Promise<any[]> {
+  const creds = credsDo(channel);
+  const r = await fetch(url(creds, `/chat/findContacts/${encodeURIComponent(creds.instance)}`), {
+    method: 'POST', headers: headers(creds), body: '{}', signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`contacts_http_${r.status}`);
+  const data = await r.json() as any;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.contacts)) return data.contacts;
+  throw new Error('contacts_resposta_invalida');
+}
+
 /**
  * Baixa mídia. Quando o webhook já trouxe base64, `parseWebhook` devolve um
  * `data:` URI e esta função nem precisa ir à rede.
