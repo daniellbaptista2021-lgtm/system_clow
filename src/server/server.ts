@@ -597,6 +597,18 @@ async function main(): Promise<void> {
       return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
     } catch (e: any) { return c.text('error: ' + e.message, 500); }
   });
+  // Site de vendas do EVOX (public/site): a pagina e as imagens dela.
+  app.get('/site', (c) => c.redirect('/site/', 301));
+  app.get('/site/*', (c) => {
+    const base = path.resolve(process.cwd(), 'public', 'site');
+    let alvo = path.resolve(base, '.' + c.req.path.slice('/site'.length));
+    if (alvo !== base && !alvo.startsWith(base + path.sep)) return c.notFound();
+    if (alvo === base) alvo = path.join(base, 'index.html');
+    if (!fs.existsSync(alvo) || !fs.statSync(alvo).isFile()) return c.notFound();
+    const tipos: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+    const ext = path.extname(alvo).toLowerCase();
+    return new Response(fs.readFileSync(alvo), { headers: { 'Content-Type': tipos[ext] || 'application/octet-stream', 'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400' } });
+  });
   app.get('/signup', (c) => {
     // Old signup form unified into /pricing (plan picker + modal)
     const qs = (new URL(c.req.url)).search;
