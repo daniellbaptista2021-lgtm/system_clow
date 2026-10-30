@@ -96,18 +96,51 @@ h2{font-size:clamp(30px,4.4vw,50px);line-height:1.08;letter-spacing:-.03em;font-
 .centro{text-align:center}.centro .lead{margin-left:auto;margin-right:auto}
 
 
-/* Vídeo */
-.video-sec{padding:40px 0 30px}
-.video-caixa{position:relative;max-width:1000px;margin:40px auto 0;border-radius:22px;overflow:hidden;background:var(--ink);box-shadow:var(--grande);aspect-ratio:16/9}
-.video-caixa video{width:100%;height:100%;display:block;object-fit:cover;background:var(--ink)}
-.video-play{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border:0;cursor:pointer;background:linear-gradient(180deg,rgba(7,18,33,.25),rgba(7,18,33,.7));color:#fff;font:inherit;transition:background .2s}
-.video-play:hover{background:linear-gradient(180deg,rgba(7,18,33,.05),rgba(7,18,33,.45))}
-.video-play .bola{width:88px;height:88px;border-radius:50%;background:var(--p);display:grid;place-items:center;box-shadow:0 0 0 12px rgba(10,102,245,.25),0 20px 40px -10px rgba(10,102,245,.7);transition:transform .2s}
-.video-play:hover .bola{transform:scale(1.07)}
-.video-play b{font-size:18px;font-weight:700;text-shadow:0 2px 12px rgba(0,0,0,.4)}
-.video-play small{font-size:14px;opacity:.85;margin-top:-10px}
+/* Vídeo: palco escuro com moldura 3D e capítulos */
+.video-sec{padding:50px 0 40px}
+.palco{position:relative;margin:0 auto;max-width:1120px;border-radius:34px;padding:56px 48px 40px;background:
+  radial-gradient(700px 360px at 50% -40px,rgba(28,190,255,.28),transparent 70%),
+  radial-gradient(600px 400px at 100% 100%,rgba(10,102,245,.35),transparent 65%),
+  linear-gradient(180deg,#0B1830 0%,#071221 100%);
+  color:#E9EEF7;box-shadow:0 60px 120px -50px rgba(7,18,33,.8),0 0 0 1px rgba(255,255,255,.06) inset;overflow:hidden}
+.palco::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(ellipse at 50% 30%,#000 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 30%,transparent 75%);pointer-events:none}
+.palco > *{position:relative}
+.palco .rotulo{color:var(--c)}
+.palco h2{color:#fff}
+.palco .lead{color:#9AA7BD;margin-left:auto;margin-right:auto}
+.narrador{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:6px 16px 6px 6px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:14px;color:#C9D3E3}
+.narrador img{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--p)}
+.narrador b{color:#fff;font-weight:600}
+.narrador em{font-style:normal}
+@media(max-width:600px){.narrador .so-pc{display:none}.narrador{font-size:13px}}
+.cena3d{perspective:1800px;margin-top:40px}
+.moldura{position:relative;border-radius:20px;padding:10px;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.14);
+  transform:rotateX(10deg) scale(.97);transform-origin:50% 0;transition:transform .7s cubic-bezier(.2,.7,.2,1),box-shadow .7s;
+  box-shadow:0 70px 100px -40px rgba(10,102,245,.75),0 30px 60px -30px rgba(0,0,0,.6)}
+.cena3d:hover .moldura,.moldura.tocando{transform:none;box-shadow:0 50px 90px -40px rgba(10,102,245,.6),0 20px 40px -24px rgba(0,0,0,.5)}
+.moldura .barra{display:flex;align-items:center;gap:7px;padding:4px 6px 12px}
+.moldura .barra i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.22)}
+.moldura .barra i:first-child{background:#FF5F57}.moldura .barra i:nth-child(2){background:#FEBC2E}.moldura .barra i:nth-child(3){background:#28C840}
+.moldura .barra span{margin:0 auto;font-size:12px;color:#9AA7BD;letter-spacing:.02em;transform:translateX(-20px)}
+.video-caixa{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.video-caixa video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
+.video-play{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:0;cursor:pointer;
+  background:radial-gradient(circle at 50% 50%,rgba(7,18,33,.35),rgba(7,18,33,.78));color:#fff;font:inherit;transition:background .3s}
+.video-play:hover{background:radial-gradient(circle at 50% 50%,rgba(7,18,33,.2),rgba(7,18,33,.65))}
+.video-play .bola{position:relative;width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--c));display:grid;place-items:center;box-shadow:0 8px 0 var(--p2),0 24px 50px -10px rgba(10,102,245,.8);transition:transform .2s}
+.video-play .bola::after{content:"";position:absolute;inset:-12px;border-radius:50%;border:2px solid rgba(28,190,255,.6);animation:onda 2s ease-out infinite}
+@keyframes onda{from{transform:scale(.85);opacity:1}to{transform:scale(1.35);opacity:0}}
+.video-play:hover .bola{transform:translateY(-2px) scale(1.05)}
+.video-play b{font-size:20px;font-weight:700;letter-spacing:-.01em;text-shadow:0 2px 14px rgba(0,0,0,.5)}
+.video-play small{font-size:14px;color:#C9D3E3;margin-top:-8px}
 .video-caixa.tocando .video-play{display:none}
-@media(max-width:600px){.video-caixa{border-radius:16px}.video-play .bola{width:66px;height:66px}.video-play b{font-size:16px}}
+.capitulos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:28px}
+.cap{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#C9D3E3;font:inherit;font-size:14px;text-align:left;cursor:pointer;transition:background .2s,border-color .2s,transform .2s}
+.cap:hover{background:rgba(255,255,255,.09);transform:translateY(-1px)}
+.cap time{flex:none;font-size:12px;font-weight:700;color:var(--c);background:rgba(28,190,255,.12);padding:3px 7px;border-radius:7px;font-variant-numeric:tabular-nums}
+.cap.ativo{background:rgba(10,102,245,.28);border-color:rgba(28,190,255,.55);color:#fff}
+@media(max-width:900px){.capitulos{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.palco{padding:36px 14px 18px;border-radius:24px}.moldura{padding:6px;transform:none}.moldura .barra{display:none}.video-play .bola{width:70px;height:70px}.video-play b{font-size:16px}.cap{font-size:13px;padding:10px}}
 
 /* Dores */
 .dores{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px}
@@ -332,16 +365,34 @@ footer a:hover{color:var(--t1)}
 
   <!-- VÍDEO -->
   <section class="video-sec" id="video">
-    <div class="wrap centro">
-      <span class="rotulo sobe">Veja funcionando</span>
-      <h2 class="sobe">O EVOX <em>por dentro</em>, em 3 minutos</h2>
-      <p class="lead sobe">O funil, a IA atendendo um lead de verdade no WhatsApp, e o Agente IA criando uma campanha na Meta sozinho, como um gestor de tráfego.</p>
-      <div class="video-caixa sobe" id="videoCaixa">
-        <video id="videoEvox" src="/site/video/evox-apresentacao.mp4?v=2" poster="/site/video/capa.jpg?v=2" preload="metadata" playsinline></video>
-        <button class="video-play" id="videoPlay" type="button" aria-label="Assistir ao vídeo">
-          <span class="bola"><svg width="34" height="34" viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
-          <b>Assistir à apresentação</b><small>3:20 · com som</small>
-        </button>
+    <div class="wrap">
+      <div class="palco centro sobe">
+        <span class="rotulo">Veja funcionando</span>
+        <h2>O EVOX <em>por dentro</em>, em 3 minutos</h2>
+        <p class="lead">O funil, a IA atendendo um lead de verdade no WhatsApp, e o Agente IA criando uma campanha na Meta sozinho, como um gestor de tráfego.</p>
+        <span class="narrador"><img src="/site/img/daniel.jpg" alt=""><span>Apresentado por <b>Daniel Baptista</b><em class="so-pc">, corretor de seguros</em></span></span>
+        <div class="cena3d">
+          <div class="moldura" id="moldura">
+            <div class="barra"><i></i><i></i><i></i><span>EVOX · Apresentação</span></div>
+            <div class="video-caixa" id="videoCaixa">
+              <video id="videoEvox" src="/site/video/evox-apresentacao.mp4?v=2" poster="/site/video/capa.jpg?v=2" preload="metadata" playsinline></video>
+              <button class="video-play" id="videoPlay" type="button" aria-label="Assistir ao vídeo">
+                <span class="bola"><svg width="36" height="36" viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
+                <b>Assistir à apresentação</b><small>3:20 · com som</small>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="capitulos">
+          <button class="cap" type="button" data-t="13"><time>0:13</time>Funil de vendas</button>
+          <button class="cap" type="button" data-t="24.5"><time>0:24</time>IA em cada etapa</button>
+          <button class="cap" type="button" data-t="40"><time>0:40</time>Lead no WhatsApp</button>
+          <button class="cap" type="button" data-t="56.7"><time>0:57</time>O Agente IA</button>
+          <button class="cap" type="button" data-t="99.1"><time>1:39</time>Gestor de tráfego</button>
+          <button class="cap" type="button" data-t="123.3"><time>2:03</time>Campanha na Meta</button>
+          <button class="cap" type="button" data-t="147.5"><time>2:27</time>Mensalidades e datas</button>
+          <button class="cap" type="button" data-t="181.6"><time>3:01</time>Os planos</button>
+        </div>
       </div>
     </div>
   </section>
@@ -577,12 +628,16 @@ footer a:hover{color:var(--t1)}
 
 <script>
 (function(){
-  // Vídeo: o botão grande dá o play com som; os controles do navegador cuidam do resto.
-  var cx=document.getElementById('videoCaixa'),vd=document.getElementById('videoEvox');
-  document.getElementById('videoPlay').addEventListener('click',function(){cx.classList.add('tocando');vd.controls=true;vd.muted=false;var r=vd.play();if(r&&r.catch)r.catch(function(){});});
-  vd.addEventListener('play',function(){cx.classList.add('tocando');vd.controls=true;});
+  // Vídeo: o botão grande dá o play com som; a moldura 3D se endireita; os capítulos pulam para o trecho.
+  var cx=document.getElementById('videoCaixa'),vd=document.getElementById('videoEvox'),mol=document.getElementById('moldura');
+  function tocar(t){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;vd.muted=false;if(t!=null)vd.currentTime=t;var r=vd.play();if(r&&r.catch)r.catch(function(){});}
+  document.getElementById('videoPlay').addEventListener('click',function(){tocar()});
+  vd.addEventListener('play',function(){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;});
+  var caps=[].slice.call(document.querySelectorAll('.cap'));
+  caps.forEach(function(b){b.addEventListener('click',function(){tocar(parseFloat(b.dataset.t))})});
+  vd.addEventListener('timeupdate',function(){var atual=null;caps.forEach(function(b){if(vd.currentTime>=parseFloat(b.dataset.t)-.3)atual=b});caps.forEach(function(b){b.classList.toggle('ativo',b===atual)})});
   // Os links "Ver o vídeo" rolam até ele e já começam a tocar.
-  document.querySelectorAll('a[href="#video"]').forEach(function(a){a.addEventListener('click',function(){setTimeout(function(){cx.classList.add('tocando');var r=vd.play();if(r&&r.catch)r.catch(function(){});},600)})});
+  document.querySelectorAll('a[href="#video"]').forEach(function(a){a.addEventListener('click',function(){setTimeout(function(){tocar()},600)})});
   var topo=document.getElementById('topo');
   addEventListener('scroll',function(){topo.classList.toggle('rolou',scrollY>8)},{passive:true});
   var els=document.querySelectorAll('.sobe');
