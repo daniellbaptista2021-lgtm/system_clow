@@ -17,7 +17,7 @@ import { ingestInbound } from './inbox.js';
 import { logger } from '../utils/logger.js';
 
 
-// Internal forward: also deliver the raw webhook to the System Clow agent
+// Internal forward: also deliver the raw webhook to the EVOX agent
 // adapter so the AI can respond. Fire-and-forget; never blocks ACK to Meta.
 async function forwardToAgent(path: string, payload: unknown, sigHeader?: string, tenantId?: string) {
   try {
@@ -111,7 +111,7 @@ app.post('/meta/:secret', async (c) => {
     logger.warn('[crm-webhook] adminConfig check failed:', err?.message);
   }
 
-  // ALSO forward the original payload to the System Clow AI agent so it can reply
+  // ALSO forward the original payload to the EVOX AI agent so it can reply
   // (the agent handler dedupes by messageId so no double-processing risk)
   void forwardToAgent('/webhooks/meta', payload, c.req.header('x-hub-signature-256'), forwardTenantId);
   return c.json({ ok: true, processed: parsed.messages.length });

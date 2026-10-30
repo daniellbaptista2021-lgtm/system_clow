@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
  * Falls back to in-memory Map when Redis is not configured.
  *
  * Stores session metadata (not the full QueryEngine) in Redis with TTL.
- * Enables multiple System Clow instances to share session state.
+ * Enables multiple EVOX instances to share session state.
  */
 
 // ════════════════════════════════════════════════════════════════════════════

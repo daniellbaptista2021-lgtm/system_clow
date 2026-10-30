@@ -1,5 +1,5 @@
 /**
- * QueryEngine.ts — The Brain of System Clow (Full Rewrite)
+ * QueryEngine.ts — The Brain of EVOX (Full Rewrite)
  *
  * Based on Claude Code's QueryEngine.ts (1,296 lines) + query.ts (1,730 lines)
  *

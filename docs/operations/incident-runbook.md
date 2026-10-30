@@ -6,7 +6,7 @@
 ```bash
 # Roda isso primeiro, sempre. Define as variáveis pro resto do doc.
 export VPS_IP=<vps-ip>
-export DOMAIN=system-clow.pvcorretor01.com.br
+export DOMAIN=app.evox.com.br
 export METRICS_TOKEN=<valor-do-.env>
 ```
 

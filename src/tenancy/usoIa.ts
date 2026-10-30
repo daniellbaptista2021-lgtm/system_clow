@@ -92,6 +92,12 @@ export function planoDa(tenantId: string): PlanoIa {
   return l?.plano === 'completo' ? 'completo' : 'essencial';
 }
 
+/** O Agente IA geral do menu pertence somente ao plano Completo.
+ * Os agentes automáticos das colunas do funil continuam nos dois planos. */
+export function podeUsarAgenteCompleto(tenantId: string): boolean {
+  return planoDa(tenantId) === 'completo';
+}
+
 export function definirPlano(tenantId: string, plano: PlanoIa): void {
   db().prepare('INSERT INTO evox_plano_ia (tenant_id, plano) VALUES (?, ?) ON CONFLICT(tenant_id) DO UPDATE SET plano = excluded.plano').run(tenantId, plano);
 }

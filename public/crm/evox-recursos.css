@@ -1,5 +1,5 @@
 /* EVOX — estilos das telas próprias do corretor (Apresentação, Datas),
- * herdados do Vector com as cores trocadas pelos tokens do tema (evox-tema.css). */
+ * integrados à identidade visual definida em evox-tema.css. */
 /* ─── Apresentação MetLife (apresentacao.js) ───────────────────────────── */
 .apr-abas { display: flex; gap: 8px; flex-wrap: wrap; }
 .apr-abas .apr-aba-ativa { border-color: var(--text) !important;  }

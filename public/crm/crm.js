@@ -16,6 +16,7 @@ const state = {
   inventory: [],
   currentCard: null,
   pollInterval: null,
+  planoEvox: 'essencial',
 };
 
 window.addEventListener('territorio-session', () => {
@@ -361,15 +362,28 @@ async function loadStats() {
 function renderSidebarTenant() {
   // state.tenant nunca era preenchido e o rodapé mostrava a palavra "Tenant".
   // O nome da conta vem de /me; o plano (tier) não diz nada ao corretor, o
-  // e-mail diz em qual conta ele está — no Vector cada vendedor tem a sua.
+  // e-mail diz em qual conta ele está — cada vendedor tem a sua.
   const nome = $('#tenantName'), sub = $('#tenantTier');
   if (nome) nome.textContent = state.tenant?.name || '';
   if (sub) sub.textContent = state.tenant?.email || '';
   api('/me').then((r) => {
     state.tenant = r.tenant || state.tenant;
+    state.planoEvox = r.plano === 'completo' ? 'completo' : 'essencial';
+    aplicarPlanoEvox(state.planoEvox);
     if (nome) nome.textContent = state.tenant?.name || state.tenant?.email || '';
-    if (sub) sub.textContent = state.tenant?.name ? (state.tenant?.email || '') : '';
+    if (sub) sub.textContent = 'Plano ' + (state.planoEvox === 'completo' ? 'Completo' : 'Essencial');
   }).catch(() => {});
+}
+
+function aplicarPlanoEvox(plano) {
+  const completo = plano === 'completo';
+  document.documentElement.dataset.evoxPlano = completo ? 'completo' : 'essencial';
+  document.querySelectorAll('[data-plano="completo"]').forEach((item) => {
+    item.hidden = !completo;
+  });
+  if (!completo && document.querySelector('.view[data-view="agente"].active')) {
+    showView('kanban');
+  }
 }
 
 // ─── Rendering: board selector ─────────────────────────────────────────
@@ -2042,6 +2056,10 @@ async function openNewCardModal(columnId = null) {
 
 // ─── Views: Contacts / Channels / Agents / Inventory / Stats ──────────
 async function showView(viewName) {
+  if (viewName === 'agente' && state.planoEvox !== 'completo') {
+    toast('O Agente IA completo faz parte do plano Completo.', 'error');
+    return;
+  }
   $$('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === viewName));
   $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === viewName));
   if (viewName === 'agente') {
@@ -4249,7 +4267,7 @@ function wireEvents() {
 }
 
 
-// ─── Auto-login via System Clow session ───────────────────────────────
+// ─── Auto-login via EVOX session ───────────────────────────────
 async function tryExchange() {
   const sessionToken = window.clowStorage.getItem('clow_token');
   if (!sessionToken) return null;
@@ -4274,7 +4292,7 @@ async function tryAutoLogin() {
     try { await attemptLogin(state.apiKey); return true; }
     catch (e) { state.apiKey = ''; window.clowStorage.removeItem('clow_crm_key'); }
   }
-  // 2. Try exchange via System Clow session
+  // 2. Try exchange via EVOX session
   const fresh = await tryExchange();
   if (fresh) {
     state.apiKey = fresh;
@@ -6861,4 +6879,3 @@ function openExportContactsMenu() {
   dialog.append(modal);
   document.body.append(dialog);
 }
-

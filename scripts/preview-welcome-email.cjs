@@ -48,7 +48,7 @@ const tierMessages = ({
   starter: '500 mensagens IA/mês · 1 fluxo n8n · 500 contatos · 2 boards · 5 automações · 1 canal WhatsApp',
 })[TIER] || '';
 const firstName = NAME.split(' ')[0] || NAME;
-const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://app.evox.com.br';
 const to = TO;
 const tempPassword = TEMP_PASSWORD;
 
@@ -66,7 +66,7 @@ fs.mkdirSync(outDir, { recursive: true });
 const outPath = path.join(outDir, 'sample-welcome-email.html');
 fs.writeFileSync(outPath, html);
 
-console.log(`subject: Bem-vindo ao System Clow, ${firstName}! Sua assinatura ${tierLabel} tá ativa 🎉`);
+console.log(`subject: Bem-vindo ao EVOX, ${firstName}! Sua assinatura ${tierLabel} tá ativa 🎉`);
 console.log(`to:      ${to}`);
 console.log(`tier:    ${tierLabel}`);
 console.log(`saved:   ${outPath} (${html.length} bytes)`);

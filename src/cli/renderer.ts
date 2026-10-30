@@ -72,7 +72,7 @@ export class TerminalSessionRenderer {
     if (!this.turn) return;
     if (this.turn.assistantOpen) return;
     this.turn.assistantOpen = true;
-    process.stdout.write(`${color.accent(this.glyphs.branch)} ${color.white('System Clow')}\n`);
+    process.stdout.write(`${color.accent(this.glyphs.branch)} ${color.white('EVOX')}\n`);
   }
 
   streamText(text: string): void {
@@ -165,7 +165,7 @@ export class TerminalSessionRenderer {
       `${pill('core', 'gold')} ${color.white('/plan')} ${color.muted('toggle plan mode')}`,
       `${pill('core', 'gold')} ${color.white('/remote-control start|stop|status')} ${color.muted('manage remote control bridge')}`,
     ];
-    process.stdout.write(`\n${color.white('System Clow Commands')}\n`);
+    process.stdout.write(`\n${color.white('EVOX Commands')}\n`);
     process.stdout.write(`${divide(getTerminalWidth())}\n`);
     for (const line of sections) {
       process.stdout.write(`${line}\n`);

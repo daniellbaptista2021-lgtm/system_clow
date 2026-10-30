@@ -1,14 +1,14 @@
 /**
- * modoBonus.ts — o System Clow como bonus, sem assinatura.
+ * modoBonus.ts — o EVOX como bonus, sem assinatura.
  *
- * Decisao do Daniel (10/08/2026): o System Clow deixou de ser um SaaS cobrado
- * a parte e virou um bonus dentro do System Clow. Quem entra ja pagou
+ * Decisao do Daniel (10/08/2026): o EVOX deixou de ser um SaaS cobrado
+ * a parte e virou um bonus dentro do EVOX. Quem entra ja pagou
  * pelo Territorio; cobrar de novo aqui nao faz sentido. E como a IA agora roda
  * na chave do proprio cliente (ver aiCredentials.ts), o custo por mensagem que
  * justificava cota tambem deixou de ser nosso.
  *
  * **Desligado por configuracao, nao arrancado.** O codigo de licenca, Stripe,
- * trial e cota continua inteiro e testado: se um dia o System Clow voltar a
+ * trial e cota continua inteiro e testado: se um dia o EVOX voltar a
  * ser vendido sozinho, e uma variavel de ambiente, nao uma reconstrucao.
  * Arrancar seria a decisao dificil de desfazer — e essa nao e uma decisao que
  * precise ser dificil.

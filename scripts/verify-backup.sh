@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────
-# verify-backup.sh — Validate a System Clow SQLite backup
+# verify-backup.sh — Validate a EVOX SQLite backup
 # ─────────────────────────────────────────────────────────────────────────
 # Usage:
 #   verify-backup.sh                 # verify the latest snapshot

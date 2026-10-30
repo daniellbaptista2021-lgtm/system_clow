@@ -4,7 +4,7 @@
  * 2026-04-29 mudanca de modelo: WHITELIST → BLACKLIST.
  * Daniel: "todos os comandos exceto mexer no proprio sistema". Tenant pode
  * rodar QUALQUER binario/comando dentro do seu workspace; bloqueamos so o
- * que toca o System Clow propriamente dito (codigo, processo, .env, banco
+ * que toca o EVOX propriamente dito (codigo, processo, .env, banco
  * dos tenants) ou que escala privilegio (sudo/su).
  *
  * Garantias estruturais que continuam (NAO precisam estar nessa lista):
@@ -15,7 +15,7 @@
  *  - Sem sudo, processos rodam como user nao-root no sandbox.
  *
  * Por isso a blacklist abaixo e CURTA: cobre apenas o que sandbox/SQL nao
- * isolam por conta propria — comandos que escalam ou acessam o System Clow
+ * isolam por conta propria — comandos que escalam ou acessam o EVOX
  * pelo canal de processo/PID/arquivos especiais.
  *
  * Admin: unrestricted (path separado em BashTool).
@@ -25,7 +25,7 @@
 // Configuration
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Patterns que afetam o System Clow ou escalam privilegio. */
+/** Patterns que afetam o EVOX ou escalam privilegio. */
 const BLOCKED_PATTERNS = [
   // Privilege escalation
   /\bsudo\b/,
@@ -33,7 +33,7 @@ const BLOCKED_PATTERNS = [
   /\bdoas\b/,
   /\bpolkit\b/i,
 
-  // System Clow process control
+  // EVOX process control
   /\bpm2\b/,
   /\bsystemctl\b/,
   /(^|\s|;|&|\|)service\s+\S+\s+(start|stop|restart|reload)/,
@@ -41,7 +41,7 @@ const BLOCKED_PATTERNS = [
   /\bshutdown\b/,
   /\binit\b\s+\d/,
 
-  // Mata processo do System Clow / sistema (PID 1, ranges)
+  // Mata processo do EVOX / sistema (PID 1, ranges)
   /\bkill\s+-9\s+1\b/,
   /\bkill\s+1\b/,
   /\bkillall\s+(node|clow|pm2)\b/,
@@ -63,7 +63,7 @@ const BLOCKED_PATTERNS = [
   /\bdd\s+if=/,
   />\s*\/dev\/(sd|nvme|hd)/,
 
-  // Leak/modificacao de credenciais e do banco do System Clow
+  // Leak/modificacao de credenciais e do banco do EVOX
   /\.env\b/,
   /tenants\.json/i,
   /\bANTHROPIC_API_KEY\b/,
@@ -105,7 +105,7 @@ export interface SandboxResult {
  * Valida um comando Bash de tenant SaaS.
  *
  * Modelo blacklist (2026-04-29): tenant pode rodar qualquer binario/comando.
- * Bloqueamos so o que toca o proprio System Clow (processo, codigo, banco)
+ * Bloqueamos so o que toca o proprio EVOX (processo, codigo, banco)
  * ou escala privilegio (sudo/su). Isolamento de filesystem entre tenants e
  * feito pelo bwrap namespace em SandboxRunner (nao por path matching aqui).
  */
@@ -123,7 +123,7 @@ export function validateBashCommand(
     if (pattern.test(trimmed)) {
       return {
         allowed: false,
-        reason: `Bloqueado: comando afeta o CRM Pulse ou escala privilegio (${pattern.source.slice(0, 40)}). Voce pode rodar qualquer outra coisa no seu workspace.`,
+        reason: `Bloqueado: comando afeta o EVOX ou escala privilegio (${pattern.source.slice(0, 40)}). Voce pode rodar qualquer outra coisa no seu workspace.`,
       };
     }
   }
@@ -132,7 +132,7 @@ export function validateBashCommand(
     if (trimmed.includes(blockedPath)) {
       return {
         allowed: false,
-        reason: `Bloqueado: caminho pertence ao CRM Pulse ou ao sistema operacional (${blockedPath}).`,
+        reason: `Bloqueado: caminho pertence ao EVOX ou ao sistema operacional (${blockedPath}).`,
       };
     }
   }

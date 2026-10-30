@@ -7,7 +7,7 @@
  *   - repl: in-REPL /remote-control command
  *   - env-less: direct JWT connection (v3)
  *
- * This is the LAST module of the System Clow v1.0.
+ * This is the LAST module of the EVOX v1.0.
  * With this, paridade arquitetural com Claude Code está completa.
  */
 

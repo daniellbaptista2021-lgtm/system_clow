@@ -166,7 +166,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 
       <div class="webhook-box">
         <div class="lbl">🔗 Webhook URL (cole no painel do provedor DEPOIS de clicar "Conectar")</div>
-        <div class="url" id="webhookPreview">https://system-clow.pvcorretor01.com.br/webhooks/crm/meta/[será gerado]</div>
+        <div class="url" id="webhookPreview">http://127.0.0.1:3041/webhooks/crm/meta/[será gerado]</div>
         <button class="copy-btn" onclick="copyWebhook()">Copiar</button>
       </div>
       <div id="verifyTokenBlock" class="webhook-box" style="display:block">
@@ -315,7 +315,7 @@ function copyVerify() {
 }
 
 async function connectChannel() {
-  // First exchange System Clow token → CRM api_key
+  // First exchange EVOX token → CRM api_key
   const btn = document.getElementById('connectBtn');
   btn.disabled = true; btn.textContent = 'Conectando...';
   const errEl = document.getElementById('err3');

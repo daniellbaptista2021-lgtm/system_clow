@@ -1,4 +1,4 @@
-# SQLite tuning — System Clow
+# SQLite tuning — EVOX
 
 This document records the database-tuning decisions in [src/crm/schema.ts](../src/crm/schema.ts) and [src/crm/store/preparedCache.ts](../src/crm/store/preparedCache.ts), plus the measured impact of each.
 

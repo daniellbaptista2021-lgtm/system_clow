@@ -91,7 +91,7 @@ function whatsappAddonPriceId(): string | undefined {
 // digita o codigo no campo "Adicionar cupom" do Stripe Checkout.
 
 function publicBase(): string {
-  return process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+  return process.env.CLOW_PUBLIC_BASE_URL || 'http://127.0.0.1:3041';
 }
 
 let _stripeClient: any = null;
@@ -337,8 +337,8 @@ app.post('/webhooks/stripe', async (c) => {
               const { sendMail } = await import('../utils/mailer.js');
               await sendMail({
                 to: t.email,
-                subject: 'Falha na cobrança — CRM Pulse',
-                text: `Olá ${t.full_name || t.name},\n\nA cobrança automática da sua assinatura falhou (tentativa ${inv.attempt_count || 1}). O Stripe vai retentar nos próximos dias.\n\nSe quiser atualizar o cartão, acesse o Portal de Cobrança no painel.\n\n— CRM Pulse`,
+                subject: 'Falha na cobrança — EVOX',
+                text: `Olá ${t.full_name || t.name},\n\nA cobrança automática da sua assinatura falhou (tentativa ${inv.attempt_count || 1}). O Stripe vai retentar nos próximos dias.\n\nSe quiser atualizar o cartão, acesse o Portal de Cobrança no painel.\n\n— EVOX`,
               });
             } catch { /* email opcional */ }
           }
@@ -369,8 +369,8 @@ app.post('/webhooks/stripe', async (c) => {
             const { sendMail } = await import('../utils/mailer.js');
             await sendMail({
               to: t.email,
-              subject: 'Seu trial termina em 3 dias — CRM Pulse',
-              text: `Olá ${t.full_name || t.name},\n\nSeu período de avaliação termina em 3 dias. A primeira cobrança será feita automaticamente no cartão cadastrado.\n\nQuer atualizar o cartão ou cancelar? Acesse o Portal de Cobrança no painel.\n\n— CRM Pulse`,
+              subject: 'Seu trial termina em 3 dias — EVOX',
+              text: `Olá ${t.full_name || t.name},\n\nSeu período de avaliação termina em 3 dias. A primeira cobrança será feita automaticamente no cartão cadastrado.\n\nQuer atualizar o cartão ou cancelar? Acesse o Portal de Cobrança no painel.\n\n— EVOX`,
             });
           } catch { /* email opcional */ }
         }
@@ -446,7 +446,7 @@ async function provisionFromSession(session: any): Promise<void> {
   logger.info(`[stripe] created tenant ${email} (${plan}${isPilot ? ' PILOT' : ''}); disparando email + whatsapp`);
 
   // Dispara email + WhatsApp em paralelo; nenhum é bloqueante
-  const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+  const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'http://127.0.0.1:3041';
   Promise.allSettled([
     sendWelcomeEmail(email, md.full_name || email, tempPassword, plan),
     sendWelcomeWhatsApp(phone, md.full_name || email, tempPassword, plan, loginUrl),
@@ -506,7 +506,7 @@ app.get('/signup/success', async (c) => {
   const html = [
     '<!DOCTYPE html><html lang="pt-BR"><head>',
     '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
-    '<title>CRM Pulse — Bem-vindo!</title>',
+    '<title>EVOX — Bem-vindo!</title>',
     '<link rel="icon" href="/assets/favicon-gold.png">',
     '<style>',
     'body{margin:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px}',
@@ -536,7 +536,7 @@ app.get('/signup/success', async (c) => {
     '.note{font-size:11.5px;color:#6E6E8C;margin-top:16px}',
     '</style></head><body>',
     '<div class="card">',
-    '<div class="logo"><img src="/assets/vector/icone-192.png" alt="" style="height:56px;width:56px;border-radius:14px;vertical-align:middle"> <b style="font-size:22px;vertical-align:middle">CRM Pulse</b></div>',
+    '<div class="logo"><img src="/assets/vector/icone-192.png" alt="" style="height:56px;width:56px;border-radius:14px;vertical-align:middle"> <b style="font-size:22px;vertical-align:middle">EVOX</b></div>',
     '<div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>',
     '<h1>Pagamento confirmado!</h1>',
     '<p>Sua conta foi criada. ' + (creds ? 'Aqui estão suas credenciais:' : 'Confira seu email e WhatsApp.') + '</p>',

@@ -167,7 +167,7 @@ app.post('/flows/install-template', async (c) => {
 
   const id = 'n8n_' + Math.random().toString(36).slice(2, 14);
   const webhookSecret = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  const webhookUrl = `https://system-clow.pvcorretor01.com.br/webhooks/n8n/${u.tid}/${webhookSecret}`;
+  const webhookUrl = `https://app.evox.com.br/webhooks/n8n/${u.tid}/${webhookSecret}`;
   db.prepare(`
     INSERT INTO crm_n8n_flows (id, tenant_id, name, template_key, status, webhook_url, config_json, created_at)
     VALUES (?, ?, ?, ?, 'active', ?, ?, ?)

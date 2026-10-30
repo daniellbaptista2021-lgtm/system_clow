@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────
-# backup-sqlite.sh — Live, WAL-safe SQLite backup for System Clow
+# backup-sqlite.sh — Live, WAL-safe SQLite backup for EVOX
 # ─────────────────────────────────────────────────────────────────────────
 # Uses the SQLite `.backup` command (NOT cp) — produces a single consistent
 # snapshot file even while the database is being written to.

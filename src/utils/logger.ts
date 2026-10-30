@@ -1,5 +1,5 @@
 /**
- * logger.ts — pino-backed structured JSON logging for System Clow.
+ * logger.ts — pino-backed structured JSON logging for EVOX.
  *
  * Output shape (one line of JSON per event, regardless of dev/prod):
  *   {

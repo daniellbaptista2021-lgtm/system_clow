@@ -3,7 +3,7 @@
  *
  * Padroniza um agente de IA por canal (Z-API/Meta) sem precisar de n8n
  * externo. Cada tenant tem seu próprio bot conversacional dentro do
- * System Clow:
+ * EVOX:
  *   - ai_enabled: liga/desliga o agente automatico
  *   - ai_system_prompt: personalidade + contexto do bot
  *   - ai_model: deepseek-chat (default) | gpt-4o-mini | etc

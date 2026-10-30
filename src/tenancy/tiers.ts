@@ -1,7 +1,7 @@
 /**
  * tiers.ts — Tier definitions with quotas and features
  *
- * Planos publicos vendidos (https://system-clow.pvcorretor01.com.br/pricing):
+ * Planos publicos vendidos (https://app.evox.com.br/pricing):
  *   STARTER:      R$347/mes
  *   PROFISSIONAL: R$697/mes  (mais escolhido)
  *   EMPRESARIAL:  R$1.297/mes

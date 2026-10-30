@@ -1,4 +1,4 @@
-# Operações — System Clow
+# Operações — EVOX
 
 Documentação operacional pro launch dos 500 corretores e suporte 24/7 depois.
 
@@ -17,7 +17,7 @@ Todos os docs assumem que você exportou:
 
 ```bash
 export VPS_IP=<vps-ip>                    # IP da VPS (não está versionado por gitleaks)
-export DOMAIN=system-clow.pvcorretor01.com.br
+export DOMAIN=app.evox.com.br
 export METRICS_TOKEN=<valor-do-.env>      # token do /metrics
 ```
 

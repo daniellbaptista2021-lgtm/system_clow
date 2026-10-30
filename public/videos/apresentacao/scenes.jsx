@@ -1,4 +1,4 @@
-// scenes.jsx — Cenas do video System Clow (16:9 YouTube, 1920x1080, 45s)
+// scenes.jsx — Cenas do video EVOX (16:9 YouTube, 1920x1080, 45s)
 
 // ─── Paleta oficial (preto + roxo) ─────────────────────────────────────
 const PAL = {
@@ -18,7 +18,7 @@ function ClowLogo({ height = 64, opacity = 1 }) {
   return (
     <img
       src="assets/logo-clean.png"
-      alt="System Clow"
+      alt="EVOX"
       style={{
         height,
         width: 'auto',

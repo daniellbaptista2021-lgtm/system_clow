@@ -6,7 +6,7 @@
 ```bash
 # Sempre exporta isso primeiro:
 export VPS_IP=<vps-ip>
-export DOMAIN=system-clow.pvcorretor01.com.br
+export DOMAIN=app.evox.com.br
 export METRICS_TOKEN=<valor-do-.env>
 ```
 
@@ -195,7 +195,7 @@ curl -fsS https://$DOMAIN/health | jq .activeSessions
 | 0-5 min | Você sozinho, segue runbook |
 | 5-15 min sem resolver | Acorda o dev backup (canal `#oncall-pager` no Telegram) |
 | 15-30 min sem resolver | Considera [rollback](rollback.md) preventivo enquanto investiga |
-| 30+ min | Posta status público em https://status.system-clow.pvcorretor01.com.br (se tiver) ou e-mail aos tenants ativos |
+| 30+ min | Posta status público em https://status.app.evox.com.br (se tiver) ou e-mail aos tenants ativos |
 | 1h+ | Escalate pro Daniel direto (WhatsApp pessoal, não canal) |
 
 ---

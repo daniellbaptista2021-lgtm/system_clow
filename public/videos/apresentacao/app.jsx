@@ -1,4 +1,4 @@
-// app.jsx — System Clow video 16:9 YouTube 1920x1080, 45s
+// app.jsx — EVOX video 16:9 YouTube 1920x1080, 45s
 
 // ────────────────────────────────────────────────────────────────────
 // AudioSync — <audio> atrelado ao Stage/TimelineContext.

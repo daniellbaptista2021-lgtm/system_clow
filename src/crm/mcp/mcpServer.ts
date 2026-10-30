@@ -1,10 +1,10 @@
 /**
- * Servidor MCP do CRM — deixa um agente externo operar o System Clow.
+ * Servidor MCP do CRM — deixa um agente externo operar o EVOX.
  *
  * ── O que é ──────────────────────────────────────────────────────────────
  *
  * O Model Context Protocol é JSON-RPC 2.0. Este módulo implementa o lado
- * SERVIDOR (`src/mcp/` já tinha o lado cliente, que é o System Clow chamando
+ * SERVIDOR (`src/mcp/` já tinha o lado cliente, que é o EVOX chamando
  * ferramentas de terceiros — direção oposta). Transporte: Streamable HTTP,
  * um único POST que responde JSON. Sem SSE: nenhuma tool daqui emite progresso
  * parcial, então stream seria complexidade sem uso.
@@ -46,7 +46,7 @@ const VERSAO_PREFERIDA = '2025-06-18';
 
 const SERVER_INFO = {
   name: 'system-clow-crm',
-  title: 'CRM Pulse',
+  title: 'EVOX',
   version: '1.0.0',
 };
 
@@ -281,7 +281,7 @@ export async function tratarMensagem(
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:
-          'Ferramentas do CRM Pulse. Antes de criar card ou mandar mensagem, ' +
+          'Ferramentas do EVOX. Antes de criar card ou mandar mensagem, ' +
           'resolva o contato com crm_find_or_create_contact e use o id retornado. ' +
           'crm_pipeline e crm_dashboard dão o panorama; crm_search encontra por texto. ' +
           'Tools de envio falam com clientes reais — confirme com o usuário antes de disparar.',

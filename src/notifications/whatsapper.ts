@@ -12,7 +12,7 @@ import { logger } from '../utils/logger.js';
  *   2. Criar template categoria UTILITY:
  *      - name: clow_welcome
  *      - language: pt_BR
- *      - header: "Bem-vindo ao System Clow!"
+ *      - header: "Bem-vindo ao EVOX!"
  *      - body: "Olá {{1}}! Seu plano {{2}} tá ativo.
  *               Senha temporária: *{{3}}*
  *               Faça login: {{4}}
@@ -178,7 +178,7 @@ export async function sendWelcomeWhatsApp(
   }
 
   const firstName = String(fullName || '').trim().split(/\s+/)[0] || 'você';
-  const link = loginUrl || process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+  const link = loginUrl || process.env.CLOW_PUBLIC_BASE_URL || 'https://app.evox.com.br';
 
   // Template AUTHENTICATION approved at Meta: clow_access_code
   // Estrutura fixa: body com variável única {{1}} = senha, + botão COPY_CODE que replica {{1}}.
@@ -203,7 +203,7 @@ export async function sendWelcomeWhatsApp(
 
   // 2. Fallback freeform (só funciona dentro da janela 24h)
   const body = [
-    `🎉 Bem-vindo ao *CRM Pulse*, ${firstName}!`,
+    `🎉 Bem-vindo ao *EVOX*, ${firstName}!`,
     ``,
     `Seu plano *${plan}* tá ativo.`,
     ``,

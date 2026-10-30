@@ -1,14 +1,14 @@
 /**
- * ssoAuth.ts — Single Sign-On between Clow and System Clow
+ * ssoAuth.ts — Single Sign-On between Clow and EVOX
  *
  * Enables users authenticated in Clow (main product) to access
- * System Clow without re-entering credentials.
+ * EVOX without re-entering credentials.
  *
  * Flow:
  * 1. Clow generates SSO token with user info + HMAC signature
- * 2. User clicks "System Clow" button in Clow sidebar
- * 3. Iframe loads System Clow with ?sso_token=... parameter
- * 4. System Clow verifies token, creates session, returns JWT
+ * 2. User clicks "EVOX" button in Clow sidebar
+ * 3. Iframe loads EVOX with ?sso_token=... parameter
+ * 4. EVOX verifies token, creates session, returns JWT
  *
  * Both sides share CLOW_SSO_SECRET environment variable.
  */
@@ -36,7 +36,7 @@ export interface SSOPayload {
 
 /**
  * Generate an SSO token for a user.
- * Called by the Clow main product when user clicks "System Clow".
+ * Called by the Clow main product when user clicks "EVOX".
  */
 export function generateSSOToken(payload: Omit<SSOPayload, 'iat' | 'exp'>): string {
   const secret = getSecret();
@@ -54,7 +54,7 @@ export function generateSSOToken(payload: Omit<SSOPayload, 'iat' | 'exp'>): stri
 
 /**
  * Verify an SSO token received from Clow main.
- * Called by System Clow when iframe loads with ?sso_token=...
+ * Called by EVOX when iframe loads with ?sso_token=...
  */
 export function verifySSOToken(token: string): SSOPayload | null {
   try {
@@ -79,14 +79,14 @@ export function verifySSOToken(token: string): SSOPayload | null {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SSO Routes (mounted on System Clow)
+// SSO Routes (mounted on EVOX)
 // ════════════════════════════════════════════════════════════════════════════
 
 export function buildSSORoutes(): Hono {
   const app = new Hono();
 
   /**
-   * POST /auth/sso — Exchange SSO token for System Clow session
+   * POST /auth/sso — Exchange SSO token for EVOX session
    * Body: { sso_token: "..." }
    * Returns: { ok: true, token: "jwt...", email, tier }
    */
@@ -104,7 +104,7 @@ export function buildSSORoutes(): Hono {
     }
 
     if (!payload.hasSystemClow) {
-      return c.json({ ok: false, error: 'CRM Pulse not active for this account. Contrate em https://clow.pvcorretor01.com.br' }, 403);
+      return c.json({ ok: false, error: 'EVOX not active for this account. Contrate em https://app.evox.com.br' }, 403);
     }
 
     // Create admin session token for the SSO user

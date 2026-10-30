@@ -14,7 +14,7 @@
  *   DELETE /apresentacoes/:id/cotacao
  *   GET  /apresentacoes/:id/pdf          monta e devolve o PDF
  *
- * Cada corretor tem a própria conta no CRM Pulse, então "do tenant" é "do
+ * Cada corretor tem a própria conta no EVOX, então "do tenant" é "do
  * corretor": ninguém enxerga apresentação de outro.
  *
  * O perfil vai no crm_settings (é pequeno: as imagens chegam já reduzidas

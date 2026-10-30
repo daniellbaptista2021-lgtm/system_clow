@@ -24,7 +24,7 @@ interface EmailInput {
   attachments?: EmailAttachment[];
 }
 
-const FROM_NAME = process.env.MAILER_FROM_NAME || 'CRM Pulse';
+const FROM_NAME = process.env.MAILER_FROM_NAME || 'EVOX';
 const FROM_EMAIL = process.env.MAILER_FROM_EMAIL || 'nao-responda@pvcorretor01.com.br';
 
 function stripHtml(html: string): string {
@@ -162,7 +162,7 @@ export async function sendWelcomeEmail(to: string, name: string, tempPassword: s
     starter: '500 mensagens IA/mês · 1 fluxo n8n · 500 contatos · 2 boards · 5 automações · 1 canal WhatsApp',
   } as Record<string, string>)[tier] || '';
   const firstName = name.split(' ')[0] || name;
-  const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br';
+  const loginUrl = process.env.CLOW_PUBLIC_BASE_URL || 'https://app.evox.com.br';
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:0;background:#08081a;color:#E8E8F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <div style="max-width:600px;margin:0 auto;padding:32px 20px">
@@ -173,7 +173,7 @@ export async function sendWelcomeEmail(to: string, name: string, tempPassword: s
       <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#9B59FC,#4A9EFF);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(155,89,252,.4);vertical-align:middle">
         <span style="color:#fff;font-size:22px;font-weight:800;line-height:1">C</span>
       </div>
-      <span style="font-size:18px;font-weight:700;color:#E8E8F0;letter-spacing:.3px;vertical-align:middle">CRM Pulse</span>
+      <span style="font-size:18px;font-weight:700;color:#E8E8F0;letter-spacing:.3px;vertical-align:middle">EVOX</span>
     </div>
   </div>
 
@@ -238,7 +238,7 @@ export async function sendWelcomeEmail(to: string, name: string, tempPassword: s
       <div style="margin:0 0 16px">
         <div style="color:#9B59FC;font-size:12px;font-weight:700;margin-bottom:4px;letter-spacing:.5px">PASSO 3 — INSTALA NO CELULAR (PWA, opcional)</div>
         <div style="color:#B8B8D0;font-size:14px;line-height:1.5">
-          O CRM Pulse funciona como app nativo — sem precisar baixar da Play Store/App Store.
+          O EVOX funciona como app nativo — sem precisar baixar da Play Store/App Store.
           <ul style="padding-left:20px;margin:8px 0 0;color:#B8B8D0">
             <li><strong>Android (Chrome):</strong> abre o site → menu ⋮ → "Instalar app" ou "Adicionar à tela inicial"</li>
             <li><strong>iPhone (Safari):</strong> abre o site → botão Compartilhar → "Adicionar à Tela de Início"</li>
@@ -270,12 +270,12 @@ export async function sendWelcomeEmail(to: string, name: string, tempPassword: s
 
   <!-- FOOTER -->
   <div style="text-align:center;color:#6E6E8C;font-size:11px;margin-top:24px;line-height:1.6">
-    CRM Pulse © 2026 · IA pra corretores de imóveis<br>
+    EVOX © 2026 · IA pra corretores de imóveis<br>
     <a href="${loginUrl}" style="color:#6E6E8C;text-decoration:none">${loginUrl.replace(/^https?:\/\//, '')}</a>
   </div>
 </div>
 </body></html>`;
-  await sendEmail({ to, subject: `Bem-vindo ao CRM Pulse, ${firstName}! Sua assinatura ${tierLabel} tá ativa 🎉`, html });
+  await sendEmail({ to, subject: `Bem-vindo ao EVOX, ${firstName}! Sua assinatura ${tierLabel} tá ativa 🎉`, html });
 }
 
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string): Promise<void> {
@@ -288,5 +288,5 @@ export async function sendPasswordResetEmail(to: string, name: string, resetUrl:
     <p style="color:#6E6E8C;font-size:12px">Se você não solicitou, ignore esse email.</p>
   </div>
 </div></body></html>`;
-  await sendEmail({ to, subject: 'CRM Pulse — Redefinir senha', html });
+  await sendEmail({ to, subject: 'EVOX — Redefinir senha', html });
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────
-# restore-sqlite.sh — Restore System Clow SQLite snapshot
+# restore-sqlite.sh — Restore EVOX SQLite snapshot
 # ─────────────────────────────────────────────────────────────────────────
 # Usage:
 #   restore-sqlite.sh <YYYY-MM-DD-HH>           # restore (overwrites live DBs)

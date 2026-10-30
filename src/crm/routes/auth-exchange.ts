@@ -321,8 +321,8 @@ function ipOf(c: any): string {
 
 // ─── Checklists ─────────────────────────────────────────────
 
-// Used by the System Clow shell to open CRM in-app without asking the user
-// for an API key. When user logs into System Clow (workspace), this endpoint
+// Used by the EVOX shell to open CRM in-app without asking the user
+// for an API key. When user logs into EVOX (workspace), this endpoint
 // gives them the CRM key for their tenant.
 //
 // Today: admin session token → admin tenant key

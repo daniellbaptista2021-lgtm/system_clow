@@ -1,6 +1,6 @@
 /**
  * clow-dialog.js — substitui prompt/confirm/alert nativos do browser por
- * modais com a paleta e estilo oficiais do System Clow.
+ * modais com a paleta e estilo oficiais do EVOX.
  *
  * Uso (sempre async):
  *   const nome = await clowPrompt('Nome do plano:', 'Padrão');

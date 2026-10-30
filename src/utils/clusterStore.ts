@@ -3,7 +3,7 @@ import { logger } from './logger.js';
  * clusterStore.ts — async key/value primitives shared across PM2 cluster
  * workers, with a transparent in-memory fallback when Redis is absent.
  *
- * Why exist: when System Clow runs in PM2 cluster mode (2+ workers),
+ * Why exist: when EVOX runs in PM2 cluster mode (2+ workers),
  * any state held in module-scoped Maps/Sets is duplicated per worker.
  * Rate limit windows count the wrong scope, dedup sets miss cross-
  * worker collisions, etc. This module gives the rate limiter, the

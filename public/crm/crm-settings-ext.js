@@ -244,7 +244,7 @@
         el('div', { class: 'field' }, el('label', {}, 'Domínio customizado (CNAME apontado pra gente)'),
           el('input', { name: 'custom_domain', type: 'text', value: d.custom_domain || '', placeholder: 'crm.suaempresa.com.br' }),
           el('div', { style: 'font-size:11px;color:var(--text-faint);margin-top:4px' },
-            'Aponte um CNAME do seu domínio pra system-clow.pvcorretor01.com.br. Depois nos avise pra configurarmos SSL.'),
+            'Aponte um CNAME do seu domínio para o endereço informado pelo suporte EVOX. Depois nos avise para configurarmos o SSL.'),
         ),
         el('div', { style: 'display:flex;justify-content:flex-end;margin-top:20px' },
           el('button', { type: 'submit', class: 'save-btn' }, 'Salvar'),

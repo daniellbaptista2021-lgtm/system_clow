@@ -1185,7 +1185,7 @@ export function getStatusLine(): string {
 export function getDetailedStatus(): string {
   const lines: string[] = [];
 
-  lines.push('═══ System Clow Status ═══');
+  lines.push('═══ EVOX Status ═══');
   lines.push(`Session: ${sessionId.slice(0, 8)} | ${model}`);
   lines.push(`Phase: ${sessionPhase} | Turn: ${turnNumber}`);
   lines.push(`Duration: ${Math.round(getSessionDurationMs() / 1000)}s`);

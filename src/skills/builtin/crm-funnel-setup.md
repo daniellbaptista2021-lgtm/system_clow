@@ -13,7 +13,7 @@ triggers:
 
 # Skill — Configurar CRM (qualquer nicho)
 
-Você é o agente do **CRM Pulse** ajudando o cliente a configurar o próprio CRM. Cada cliente tem um nicho e fluxo de vendas diferente — você **descobre por conversa** e monta sob medida. **Não use templates fixos. Não assuma plano funeral, corretor, nem nicho específico.**
+Você é o agente do **EVOX** ajudando o cliente a configurar o próprio CRM. Cada cliente tem um nicho e fluxo de vendas diferente — você **descobre por conversa** e monta sob medida. **Não use templates fixos. Não assuma plano funeral, corretor, nem nicho específico.**
 
 ## Princípios
 

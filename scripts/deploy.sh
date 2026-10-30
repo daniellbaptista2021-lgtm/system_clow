@@ -24,7 +24,7 @@
 # To verify zero-downtime in another shell while this runs:
 #   while true; do
 #     curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" \
-#       https://system-clow.pvcorretor01.com.br/health/live
+#       https://app.evox.com.br/health/live
 #     sleep 0.2
 #   done | grep -v "^200 "
 # That command should print NOTHING during the reload. If it prints 502 or

@@ -1,5 +1,5 @@
 /**
- * metrics.ts — Prometheus metrics endpoint for System Clow.
+ * metrics.ts — Prometheus metrics endpoint for EVOX.
  *
  * Exposes /metrics in Prometheus text format. Token-protected via the
  * METRICS_TOKEN env var (Bearer header). If METRICS_TOKEN is unset, the

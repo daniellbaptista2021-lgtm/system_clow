@@ -322,8 +322,8 @@ function ipOf(c: any): string {
 
 // ─── Checklists ─────────────────────────────────────────────
 
-// Used by the System Clow shell to open CRM in-app without asking the user
-// for an API key. When user logs into System Clow (workspace), this endpoint
+// Used by the EVOX shell to open CRM in-app without asking the user
+// for an API key. When user logs into EVOX (workspace), this endpoint
 // gives them the CRM key for their tenant.
 //
 // Today: admin session token → admin tenant key
@@ -380,6 +380,8 @@ export function registerAgentsRoutes(app: Hono): void {
     try {
       const { getTenant } = await import('../../tenancy/tenantStore.js');
       const { TIERS } = await import('../../tenancy/tiers.js');
+      const { planoDa } = await import('../../tenancy/usoIa.js');
+      const planoEvox = planoDa(tid);
       const t = getTenant(tid);
       const channels = store.listChannels(tid);
       const zapiCount = channels.filter((ch: any) => ch.type === 'zapi').length;
@@ -392,6 +394,8 @@ export function registerAgentsRoutes(app: Hono): void {
         return c.json({
           ok: true,
           _fallback: true,
+          plano: planoEvox,
+          recursos: { agenteCompleto: planoEvox === 'completo' },
           tenant: { id: tid, email: null, name: null, tier: 'unknown', status: 'unknown', hasStripe: false },
           whatsapp: { included: 1, max: 999, zapiCount, metaCount, totalUsed, extraPaid: 0, available: Math.max(0, 999 - totalUsed), pricePerExtraBrl: 100 },
         });
@@ -419,6 +423,8 @@ export function registerAgentsRoutes(app: Hono): void {
 
       return c.json({
         ok: true,
+        plano: planoEvox,
+        recursos: { agenteCompleto: planoEvox === 'completo' },
         tenant: {
           id: t.id,
           email: t.email,
@@ -445,6 +451,8 @@ export function registerAgentsRoutes(app: Hono): void {
         ok: true,
         _fallback: true,
         _error: err?.message || 'internal',
+        plano: 'essencial',
+        recursos: { agenteCompleto: false },
         tenant: { id: tid, email: null, name: null, tier: 'unknown', status: 'unknown', hasStripe: false },
         whatsapp: { included: 1, max: 999, zapiCount: 0, metaCount: 0, totalUsed: 0, extraPaid: 0, available: 999, pricePerExtraBrl: 100 },
       });

@@ -1,5 +1,5 @@
 /**
- * builtInSkills.ts — Built-in skills bundled with System Clow
+ * builtInSkills.ts — Built-in skills bundled with EVOX
  *
  * Based on Claude Code's built-in skills (~200 lines)
  *

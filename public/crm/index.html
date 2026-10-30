@@ -55,7 +55,7 @@
       </div>
     </div>
     <nav>
-      <button class="nav-item" data-view="agente"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="nav-label">Agente IA</span></button>
+      <button class="nav-item" data-view="agente" data-plano="completo" hidden><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="nav-label">Agente IA</span></button>
       <button class="nav-item" data-view="kanban"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span><span class="nav-label">Pipeline</span></button>
       <button class="nav-item" data-view="contacts"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="nav-label">Contatos</span></button>
       <button class="nav-item" data-view="channels"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span class="nav-label">Canais WA</span></button>
@@ -87,7 +87,7 @@
       <div class="evox-usuario"><button type="button" class="evox-avatar" id="evoxAvatar" title="Foto de perfil" aria-haspopup="menu">—</button><input type="file" id="evoxFotoArquivo" accept="image/png,image/jpeg,image/webp" hidden><div class="evox-foto-menu" id="evoxFotoMenu" role="menu" hidden><button type="button" role="menuitem" data-acao="trocar">Trocar foto</button><button type="button" role="menuitem" data-acao="remover">Remover foto</button></div><div><div class="evox-usuario-nome" id="evoxUsuarioNome">—</div><div class="evox-usuario-papel">Corretor</div></div></div>
     </div>
     <!-- AGENTE IA VIEW (embutido, mesma aba) -->
-    <div class="view" data-view="agente" id="agenteView">
+    <div class="view" data-view="agente" data-plano="completo" id="agenteView" hidden>
       <div class="agente-frame-wrap" id="agenteFrameWrap">
         <div class="agente-frame-loading" id="agenteFrameLoading">
           <div class="ai-chat-spin"></div>
@@ -510,7 +510,7 @@
 <script src="/crm/agent-config-modal.js?v=evox3"></script>
 <script src="/crm/evox-ui.js?v=6"></script>
 <script src="/crm/mcp-panel.js?v=vector3"></script>
-<!-- EVOX: "Apresentação" (proposta MetLife do Vector) saiu do menu a pedido do Daniel, 29/10/2026. O arquivo segue no repositório. -->
+<!-- "Apresentação" saiu do menu; o arquivo segue preservado no repositório. -->
 <script src="/crm/datas.js?v=1"></script>
 <script>
 if ('serviceWorker' in navigator) {
@@ -544,7 +544,7 @@ document.getElementById('themeBtn')?.addEventListener('click',function(){
 <nav class="evox-abas-baixo" id="evoxAbasBaixo" aria-label="Navegação">
   <button data-ir="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Painel</span></button>
   <button data-ir="kanban"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 8.5c-.6-.9-1.7-1.5-3-1.5-1.9 0-3 1-3 2.3 0 3.1 6 1.7 6 4.9 0 1.3-1.2 2.3-3 2.3-1.4 0-2.6-.6-3.2-1.6M12 5.5v13"/></svg><span>Vendas</span></button>
-  <button data-ir="agente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg><span>Agente IA</span></button>
+  <button data-ir="agente" data-plano="completo" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg><span>Agente IA</span></button>
   <button data-ir="contacts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg><span>Clientes</span></button>
   <button data-ir="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Mais</span></button>
 </nav>

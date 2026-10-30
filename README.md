@@ -1,10 +1,10 @@
-# System Clow
+# EVOX
 
 [![CI](https://github.com/daniellbaptista2021-lgtm/system_clow/actions/workflows/ci.yml/badge.svg)](https://github.com/daniellbaptista2021-lgtm/system_clow/actions/workflows/ci.yml)
 
 > Plataforma SaaS premium que une **Agente IA via WhatsApp** + **CRM completo** + **automações n8n** num único produto. Cada cliente assinante recebe seu workspace isolado com pipeline de vendas, atendimento por WhatsApp e IA que opera o CRM por comando natural.
 
-**Live:** https://system-clow.pvcorretor01.com.br
+**Live:** http://127.0.0.1:3041
 **Stack:** Node 22 + TypeScript + Hono + better-sqlite3 + GLM-5.1 (via LiteLLM/OpenRouter)
 
 ---
@@ -13,8 +13,8 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                      System Clow Workspace                       │
-│  https://system-clow.pvcorretor01.com.br                         │
+│                      EVOX Workspace                       │
+│  http://127.0.0.1:3041                         │
 │                                                                  │
 │  ┌────────────────┐         ┌──────────────────────────────┐    │
 │  │ Agente IA      │ ◄──────►│ CRM Clow (modal in-app)      │    │
@@ -70,7 +70,7 @@ Arquivos relevantes:
 
 ## 🚀 Funcionalidades
 
-### Agente IA (System Clow)
+### Agente IA (EVOX)
 
 - Conversa via WhatsApp com cliente final usando GLM-5.1
 - **10 ferramentas CRM** que a IA opera por comando natural:
@@ -118,7 +118,7 @@ src/
 ├── auth/             ★ Signup/Login multi-user + tokens HMAC
 ├── billing/          ★ Stripe Checkout + webhooks
 ├── bootstrap/        Initialization
-├── bridge/           External integration (Clow ↔ System Clow)
+├── bridge/           External integration (Clow ↔ EVOX)
 ├── cli/ + cli.ts     Standalone CLI
 ├── coordinator/      Agent orchestration
 ├── crm/              ★ CRM module completo (12 tabelas, REST, webhooks, automations, billing)
@@ -147,7 +147,7 @@ src/
 └── utils/            Compaction, logging, paths
 
 public/
-├── index.html        Shell System Clow (login + chat + sidebar + CRM modal)
+├── index.html        Shell EVOX (login + chat + sidebar + CRM modal)
 ├── crm/              ★ CRM SPA
 │   ├── index.html    App shell (auto-loader, no manual API key prompt)
 │   ├── crm.css       Dark theme + nav 3D + brand SVG
@@ -203,7 +203,7 @@ POST   /reminders
 POST   /media/upload · GET /media/:tenantId/:date/:file
 GET    /events                     (SSE)
 GET    /stats
-POST   /auth/exchange              (System Clow session → CRM api_key)
+POST   /auth/exchange              (EVOX session → CRM api_key)
 ```
 
 ### Webhooks (públicos, secret-validated)
@@ -223,7 +223,7 @@ POST      /webhooks/stripe              Stripe events
 - **AES-256-GCM** pra credenciais de canal WhatsApp (scrypt KDF)
 - **CLOW_CRM_SECRET** + **CLOW_USER_SESSION_SECRET** + **STRIPE_WEBHOOK_SECRET** em env vars
 - Server escuta só em `127.0.0.1:3001` (nginx faz o terminate TLS público)
-- CSP `frame-ancestors 'self'` no CRM (não embarcável fora do System Clow)
+- CSP `frame-ancestors 'self'` no CRM (não embarcável fora do EVOX)
 - Webhook signature verification opcional (Meta `X-Hub-Signature-256`, Stripe assinatura)
 - Phone whitelist no agente (impede uso por terceiros)
 - Path traversal guard no media handler
@@ -413,7 +413,7 @@ Endpoints públicos pra monitoramento externo (UptimeRobot, Better Stack, Pingdo
 ### Configurando UptimeRobot
 
 1. **New Monitor** → **HTTP(s)**
-2. **URL**: `https://system-clow.pvcorretor01.com.br/health/ready`
+2. **URL**: `http://127.0.0.1:3041/health/ready`
 3. **Monitoring Interval**: 5 minutes
 4. **Advanced Settings → Custom HTTP Statuses**: aceitar `200` apenas (UptimeRobot dispara alerta em 503)
 5. **Alert Contacts**: e-mail do oncall + canal Slack/Telegram via webhook
@@ -423,7 +423,7 @@ Adicione um monitor extra **HTTP(s)** apontando pra `/health/live` com intervalo
 ### Configurando Better Stack
 
 1. **Monitors → Create monitor → HTTP**
-2. **URL**: `https://system-clow.pvcorretor01.com.br/health/ready`
+2. **URL**: `http://127.0.0.1:3041/health/ready`
 3. **Check frequency**: `30s`
 4. **Request timeout**: `5s` (o `/health/ready` faz 4 probes em paralelo — fica em ~50–500ms tipicamente)
 5. **Expected status code**: `200`
@@ -485,7 +485,7 @@ Sem `METRICS_TOKEN` setado → endpoint retorna **503** (proteção contra expos
 
 ```bash
 curl -H "Authorization: Bearer $METRICS_TOKEN" \
-  https://system-clow.pvcorretor01.com.br/metrics
+  http://127.0.0.1:3041/metrics
 ```
 
 ### Apontando Grafana Cloud free tier
@@ -506,7 +506,7 @@ scrape_configs:
     metrics_path: /metrics
     bearer_token: <METRICS_TOKEN_VALUE>
     static_configs:
-      - targets: ['system-clow.pvcorretor01.com.br:443']
+      - targets: ['app.evox.com.br:443']
         labels:
           env: production
     scheme: https
@@ -623,7 +623,7 @@ A regra: **se em dúvida, filtra**. Adicione mais nomes em `SENSITIVE_KEY_RX` em
 Forçar um erro de teste em prod:
 
 ```bash
-curl -i https://system-clow.pvcorretor01.com.br/v1/crm/contacts/__sentry_test_force_500__ \
+curl -i http://127.0.0.1:3041/v1/crm/contacts/__sentry_test_force_500__ \
      -H "Authorization: Bearer <api_key_inválida>"
 ```
 
@@ -737,7 +737,7 @@ Em outro shell, antes de rodar `deploy.sh`:
 ```bash
 while true; do
   curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" \
-    https://system-clow.pvcorretor01.com.br/health/live
+    http://127.0.0.1:3041/health/live
   sleep 0.2
 done | grep -v "^200 "
 ```
@@ -778,7 +778,7 @@ upstream clow_cluster {
 
 server {
     listen 443 ssl http2;
-    server_name system-clow.pvcorretor01.com.br;
+    server_name app.evox.com.br;
     location / {
         proxy_pass http://clow_cluster;
         proxy_set_header X-Real-IP $remote_addr;
@@ -800,7 +800,7 @@ pm2 restart clow --update-env   # 15-30s downtime
 
 ## 📌 Estado atual (2026-04-27)
 
-**Produção**: https://system-clow.pvcorretor01.com.br · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `5cb7b9e`
+**Produção**: http://127.0.0.1:3041 · PM2 cluster 2 workers · `clow` v1.0.0 · branch `refactor/pricing-whatsapp-v2` · HEAD `5cb7b9e`
 
 ### 💰 Planos comerciais (Stripe ao vivo)
 

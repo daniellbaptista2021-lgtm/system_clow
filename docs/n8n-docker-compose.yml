@@ -1,4 +1,4 @@
-# n8n self-hosted para System Clow SaaS
+# n8n self-hosted para EVOX SaaS
 #
 # Deploy:
 #   scp n8n-docker-compose.yml root@<vps-ip>:/opt/n8n/
@@ -7,10 +7,10 @@
 # URL pública: https://n8n.pvcorretor01.com.br (nginx proxy pra 127.0.0.1:5678)
 # Auth: basic (N8N_BASIC_AUTH_USER + PASSWORD) ou OAuth/SSO depois
 #
-# Integração com System Clow:
+# Integração com EVOX:
 #   - cada tenant recebe credenciais n8n com prefixo tenant_{id}
 #   - workflows são criados via API do n8n (POST /rest/workflows)
-#   - webhooks de workflows apontam pra System Clow endpoints:
+#   - webhooks de workflows apontam pra EVOX endpoints:
 #     POST /webhooks/n8n/{tenantId}/{flowSecret}
 
 version: '3.8'
@@ -42,7 +42,7 @@ services:
       - EXECUTIONS_PROCESS=main
       - EXECUTIONS_MODE=regular
       - N8N_METRICS=true
-      # Dar acesso à API REST interna (pra System Clow criar workflows programaticamente)
+      # Dar acesso à API REST interna (pra EVOX criar workflows programaticamente)
       - N8N_PUBLIC_API_DISABLED=false
       - N8N_PUBLIC_API_ENDPOINT=api
     volumes:

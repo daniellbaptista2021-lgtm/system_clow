@@ -414,7 +414,7 @@ export function renderICS(appointments: Appointment[]): string {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//System Clow//CRM//PT-BR',
+    'PRODID:-//EVOX//CRM//PT-BR',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
   ];

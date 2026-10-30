@@ -39,7 +39,7 @@ if (r.status !== 0) {
 
 // Conteúdo do pre-commit
 const preCommitPath = path.join(repoRoot, '.husky', 'pre-commit');
-const preCommitBody = `# Pre-commit hook do System Clow — gerado por scripts/setup-husky.cjs
+const preCommitBody = `# Pre-commit hook do EVOX — gerado por scripts/setup-husky.cjs
 # Roda lint-staged → que chama gitleaks protect --staged.
 # Pra pular um commit emergencial: git commit --no-verify (NÃO RECOMENDADO).
 

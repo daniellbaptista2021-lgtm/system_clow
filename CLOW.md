@@ -17,7 +17,7 @@ Ao inspecionar o próprio projeto ou qualquer repositório, seguir obrigatoriame
 
 ## Skill: Clone Website
 
-O System Clow tem a capacidade de clonar sites de forma pixel-perfect.
+O EVOX tem a capacidade de clonar sites de forma pixel-perfect.
 Quando o usuario pedir para clonar, copiar, replicar ou reconstruir um site:
 
 1. Use o Browser MCP (Claude in Chrome) para acessar o site alvo
@@ -36,12 +36,12 @@ A skill completa esta em: src/skills/builtin/clone-website.md
 
 ## 🔒 Política de Acesso Admin
 
-Apenas o administrador (Daniel) pode autorizar alterações na infraestrutura da VPS e na estrutura do System Clow.
+Apenas o administrador (Daniel) pode autorizar alterações na infraestrutura da VPS e na estrutura do EVOX.
 
 ### Ações que REQUEREM senha de admin:
 - Instalar/desinstalar pacotes na VPS (apt, npm, pip, docker)
 - Modificar serviços (systemd, nginx, docker, pm2)
-- Alterar configurações do System Clow
+- Alterar configurações do EVOX
 - Apagar arquivos/diretórios do sistema
 - Clonar repositórios na VPS
 - Acessar/modificar .env ou credenciais

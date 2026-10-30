@@ -89,7 +89,7 @@ function htmlToMarkdown(html: string): string {
 
 const MAX_CONTENT_CHARS = 100_000;
 const FETCH_TIMEOUT_MS = 30_000;
-const USER_AGENT = 'Clow/1.0 (System Clow AI Agent)';
+const USER_AGENT = 'Clow/1.0 (EVOX AI Agent)';
 
 // ─── Input Schema ───────────────────────────────────────────────────────────
 

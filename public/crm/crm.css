@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
  * CRM — stylesheet
- * Identidade do System Clow de IA: preto, vermelho (#C18638), branco.
+ * Identidade do EVOX de IA: preto, vermelho (#C18638), branco.
  *
  * Os tokens de cor antigos (--purple, --blue e o gradiente roxo→azul)
  * continuam existindo, com valores novos, de propósito: os NOMES estão
@@ -282,7 +282,7 @@ body {
 }
 .brand:hover .brand-logo { opacity: 1; transform: scale(1.03); }
 
-/* ─── Wordmark "System Clow" ──────────────────────────────────────────
+/* ─── Wordmark "EVOX" ──────────────────────────────────────────
  * O relevo é uma pilha de text-shadow: quatro camadas de 1px descendo em
  * cinza cada vez mais escuro formam a "parede" da letra extrudada, e a
  * sombra larga embaixo apoia o conjunto no fundo. É mais leve que uma
@@ -1696,7 +1696,7 @@ img.card-avatar, img.contact-avatar {
 
 /* ─── Marca do cliente (vinda do Território Próprio) ─────────────────────
  * Quando o cliente define a própria identidade no painel, o wordmark
- * "System Clow" sai e entra o logo + nome dele. Cores vêm das variáveis,
+ * "EVOX" sai e entra o logo + nome dele. Cores vêm das variáveis,
  * que a ponte (territorio-bridge.js) reescreve no <html>. */
 .brand.brand-cliente { flex-direction: column; gap: 10px; text-align: center; }
 .brand.brand-cliente .brand-logo {

@@ -146,7 +146,7 @@ export async function sendUrgentWhatsAppAlert(
 ): Promise<void> {
   const phone = (process.env.URGENT_ALERT_PHONE || '').replace(/\D/g, '');
   if (!phone) return;
-  const cardUrl = `${process.env.PUBLIC_BASE_URL || 'https://system-clow.pvcorretor01.com.br'}/crm/?card=${ctx.card.id}`;
+  const cardUrl = `${process.env.PUBLIC_BASE_URL || 'https://app.evox.com.br'}/crm/?card=${ctx.card.id}`;
   const text = `🚨 *LEAD QUENTE — INTERESSE PLANO COMPLETO* 🚨\n\n` +
     `👤 Cliente: *${contactName || ctx.card.title || 'sem nome'}*\n` +
     `📞 Telefone: ${ctx.customerPhone}\n` +

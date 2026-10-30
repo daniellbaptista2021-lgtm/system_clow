@@ -1,5 +1,5 @@
 /**
- * app.js — System Clow Frontend Application (Modular)
+ * app.js — EVOX Frontend Application (Modular)
  *
  * Separated from inline HTML for maintainability.
  * Modules: Auth, Sessions, Chat, UI, Markdown, Sidebar
@@ -500,7 +500,7 @@ async function showApp() {
   setTimeout(() => { LS.style.display = 'none'; }, 250);
   AP.style.display = 'block';
   // Atualiza footer (nome + tier) e isola SESSIONS_KEY por tenant.
-  // Sem isso, footer mostrava "Clow Admin / Plano Max" hardcoded e
+  // Sem isso, o rodapé mostrava um administrador fixo e
   // todos os tenants viam as MESMAS conversas no mesmo browser.
   await applyTenantContext();
   syncSidebarState(); clearLegacyClientCache(); clearBrowserCaches(); cleanupSessions();
@@ -525,7 +525,7 @@ async function applyTenantContext() {
     const nameEl = document.getElementById('acctName');
     const tierEl = document.getElementById('acctTier');
     const avEl = document.getElementById('acctAvatar');
-    if (nameEl) nameEl.textContent = u.name || u.email || (u.is_admin ? 'Clow Admin' : '—');
+    if (nameEl) nameEl.textContent = u.name || u.email || (u.is_admin ? 'Admin EVOX' : '—');
     if (tierEl) {
       const tierLabels = { starter: 'Starter', profissional: 'Profissional', empresarial: 'Empresarial', business: 'Business', smart: 'Smart', one: 'One', admin: 'Admin' };
       tierEl.textContent = u.is_admin ? 'Admin' : ('Plano ' + (tierLabels[u.tier] || u.tier || '—'));

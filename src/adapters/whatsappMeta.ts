@@ -28,7 +28,7 @@ import { maskPhone } from '../utils/redact.js';
  */
 
 /**
- * Check if a phone is authorized to use the System Clow agent for a tenant.
+ * Check if a phone is authorized to use the EVOX agent for a tenant.
  * Tenant.authorized_phones is the whitelist set on signup (= owner phone).
  * If empty / undefined: legacy mode, allow all (admin tenant).
  */

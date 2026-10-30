@@ -1,5 +1,5 @@
 /**
- * openapi.ts — OpenAPI 3.1 specification for System Clow API
+ * openapi.ts — OpenAPI 3.1 specification for EVOX API
  *
  * Auto-serves Swagger UI at /docs and OpenAPI JSON at /openapi.json
  */
@@ -13,14 +13,14 @@ import { Hono } from 'hono';
 export const OPENAPI_SPEC = {
   openapi: '3.1.0',
   info: {
-    title: 'CRM Pulse API',
+    title: 'EVOX API',
     version: '1.0.0',
     description: 'AI coding agent API — execute tasks, manage sessions, search memory, and more.',
-    contact: { name: 'CRM Pulse', url: 'https://github.com/daniellbaptista2021-lgtm/system_clow' },
+    contact: { name: 'EVOX', url: 'https://github.com/daniellbaptista2021-lgtm/system_clow' },
     license: { name: 'Proprietary' },
   },
   servers: [
-    { url: 'https://system-clow.pvcorretor01.com.br', description: 'Production' },
+    { url: 'http://127.0.0.1:3041', description: 'Production' },
     { url: 'http://localhost:3001', description: 'Local Development' },
   ],
   tags: [
@@ -456,7 +456,7 @@ export function buildDocsRoutes(): Hono {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CRM Pulse API Docs</title>
+  <title>EVOX API Docs</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
   <style>body{margin:0;background:#1a1a2e}.topbar{display:none}</style>
 </head>

@@ -1,4 +1,4 @@
-// System Clow PWA Service Worker — v118
+// EVOX PWA Service Worker — v118
 // Bypass: /v1/* /auth/* /webhooks/* /crm/* /downloads/* — sempre fresh do server
 // Cache: assets estaticos do shell (icons, manifest)
 // v118: bump pra invalidar cache de icones antigos (bege/dourado) — agora
@@ -60,7 +60,7 @@ self.addEventListener('push', (e) => {
   if (!e.data) return;
   let payload = {};
   try { payload = e.data.json(); }
-  catch { payload = { title: 'Clow', body: e.data.text() }; }
+  catch { payload = { title: 'EVOX', body: e.data.text() }; }
   const opts = {
     body: payload.body || '',
     icon: payload.icon || '/assets/icon-192.png',
@@ -69,7 +69,7 @@ self.addEventListener('push', (e) => {
     tag: payload.tag || 'clow-' + Date.now(),
     requireInteraction: false,
   };
-  e.waitUntil(self.registration.showNotification(payload.title || 'Clow', opts));
+  e.waitUntil(self.registration.showNotification(payload.title || 'EVOX', opts));
 });
 
 self.addEventListener('notificationclick', (e) => {

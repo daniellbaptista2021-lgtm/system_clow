@@ -29,7 +29,7 @@ export interface SendMailResult {
   messageId?: string;
 }
 
-const DEFAULT_FROM = process.env.CLOW_MAIL_FROM || 'no-reply@system-clow.pvcorretor01.com.br';
+const DEFAULT_FROM = process.env.CLOW_MAIL_FROM || 'no-reply@evox.com.br';
 
 /**
  * Envia email pelo melhor backend disponivel. Nunca throw.

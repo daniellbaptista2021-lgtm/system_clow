@@ -59,7 +59,7 @@ import { renderPrompt } from './cli/prompt.js';
 import { TerminalSessionRenderer } from './cli/renderer.js';
 
 const VERSION = '1.0.0';
-const PRODUCT_NAME = 'System Clow';
+const PRODUCT_NAME = 'EVOX';
 
 interface LoadedPluginCommand {
   plugin: string;
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   const program = new Command();
   program
     .name('clow')
-    .description('System Clow — AI-powered coding agent')
+    .description('EVOX — AI-powered coding agent')
     .version(VERSION, '-v, --version')
     .option('-p, --print', 'Non-interactive: process single prompt and exit')
     .option('--cwd <dir>', 'Set working directory')

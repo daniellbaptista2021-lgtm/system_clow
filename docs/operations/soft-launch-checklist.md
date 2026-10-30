@@ -10,7 +10,7 @@ Vai marcando `[x]` conforme rodar. Se qualquer comando der saída inesperada, **
 # Variáveis usadas pelo checklist inteiro — exporta primeiro.
 export VPS_IP=<vps-ip>
 export METRICS_TOKEN=<valor-do-.env>
-export DOMAIN=system-clow.pvcorretor01.com.br
+export DOMAIN=app.evox.com.br
 ```
 
 ---
@@ -85,7 +85,7 @@ Dashboard Stripe → **Developers → Webhooks → Hosted endpoints** (modo **Li
 
 Endpoint cadastrado tem que ser exatamente:
 ```
-https://system-clow.pvcorretor01.com.br/webhooks/stripe
+https://app.evox.com.br/webhooks/stripe
 ```
 
 Eventos selecionados (mínimo):

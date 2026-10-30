@@ -7,7 +7,7 @@ import { createRequire } from 'module';
 globalThis.require = createRequire(import.meta.url);
 
 /**
- * server.ts — System Clow HTTP API Server
+ * server.ts — EVOX HTTP API Server
  *
  * Bootstrap: env → Anthropic → MCP → SessionPool → Routes → Listen
  * Auth: Bearer token via CLOW_API_KEY
@@ -61,6 +61,25 @@ import { buildTerritorioRoutes } from './territorioRoutes.js';
 import { territorioExclusivo, territorioOrigin } from '../tenancy/territorio.js';
 import { buildMarketplaceRoutes } from '../plugins/marketplace.js';
 import { buildMissionRoutes } from './missions.js';
+import { podeUsarAgenteCompleto } from '../tenancy/usoIa.js';
+
+async function exigirPlanoCompleto(c: any, next: () => Promise<void>): Promise<Response | void> {
+  const authMode = c.get('authMode');
+  // Admin e a ponte legada têm cobrança/autorização próprias.
+  if (authMode === 'admin_session' || authMode === 'clow_sonnet') return next();
+  const tenantId = c.get('tenantId');
+  if (typeof tenantId !== 'string' || !tenantId) {
+    return c.json({ error: 'tenant_required' }, 401);
+  }
+  if (!podeUsarAgenteCompleto(tenantId)) {
+    return c.json({
+      error: 'plano_completo_required',
+      message: 'O Agente IA completo está disponível no plano Completo. Os agentes automáticos do funil continuam ativos no Essencial.',
+      plano: 'essencial',
+    }, 403);
+  }
+  return next();
+}
 
 function getAllowedCorsOrigins(): string[] {
   return (process.env.CLOW_ALLOWED_ORIGINS || '')
@@ -263,6 +282,8 @@ async function main(): Promise<void> {
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);
   app.use('/v1/sessions', tenantAuth);
+  app.use('/v1/sessions/*', exigirPlanoCompleto);
+  app.use('/v1/sessions', exigirPlanoCompleto);
   app.route('/p', publicProposals);
   app.use('/v1/crm/*', tenantAuth);
   // ONDA 30 — API v2 (mounts after tenantAuth for same auth model)
@@ -370,6 +391,7 @@ async function main(): Promise<void> {
   // Arquivos e áudio mandados ao Agente IA (vão para a pasta da conta).
   const { buildAgenteAnexosRoutes } = await import('./routes/agenteAnexos.js');
   app.use('/v1/agente/*', tenantAuth);
+  app.use('/v1/agente/*', exigirPlanoCompleto);
   app.use('/v1/agente/*', marcarTenant);
   app.route('/v1/agente', buildAgenteAnexosRoutes());
   app.route('/v1/crm', crmRoutes);
@@ -678,7 +700,7 @@ async function main(): Promise<void> {
       const html = fs.readFileSync(htmlPath, 'utf-8');
       return c.html(html);
     }
-    return c.text('CRM Pulse API', 200);
+    return c.text('EVOX API', 200);
   });
 
   // Graceful shutdown
@@ -699,7 +721,7 @@ async function main(): Promise<void> {
 
   // Start
   logger.info(`\n  ╔═══════════════════════════════════════╗`);
-  logger.info(`  ║   CRM Pulse API — port ${PORT}         ║`);
+  logger.info(`  ║   EVOX API — port ${PORT}         ║`);
   logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
   // Use HTTPS with self-signed certificate

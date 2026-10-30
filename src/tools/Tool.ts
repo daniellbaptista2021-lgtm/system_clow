@@ -2,7 +2,7 @@
  * Tool.ts — The Universal Tool Interface (Full Implementation)
  *
  * Based on Claude Code's Tool.ts (793 lines, 30+ methods)
- * Every action System Clow takes — reading files, running bash, spawning agents,
+ * Every action EVOX takes — reading files, running bash, spawning agents,
  * calling MCP servers — goes through this single interface.
  *
  * Design principles:

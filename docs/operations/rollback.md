@@ -5,7 +5,7 @@
 
 ```bash
 export VPS_IP=<vps-ip>
-export DOMAIN=system-clow.pvcorretor01.com.br
+export DOMAIN=app.evox.com.br
 ```
 
 ---
@@ -198,7 +198,7 @@ ssh root@$VPS_IP 'pm2 stop clow && curl -fsS http://127.0.0.1:3001/health/live; 
 sudo nano /etc/nginx/sites-available/system-clow
 # Comenta o location / { proxy_pass... } e adiciona:
 #   location / {
-#     return 503 "System Clow temporarily unavailable. Voltamos em breve.";
+#     return 503 "EVOX temporarily unavailable. Voltamos em breve.";
 #   }
 sudo nginx -t && sudo nginx -s reload
 

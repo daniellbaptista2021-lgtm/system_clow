@@ -1,5 +1,5 @@
 /**
- * CrmTool.ts — AI tools that let the System Clow agent operate the CRM.
+ * CrmTool.ts — AI tools that let the EVOX agent operate the CRM.
  *
  * All tools are tenant-scoped: they read context.tenantId. When called from
  * a multi-tenant session, only that tenant's data is touched.
@@ -10,7 +10,7 @@
  *     crm_send_whatsapp, crm_search, crm_pipeline, crm_get_contact,
  *     crm_create_reminder, crm_dashboard, crm_create_subscription,
  *     crm_mark_subscription_paid, crm_create_task, crm_create_appointment
- *   Configuração (System Clow monta o funnel pro cliente):
+ *   Configuração (EVOX monta o funnel pro cliente):
  *   - crm_list_boards, crm_create_board, crm_list_columns, crm_create_column,
  *     crm_update_column, crm_delete_column, crm_configure_column_agent,
  *     crm_disable_column_agent, crm_update_card
@@ -39,7 +39,7 @@ import {
 // admin reusada, header faltante etc) deixa o campo vazio.
 //
 // Bug 2026-04-29: o fallback antigo `ctx.tenantId || 'default'` fazia o
-// agente System Clow consultar dados do tenant 'default' (admin/dev) quando
+// agente EVOX consultar dados do tenant 'default' (admin/dev) quando
 // usuarios SaaS interagiam — mostrou cards/valores que nao eram deles.
 function tid(ctx: ToolUseContext): string {
   const t = ctx.tenantId;
@@ -713,7 +713,7 @@ export const CrmCreateAppointmentTool = buildTool<z.infer<typeof CreateAppointme
 });
 
 // ════════════════════════════════════════════════════════════════════════
-// CONFIG TOOLS — System Clow monta funnels para tenants (qualquer nicho).
+// CONFIG TOOLS — EVOX monta funnels para tenants (qualquer nicho).
 // Workflow conversacional documentado em src/skills/builtin/crm-funnel-setup.md
 // ════════════════════════════════════════════════════════════════════════
 
