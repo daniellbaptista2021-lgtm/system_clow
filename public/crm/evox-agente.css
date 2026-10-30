@@ -61,3 +61,9 @@ html.no-quadro .top-right .outline-btn { display: none; }
 /* Negrito e itálico nas respostas vinham brancos do tema escuro antigo. */
 .rp strong { color: var(--text); font-weight: 700; }
 .rp em { color: var(--muted); }
+/* Títulos e citações das respostas: herdavam cores do tema escuro e sumiam no claro. */
+.rp h1, .rp h2, .rp h3, .rp h4 { color: var(--text); }
+.rp h2 { font-size: 17px; margin: 18px 0 8px; }
+.rp h3, .rp h4 { color: var(--accent); }
+.rp blockquote { color: var(--text); border-left: 3px solid var(--accent); background: rgba(10,102,245,.05); padding: 8px 12px; border-radius: 0 8px 8px 0; }
+.rp hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
