@@ -22,7 +22,7 @@ import { assembleFullContext } from '../utils/context/context.js';
 import { createCanUseTool, type LegacyPermissionContext } from '../utils/permissions/permissions.js';
 import { filterToolsForTier } from '../tenancy/quotaGuard.js';
 import { podeUsarTerminal } from '../tenancy/terminalPermitido.js';
-import { slotsDisponiveis } from '../tenancy/slotConta.js';
+import { slotsDisponiveis, avisoDoTerminal } from '../tenancy/slotConta.js';
 import { pastaDasContas } from '../tenancy/bashSandbox.js';
 import { registerSession, unregisterSession } from '../tenancy/tenantStore.js';
 import {
@@ -303,7 +303,7 @@ export class SessionPool {
         const year = now.getFullYear();
         const months = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
         const fullDate = `${now.getDate()} de ${months[now.getMonth()]} de ${year}`;
-        return `<environment>\nData atual: ${isoDate} (${fullDate})\nAno: ${year}\nWorking directory: ${cwd}\nPlatform: ${process.platform}\nNode: ${process.version}\n</environment>\n\nIMPORTANTE: Hoje e ${fullDate}. O ano atual e ${year}. Use SEMPRE esta data ao gerar relatorios, planilhas, documentos ou qualquer conteudo com datas. NUNCA use anos passados (2024, 2025) como se fossem atuais.`;
+        return `<environment>\nData atual: ${isoDate} (${fullDate})\nAno: ${year}\nWorking directory: ${cwd}${avisoDoTerminal(cwd) ? '\\n' + avisoDoTerminal(cwd) : ''}\nPlatform: ${process.platform}\nNode: ${process.version}\n</environment>\n\nIMPORTANTE: Hoje e ${fullDate}. O ano atual e ${year}. Use SEMPRE esta data ao gerar relatorios, planilhas, documentos ou qualquer conteudo com datas. NUNCA use anos passados (2024, 2025) como se fossem atuais.`;
       })(),
       features: {
         REACTIVE_COMPACT: true,

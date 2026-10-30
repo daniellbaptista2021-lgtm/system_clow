@@ -11,6 +11,7 @@
  * 4. Local     CLOW.local.md (gitignored)
  */
 
+import { avisoDoTerminal } from '../../tenancy/slotConta.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -179,7 +180,7 @@ Se precisar de uma data especifica para exemplo, use sempre o mes/ano atuais.
 
 Quando o usuario pede pra criar qualquer arquivo para download:
 
-1. PASSO 1: Crie o arquivo. Pode salvar em /tmp/, output/, ou CWD — qualquer um funciona.
+1. PASSO 1: Crie o arquivo DENTRO da pasta de trabalho: no terminal, em /workspace (ex.: /workspace/output/arquivo.xlsx); nas ferramentas de arquivo, caminho relativo (ex.: output/arquivo.xlsx). NUNCA em /tmp: o /tmp do terminal fica numa maquina separada e o Download nao enxerga.
 
 2. PASSO 2: OBRIGATORIAMENTE use o tool Download passando o source_path do arquivo criado.
    O tool Download:
@@ -188,13 +189,14 @@ Quando o usuario pede pra criar qualquer arquivo para download:
    - Retorna o URL publico validado em outputText
 
 3. PASSO 3: Na resposta final, use EXATAMENTE o link markdown que o Download tool retornou.
-   Formato: [Baixar arquivo](http://127.0.0.1:3041/downloads/NOME.ext)
+   Formato: [Baixar arquivo](http://127.0.0.1:3041/downloads/CODIGO/NOME.ext)
 
 REGRAS ABSOLUTAS (violacao = link quebrado / tela branca):
 - OBRIGATORIO usar o tool Download APOS criar qualquer arquivo (xlsx, csv, pdf, docx, html, txt, json, zip, etc).
-- OBRIGATORIO copiar o URL ABSOLUTO que o Download tool retornou em outputText. Exemplo do retorno: "Use this exact Markdown link in your response: [Baixar arquivo](http://127.0.0.1:3041/downloads/arquivo.ext)".
+- OBRIGATORIO copiar o URL ABSOLUTO que o Download tool retornou em outputText. Exemplo do retorno: "Use this exact Markdown link in your response: [Baixar arquivo](http://127.0.0.1:3041/downloads/9f3a.../arquivo.ext)".
 - PROIBIDO usar link relativo tipo (/downloads/arquivo) — o usuario pode estar em iframe dentro do Clow e o link relativo resolve pra dominio errado = 404 / tela branca.
 - PROIBIDO inventar URLs. Use SOMENTE o URL retornado pelo tool Download em outputText.
+- O URL tem um codigo aleatorio antes do nome do arquivo (/downloads/CODIGO/arquivo). Copie inteiro: sem o codigo o link nao abre.
 - PROIBIDO duplicar link na mesma resposta.
 - PROIBIDO escrever link puro sem markdown.
 - Se o Download tool retornar isError: true, tente criar o arquivo de outro formato (CSV ao inves de XLSX, TXT ao inves de PDF) e retry.
@@ -203,7 +205,7 @@ REGRAS ABSOLUTAS (violacao = link quebrado / tela branca):
 Exemplo CORRETO (SEMPRE URL absoluta):
    Planilha criada com analise de vendas mensais.
 
-   [Baixar arquivo](http://127.0.0.1:3041/downloads/vendas_2026.xlsx)
+   [Baixar arquivo](http://127.0.0.1:3041/downloads/9f3a.../vendas_2026.xlsx)
 
 Exemplo ERRADO (NAO FACA — link relativo vira 404 em iframe):
    [Baixar](/downloads/vendas.xlsx)                          <- RELATIVO, quebra
@@ -241,7 +243,7 @@ export function getDynamicContext(): string {
   return `<environment>
 Data atual: ${isoDate} (${fullDate})
 Ano: ${year}
-Working directory: ${getCwd()}
+Working directory: ${getCwd()}${avisoDoTerminal(getCwd()) ? '\n' + avisoDoTerminal(getCwd()) : ''}
 Platform: ${process.platform}
 Node: ${process.version}
 ${getIsGitRepo() ? `Git branch: ${getGitBranch() || 'unknown'}` : 'Not a git repository'}

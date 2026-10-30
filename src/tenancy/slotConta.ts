@@ -126,3 +126,14 @@ const aspas = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 export function comandoNoSlot(nome: string, comando: string, cwdNoSlot: string): string {
   return `${aspas(CLI)} exec -w ${aspas(cwdNoSlot)} ${aspas(nome)} bash -lc ${aspas(comando)}`;
 }
+
+/** Linha para o contexto do agente: a pasta do servidor aparece no terminal
+ *  da conta como /workspace. Sem isto o agente via o caminho do servidor e
+ *  tentava "cd" nele dentro do slot, onde não existe. */
+export function avisoDoTerminal(cwd: string): string {
+  const raiz = process.env.CLOW_WORKSPACES_DIR;
+  if (!slotsDisponiveis() || !raiz) return '';
+  const rel = path.relative(path.resolve(raiz), path.resolve(cwd));
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return '';
+  return `Terminal (Bash): roda na maquina da conta; esta pasta la se chama ${PASTA_NO_SLOT}. Use ${PASTA_NO_SLOT} nos comandos, nunca o caminho acima.`;
+}

@@ -5,6 +5,7 @@
  * This preserves prefix stability for prompt caching across repeated turns.
  */
 
+import { avisoDoTerminal } from '../../tenancy/slotConta.js';
 import * as crypto from 'crypto';
 import { MemoryFileWalker } from './memoryFileWalker.js';
 import { UserContextBuilder } from './userContextBuilder.js';
@@ -104,6 +105,8 @@ export class ContextAssembler {
   private formatDynamic(ctx: UserContextBlock): string {
     const lines = ['<environment>'];
     lines.push(`Working directory: ${ctx.cwd}`);
+    const terminal = avisoDoTerminal(ctx.cwd);
+    if (terminal) lines.push(terminal);
     lines.push(`Platform: ${ctx.platform}`);
     lines.push(`Node: ${ctx.nodeVersion}`);
     lines.push(`Date: ${ctx.date}`);

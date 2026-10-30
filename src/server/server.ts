@@ -61,6 +61,7 @@ import { buildTerritorioRoutes } from './territorioRoutes.js';
 import { territorioExclusivo, territorioOrigin } from '../tenancy/territorio.js';
 import { buildMarketplaceRoutes } from '../plugins/marketplace.js';
 import { buildMissionRoutes } from './missions.js';
+import { caminhoDeDownload } from './downloads.js';
 import { podeUsarAgenteCompleto } from '../tenancy/usoIa.js';
 
 async function exigirPlanoCompleto(c: any, next: () => Promise<void>): Promise<Response | void> {
@@ -107,12 +108,6 @@ function resolveDownloadRootCandidates(): string[] {
     path.resolve(process.cwd(), 'tmp'),
     path.resolve(os.tmpdir(), 'clow-downloads'),
   ]));
-}
-
-function isSafeDownloadName(requested: string): boolean {
-  if (!requested || requested.includes('/') || requested.includes('\\')) return false;
-  if (requested === '.' || requested === '..') return false;
-  return !/[\x00-\x1f]/.test(requested);
 }
 
 function ensureSSLCertificates(): { key: string; cert: string } {
@@ -503,9 +498,11 @@ async function main(): Promise<void> {
 
   // ─── File Downloads (Excel, CSV, etc created by Clow) ───────────
   app.get('/downloads/*', (c) => {
-    const requestedName = decodeURIComponent(c.req.path.replace('/downloads/', '').trim());
-    if (!isSafeDownloadName(requestedName)) {
-      return c.json({ error: 'invalid_file_name' }, 400);
+    let requestedName: string | null;
+    try { requestedName = caminhoDeDownload(decodeURIComponent(c.req.path.replace('/downloads/', '').trim())); }
+    catch { requestedName = null; }
+    if (!requestedName) {
+      return c.json({ error: 'File not found' }, 404);
     }
     const candidates = downloadRoots.map((root) => path.resolve(root, requestedName));
     for (const fp of candidates) {
@@ -548,6 +545,11 @@ async function main(): Promise<void> {
             'Content-Type': contentType,
             'Content-Disposition': `attachment; filename="${fileName}"`,
             'Content-Length': String(content.length),
+            // Sempre baixa, nunca vira página: um HTML gerado não roda no
+            // endereço do EVOX (onde ficam o login e a chave da conta).
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "sandbox; default-src 'none'",
+            'Cache-Control': 'private, no-store',
           },
         });
       }
