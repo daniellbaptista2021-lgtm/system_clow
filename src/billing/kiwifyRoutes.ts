@@ -18,6 +18,7 @@ import { definirPlano } from '../tenancy/usoIa.js';
 import { sendMail } from '../utils/mailer.js';
 import { logger } from '../utils/logger.js';
 import { validarKiwify, lerVenda, acaoDaVenda, ehDeOutraAssinatura } from './kiwifyEvox.js';
+import { emailBoasVindas } from './emailBoasVindas.js';
 
 const VALIDADE_LINK_MS = 7 * 24 * 3600_000;
 
@@ -58,17 +59,8 @@ export function criarLinkDeSenha(tenantId: string): string {
 }
 
 async function mandarBoasVindas(email: string, nome: string, plano: string, link: string) {
-  const primeiro = (nome || '').split(/\s+/)[0] || '';
-  const nomePlano = plano === 'completo' ? 'Completo' : 'Essencial';
-  const text = `Olá${primeiro ? ', ' + primeiro : ''}!\n\nSua assinatura do EVOX (plano ${nomePlano}) foi confirmada.\n\n`
-    + `Crie sua senha neste link (vale por 7 dias):\n${link}\n\nDepois é só entrar em ${base()} com este e-mail.\n\nEquipe EVOX`;
-  const html = `<div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:auto;color:#071221">
-  <h2 style="color:#0A66F5;margin:0 0 12px">Bem-vindo ao EVOX</h2>
-  <p>Olá${primeiro ? ', ' + primeiro : ''}! Sua assinatura do EVOX (plano <b>${nomePlano}</b>) foi confirmada.</p>
-  <p style="margin:24px 0"><a href="${link}" style="background:#0A66F5;color:#fff;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:600">Criar minha senha</a></p>
-  <p style="color:#5B6678;font-size:13px">O link vale por 7 dias. Depois, entre em <a href="${base()}">${base().replace(/^https?:\/\//, '')}</a> com este e-mail.</p>
-</div>`;
-  return sendMail({ to: email, subject: 'Seu acesso ao EVOX', text, html });
+  const { subject, html, text } = emailBoasVindas({ nome, plano, link, base: base() });
+  return sendMail({ to: email, subject, text, html });
 }
 
 export function registerKiwifyRoutes(app: Hono) {
