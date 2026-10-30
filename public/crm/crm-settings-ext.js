@@ -433,23 +433,6 @@
         el('button', { type: 'submit', class: 'save-btn' }, 'Atualizar senha'),
       ),
     ));
-
-    // === Danger zone ===
-    body.append(el('div', { style: 'max-width:720px;margin:0 auto;background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:26px' },
-      el('h3', { style: 'margin:0 0 10px;font-size:15px;color:var(--red)' }, 'Zona de perigo'),
-      el('p', { style: 'font-size:12px;color:var(--text-dim);margin:0 0 16px;line-height:1.6' },
-        'Cancelar assinatura: seus dados ficam congelados 30 dias, depois são apagados. Você consegue exportar CSV de contatos antes de cancelar.'),
-      el('div', { style: 'display:flex;gap:10px' },
-        el('a', { href: '/pricing', style: 'flex:1;padding:10px;background:var(--bg-3);color:var(--text);border-radius:8px;font-size:12px;font-weight:600;text-align:center;text-decoration:none' }, 'Trocar plano'),
-        el('button', {
-          style: 'padding:10px 16px;background:transparent;border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit',
-          on: { click: async () => {
-            if (!(await clowConfirm('Cancelar assinatura? Você continua com acesso até o fim do período já pago.', { title: 'Cancelar assinatura', danger: true, confirmLabel: 'Cancelar' }))) return;
-            toast('Entre em contato pelo WhatsApp pra finalizar cancelamento.', 'error');
-          } },
-        }, 'Cancelar assinatura'),
-      ),
-    ));
   }
 
   function infoRow(label, value) {

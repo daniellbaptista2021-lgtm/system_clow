@@ -232,3 +232,23 @@
 .uso-ia-pacote:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--border); }
 .uso-ia-pacote b { font-size: 15px; color: #0A66F5; } .uso-ia-pacote span { font-size: 13px; color: var(--text-dim); }
 @media (max-width: 600px) { .uso-ia-pacotes { grid-template-columns: 1fr; } .uso-ia-cartao { padding: 20px; } }
+
+/* Trocar de plano (Configurações) */
+.troca-plano { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.troca-card { position: relative; display: flex; flex-direction: column; padding: 20px; border-radius: 16px; background: var(--bg-1, #fff); border: 1px solid var(--border); }
+.troca-card.top { background: #071221; color: #E9EEF7; border-color: #071221; box-shadow: 0 24px 50px -28px rgba(10,102,245,.6); }
+.troca-card.atual { outline: 2px solid #0A66F5; outline-offset: -2px; }
+.troca-tag { position: absolute; top: -11px; left: 20px; font-size: 12px; font-weight: 700; color: #fff; padding: 4px 11px; border-radius: 99px; background: linear-gradient(90deg, #0A66F5, #1CBEFF); }
+.troca-nome { font-size: 17px; font-weight: 700; }
+.troca-preco { display: flex; align-items: baseline; gap: 4px; margin: 10px 0 6px; }
+.troca-preco small { font-size: 14px; font-weight: 600; } .troca-preco b { font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+.troca-preco span { font-size: 13px; color: var(--text-dim); } .troca-card.top .troca-preco span, .troca-card.top .troca-desc { color: #9AA7BD; }
+.troca-desc { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+.troca-card ul { list-style: none; margin: 14px 0 18px; padding: 0; display: grid; gap: 8px; flex: 1; font-size: 13.5px; }
+.troca-card li::before { content: '✓'; color: #0A66F5; font-weight: 800; margin-right: 8px; } .troca-card.top li::before { color: #1CBEFF; }
+.troca-btn { height: 42px; border-radius: 12px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; background: #fff; color: #0A66F5; border: 1.5px solid #BBD2F7; box-shadow: 0 4px 0 #D5E3F8; }
+.troca-btn.sobe { background: #0A66F5; color: #fff; border-color: #0A66F5; box-shadow: 0 4px 0 #004BCA; }
+.troca-btn:active { transform: translateY(3px); box-shadow: none; }
+.troca-atual { height: 42px; display: grid; place-items: center; border-radius: 12px; font-size: 14px; font-weight: 600; color: #0A66F5; background: rgba(10,102,245,.1); }
+.troca-card.top .troca-atual { color: #fff; background: rgba(28,190,255,.18); }
+@media (max-width: 600px) { .troca-plano { grid-template-columns: 1fr; } }

@@ -150,10 +150,16 @@ export function resumoUso(tenantId: string) {
     // Crédito é igual nos dois planos (decisão do Daniel): o plano mais caro só
     // ganha no limite da mensalidade. Por isso o pacote nunca é mostrado em %
     // do plano — isso faria o mesmo pacote parecer menor no Completo.
-    pacotes: PACOTES_CREDITO_BRL.map((v, i) => ({
+    pacotes: PACOTES_CREDITO_BRL.map((v) => ({
       valor: v,
-      nome: ['Uso extra P', 'Uso extra M', 'Uso extra G'][i] || `Uso extra ${i + 1}`,
+      nome: 'Crédito extra',
       link: process.env[`EVOX_LINK_CREDITO_${v}`] || null,
+    })),
+    // Trocar de plano: o pagamento vai pela Kiwify (link por plano, quando existir).
+    planos: (['essencial', 'completo'] as PlanoIa[]).map((p) => ({
+      id: p,
+      atual: p === planoDa(tenantId),
+      link: process.env[`EVOX_LINK_PLANO_${p.toUpperCase()}`] || null,
     })),
   };
 }
