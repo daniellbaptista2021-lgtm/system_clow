@@ -95,6 +95,20 @@ h2{font-size:clamp(30px,4.4vw,50px);line-height:1.08;letter-spacing:-.03em;font-
 .lead{font-size:18px;color:var(--t2);margin-top:18px;max-width:600px}
 .centro{text-align:center}.centro .lead{margin-left:auto;margin-right:auto}
 
+
+/* Vídeo */
+.video-sec{padding:40px 0 30px}
+.video-caixa{position:relative;max-width:1000px;margin:40px auto 0;border-radius:22px;overflow:hidden;background:var(--ink);box-shadow:var(--grande);aspect-ratio:16/9}
+.video-caixa video{width:100%;height:100%;display:block;object-fit:cover;background:var(--ink)}
+.video-play{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;border:0;cursor:pointer;background:linear-gradient(180deg,rgba(7,18,33,.25),rgba(7,18,33,.7));color:#fff;font:inherit;transition:background .2s}
+.video-play:hover{background:linear-gradient(180deg,rgba(7,18,33,.05),rgba(7,18,33,.45))}
+.video-play .bola{width:88px;height:88px;border-radius:50%;background:var(--p);display:grid;place-items:center;box-shadow:0 0 0 12px rgba(10,102,245,.25),0 20px 40px -10px rgba(10,102,245,.7);transition:transform .2s}
+.video-play:hover .bola{transform:scale(1.07)}
+.video-play b{font-size:18px;font-weight:700;text-shadow:0 2px 12px rgba(0,0,0,.4)}
+.video-play small{font-size:14px;opacity:.85;margin-top:-10px}
+.video-caixa.tocando .video-play{display:none}
+@media(max-width:600px){.video-caixa{border-radius:16px}.video-play .bola{width:66px;height:66px}.video-play b{font-size:16px}}
+
 /* Dores */
 .dores{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px}
 .dor{background:var(--card);border:1px solid var(--line);border-radius:var(--raio);padding:30px;box-shadow:var(--sombra)}
@@ -265,7 +279,7 @@ footer a:hover{color:var(--t1)}
       <div class="ctas sobe">
         <a class="btn btn-p" href="#planos">Quero o EVOX
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        <a class="btn btn-o" href="#agente">Ver o Agente IA</a>
+        <a class="btn btn-o" href="#video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>Ver o vídeo</a>
       </div>
       <p class="miudo sobe">Funciona no computador e no celular.</p>
 
@@ -293,6 +307,22 @@ footer a:hover{color:var(--t1)}
       <div class="num sobe"><b>PC + celular</b><span>onde você estiver</span></div>
     </div>
   </div>
+
+  <!-- VÍDEO -->
+  <section class="video-sec" id="video">
+    <div class="wrap centro">
+      <span class="rotulo sobe">Veja funcionando</span>
+      <h2 class="sobe">O EVOX em <em>1 minuto e meio</em></h2>
+      <p class="lead sobe">O funil, a IA atendendo um lead de verdade no WhatsApp, o Agente IA trabalhando sozinho, mensalidades e renovações.</p>
+      <div class="video-caixa sobe" id="videoCaixa">
+        <video id="videoEvox" src="/site/video/evox-apresentacao.mp4" poster="/site/video/capa.jpg?v=2" preload="metadata" playsinline></video>
+        <button class="video-play" id="videoPlay" type="button" aria-label="Assistir ao vídeo">
+          <span class="bola"><svg width="34" height="34" viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
+          <b>Assistir à apresentação</b><small>1:40 · com som</small>
+        </button>
+      </div>
+    </div>
+  </section>
 
   <!-- DORES -->
   <section>
@@ -505,7 +535,7 @@ footer a:hover{color:var(--t1)}
         <p class="lead">Deixe o EVOX atender, organizar e lembrar. Você fica com a parte que só você faz: fechar.</p>
         <div class="ctas">
           <a class="btn btn-p" href="#planos">Ver os planos</a>
-          <a class="btn btn-claro" href="#agente">Ver o Agente IA</a>
+          <a class="btn btn-claro" href="#video">Rever o vídeo</a>
         </div>
       </div>
     </div>
@@ -522,6 +552,12 @@ footer a:hover{color:var(--t1)}
 
 <script>
 (function(){
+  // Vídeo: o botão grande dá o play com som; os controles do navegador cuidam do resto.
+  var cx=document.getElementById('videoCaixa'),vd=document.getElementById('videoEvox');
+  document.getElementById('videoPlay').addEventListener('click',function(){cx.classList.add('tocando');vd.controls=true;vd.muted=false;var r=vd.play();if(r&&r.catch)r.catch(function(){});});
+  vd.addEventListener('play',function(){cx.classList.add('tocando');vd.controls=true;});
+  // Os links "Ver o vídeo" rolam até ele e já começam a tocar.
+  document.querySelectorAll('a[href="#video"]').forEach(function(a){a.addEventListener('click',function(){setTimeout(function(){cx.classList.add('tocando');var r=vd.play();if(r&&r.catch)r.catch(function(){});},600)})});
   var topo=document.getElementById('topo');
   addEventListener('scroll',function(){topo.classList.toggle('rolou',scrollY>8)},{passive:true});
   var els=document.querySelectorAll('.sobe');

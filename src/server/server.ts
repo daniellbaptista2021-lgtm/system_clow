@@ -605,9 +605,22 @@ async function main(): Promise<void> {
     if (alvo !== base && !alvo.startsWith(base + path.sep)) return c.notFound();
     if (alvo === base) alvo = path.join(base, 'index.html');
     if (!fs.existsSync(alvo) || !fs.statSync(alvo).isFile()) return c.notFound();
-    const tipos: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' };
+    const tipos: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.mp4': 'video/mp4' };
     const ext = path.extname(alvo).toLowerCase();
-    return new Response(fs.readFileSync(alvo), { headers: { 'Content-Type': tipos[ext] || 'application/octet-stream', 'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400' } });
+    const cabecalhos: Record<string, string> = { 'Content-Type': tipos[ext] || 'application/octet-stream', 'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400', 'Accept-Ranges': 'bytes' };
+    // Vídeo vai em pedaços (Range): Safari e iPhone não tocam vídeo servido inteiro de uma vez.
+    const total = fs.statSync(alvo).size;
+    const faixa = /^bytes=(\d*)-(\d*)$/.exec(c.req.header('range') || '');
+    if (faixa && (faixa[1] || faixa[2])) {
+      const ini = faixa[1] ? Number(faixa[1]) : Math.max(0, total - Number(faixa[2]));
+      const fim = faixa[1] && faixa[2] ? Math.min(Number(faixa[2]), total - 1) : total - 1;
+      if (ini >= total || ini > fim) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
+      const fd = fs.openSync(alvo, 'r');
+      const pedaco = Buffer.alloc(fim - ini + 1);
+      try { fs.readSync(fd, pedaco, 0, pedaco.length, ini); } finally { fs.closeSync(fd); }
+      return new Response(pedaco, { status: 206, headers: { ...cabecalhos, 'Content-Range': `bytes ${ini}-${fim}/${total}`, 'Content-Length': String(pedaco.length) } });
+    }
+    return new Response(fs.readFileSync(alvo), { headers: { ...cabecalhos, 'Content-Length': String(total) } });
   });
   app.get('/signup', (c) => {
     // Old signup form unified into /pricing (plan picker + modal)
