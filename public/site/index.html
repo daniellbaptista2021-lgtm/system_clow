@@ -98,7 +98,7 @@ h2{font-size:clamp(30px,4.4vw,50px);line-height:1.08;letter-spacing:-.03em;font-
 
 /* Vídeo: palco escuro com moldura 3D e capítulos */
 .video-sec{padding:50px 0 40px}
-.palco{position:relative;margin:0 auto;max-width:1120px;border-radius:34px;padding:56px 48px 40px;background:
+.palco{position:relative;margin:0 auto;max-width:1120px;border-radius:34px;padding:56px 48px 52px;background:
   radial-gradient(700px 360px at 50% -40px,rgba(28,190,255,.28),transparent 70%),
   radial-gradient(600px 400px at 100% 100%,rgba(10,102,245,.35),transparent 65%),
   linear-gradient(180deg,#0B1830 0%,#071221 100%);
@@ -109,7 +109,7 @@ h2{font-size:clamp(30px,4.4vw,50px);line-height:1.08;letter-spacing:-.03em;font-
 .palco h2{color:#fff}
 .palco .lead{color:#9AA7BD;margin-left:auto;margin-right:auto}
 .narrador{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:6px 16px 6px 6px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:14px;color:#C9D3E3}
-.narrador img{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--p)}
+.narrador img{width:34px;height:34px;border-radius:50%;object-fit:contain;padding:7px;background:#fff;box-shadow:0 0 0 2px rgba(28,190,255,.45)}
 .narrador b{color:#fff;font-weight:600}
 .narrador em{font-style:normal}
 @media(max-width:600px){.narrador .so-pc{display:none}.narrador{font-size:13px}}
@@ -370,7 +370,7 @@ footer a:hover{color:var(--t1)}
         <span class="rotulo">Veja funcionando</span>
         <h2>O EVOX <em>por dentro</em>, em 3 minutos</h2>
         <p class="lead">O funil, a IA atendendo um lead de verdade no WhatsApp, e o Agente IA criando uma campanha na Meta sozinho, como um gestor de tráfego.</p>
-        <span class="narrador"><img src="/site/img/daniel.jpg" alt=""><span>Apresentado por <b>Daniel Baptista</b><em class="so-pc">, corretor de seguros</em></span></span>
+        <span class="narrador"><img src="/assets/evox/evox-emblema.png" alt=""><span>Apresentado por <b>Daniel Baptista</b><em class="so-pc">, corretor de seguros</em></span></span>
         <div class="cena3d">
           <div class="moldura" id="moldura">
             <div class="barra"><i></i><i></i><i></i><span>EVOX · Apresentação</span></div>
@@ -382,16 +382,6 @@ footer a:hover{color:var(--t1)}
               </button>
             </div>
           </div>
-        </div>
-        <div class="capitulos">
-          <button class="cap" type="button" data-t="13"><time>0:13</time>Funil de vendas</button>
-          <button class="cap" type="button" data-t="24.5"><time>0:24</time>IA em cada etapa</button>
-          <button class="cap" type="button" data-t="40"><time>0:40</time>Lead no WhatsApp</button>
-          <button class="cap" type="button" data-t="56.7"><time>0:57</time>O Agente IA</button>
-          <button class="cap" type="button" data-t="99.1"><time>1:39</time>Gestor de tráfego</button>
-          <button class="cap" type="button" data-t="123.3"><time>2:03</time>Campanha na Meta</button>
-          <button class="cap" type="button" data-t="147.5"><time>2:27</time>Mensalidades e datas</button>
-          <button class="cap" type="button" data-t="181.6"><time>3:01</time>Os planos</button>
         </div>
       </div>
     </div>
@@ -628,14 +618,11 @@ footer a:hover{color:var(--t1)}
 
 <script>
 (function(){
-  // Vídeo: o botão grande dá o play com som; a moldura 3D se endireita; os capítulos pulam para o trecho.
+  // Vídeo: o botão grande dá o play com som; a moldura 3D se endireita.
   var cx=document.getElementById('videoCaixa'),vd=document.getElementById('videoEvox'),mol=document.getElementById('moldura');
   function tocar(t){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;vd.muted=false;if(t!=null)vd.currentTime=t;var r=vd.play();if(r&&r.catch)r.catch(function(){});}
   document.getElementById('videoPlay').addEventListener('click',function(){tocar()});
   vd.addEventListener('play',function(){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;});
-  var caps=[].slice.call(document.querySelectorAll('.cap'));
-  caps.forEach(function(b){b.addEventListener('click',function(){tocar(parseFloat(b.dataset.t))})});
-  vd.addEventListener('timeupdate',function(){var atual=null;caps.forEach(function(b){if(vd.currentTime>=parseFloat(b.dataset.t)-.3)atual=b});caps.forEach(function(b){b.classList.toggle('ativo',b===atual)})});
   // Os links "Ver o vídeo" rolam até ele e já começam a tocar.
   document.querySelectorAll('a[href="#video"]').forEach(function(a){a.addEventListener('click',function(){setTimeout(function(){tocar()},600)})});
   var topo=document.getElementById('topo');
