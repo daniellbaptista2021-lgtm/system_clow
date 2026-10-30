@@ -5911,14 +5911,18 @@ async function openChannelInboxConfig(channel) {
     const simPhone = el('input', { type: 'text', placeholder: '5511900000000', value: '5511' + Math.floor(Math.random() * 900000000 + 100000000), style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
     const simName = el('input', { type: 'text', placeholder: 'Nome do contato', value: 'Lead Teste ' + Date.now().toString().slice(-4), style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
     const simText = el('input', { type: 'text', placeholder: 'Mensagem', value: 'Olá, vim pelo site!', style: 'width:100%;padding:8px;background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:6px;margin-bottom:6px' });
+    const simAgente = el('input', { type: 'checkbox' });
+    const simAgenteRotulo = el('label', { style: 'display:flex;gap:8px;align-items:flex-start;font-size:12px;margin:2px 0 8px;cursor:pointer' }, simAgente,
+      el('span', {}, 'Fazer o agente da coluna responder. ', el('b', {}, 'A resposta vai de verdade pelo WhatsApp para o número acima'), ' — use o seu.'));
     const simBtn = el('button', {
       style: 'width:100%;padding:10px;background:transparent;border:1px solid var(--purple);color:var(--purple);border-radius:6px;cursor:pointer',
       on: { click: async () => {
         simBtn.disabled = true; simBtn.textContent = 'Disparando...';
         try {
           const r = await api(`/channels/${channel.id}/test-inbound`, { method: 'POST', body: {
-            fromPhone: simPhone.value, fromName: simName.value, text: simText.value,
+            fromPhone: simPhone.value, fromName: simName.value, text: simText.value, acionarAgente: simAgente.checked,
           } });
+          if (r?.agente) toast('Agente acionado: a resposta chega no WhatsApp ' + simPhone.value, 'success');
           if (r?.result?.cardId) toast('✅ Card criado: ' + r.result.cardId, 'success');
           else if (r?.result?.contactId) toast('✅ Activity logada (sem card por config)', 'success');
           else toast('Disparado, ver resultado', 'info');
@@ -5926,7 +5930,7 @@ async function openChannelInboxConfig(channel) {
         finally { simBtn.disabled = false; simBtn.textContent = '🚀 Disparar simulação'; }
       } },
     }, '🚀 Disparar simulação');
-    body.append(simPhone, simName, simText, simBtn);
+    body.append(simPhone, simName, simText, simAgenteRotulo, simBtn);
   } catch (e) {
     body.innerHTML = '<div style="padding:20px;color:var(--danger)">Erro: ' + e.message + '</div>';
   }

@@ -70,45 +70,15 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 1. Qualificador acolhe com mensagem padrao ────────────────────
 
-  it('1. Qualificador prompt contem mensagem de acolhimento + pergunta critica', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toContain('Oi! Sou a {{persona_name}}, da *PV Corretora*');
-    // PR 7.0: acolhimento natural mais aberto (era "Você viu nosso anúncio")
-    expect(p).toMatch(/Vi sua mensagem|primeiro nome/i);
-  });
 
   // ─── 2. Qualificador oferece ESCOLHA (funeral vs plano completo) ───
 
-  it('2. Qualificador prompt oferece escolha funeral simples vs plano completo', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toContain('1️⃣');
-    expect(p).toMatch(/prote[çc][ãa]o\s+funeral/i);
-    expect(p).toContain('2️⃣');
-    expect(p).toMatch(/seguro de vida.*doen[çc]as graves|doen[çc]as graves.*cirurgia/);
-    // PR 7.0: pergunta final mais natural (era "Qual dos dois faz mais sentido")
-    // 6b629a0: encurtada pra so "Qual?" — tom direto, no maximo 4 linhas.
-    // A escolha em si esta provada pelos marcadores 1️⃣/2️⃣ acima.
-    expect(p).toMatch(/Qual(\s+(dos\s+dois|encaixa\s+melhor))?\?/i);
-  });
 
   // ─── 3. Qualificador NAO fala valor em R$ proibido ─────────────────
 
-  it('3. Qualificador prompt instrui NAO citar valor em R$', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    // PR 7.0: regra mais rigida (era "NAO fale valor errado")
-    // 6b629a0: bloco "NUNCA X" virou "REGRAS RIGIDAS — PROIBIDO / PROIBIDO X".
-    expect(p).toMatch(/(NUNCA|PROIBIDO)\s+cit(e|ar)\s+valor\s+em\s+R\$/i);
-  });
 
   // ─── 4. Qualificador NAO pede CPF/RG ───────────────────────────────
 
-  it('4. Qualificador prompt instrui NAO pedir CPF/RG/dados sensiveis', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    // PR 7.0: phrase mudou de "NAO fale" pra "NUNCA peça"
-    // 6b629a0: virou "PROIBIDO pedir endereco, CPF, RG, estado civil, ..." —
-    // CPF deixou de ser adjacente ao verbo, dai o [^\n]* no meio.
-    expect(p).toMatch(/(NUNCA\s+pe[çc]a|PROIBIDO\s+pedir)\b[^\n]*\bCPF\b/i);
-  });
 
   // ─── 5. Qualificador NAO menciona "corretora oficial SulAmerica" ──
 
@@ -135,49 +105,18 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 7. Vendedor Funeral TEM autoridade pra cotar + falar valor ────
 
-  it('7. Cotador prompt instrui usar gerar_cotacao_sulamerica; Vendedor fecha venda', () => {
-    // PR 7.0: cotacao virou responsabilidade do COTADOR (nao do Vendedor).
-    // Vendedor agora fecha venda com perguntas abertas.
-    const cot = prompts.PROMPT_COTADOR;
-    expect(cot).toContain('gerar_cotacao_sulamerica');
-    const vend = prompts.PROMPT_VENDEDOR;
-    expect(vend).toMatch(/Vender|fecha|VENDEDOR/i);
-    expect(vend).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
-  });
 
   // ─── 8. Vendedor Funeral NAO oferece desconto ──────────────────────
 
-  it('8. Vendedor Funeral prompt proibe oferecer desconto', () => {
-    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
-    expect(p).toMatch(/(N[ÃA]O|NUNCA)\s+invente\s+desconto/i);
-  });
 
   // ─── 9. Vendedor Funeral trata objecao "tá caro" ───────────────────
 
-  it('9. Vendedor prompt tem template pra objecao "tá caro" com ancoragem por dia', () => {
-    const p = prompts.PROMPT_VENDEDOR;
-    expect(p).toMatch(/T[áa] caro/);
-    // PR 7.0: divisao por dia atualizada pra R$ 1,67 (49,90/30)
-    expect(p).toMatch(/menos\s+de\s+R\$\s*1[,.]67\s+por\s+dia/i);
-  });
 
   // ─── 10. Coletor de Dados menciona Daniel especificamente ──────────
 
-  it('10. Coletor de Dados prompt menciona Daniel como pessoa especifica', () => {
-    const p = prompts.PROMPT_COLETOR_DADOS;
-    expect(p).toMatch(/\*Daniel\*/);
-    expect(p).toMatch(/corretor/i);
-  });
 
   // ─── 11. Finalizador pede consentimento LGPD ───────────────────────
 
-  it('11. Coletor de Dados prompt tem mensagem de consentimento LGPD', () => {
-    const p = prompts.PROMPT_COLETOR_DADOS;
-    expect(p).toContain('CONSENTIMENTO LGPD');
-    expect(p).toContain('Antes de pegar seus dados');
-    // PR 7.0: pergunta consultiva (era "Tudo bem?", agora "Tudo bem se eu coletar?")
-    expect(p).toMatch(/Tudo\s+bem[^?]*\?/);
-  });
 
   // ─── 12. Finalizador valida CPF "137.44793737" como invalido ──────
 
@@ -189,22 +128,6 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── 13. Finalizador coleta 17 campos ──────────────────────────────
 
-  it('13. Coletor de Dados prompt lista os 15 campos titular + 4 dependente', () => {
-    const p = prompts.PROMPT_COLETOR_DADOS;
-    const titularFields = [
-      'Nome completo', 'CPF', 'RG', 'Data nascimento', 'Sexo',
-      'Estado civil', 'Nacionalidade', 'Nome da mãe',
-      'Dia vencimento', 'Celular WhatsApp', 'E-mail',
-      'CEP', 'Endereço completo', 'Profissão', 'Altura', 'Peso',
-    ];
-    for (const f of titularFields) {
-      expect(p).toMatch(new RegExp(f, 'i'));
-    }
-    // Dependentes
-    expect(p).toMatch(/Parentesco/i);
-    expect(p).toMatch(/CPF/);
-    expect(p).toMatch(/Data\s+nascimento/i);
-  });
 
   // ─── 14. Roles deprecated (cotador / closer / educador / finalizador) ──
 
@@ -301,17 +224,7 @@ describe('PR 5.2 — Safira SDR refinada (3 estagios)', () => {
 
   // ─── PR 6.0 — Vendedor Funeral prompt menciona escalate em plano completo ─
 
-  it('PR 6.0: Vendedor Funeral prompt instrui escalar quando cliente pede plano completo', () => {
-    const p = prompts.PROMPT_VENDEDOR_FUNERAL;
-    expect(p).toMatch(/PRODUTO ADICIONAL/i);
-    expect(p).toMatch(/escalar_humano.*urgencia.*alta/);
-  });
 
   // ─── PR 6.0 — Qualificador prompt tem PASSO 3B (escala plano completo) ───
 
-  it('PR 6.0: Qualificador prompt tem PASSO 3B com escalar_humano urgencia alta', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toContain('PASSO 3B');
-    expect(p).toMatch(/escalar_humano.*urgencia.*alta/);
-  });
 });

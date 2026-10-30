@@ -567,11 +567,20 @@ export function registerChannelsRoutes(app: Hono): void {
     const text = String(body.text || 'Mensagem de teste — gerada via UI');
     const { ingestInbound } = await import('.././inbox.js');
     try {
+      const messageId = 'test_' + Date.now();
       const r = await ingestInbound(ch, {
-        fromPhone, fromName, messageId: 'test_' + Date.now(),
+        fromPhone, fromName, messageId,
         type: 'text' as any, text, timestamp: Date.now(),
       });
-      return ok(c, { ok: true, result: r });
+      // Só com o pedido explícito da tela: a resposta do agente sai de verdade
+      // pelo WhatsApp para fromPhone, e o número padrão da tela é aleatório.
+      let agente = false;
+      if (body.acionarAgente === true) {
+        const aiAgent = await import('../ai/agent.js');
+        aiAgent.handleInboundForAI({ channel: ch, customerPhone: fromPhone, text, senderName: fromName, messageId });
+        agente = true;
+      }
+      return ok(c, { ok: true, result: r, agente });
     } catch (err: any) {
       return c.json({ error: 'test_failed', message: err.message }, 500);
     }

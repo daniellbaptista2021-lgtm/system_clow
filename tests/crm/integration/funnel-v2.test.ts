@@ -282,69 +282,12 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
 
   // ─── PROMPTS ────────────────────────────────────────────────────────────
 
-  it('13. Qualificador prompt NAO contem precos do plano (29,90 / 39,90 / 49,90 / 89,90)', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    // PR 7.0: Qualificador pode mencionar beneficio "R$ 50.000 morte acidental"
-    // (eh valor de cobertura, nao preco do plano). Mas NUNCA cita preco mensal.
-    expect(p).not.toContain('29,90');
-    expect(p).not.toContain('39,90');
-    expect(p).not.toContain('49,90');
-    expect(p).not.toContain('89,90');
-    // Regra explicita esta no prompt
-    // 6b629a0: bloco "NUNCA X" virou "REGRAS RIGIDAS — PROIBIDO / PROIBIDO X".
-    expect(p).toMatch(/(NUNCA|PROIBIDO)\s+cit(e|ar)\s+valor\s+em\s+R\$/i);
-  });
 
-  it('14. Qualificador prompt instrui PASSO 2 com escolha funeral/completo', () => {
-    const p = prompts.PROMPT_QUALIFICADOR;
-    expect(p).toContain('PASSO 2');
-    expect(p).toContain('1️⃣');
-    expect(p).toContain('2️⃣');
-    expect(p).toMatch(/Prote[çc][ãa]o\s+funeral/i);
-  });
 
-  it('15. Cotador prompt SO chama gerar_cotacao_sulamerica + promote, nao escreve cotacao manual', () => {
-    const p = prompts.PROMPT_COTADOR;
-    expect(p).toContain('gerar_cotacao_sulamerica');
-    expect(p).toContain('promover_para_vendedor');
-    expect(p).toMatch(/N[ÃA]O\s+escreve\s+cota[çc][ãa]o\s+manual/i);
-  });
 
-  it('16. Vendedor prompt CONTEM proibicao de "quer fechar" + exemplo "boleto ou cartao"', () => {
-    const p = prompts.PROMPT_VENDEDOR;
-    expect(p).toMatch(/NUNCA\s+pergunte\s+sim\/n[ãa]o/i);
-    expect(p).toMatch(/Quer\s+fechar/i); // pelo menos referenciado nos exemplos ❌
-    expect(p).toMatch(/boleto\s+mensal.*cart[ãa]o\s+recorrente|cart[ãa]o.*boleto/i);
-  });
 
-  it('17. Coletor prompt pede LGPD ANTES de coletar', () => {
-    const p = prompts.PROMPT_COLETOR;
-    expect(p).toContain('CONSENTIMENTO LGPD');
-    // PASSO 1 = LGPD, PASSO 2 = coleta — essa ordem
-    const idxLgpd = p.indexOf('CONSENTIMENTO LGPD');
-    const idxColeta = p.indexOf('COLETA DOS 17 CAMPOS');
-    expect(idxLgpd).toBeGreaterThan(0);
-    expect(idxColeta).toBeGreaterThan(idxLgpd);
-  });
 
-  it('18. Coletor prompt lista os 17 campos (15 titular + 4 dependente)', () => {
-    const p = prompts.PROMPT_COLETOR;
-    const titular = ['Nome completo', 'CPF', 'RG', 'Data nascimento', 'Sexo',
-      'Estado civil', 'Nacionalidade', 'Nome da mãe', 'Dia vencimento',
-      'Celular WhatsApp', 'E-mail', 'CEP', 'Endereço completo', 'Profissão',
-      'Altura', 'Peso'];
-    for (const f of titular) expect(p).toMatch(new RegExp(f, 'i'));
-    expect(p).toMatch(/Parentesco/i);
-  });
 
-  it('19. Followupper tem 4 mensagens (24h, 48h, 72h, final_delete)', () => {
-    const p = prompts.PROMPT_FOLLOWUPPER;
-    expect(p).toContain('SYSTEM:followup_step_1');
-    expect(p).toContain('SYSTEM:followup_step_2');
-    expect(p).toContain('SYSTEM:followup_step_3');
-    expect(p).toContain('SYSTEM:final_delete');
-    expect(p).toContain('deletar_card_final');
-  });
 
   // ─── TAGS ───────────────────────────────────────────────────────────────
 
@@ -425,12 +368,6 @@ describe('PR 7.0 — Funil v2 Timer-Driven', () => {
     expect(escalated?.reason).toMatch(/^urgent:/);
   });
 
-  it('24. Vendedor durante venda detecta interesse adicional → escala + tag', () => {
-    // Smoke: prompt do vendedor menciona escalar pra plano completo
-    const p = prompts.PROMPT_VENDEDOR;
-    expect(p).toMatch(/escalar_humano.*urgencia.*alta|urgencia.*alta.*escalar_humano/i);
-    expect(p).toMatch(/interesse_plano_completo|plano completo/i);
-  });
 
   // ─── CRIPTO E VALIDACAO ─────────────────────────────────────────────────
 

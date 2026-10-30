@@ -176,6 +176,27 @@ app.post('/evolution/:secret', async (c) => {
     return c.json({ ok: true, processed: 0, lidos: recibos.messageIds.length });
   }
 
+  // Mensagem apagada no WhatsApp: o balão fica, mas avisa que foi apagada —
+  // como no próprio WhatsApp. Apagar a linha some com o contexto da conversa
+  // (e com a resposta que o agente deu a ela).
+  const apagadas = evolution.parseApagadas(payload);
+  if (apagadas.length) {
+    try {
+      const { getCrmDb } = await import('./schema.js');
+      const { updateActivityContent } = await import('./store/cardsStore.js');
+      const db = getCrmDb();
+      for (const id of apagadas) {
+        const linhas = db.prepare('SELECT id FROM crm_activities WHERE tenant_id = ? AND provider_message_id = ?').all(channel.tenantId, id) as any[];
+        for (const l of linhas) updateActivityContent(channel.tenantId, l.id, '🚫 Esta mensagem foi apagada');
+      }
+    } catch (err: any) {
+      logger.warn('[evolution-webhook] mensagem apagada:', err?.message);
+    }
+    if (String(payload?.event || '').toLowerCase().startsWith('messages.delete')) {
+      return c.json({ ok: true, processed: 0, apagadas: apagadas.length });
+    }
+  }
+
   const parsed = evolution.parseWebhook(payload);
   // Encadeadas, não disparadas em paralelo.
   //

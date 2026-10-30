@@ -129,3 +129,19 @@ html.no-quadro .top-right .outline-btn { display: none; }
 .solte-caixa b { font-size: 20px; color: var(--accent); }
 .solte-caixa span { font-size: 14px; color: var(--muted); max-width: 300px; }
 .evx-aviso { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 70; padding: 12px 18px; border-radius: 14px; background: #071221; color: #fff; font-size: 14px; box-shadow: var(--shadow); }
+
+/* Respostas em letra de texto, não de código: o .rp herdava o JetBrains Mono
+   do estilo antigo e a conversa parecia um terminal (30/10/2026). Código
+   (pre/code) continua em mono. */
+.rp, .rp p, .rp li, .rp td, .rp th, .ut { font-family: var(--font) !important; }
+.rp pre, .rp code, .rp pre * { font-family: var(--mono, 'JetBrains Mono', monospace) !important; }
+.rp { font-size: 15px; }
+
+/* Dentro do CRM o topo daqui era uma faixa branca vazia: o logo e o "Sair"
+   já estão no CRM. O botão das conversas continua no canto. */
+html.no-quadro .topbar { display: none !important; }
+
+/* Com a barra de conversas recolhida, o e-mail longo da conta vazava pela
+   borda e aparecia um "om" solto no canto da tela. */
+.sidebar { overflow: hidden; }
+.account-name, .account-plan { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

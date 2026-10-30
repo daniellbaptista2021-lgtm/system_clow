@@ -46,25 +46,55 @@ export async function processBillingTick(): Promise<void> {
 }
 
 // ─── 1. Reminders T-3d / T-1d / T-0 ─────────────────────────────────────
+//
+// Cada etapa sai UMA vez. Antes a janela de cada etapa durava 1h, o tick
+// roda a cada minuto e a regra era "reminders_sent <= N": o mesmo "vence
+// amanhã" saía três vezes seguidas (achado no teste de 29/10/2026). E se o
+// servidor estivesse desligado naquela hora, a etapa nunca saía.
+//
+// Agora reminders_sent guarda até qual etapa já foi avisada (1 = T-3,
+// 2 = T-1, 3 = no dia), e cada assinatura recebe só a etapa mais próxima do
+// vencimento que ainda não recebeu.
+
+const diaBrasilia = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(ms));
+
+/** Dias de calendário (Brasília) até o vencimento: 0 = hoje, 1 = amanhã. */
+export function diasAteVencer(nextChargeAt: number, agora: number): number {
+  return Math.round((Date.parse(diaBrasilia(nextChargeAt)) - Date.parse(diaBrasilia(agora))) / 86400_000);
+}
+
+/** Índice da etapa que vale agora (0 = T-3, 1 = T-1, 2 = no dia), ou -1. */
+export function etapaDoLembrete(nextChargeAt: number, agora: number): number {
+  const dias = diasAteVencer(nextChargeAt, agora);
+  if (dias < 0) return -1; // já venceu: quem cuida é o chargeDue
+  let etapa = -1;
+  REMINDER_DAYS.forEach((d, i) => { if (dias <= d) etapa = i; });
+  return etapa;
+}
+
+/** Manda o lembrete desta etapa? Só se ela (ou uma mais próxima) ainda não saiu. */
+export function deveLembrar(remindersSent: number, etapa: number): boolean {
+  return etapa >= 0 && remindersSent <= etapa;
+}
+
 async function sendUpcomingReminders(): Promise<void> {
   const db = getCrmDb();
   const now = Date.now();
-  for (const days of REMINDER_DAYS) {
-    const windowStart = now + (days * 86400_000) - 30 * 60_000; // ±30min window
-    const windowEnd = now + (days * 86400_000) + 30 * 60_000;
-    const rows = db.prepare(`
-      SELECT * FROM crm_subscriptions
-      WHERE status = 'active' AND deleted_at IS NULL
-        AND next_charge_at >= ? AND next_charge_at <= ? AND reminders_sent <= ?
-    `).all(windowStart, windowEnd, REMINDER_DAYS.length - REMINDER_DAYS.indexOf(days)) as any[];
-    for (const r of rows) {
-      try { await sendBillingReminder(rowToSub(r), days); }
-      catch (e: any) { logger.warn('[billing reminder] failed', e.message); }
-    }
+  const ate = now + (REMINDER_DAYS[0] + 1) * 86400_000;
+  const rows = db.prepare(`
+    SELECT * FROM crm_subscriptions
+    WHERE status = 'active' AND deleted_at IS NULL
+      AND next_charge_at >= ? AND next_charge_at <= ? AND reminders_sent < ?
+  `).all(now - 86400_000, ate, REMINDER_DAYS.length) as any[];
+  for (const r of rows) {
+    const etapa = etapaDoLembrete(r.next_charge_at, now);
+    if (!deveLembrar(r.reminders_sent, etapa)) continue;
+    try { await sendBillingReminder(rowToSub(r), diasAteVencer(r.next_charge_at, now), etapa + 1); }
+    catch (e: any) { logger.warn('[billing reminder] failed', e.message); }
   }
 }
 
-async function sendBillingReminder(sub: Subscription, days: number): Promise<void> {
+async function sendBillingReminder(sub: Subscription, days: number, etapaAvisada: number): Promise<void> {
   const tenantId = sub.tenantId;
   const contact = store.getContact(tenantId, sub.contactId);
   if (!contact) return;
@@ -75,6 +105,10 @@ async function sendBillingReminder(sub: Subscription, days: number): Promise<voi
     ? `📅 Olá ${contact.name.split(/\s+/)[0]}! Amanhã (${due}) vence sua assinatura "${sub.planName}" — ${fmtMoney(sub.amountCents)}. Para evitar interrupção, regularize antes do vencimento.`
     : `🔔 Olá ${contact.name.split(/\s+/)[0]}! Em ${days} dias (${due}) vence sua assinatura "${sub.planName}" — ${fmtMoney(sub.amountCents)}.`;
 
+  // Marca ANTES de mandar: se o envio demorar mais que um tick, o tick
+  // seguinte não manda a mesma etapa de novo.
+  store.updateSubscription(tenantId, sub.id, { remindersSent: etapaAvisada });
+
   // Pick first active channel
   const channels = store.listChannels(tenantId).filter(c => c.status === 'active');
   if (contact.phone && channels[0]) {
@@ -83,13 +117,12 @@ async function sendBillingReminder(sub: Subscription, days: number): Promise<voi
     });
   }
 
-  // Log + bump reminders_sent
+  // Log
   store.logActivity(tenantId, {
     cardId: sub.cardId, contactId: sub.contactId,
     type: 'billing', channel: channels[0] ? (channels[0].type === 'meta' ? 'whatsapp_meta' : 'whatsapp_evolution') : 'manual',
     content: `Lembrete cobrança T-${days}d enviado: ${sub.planName} ${fmtMoney(sub.amountCents)}`,
   });
-  store.updateSubscription(tenantId, sub.id, { remindersSent: sub.remindersSent + 1 });
 }
 
 // ─── 2. Charge due (advance next_charge_at + log) ───────────────────────

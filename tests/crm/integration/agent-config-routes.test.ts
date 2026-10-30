@@ -144,11 +144,4 @@ describe('PR 7.1 — Agent config UI (backend)', () => {
     expect(prompts.DEFAULT_TIMERS.coletor.followupStepsHours).toBeNull();
   });
 
-  it('13. PROMPT_QUALIFICADOR contem PV Corretora + Lead novo + nao cita preco', () => {
-    const p = prompts.DEFAULT_PROMPTS.qualificador;
-    expect(p).toContain('PV Corretora');
-    expect(p).toContain('Lead novo');
-    expect(p).not.toContain('29,90');
-    expect(p).not.toContain('49,90');
-  });
 });

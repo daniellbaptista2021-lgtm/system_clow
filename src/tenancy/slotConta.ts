@@ -57,6 +57,28 @@ async function estado(nome: string): Promise<'running' | 'stopped' | 'ausente'> 
   }
 }
 
+// O serviço de containers da Apple não volta sozinho depois de reiniciar o
+// Mac. Desligado, `inspect` falha como se o slot não existisse, o `run` falha
+// também, e o Agente IA fica sem terminal sem dizer por quê (30/10/2026).
+let sistema: Promise<void> | null = null;
+let sistemaConferidoAte = 0;
+export function garantirSistema(): Promise<void> {
+  // Confere de novo a cada minuto: o serviço pode cair com o Mac ligado.
+  if (!sistema || Date.now() > sistemaConferidoAte) {
+    sistemaConferidoAte = Date.now() + 60_000;
+    sistema = (async () => {
+      try {
+        const { stdout } = await exec(CLI, ['system', 'status'], { timeout: 15_000 });
+        if (/status\s+running/i.test(stdout)) return;
+      } catch { /* desligado: o status sai com erro */ }
+      // O kernel já foi instalado na primeira vez; sem a flag, o start fica
+      // esperando uma resposta no terminal que não existe.
+      await exec(CLI, ['system', 'start', '--disable-kernel-install'], { timeout: 180_000 });
+    })().catch((e) => { sistema = null; throw e; });
+  }
+  return sistema;
+}
+
 export async function garantirSlot(tenantId: string, pastaDaConta: string): Promise<string> {
   const nome = nomeDoSlot(tenantId);
   if ((prontoAte.get(nome) || 0) > Date.now()) return nome;
@@ -64,6 +86,7 @@ export async function garantirSlot(tenantId: string, pastaDaConta: string): Prom
   if (andamento) return andamento;
 
   const p = (async () => {
+    await garantirSistema();
     fs.mkdirSync(pastaDaConta, { recursive: true });
     const s = await estado(nome);
     if (s === 'stopped') {

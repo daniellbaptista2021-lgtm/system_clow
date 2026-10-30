@@ -226,6 +226,35 @@ function midiaDaMensagem(mBruto: any, base64?: string): Partial<ParsedInbound> {
 }
 
 /**
+ * Ids das mensagens que alguém APAGOU no WhatsApp ("apagar para todos").
+ *
+ * O WhatsApp avisa com uma mensagem nova do tipo `protocolMessage` REVOKE
+ * apontando para a original; algumas versões da Evolution mandam também o
+ * evento `messages.delete`. Antes os dois eram descartados e a mensagem
+ * apagada continuava inteira na conversa do CRM (achado no teste de
+ * 29/10/2026).
+ */
+export function parseApagadas(payload: any): string[] {
+  const evento = String(payload?.event || payload?.Event || '').toLowerCase();
+  const bruto = payload?.data ?? payload;
+  const itens = Array.isArray(bruto) ? bruto : [bruto];
+  const ids: string[] = [];
+  for (const item of itens) {
+    if (!item) continue;
+    if (evento.startsWith('messages.delete')) {
+      const id = item.key?.id || item.id || item.keyId;
+      if (id) ids.push(String(id));
+      continue;
+    }
+    if (evento && !evento.startsWith('messages.upsert')) continue;
+    const pm = item.message?.protocolMessage;
+    const revoga = pm && (pm.type === 0 || pm.type === 'REVOKE' || pm.type === '0');
+    if (revoga && pm.key?.id) ids.push(String(pm.key.id));
+  }
+  return ids;
+}
+
+/**
  * Interpreta o webhook da Evolution.
  *
  * Só nos interessa `messages.upsert`. Os outros eventos (status de conexão,
@@ -721,7 +750,7 @@ export async function configurarWebhook(creds: EvolutionCreds, webhookUrl: strin
           // continuava aceso em conversa que o corretor já tinha lido — e às
           // vezes já respondido — pelo celular. Ver `parseReadReceipt` aqui e
           // `syncReadState` em evolutionSync.ts.
-          events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
+          events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_DELETE', 'CONNECTION_UPDATE'],
         },
       }),
       signal: AbortSignal.timeout(20_000),

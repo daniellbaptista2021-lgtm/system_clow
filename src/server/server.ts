@@ -724,6 +724,16 @@ async function main(): Promise<void> {
   logger.info(`  ║   EVOX API — port ${PORT}         ║`);
   logger.info(`  ╚═══════════════════════════════════════╝\n`);
 
+  // Slots das contas: liga o serviço de containers já na subida, para a
+  // primeira mensagem ao Agente IA não esperar (nem falhar) por ele.
+  {
+    const { slotsDisponiveis, garantirSistema } = await import('../tenancy/slotConta.js');
+    if (slotsDisponiveis()) {
+      garantirSistema().then(() => logger.info('[slots] serviço de containers pronto'))
+        .catch((e: any) => logger.error(`[slots] não consegui ligar o serviço de containers: ${e?.message || e}`));
+    }
+  }
+
   // Use HTTPS with self-signed certificate
   const useHttps = process.env.CLOW_USE_HTTPS === 'true';
   
