@@ -54,7 +54,7 @@
           : u.percentual >= 80
             ? 'Você está perto do limite do mês. Se precisar, libere mais uso abaixo.'
             : 'Inclui o Agente IA e os agentes do funil atendendo seus leads.'),
-      u.extra_percentual > 0 ? el('div', { class: 'uso-ia-extra' }, `✦ +${u.extra_percentual}% de uso liberado este mês`) : '',
+      u.extra_pacotes > 0 ? el('div', { class: 'uso-ia-extra' }, '✦ Uso extra liberado este mês') : '',
     );
 
     const caixa = el('div', { class: 'uso-ia-pacotes' });
@@ -69,10 +69,10 @@
           } catch (e) { toast('Não consegui registrar o pedido: ' + e.message, 'error'); }
         } },
       },
-        el('b', {}, `+${p.mais_uso_percentual}% de uso`),
+        el('b', {}, p.nome),
         el('span', {}, moeda(p.valor))));
     });
-    cartao.append(el('div', { class: 'uso-ia-libere' }, el('h4', {}, 'Liberar mais uso este mês'), caixa));
+    cartao.append(el('div', { class: 'uso-ia-libere' }, el('h4', {}, 'Liberar mais uso este mês'), el('div', { class: 'uso-ia-sub', style: 'margin:-6px 0 12px' }, 'O uso extra vale para este mês e soma ao limite do seu plano.'), caixa));
   }
 
   window.UsoIA = { montar };

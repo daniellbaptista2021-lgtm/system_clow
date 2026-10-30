@@ -145,11 +145,14 @@ export function resumoUso(tenantId: string) {
     percentual: limite > 0 ? Math.min(100, Math.round((gasto / limite) * 1000) / 10) : 100,
     bloqueado: gasto >= limite,
     renova_em: renovaEm(),
-    // Quanto o crédito extra aumentou o limite do plano, em % do plano.
-    extra_percentual: Math.round((extra / LIMITE_PLANO_BRL[planoDa(tenantId)]) * 100),
-    pacotes: PACOTES_CREDITO_BRL.map((v) => ({
+    // Uso extra comprado neste mês, contado em pacotes (o menor vale 1).
+    extra_pacotes: Math.round((extra / PACOTES_CREDITO_BRL[0]) * 10) / 10,
+    // Crédito é igual nos dois planos (decisão do Daniel): o plano mais caro só
+    // ganha no limite da mensalidade. Por isso o pacote nunca é mostrado em %
+    // do plano — isso faria o mesmo pacote parecer menor no Completo.
+    pacotes: PACOTES_CREDITO_BRL.map((v, i) => ({
       valor: v,
-      mais_uso_percentual: Math.round((v / LIMITE_PLANO_BRL[planoDa(tenantId)]) * 100),
+      nome: ['Uso extra P', 'Uso extra M', 'Uso extra G'][i] || `Uso extra ${i + 1}`,
       link: process.env[`EVOX_LINK_CREDITO_${v}`] || null,
     })),
   };
