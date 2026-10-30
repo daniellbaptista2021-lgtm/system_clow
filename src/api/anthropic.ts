@@ -7,6 +7,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tenantAtual } from './contextoTenant.js';
 import { obterCredencial, SemCredencialIa } from '../tenancy/aiCredentials.js';
+import { conferirLimite, registrarUso } from '../tenancy/usoIa.js';
 import { chamarModeloOpenAI, chamarModeloOpenAISync } from './motorOpenAI.js';
 import { addCost, addAPIDuration, setLastAPIRequestTimestamp, setLastApiCompletionTimestamp, setLastMainRequestId } from '../bootstrap/state.js';
 import type { Tool } from '../tools/Tool.js';
@@ -126,6 +127,7 @@ function clienteAnthropicPara(apiKey: string, baseUrl: string): Anthropic {
 function resolverMotor(): MotorIa {
   const ctx = tenantAtual();
   if (ctx?.tenantId) {
+    conferirLimite(ctx.tenantId);
     const cred = obterCredencial(ctx.tenantId);
     if (!cred) throw new SemCredencialIa(ctx.tenantId);
     if (cred.wire === 'anthropic') {
@@ -408,7 +410,11 @@ export async function* callModel(
   // o caminho e outro, mas os pedacos que saem daqui sao os mesmos — quem
   // consome nao sabe qual provedor esta do outro lado, e nao deve saber.
   if (motor.wire === 'openai') {
-    yield* chamarModeloOpenAI(motor.destino, messages, tools, systemPrompt, signal);
+    const tid = tenantAtual()?.tenantId;
+    for await (const pedaco of chamarModeloOpenAI(motor.destino, messages, tools, systemPrompt, signal)) {
+      if ((pedaco as any).type === 'done') registrarUso(tid, (pedaco as any).usage);
+      yield pedaco;
+    }
     return;
   }
   const cfg = { model: motor.model, maxOutputTokens: motor.maxOutputTokens };
@@ -572,7 +578,9 @@ export async function callModelSync(
 ): Promise<{ content: string; usage: { inputTokens: number; outputTokens: number } }> {
   const motor = resolverMotor();
   if (motor.wire === 'openai') {
-    return chamarModeloOpenAISync(motor.destino, messages, systemPrompt, maxTokens);
+    const r = await chamarModeloOpenAISync(motor.destino, messages, systemPrompt, maxTokens);
+    registrarUso(tenantAtual()?.tenantId, r.usage);
+    return r;
   }
   const api = motor.cliente;
   const cfg = { model: motor.model, maxOutputTokens: motor.maxOutputTokens };

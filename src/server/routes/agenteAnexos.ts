@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getTenantWorkspaceDir } from '../../tenancy/bashSandbox.js';
 import { logger } from '../../utils/logger.js';
+import { resumoUso, registrarPedido, PACOTES_CREDITO_BRL } from '../../tenancy/usoIa.js';
 
 const LIMITE_ARQUIVO = 20 * 1024 * 1024;
 const LIMITE_AUDIO = 15 * 1024 * 1024;
@@ -70,6 +71,26 @@ export function buildAgenteAnexosRoutes(): Hono {
     const texto = (await transcribeAudio(dados)).trim();
     if (!texto) return c.json({ error: 'sem_texto', message: 'Não consegui entender o áudio. Tente falar de novo, mais perto do microfone.' }, 422);
     return c.json({ ok: true, texto });
+  });
+
+  // Uso da IA do mês: a tela mostra só a barra (porcentagem), nunca reais.
+  app.get('/uso', (c) => {
+    const tenantId = tenantDa(c);
+    if (!tenantId) return c.json({ error: 'sem_tenant' }, 401);
+    return c.json(resumoUso(tenantId));
+  });
+
+  // Pedido de mais uso. Com link de pagamento configurado, a tela abre o link;
+  // o crédito entra quando o pagamento é confirmado (scripts/evox-credito.mjs).
+  app.post('/uso/pedido', async (c) => {
+    const tenantId = tenantDa(c);
+    if (!tenantId) return c.json({ error: 'sem_tenant' }, 401);
+    const corpo = await c.req.json().catch(() => ({} as any));
+    const valor = Number(corpo?.valor);
+    if (!PACOTES_CREDITO_BRL.includes(valor)) return c.json({ error: 'pacote_invalido' }, 400);
+    const id = registrarPedido(tenantId, valor);
+    logger.info(`[uso-ia] pedido de crédito #${id} tenant=${tenantId} R$ ${valor}`);
+    return c.json({ ok: true, pedido: id });
   });
 
   return app;

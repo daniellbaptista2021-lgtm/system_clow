@@ -15,6 +15,7 @@
  */
 import { logger } from '../../utils/logger.js';
 import { obterCredencial, SemCredencialIa } from '../../tenancy/aiCredentials.js';
+import { conferirLimite, registrarUso } from '../../tenancy/usoIa.js';
 import { getCrmDb } from '../schema.js';
 import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
@@ -157,6 +158,7 @@ function calcCost(usage: { prompt_tokens?: number; completion_tokens?: number } 
 /** Grava usage no tenant (incrementUsage). Best-effort — falha nao throw. */
 async function recordTenantUsage(tenantId: string | undefined, usage: any): Promise<void> {
   if (!tenantId || tenantId === 'default') return;
+  registrarUso(tenantId, usage && { inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens, cachedTokens: usage.prompt_cache_hit_tokens, uncachedTokens: usage.prompt_cache_miss_tokens });
   try {
     const cost = calcCost(usage);
     if (cost <= 0) return;
@@ -182,6 +184,7 @@ async function recordTenantUsage(tenantId: string | undefined, usage: any): Prom
  */
 function resolverDestino(tenantId?: string, modeloPedido?: string): { url: string; headers: Record<string, string>; model: string } {
   if (!tenantId) throw new SemCredencialIa('');
+  conferirLimite(tenantId);
   const cred = obterCredencial(tenantId);
   if (!cred) throw new SemCredencialIa(tenantId);
   const base = cred.baseUrl.replace(/\/+$/, '');

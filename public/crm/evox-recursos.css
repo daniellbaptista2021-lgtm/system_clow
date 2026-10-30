@@ -211,3 +211,24 @@
 /* Rodapé da barra lateral: nome e e-mail da conta (antes saía "Tenant"). */
 .sidebar .tenant-info .name { color: #F4F4F5; font-size: 12.5px; }
 .sidebar .tenant-info .tier { text-transform: none; letter-spacing: 0; color: #A9B4C6; font-size: 11px; word-break: break-all; }
+
+/* Uso da IA (Configurações): barra de limite como no plano Pro do Claude. */
+.uso-ia-cartao { max-width: 720px; margin: 0 auto 20px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 26px; }
+.uso-ia-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.uso-ia-cartao h3 { margin: 0 0 4px; font-size: 16px; }
+.uso-ia-sub { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.uso-ia-pct { font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.uso-ia-pct.alto { color: #D97706; } .uso-ia-pct.cheio { color: var(--red, #D92D20); }
+.uso-ia-barra { height: 12px; border-radius: 99px; background: var(--bg-3); overflow: hidden; margin-bottom: 12px; }
+.uso-ia-barra i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #0A66F5, #1CBEFF); transition: width .4s; }
+.uso-ia-barra i.alto { background: linear-gradient(90deg, #F59E0B, #F97316); } .uso-ia-barra i.cheio { background: #D92D20; }
+.uso-ia-extra { margin-top: 10px; display: inline-block; font-size: 13px; font-weight: 600; color: #0A66F5; background: rgba(10,102,245,.08); padding: 5px 10px; border-radius: 99px; }
+.uso-ia-libere { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.uso-ia-libere h4 { margin: 0 0 12px; font-size: 14px; }
+.uso-ia-pacotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.uso-ia-pacote { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; border-radius: 14px; cursor: pointer; font: inherit; text-align: left;
+  background: var(--bg-1, #fff); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 0 var(--border); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.uso-ia-pacote:hover { transform: translateY(-2px); border-color: #0A66F5; box-shadow: 0 6px 0 rgba(10,102,245,.25); }
+.uso-ia-pacote:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--border); }
+.uso-ia-pacote b { font-size: 15px; color: #0A66F5; } .uso-ia-pacote span { font-size: 13px; color: var(--text-dim); }
+@media (max-width: 600px) { .uso-ia-pacotes { grid-template-columns: 1fr; } .uso-ia-cartao { padding: 20px; } }

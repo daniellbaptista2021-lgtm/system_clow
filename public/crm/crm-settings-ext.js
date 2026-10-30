@@ -304,44 +304,15 @@
       el('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:12px' },
         infoRow('Nome', me.user.name),
         infoRow('Email (login)', me.user.email),
-        infoRow('Plano', el('span', { class: 'pill purple' }, me.user.tier.toUpperCase())),
         infoRow('Status', el('span', { class: `pill ${me.user.status === 'active' ? 'green' : 'amber'}` }, me.user.status)),
       ),
     ));
 
-    // === Inteligência Artificial (chave do próprio cliente) ===
-    // Logo abaixo da conta e ACIMA de tudo o mais: sem chave conectada o
-    // agente não responde ninguém, então é a primeira coisa que o cliente
-    // precisa resolver ao entrar aqui.
-    if (window.CartaoIA) {
-      try {
-        await window.CartaoIA.montar(body, { el, toast });
-      } catch (e) {
-        // Um erro aqui não pode derrubar o resto das configurações.
-        console.error('[ia] falha ao montar o cartão:', e);
-      }
-    }
-
-    // === Usage card ===
-    if (usage) {
-      const m = usage.messages;
-      const pct = Math.min(100, (m.current / m.limit) * 100);
-      const over = m.current > m.limit;
-      body.append(el('div', { style: 'max-width:720px;margin:0 auto 20px;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;padding:26px' },
-        el('h3', { style: 'margin:0 0 14px;font-size:15px' }, 'Uso do mês'),
-        el('div', { style: 'font-size:13px;color:var(--text-dim);margin-bottom:8px;display:flex;justify-content:space-between' },
-          el('span', {}, 'Mensagens IA'),
-          el('span', { style: over ? 'color:var(--red)' : 'color:var(--text)' }, m.current + ' / ' + m.limit + (over ? ` · overage R$ ${(m.overage_cost_cents/100).toFixed(2)}` : '')),
-        ),
-        el('div', { style: 'height:10px;background:var(--bg-3);border-radius:99px;overflow:hidden' },
-          el('div', { style: `height:100%;width:${pct}%;background:${over ? 'var(--red)' : 'var(--grad)'};transition:width .3s` }),
-        ),
-        el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px' },
-          infoRow('Contatos (lim)', usage.contacts.limit),
-          infoRow('Boards (lim)', usage.boards.limit),
-          infoRow('Fluxos n8n (lim)', usage.flows.limit),
-        ),
-      ));
+    // === Uso da IA (limite do plano, em barra) ===
+    // A IA é do EVOX: o cliente não conecta chave nenhuma, só acompanha o uso.
+    if (window.UsoIA) {
+      try { await window.UsoIA.montar(body, { el, toast }); }
+      catch (e) { console.error('[uso-ia] falha ao montar o cartão:', e); }
     }
 
     // === Authorized phones ===

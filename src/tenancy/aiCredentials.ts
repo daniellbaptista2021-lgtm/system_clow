@@ -146,6 +146,13 @@ export function mascarar(chave: string): string {
  */
 export function obterCredencial(tenantId: string): CredencialIa | null {
   if (!tenantId) return null;
+  // EVOX: a IA é do EVOX, com limite de uso por conta (ver usoIa.ts). Com a
+  // chave central configurada, nenhuma conta usa chave própria.
+  if (process.env.EVOX_IA_KEY) {
+    const modelo = process.env.EVOX_IA_MODELO || 'deepseek-flash';
+    return { tenantId, provider: 'deepseek', wire: 'openai', apiKey: process.env.EVOX_IA_KEY,
+      baseUrl: process.env.EVOX_IA_URL || 'https://api.deepseek.com/v1', model: modelo, crmModel: modelo };
+  }
   const linha = getCrmDb()
     .prepare('SELECT * FROM tenant_ai_credentials WHERE tenant_id = ?')
     .get(tenantId) as any;

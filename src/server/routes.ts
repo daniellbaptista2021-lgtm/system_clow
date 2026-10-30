@@ -209,6 +209,18 @@ export function buildRoutes(pool: SessionPool): Hono {
       }
     }
 
+    // EVOX: limite de uso da IA do mês (ver tenancy/usoIa.ts). Vale para toda
+    // conta de cliente — é aqui, antes de abrir a sessão, que dá para devolver
+    // uma mensagem clara em vez de uma resposta quebrada no meio.
+    if (requestTenantId) {
+      const { conferirLimite, LimiteIaAtingido } = await import('../tenancy/usoIa.js');
+      try { conferirLimite(requestTenantId); }
+      catch (e: any) {
+        if (e instanceof LimiteIaAtingido) return c.json({ error: 'limite_uso_ia', message: e.message }, 429);
+        throw e;
+      }
+    }
+
     const quotaError = (tenant && !isAdmin) ? await checkQuota(tenant as any) : null;
     if (quotaError) {
       audit('quota_exceeded', requestTenantId || 'unknown', { code: quotaError.code });
