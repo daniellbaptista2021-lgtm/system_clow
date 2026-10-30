@@ -2,8 +2,9 @@
  * E-mail de boas-vindas do EVOX (venda aprovada na Kiwify).
  *
  * HTML de e-mail: tabelas e estilo inline, porque Gmail e Outlook descartam
- * <style> e flexbox. O logo vem por URL absoluta do próprio EVOX
- * (/assets/evox/email-logo.png, 360×70 para ficar nítido em tela retina a 180px).
+ * <style> e flexbox.
+ * O logo é TEXTO (barras + EVOX), não imagem: o Gmail bloqueia toda imagem —
+ * de fora ou embutida — em e-mail que caiu no spam (visto em 30/10/2026).
  */
 
 const AZUL = '#0A66F5';
@@ -13,11 +14,10 @@ const FUNDO = '#F3F6FB';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-export function emailBoasVindas(o: { nome: string; plano: string; link: string; base: string; logoSrc?: string }) {
+export function emailBoasVindas(o: { nome: string; plano: string; link: string; base: string }) {
   const primeiro = esc((o.nome || '').trim().split(/\s+/)[0] || '');
   const nomePlano = o.plano === 'completo' ? 'Completo' : 'Essencial';
   const site = o.base.replace(/^https?:\/\//, '');
-  const logo = o.logoSrc || `${o.base}/assets/evox/email-logo.png`;
   const link = esc(o.link);
 
   const passo = (n: number, titulo: string, texto: string) => `
@@ -47,7 +47,18 @@ export function emailBoasVindas(o: { nome: string; plano: string; link: string; 
 
         <tr>
           <td align="center" style="padding:0 0 22px 0;">
-            <img src="${logo}" width="180" height="35" alt="EVOX" style="display:block;border:0;width:180px;height:35px;font-family:Inter,Arial,sans-serif;font-size:30px;line-height:35px;font-weight:800;letter-spacing:.06em;color:${AZUL};text-align:center;">
+            <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;"><tr>
+              <td style="padding:0 10px 0 0;" valign="middle">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr><td style="width:30px;height:7px;font-size:0;line-height:0;background:#1CBEFF;border-radius:4px;">&nbsp;</td></tr>
+                  <tr><td style="height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
+                  <tr><td style="width:30px;height:7px;font-size:0;line-height:0;background:#0A66F5;border-radius:4px;">&nbsp;</td></tr>
+                  <tr><td style="height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
+                  <tr><td style="width:30px;height:7px;font-size:0;line-height:0;background:#004BCA;border-radius:4px;">&nbsp;</td></tr>
+                </table>
+              </td>
+              <td valign="middle" style="font-family:Inter,'Segoe UI',Arial,sans-serif;font-size:34px;line-height:36px;font-weight:900;letter-spacing:4px;color:${TINTA};">EVO<span style="color:${AZUL};">X</span></td>
+            </tr></table>
           </td>
         </tr>
 
