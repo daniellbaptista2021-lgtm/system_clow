@@ -632,7 +632,7 @@ async function main(): Promise<void> {
   });
   // Páginas soltas, por lista: criar senha (link do e-mail de boas-vindas) e os
   // termos que o rodapé do site cita. Antes as duas do rodapé davam 404.
-  for (const pagina of ['definir-senha', 'terms', 'privacy']) {
+  for (const pagina of ['definir-senha', 'obrigado', 'terms', 'privacy']) {
     const servir = (c: any) => {
       const file = path.join(process.cwd(), 'public', `${pagina}.html`);
       if (!fs.existsSync(file)) return c.notFound();

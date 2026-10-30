@@ -366,7 +366,7 @@ export function registerChannelsRoutes(app: Hono): void {
         // de o cliente inventar um. O prefixo do tenant evita que dois
         // clientes colidam num servidor compartilhado.
         const sufixo = `${tid}-${Date.now().toString(36)}`.replace(/[^a-zA-Z0-9-]/g, '').slice(-40);
-        body.credentials = { baseUrl, apiKey, instance: `vector-${sufixo}` };
+        body.credentials = { baseUrl, apiKey, instance: `evox-${sufixo}` };
       } else if (!c2.baseUrl || !c2.apiKey || !c2.instance) {
         return badRequest(c, 'evolution precisa de baseUrl + apiKey + instance');
       }

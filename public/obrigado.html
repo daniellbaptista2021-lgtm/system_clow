@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compra confirmada · EVOX</title>
+<link rel="icon" type="image/png" href="/assets/evox/favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --azul: #0A66F5; --tinta: #071221; --cinza: #5B6678; --linha: #E6EAF0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px;
+    font-family: Inter, system-ui, sans-serif; color: var(--tinta); background: #F3F6FB; }
+  .cartao { width: 100%; max-width: 520px; background: #fff; border: 1px solid var(--linha); border-radius: 22px;
+    overflow: hidden; box-shadow: 0 18px 44px rgba(7,18,33,.08); }
+  .faixa { height: 6px; background: linear-gradient(90deg, #004BCA, #0A66F5 55%, #1CBEFF); }
+  .corpo { padding: 34px 30px 30px; }
+  .logo { display: block; height: 32px; margin: 0 auto 26px; }
+  .ok { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 18px; display: grid; place-items: center;
+    background: #E8F7EE; color: #12A150; font-size: 30px; font-weight: 800; }
+  h1 { font-size: 26px; line-height: 32px; margin: 0 0 10px; text-align: center; letter-spacing: -.02em; }
+  .sub { color: var(--cinza); font-size: 16px; line-height: 24px; text-align: center; margin: 0 0 26px; }
+  .aviso { background: #FFF8E6; border: 1px solid #F5D78A; border-radius: 14px; padding: 16px 18px; font-size: 15px; line-height: 23px; margin-bottom: 24px; }
+  .aviso b { color: #8A5A00; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: p; }
+  li { counter-increment: p; display: flex; gap: 14px; margin-bottom: 16px; font-size: 15px; line-height: 22px; color: var(--cinza); }
+  li::before { content: counter(p); flex: none; width: 30px; height: 30px; border-radius: 10px; background: #EAF2FF; color: var(--azul);
+    font-weight: 700; display: grid; place-items: center; font-size: 14px; }
+  li b { color: var(--tinta); }
+  .rodape { text-align: center; font-size: 13px; color: #8A94A6; margin-top: 18px; }
+  a { color: var(--azul); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<main class="cartao">
+  <div class="faixa"></div>
+  <div class="corpo">
+    <img class="logo" src="/assets/evox/evox-logo.png" alt="EVOX">
+    <div class="ok">✓</div>
+    <h1>Compra confirmada!</h1>
+    <p class="sub">Seu EVOX já está sendo preparado. Em alguns minutos você recebe o acesso por e-mail.</p>
+    <div class="aviso">
+      <b>Não achou o e-mail?</b> Procure <b>"Seu acesso ao EVOX está pronto"</b> também na pasta
+      <b>Spam</b> e na aba <b>Promoções</b>. Se estiver lá, marque como "Não é spam".
+    </div>
+    <ol>
+      <li><span><b>Abra o e-mail</b> e clique em "Criar minha senha".</span></li>
+      <li><span><b>Entre no EVOX</b> em <a href="/">evox.pvcorretor01.com.br</a> com o e-mail da compra.</span></li>
+      <li><span><b>Fale com o Agente IA</b>: conte como é a sua venda e ele monta o seu funil.</span></li>
+    </ol>
+    <p class="rodape">Use o mesmo e-mail que você informou no pagamento.</p>
+  </div>
+</main>
+</body>
+</html>
