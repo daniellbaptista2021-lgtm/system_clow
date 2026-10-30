@@ -11,6 +11,8 @@
  */
 import type { Hono } from 'hono';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getCrmDb } from '../crm/schema.js';
 import { createTenant, findTenantByEmail, updateTenant, getTenant } from '../tenancy/tenantStore.js';
@@ -59,8 +61,14 @@ export function criarLinkDeSenha(tenantId: string): string {
 }
 
 async function mandarBoasVindas(email: string, nome: string, plano: string, link: string) {
-  const { subject, html, text } = emailBoasVindas({ nome, plano, link, base: base() });
-  return sendMail({ to: email, subject, text, html });
+  // O logo vai embutido: e-mail que cai no spam não baixa imagem de fora.
+  let embutidos: Array<{ cid: string; nome: string; conteudoBase64: string }> | undefined;
+  try {
+    const arq = path.join(process.cwd(), 'public', 'assets', 'evox', 'email-logo.png');
+    embutidos = [{ cid: 'evox-logo', nome: 'evox-logo.png', conteudoBase64: fs.readFileSync(arq).toString('base64') }];
+  } catch { /* sem o arquivo, cai no logo por URL */ }
+  const { subject, html, text } = emailBoasVindas({ nome, plano, link, base: base(), logoSrc: embutidos ? 'cid:evox-logo' : undefined });
+  return sendMail({ to: email, subject, text, html, embutidos });
 }
 
 export function registerKiwifyRoutes(app: Hono) {

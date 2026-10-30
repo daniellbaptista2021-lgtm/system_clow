@@ -13,11 +13,11 @@ const FUNDO = '#F3F6FB';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-export function emailBoasVindas(o: { nome: string; plano: string; link: string; base: string }) {
+export function emailBoasVindas(o: { nome: string; plano: string; link: string; base: string; logoSrc?: string }) {
   const primeiro = esc((o.nome || '').trim().split(/\s+/)[0] || '');
   const nomePlano = o.plano === 'completo' ? 'Completo' : 'Essencial';
   const site = o.base.replace(/^https?:\/\//, '');
-  const logo = `${o.base}/assets/evox/email-logo.png`;
+  const logo = o.logoSrc || `${o.base}/assets/evox/email-logo.png`;
   const link = esc(o.link);
 
   const passo = (n: number, titulo: string, texto: string) => `
@@ -47,7 +47,7 @@ export function emailBoasVindas(o: { nome: string; plano: string; link: string; 
 
         <tr>
           <td align="center" style="padding:0 0 22px 0;">
-            <img src="${logo}" width="180" height="35" alt="EVOX" style="display:block;border:0;width:180px;height:35px;">
+            <img src="${logo}" width="180" height="35" alt="EVOX" style="display:block;border:0;width:180px;height:35px;font-family:Inter,Arial,sans-serif;font-size:30px;line-height:35px;font-weight:800;letter-spacing:.06em;color:${AZUL};text-align:center;">
           </td>
         </tr>
 

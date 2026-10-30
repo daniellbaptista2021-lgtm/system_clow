@@ -20,6 +20,9 @@ export interface SendMailParams {
   text: string;       // plain text (obrigatorio)
   html?: string;      // opcional, fallback pro text
   from?: string;      // override
+  /** Imagens que vão DENTRO do e-mail (o html usa src="cid:<cid>"). Gmail não
+   *  baixa imagem de fora em e-mail que caiu no spam; embutida, ela aparece. */
+  embutidos?: Array<{ cid: string; nome: string; conteudoBase64: string }>;
 }
 
 export interface SendMailResult {
@@ -35,7 +38,7 @@ const DEFAULT_FROM = process.env.CLOW_MAIL_FROM || 'no-reply@evox.com.br';
  * Envia email pelo melhor backend disponivel. Nunca throw.
  */
 export async function sendMail(params: SendMailParams): Promise<SendMailResult> {
-  const { to, subject, text, html, from } = params;
+  const { to, subject, text, html, from, embutidos } = params;
   if (!to || !subject || !text) {
     return { ok: false, backend: 'none', reason: 'missing_fields' };
   }
@@ -55,6 +58,9 @@ export async function sendMail(params: SendMailParams): Promise<SendMailResult> 
           subject,
           text,
           html: html || undefined,
+          attachments: embutidos?.length
+            ? embutidos.map((e) => ({ filename: e.nome, content: e.conteudoBase64, content_id: e.cid }))
+            : undefined,
         }),
       });
       if (res.ok) {
