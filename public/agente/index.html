@@ -186,7 +186,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
 
 </style>
 <script src="https://js.stripe.com/v3/"></script>
-<link rel="stylesheet" href="/crm/evox-agente.css?v=7">
+<link rel="stylesheet" href="/crm/evox-agente.css?v=8">
 </head>
 <body>
 <div class="login-ov" id="loginScreen"><div class="login-wrap"><div class="login-card"><div class="login-brand"><img src="/assets/evox/icone-192.png" alt="EVOX" style="height:64px;width:64px;border-radius:16px"></div><div class="login-title">Entre para continuar.</div><div class="login-sub">Entre com o email e a senha da sua conta para acessar o CRM, os agentes e as conversas.</div><input class="login-f" id="loginUser" type="text" placeholder="Usuário" autocomplete="username" autofocus><input class="login-f" id="loginPass" type="password" placeholder="Senha" autocomplete="current-password"><button class="login-b" id="loginBtn" onclick="doLogin()">Entrar no workspace</button><div class="login-e" id="loginError"></div>
@@ -220,7 +220,7 @@ html.clow-bridge-mode #loginScreen{display:none!important}
   </div>
   <div class="content"><div id="chat"><div class="feed" id="feed"><section class="welcome" id="wel"><div class="hero"><div class="hero-badge"><img class="welc-marca" src="/assets/evox/evox-emblema.png" alt="EVOX"><h1>Como posso <span class="gp">ajudar</span>?</h1></div><div class="hero-sub"></div></div></section></div></div></div>
 </main></div>
-<div class="dock"><div class="dock-inner"><div class="atalhos" id="atalhos"><button type="button" class="atalho" data-pedido="Quero criar agentes de IA automatizados para as etapas do meu funil. Me pergunte como funciona a minha venda e configure um agente para cada coluna."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M2 14h2M20 14h2M9 13v2M15 13v2"/></svg></span><span class="atalho-tx"><b>Criar agentes por etapa</b><small>Um agente automatizado em cada coluna</small></span></button><button type="button" class="atalho" data-pedido="Crie um site (landing page) para a minha corretora, com formulário que cai direto no meu CRM. Me pergunte o que você precisar saber."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg></span><span class="atalho-tx"><b>Criar meu site</b><small>Página que manda leads pro CRM</small></span></button><button type="button" class="atalho" data-pedido="Quero que você seja meu gestor de tráfego pago. O que você precisa de mim para cuidar das minhas campanhas no Facebook e Instagram?"><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span class="atalho-tx"><b>Tráfego pago</b><small>Campanhas no Facebook e Instagram</small></span></button><button type="button" class="atalho" data-pedido="Quero cobrar as mensalidades dos meus clientes com lembrete automático no WhatsApp. Me ajude a cadastrar e a configurar."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><span class="atalho-tx"><b>Cobrar mensalidade</b><small>Lembrete automático no WhatsApp</small></span></button><button type="button" class="atalho" data-pedido="Monte um follow-up automático para os leads que pararam de responder no meu funil."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span><span class="atalho-tx"><b>Fazer follow-up</b><small>Nenhum lead fica sem retorno</small></span></button></div><div class="composer-card"><textarea id="msg" class="composer-input" placeholder="O que você precisa?" rows="1"></textarea><div class="divider"></div><div class="composer-toolbar"><div class="toolbar-group"><div class="model-pill">EVOX</div></div><div class="toolbar-group"><button class="send-btn" id="btn" onclick="handleBtn()"><svg id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><svg id="ico-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button></div></div></div></div></div>
+<div class="solte" id="solte"><div class="solte-caixa"><b>Solte aqui</b><span>imagens, PDFs, planilhas e documentos vão direto para o Agente IA</span></div></div><div class="dock"><div class="dock-inner"><div class="atalhos" id="atalhos"><button type="button" class="atalho" data-pedido="Quero criar agentes de IA automatizados para as etapas do meu funil. Me pergunte como funciona a minha venda e configure um agente para cada coluna."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M2 14h2M20 14h2M9 13v2M15 13v2"/></svg></span><span class="atalho-tx"><b>Criar agentes por etapa</b><small>Um agente automatizado em cada coluna</small></span></button><button type="button" class="atalho" data-pedido="Crie um site (landing page) para a minha corretora, com formulário que cai direto no meu CRM. Me pergunte o que você precisar saber."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg></span><span class="atalho-tx"><b>Criar meu site</b><small>Página que manda leads pro CRM</small></span></button><button type="button" class="atalho" data-pedido="Quero que você seja meu gestor de tráfego pago. O que você precisa de mim para cuidar das minhas campanhas no Facebook e Instagram?"><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span class="atalho-tx"><b>Tráfego pago</b><small>Campanhas no Facebook e Instagram</small></span></button><button type="button" class="atalho" data-pedido="Quero cobrar as mensalidades dos meus clientes com lembrete automático no WhatsApp. Me ajude a cadastrar e a configurar."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><span class="atalho-tx"><b>Cobrar mensalidade</b><small>Lembrete automático no WhatsApp</small></span></button><button type="button" class="atalho" data-pedido="Monte um follow-up automático para os leads que pararam de responder no meu funil."><span class="atalho-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span><span class="atalho-tx"><b>Fazer follow-up</b><small>Nenhum lead fica sem retorno</small></span></button></div><div class="composer-card" id="composerCard"><div class="anexos-lista" id="anexosLista"></div><div class="gravando" id="gravando"><i></i><span id="gravTexto">Gravando</span><b id="gravTempo">0:00</b><button type="button" id="gravCancelar">Cancelar</button><button type="button" id="gravEnviar" class="grav-enviar">Enviar áudio</button></div><textarea id="msg" class="composer-input" placeholder="O que você precisa? Mande texto, áudio, imagem ou documento." rows="1"></textarea><div class="divider"></div><div class="composer-toolbar"><div class="toolbar-group"><button type="button" class="tb-btn" id="btnAnexo" title="Anexar arquivos (imagem, PDF, planilha…)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button><input type="file" id="inAnexo" multiple hidden><div class="model-pill">EVOX</div></div><div class="toolbar-group"><button type="button" class="tb-btn" id="btnMic" title="Mandar áudio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></button><button class="send-btn" id="btn" onclick="handleBtn()"><svg id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><svg id="ico-stop" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button></div></div></div></div></div>
 </div>
 <script>
 const U=location.origin;
@@ -530,8 +530,9 @@ async function applyTenantContext(){try{const r=await fetch(`${U}/auth/me`,{head
 function logout(){try{if(_tenantId){window.clowStorage.removeItem(`clow_web_sessions_v3_${_tenantId}`);window.clowStorage.removeItem(`clow_web_active_session_v3_${_tenantId}`)}window.clowStorage.removeItem('clow_web_sessions_v3_default');window.clowStorage.removeItem('clow_web_active_session_v3_default');window.clowStorage.removeItem('clow_web_sessions_v2');window.clowStorage.removeItem('clow_web_active_session_v2');}catch{}_tenantId=null;window.clowStorage.removeItem(TOKEN_KEY);if(CLOW_BRIDGE_MODE){window.clowStorage.removeItem('clow_bridge_mode');const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:system-ui;text-align:center;padding:40px;z-index:9999';d.textContent='Sessao expirada. Feche esta janela e clique novamente em Agente IA no CRM.';document.body.appendChild(d);return;}location.reload();}
 async function reset(){clearFeed();await ensureCurrentSession(true);renderRecent();renderConversation(getSession());closeSidebar();focusComposer()}
 async function go(){
-  const t=(I.value||'').trim();
-  if(!t)return;
+  let t=(I.value||'').trim();
+  if(!t&&!(window.EvoxAnexos&&EvoxAnexos.tem()))return;
+  if(window.EvoxAnexos&&EvoxAnexos.tem()){const lista=await EvoxAnexos.subir();if(lista===null)return;t=(t||'Veja o que eu anexei.')+'\n\n'+lista}
   if(!authToken){renderErrorMessage('Sessão expirada. Faça login novamente.');logout();return;}
 
   let session;
@@ -828,6 +829,61 @@ window.addEventListener('resize',()=>{if(isMobileLayout()){document.body.classLi
 function sync(){at.classList.toggle('some',wel.classList.contains('hide'))}
 new MutationObserver(sync).observe(wel,{attributes:true,attributeFilter:['class']});sync();
 at.addEventListener('click',function(e){var b=e.target.closest('.atalho');if(!b||typeof go!=='function')return;var c=document.getElementById('msg');c.value=b.dataset.pedido;c.dispatchEvent(new Event('input'));go();});})();
+</script>
+
+<script>
+// Anexos e áudio do Agente IA. O arquivo vai para a pasta da conta (anexos/), que o agente
+// abre com as próprias ferramentas; o áudio é transcrito no servidor e vira texto.
+window.EvoxAnexos=(function(){
+  var lista=[],LIM=20*1024*1024,box=document.getElementById('anexosLista'),inp=document.getElementById('inAnexo');
+  var ehImg=function(f){return /^image\//.test(f.type)};
+  function tam(n){return n>1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+  function desenhar(){box.innerHTML='';box.classList.toggle('tem',lista.length>0);lista.forEach(function(a,i){
+    var c=document.createElement('div');c.className='anexo';
+    c.innerHTML=(ehImg(a.file)?'<img alt="">':'<span class="anexo-ic">'+((a.file.name.split('.').pop()||'').slice(0,4).toUpperCase()||'ARQ')+'</span>')+'<span class="anexo-tx"><b></b><small></small></span><button type="button" title="Tirar">×</button>';
+    if(ehImg(a.file))c.querySelector('img').src=a.url;
+    c.querySelector('b').textContent=a.file.name;c.querySelector('small').textContent=tam(a.file.size);
+    c.querySelector('button').onclick=function(){if(a.url)URL.revokeObjectURL(a.url);lista.splice(i,1);desenhar()};box.appendChild(c)})}
+  function add(files){[].slice.call(files||[]).forEach(function(f){if(lista.length>=10)return;if(f.size>LIM){aviso('"'+f.name+'" passa de 20 MB.');return}lista.push({file:f,url:ehImg(f)?URL.createObjectURL(f):''})});desenhar();if(typeof focusComposer==='function')focusComposer()}
+  function aviso(m){var t=document.createElement('div');t.className='evx-aviso';t.textContent=m;document.body.appendChild(t);setTimeout(function(){t.remove()},3500)}
+  function base64(f){return new Promise(function(ok,erro){var r=new FileReader();r.onload=function(){ok(r.result)};r.onerror=erro;r.readAsDataURL(f)})}
+  async function subir(){var feitos=[];box.classList.add('enviando');
+    try{for(var i=0;i<lista.length;i++){var a=lista[i];var r=await fetch(U+'/v1/agente/anexo',{method:'POST',headers:authHeaders(),body:JSON.stringify({nome:a.file.name,tipo:a.file.type,dados:await base64(a.file)})});
+      var d=await r.json().catch(function(){return{}});if(!r.ok||!d.caminho){aviso(d.message||('Não consegui enviar "'+a.file.name+'".'));box.classList.remove('enviando');return null}
+      feitos.push(d.caminho+(ehImg(a.file)?' (imagem)':''))}}
+    catch(e){aviso('Falha ao enviar os arquivos. Confira a internet e tente de novo.');box.classList.remove('enviando');return null}
+    lista.forEach(function(a){if(a.url)URL.revokeObjectURL(a.url)});lista=[];box.classList.remove('enviando');desenhar();
+    return '[Anexei '+(feitos.length>1?'estes arquivos':'este arquivo')+' na minha pasta — abra antes de responder: '+feitos.join(', ')+']'}
+  document.getElementById('btnAnexo').onclick=function(){inp.click()};
+  inp.onchange=function(){add(inp.files);inp.value=''};
+  I.addEventListener('paste',function(e){var fs=[].slice.call((e.clipboardData||{}).files||[]);if(fs.length){e.preventDefault();add(fs)}});
+  var sol=document.getElementById('solte'),prof=0,temArq=function(e){return [].slice.call((e.dataTransfer||{}).types||[]).indexOf('Files')>=0};
+  addEventListener('dragenter',function(e){if(!temArq(e))return;e.preventDefault();prof++;sol.classList.add('on')});
+  addEventListener('dragover',function(e){if(temArq(e))e.preventDefault()});
+  addEventListener('dragleave',function(){prof=Math.max(0,prof-1);if(!prof)sol.classList.remove('on')});
+  addEventListener('drop',function(e){if(!temArq(e))return;e.preventDefault();prof=0;sol.classList.remove('on');add(e.dataTransfer.files)});
+
+  // Áudio: clica no microfone, fala, e "Enviar áudio" transcreve e manda.
+  var rec=null,pedacos=[],ini=0,relogio=null,cancelou=false,gv=document.getElementById('gravando'),gt=document.getElementById('gravTempo'),gx=document.getElementById('gravTexto'),card=document.getElementById('composerCard');
+  function parar(){if(relogio){clearInterval(relogio);relogio=null}if(rec&&rec.state!=='inactive')rec.stop()}
+  async function comecar(){
+    if(!navigator.mediaDevices||!window.MediaRecorder){aviso('Este navegador não grava áudio.');return}
+    var s;try{s=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){aviso('Libere o microfone para o EVOX no navegador e tente de novo.');return}
+    pedacos=[];cancelou=false;var tipo=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':(MediaRecorder.isTypeSupported('audio/mp4')?'audio/mp4':'');
+    rec=new MediaRecorder(s,tipo?{mimeType:tipo}:undefined);rec.ondataavailable=function(e){if(e.data.size)pedacos.push(e.data)};
+    rec.onstop=async function(){s.getTracks().forEach(function(t){t.stop()});if(cancelou||!pedacos.length){fim();return}
+      gx.textContent='Transcrevendo';gt.textContent='';gv.classList.add('ocupado');
+      try{var blob=new Blob(pedacos,{type:rec.mimeType||'audio/webm'});var r=await fetch(U+'/v1/agente/audio',{method:'POST',headers:authHeaders(),body:JSON.stringify({dados:await base64(blob)})});var d=await r.json().catch(function(){return{}});
+        if(!r.ok||!d.texto){aviso(d.message||'Não consegui transcrever o áudio.');fim();return}
+        fim();I.value=(I.value?I.value.trim()+' ':'')+d.texto;autoResize(I);go()}catch(e){aviso('Falha ao enviar o áudio.');fim()}};
+    rec.start();ini=Date.now();card.classList.add('gravando-on');gv.classList.remove('ocupado');gx.textContent='Gravando';gt.textContent='0:00';
+    relogio=setInterval(function(){var x=Math.floor((Date.now()-ini)/1000);gt.textContent=Math.floor(x/60)+':'+String(x%60).padStart(2,'0');if(x>=300)parar()},250)}
+  function fim(){card.classList.remove('gravando-on');gv.classList.remove('ocupado');rec=null}
+  document.getElementById('btnMic').onclick=function(){if(rec&&rec.state==='recording')parar();else comecar()};
+  document.getElementById('gravEnviar').onclick=function(){parar()};
+  document.getElementById('gravCancelar').onclick=function(){cancelou=true;parar()};
+  return {tem:function(){return lista.length>0},subir:subir,add:add};
+})();
 </script>
 </body>
 </html>

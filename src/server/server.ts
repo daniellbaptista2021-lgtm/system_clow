@@ -366,6 +366,12 @@ async function main(): Promise<void> {
   app.use('/v1/ia-credenciais', marcarTenant);
   app.route('/v1/ia-credenciais', buildIaCredenciaisRoutes());
   logger.info('  ✓ IA do cliente: /v1/ia-credenciais');
+
+  // Arquivos e áudio mandados ao Agente IA (vão para a pasta da conta).
+  const { buildAgenteAnexosRoutes } = await import('./routes/agenteAnexos.js');
+  app.use('/v1/agente/*', tenantAuth);
+  app.use('/v1/agente/*', marcarTenant);
+  app.route('/v1/agente', buildAgenteAnexosRoutes());
   app.route('/v1/crm', crmRoutes);
   app.route('/webhooks/crm', crmWebhooks);
   // ─── Login Auth UNIFIED (registered BEFORE /auth mount pra ter precedência) ───
