@@ -391,6 +391,9 @@ async function main(): Promise<void> {
   app.route('/v1/agente', buildAgenteAnexosRoutes());
   app.route('/v1/crm', crmRoutes);
   app.route('/webhooks/crm', crmWebhooks);
+  // Kiwify: venda aprovada cria a conta; cancelamento encerra (src/billing/kiwifyRoutes.ts).
+  const { registerKiwifyRoutes } = await import('../billing/kiwifyRoutes.js');
+  registerKiwifyRoutes(app);
   // ─── Login Auth UNIFIED (registered BEFORE /auth mount pra ter precedência) ───
   // Ordem importa no Hono: handler direto ganha do app.route('/auth', authRoutes).
   // Aceita admin (username+password) OU tenant (email+password, ou username contendo '@').
@@ -627,6 +630,17 @@ async function main(): Promise<void> {
       return new Response(buf, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' } });
     } catch (e: any) { return c.text('error: ' + e.message, 500); }
   });
+  // Páginas soltas, por lista: criar senha (link do e-mail de boas-vindas) e os
+  // termos que o rodapé do site cita. Antes as duas do rodapé davam 404.
+  for (const pagina of ['definir-senha', 'terms', 'privacy']) {
+    const servir = (c: any) => {
+      const file = path.join(process.cwd(), 'public', `${pagina}.html`);
+      if (!fs.existsSync(file)) return c.notFound();
+      return new Response(fs.readFileSync(file), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'Referrer-Policy': 'no-referrer' } });
+    };
+    app.get(`/${pagina}.html`, servir);
+    app.get(`/${pagina}`, servir);
+  }
   // Site de vendas do EVOX (public/site): a pagina e as imagens dela.
   app.get('/site', (c) => c.redirect('/site/', 301));
   app.get('/site/*', (c) => {
