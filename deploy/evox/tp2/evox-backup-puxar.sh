@@ -10,7 +10,10 @@ ARQ="$DESTINO/evox-$(date +%Y-%m-%d-%H%M).tar.gz"
 ssh -i "$CHAVE" -o BatchMode=yes -o ConnectTimeout=20 "$TP2" \
   'incus exec evox -- bash /usr/local/bin/evox-backup.sh' > "$ARQ.parcial"
 # Cópia vazia ou truncada não substitui nada: confere antes de dar nome final.
-tar -tzf "$ARQ.parcial" | grep -q 'dados/crm.sqlite3' || { echo "cópia inválida"; rm -f "$ARQ.parcial"; exit 1; }
+# (lista em variável: `tar | grep -q` com pipefail acusa erro justamente quando
+# acha o arquivo — o grep sai cedo e o tar morre com SIGPIPE.)
+LISTA=$(tar -tzf "$ARQ.parcial" 2>/dev/null || true)
+case "$LISTA" in *dados/crm.sqlite3*) ;; *) echo "cópia inválida ($(stat -c %s "$ARQ.parcial" 2>/dev/null || echo 0) bytes)"; rm -f "$ARQ.parcial"; exit 1 ;; esac
 mv "$ARQ.parcial" "$ARQ"; chmod 600 "$ARQ"
 find "$DESTINO" -name 'evox-*.tar.gz' -mtime +14 -delete
 echo "ok $ARQ $(du -h "$ARQ" | cut -f1)"
