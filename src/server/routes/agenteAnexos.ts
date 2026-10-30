@@ -31,7 +31,7 @@ function tenantDa(c: Context): string | null {
 export function nomeSeguro(original: string): string {
   const base = path.basename(String(original || 'arquivo')).normalize('NFD').replace(/[̀-ͯ]/g, '');
   const ext = path.extname(base).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 10);
-  const raiz = path.basename(base, path.extname(base)).replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'arquivo';
+  const raiz = path.basename(base, path.extname(base)).replace(/[^A-Za-z0-9_-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'arquivo';
   return raiz + ext;
 }
 
