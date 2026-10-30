@@ -850,7 +850,7 @@ window.EvoxAnexos=(function(){
   async function subir(){var feitos=[];box.classList.add('enviando');
     try{for(var i=0;i<lista.length;i++){var a=lista[i];var r=await fetch(U+'/v1/agente/anexo',{method:'POST',headers:authHeaders(),body:JSON.stringify({nome:a.file.name,tipo:a.file.type,dados:await base64(a.file)})});
       var d=await r.json().catch(function(){return{}});if(!r.ok||!d.caminho){aviso(d.message||('Não consegui enviar "'+a.file.name+'".'));box.classList.remove('enviando');return null}
-      feitos.push(d.caminho+(ehImg(a.file)?' (imagem)':''))}}
+      feitos.push(d.caminho+(ehImg(a.file)?' (imagem)':(/^video\//.test(a.file.type)?' (vídeo)':'')))}}
     catch(e){aviso('Falha ao enviar os arquivos. Confira a internet e tente de novo.');box.classList.remove('enviando');return null}
     lista.forEach(function(a){if(a.url)URL.revokeObjectURL(a.url)});lista=[];box.classList.remove('enviando');desenhar();
     return '[Anexei '+(feitos.length>1?'estes arquivos':'este arquivo')+' na minha pasta — abra antes de responder: '+feitos.join(', ')+']'}
