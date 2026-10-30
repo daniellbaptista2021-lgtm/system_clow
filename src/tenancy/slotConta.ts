@@ -23,7 +23,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 
-const exec = promisify(execFile);
+const execBruto = promisify(execFile);
+/** execFile com a entrada fechada: `incus launch` lê configuração YAML da
+ *  entrada quando ela não é um terminal, e com o pipe aberto ficava esperando
+ *  para sempre (o slot nunca nascia na VPS, 30/10/2026). */
+const exec: typeof execBruto = ((cmd: string, args: string[], opts: any) => {
+  const p = execBruto(cmd, args, opts) as any;
+  p.child?.stdin?.end();
+  return p;
+}) as any;
 
 const MOTOR = process.env.EVOX_SLOTS === 'incus' ? 'incus' : 'container';
 const CLI = process.env.EVOX_SLOT_CLI || (MOTOR === 'incus' ? '/usr/bin/incus' : '/usr/local/bin/container');
@@ -169,7 +177,7 @@ export function comandoNoSlot(nome: string, comando: string, cwdNoSlot: string):
   if (MOTOR === 'incus') {
     // Sem --env: o ambiente do servidor (chaves) não entra no slot. Os
     // arquivos criados no slot já nascem do dono certo (root de lá = DONO_NO_HOST).
-    return `${aspas(CLI)} exec ${aspas(nome)} --cwd ${aspas(cwdNoSlot)} -- bash -lc ${aspas(comando)}`;
+    return `${aspas(CLI)} exec ${aspas(nome)} --cwd ${aspas(cwdNoSlot)} -- bash -lc ${aspas(comando)} </dev/null`;
   }
   return `${aspas(CLI)} exec -w ${aspas(cwdNoSlot)} ${aspas(nome)} bash -lc ${aspas(comando)}`;
 }
