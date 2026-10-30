@@ -145,3 +145,10 @@ html.no-quadro .topbar { display: none !important; }
    borda e aparecia um "om" solto no canto da tela. */
 .sidebar { overflow: hidden; }
 .account-name, .account-plan { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Tabelas nas respostas: as linhas vinham cinza-claro do tema escuro antigo e
+   sumiam no fundo claro (30/10/2026). */
+.rp table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+.rp th { color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.rp td { color: var(--text) !important; opacity: 1 !important; border-bottom: 1px solid var(--line); }
+.rp th, .rp td { padding: 8px 10px; text-align: left; }

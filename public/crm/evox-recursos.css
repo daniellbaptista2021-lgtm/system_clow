@@ -252,3 +252,8 @@
 .troca-atual { height: 42px; display: grid; place-items: center; border-radius: 12px; font-size: 14px; font-weight: 600; color: #0A66F5; background: rgba(10,102,245,.1); }
 .troca-card.top .troca-atual { color: #fff; background: rgba(28,190,255,.18); }
 @media (max-width: 600px) { .troca-plano { grid-template-columns: 1fr; } }
+
+/* Item de menu do plano Completo escondido para o Essencial: o display:flex do
+   .nav-item passava por cima do atributo hidden e o Agente IA aparecia para
+   todo mundo (30/10/2026). */
+.nav-item[hidden], [data-plano][hidden] { display: none !important; }
