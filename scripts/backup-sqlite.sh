@@ -65,9 +65,35 @@ prune_backups() {
   local now_ts
   now_ts="$(date -u +%s)"
 
-  declare -A keep            # keep[bk]=1 means keep this dir
-  declare -A by_day          # latest backup per YYYY-MM-DD (24h..7d tier)
-  declare -A by_week         # latest backup per YYYY-WW    (7d..28d tier)
+  # macOS ainda traz Bash 3.2, sem arrays associativos. Arquivos temporários
+  # mantêm esta rotação compatível com o Mac e com o Linux do servidor.
+  local rotation_tmp keep_file day_file week_file
+  rotation_tmp="$(mktemp -d "${TMPDIR:-/tmp}/evox-backup-rotation.XXXXXX")"
+  keep_file="$rotation_tmp/keep"
+  day_file="$rotation_tmp/day"
+  week_file="$rotation_tmp/week"
+  : > "$keep_file"
+  : > "$day_file"
+  : > "$week_file"
+
+  backup_epoch() {
+    local value="$1"
+    date -u -d "$value" +%s 2>/dev/null \
+      || date -u -j -f '%Y-%m-%d %H:%M:%S' "$value" +%s 2>/dev/null
+  }
+
+  backup_week() {
+    local value="$1"
+    date -u -d "$value" +%G-%V 2>/dev/null \
+      || date -u -j -f '%Y-%m-%d' "$value" +%G-%V 2>/dev/null
+  }
+
+  remember_latest() {
+    local file="$1" key="$2" value="$3" next="$rotation_tmp/next"
+    awk -v wanted="$key" '$1 != wanted { print }' "$file" > "$next"
+    printf '%s %s\n' "$key" "$value" >> "$next"
+    mv "$next" "$file"
+  }
 
   # Iterate in chronological order so "latest of day/week" wins on overwrite.
   while IFS= read -r bk; do
@@ -77,33 +103,35 @@ prune_backups() {
 
     local y="${bk:0:4}" m="${bk:5:2}" d="${bk:8:2}" h="${bk:11:2}"
     local bk_ts age
-    bk_ts="$(date -u -d "$y-$m-$d $h:00:00" +%s 2>/dev/null)" || continue
+    bk_ts="$(backup_epoch "$y-$m-$d $h:00:00")" || continue
     age=$(( now_ts - bk_ts ))
 
     if (( age < 86400 )); then
-      keep["$bk"]=1                                   # hourly
+      printf '%s\n' "$bk" >> "$keep_file"            # hourly
     elif (( age < 604800 )); then
-      by_day["$y-$m-$d"]="$bk"                        # daily rep
+      remember_latest "$day_file" "$y-$m-$d" "$bk"  # daily rep
     elif (( age < 2419200 )); then
       local week
-      week="$(date -u -d "$y-$m-$d" +%G-%V 2>/dev/null)" || continue
-      by_week["$week"]="$bk"                          # weekly rep
+      week="$(backup_week "$y-$m-$d")" || continue
+      remember_latest "$week_file" "$week" "$bk"    # weekly rep
     fi
     # > 28 days: not added to keep — will be pruned below.
   done < <(cd "$BACKUP_ROOT" && ls -1d -- */ 2>/dev/null | sed 's|/$||' | sort)
 
-  for v in "${by_day[@]}";  do keep["$v"]=1; done
-  for v in "${by_week[@]}"; do keep["$v"]=1; done
+  awk '{ print $2 }' "$day_file" >> "$keep_file"
+  awk '{ print $2 }' "$week_file" >> "$keep_file"
 
   # Prune everything not in keep
   while IFS= read -r bk; do
     [ -n "$bk" ] || continue
     [[ "$bk" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] || continue
-    if [ -z "${keep[$bk]:-}" ]; then
+    if ! grep -Fqx "$bk" "$keep_file"; then
       rm -rf -- "${BACKUP_ROOT:?}/$bk"
       log "pruned: $bk"
     fi
   done < <(cd "$BACKUP_ROOT" && ls -1d -- */ 2>/dev/null | sed 's|/$||' | sort)
+
+  rm -rf -- "$rotation_tmp"
 }
 
 prune_backups

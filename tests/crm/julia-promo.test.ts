@@ -76,7 +76,14 @@ const COL_QUALIF = 'crm_col_fc844007d108';
 const BOARD = 'crm_board_e6579f1b9ba7';
 const PHONE = '5500000000000';
 
-describe('Julia (Lead novo) — promoção automática pro Qualificado', () => {
+// Este teste temporário depende de um clone específico do banco real. Em uma
+// instalação limpa (inclusive no Mac), os IDs abaixo não existem e o teste
+// deve ser ignorado em vez de derrubar toda a suíte por chave estrangeira.
+const cloneJuliaPreparado = Boolean(getCrmDb().prepare(
+  'SELECT 1 FROM crm_columns WHERE board_id = ? AND id IN (?, ?) GROUP BY board_id HAVING COUNT(*) = 2',
+).get(BOARD, COL_LEAD, COL_QUALIF));
+
+describe.skipIf(!cloneJuliaPreparado)('Julia (Lead novo) — promoção automática pro Qualificado', () => {
   let contactId: string;
   let cardId: string;
 
