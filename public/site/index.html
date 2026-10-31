@@ -1,652 +1,711 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>EVOX — o CRM do corretor de seguros</title>
-<meta name="description" content="EVOX é o CRM feito para corretor de seguros: funil de vendas, WhatsApp, agenda, mensalidades e um Agente IA que atende seus leads 24 horas e trabalha junto com você.">
-<meta property="og:title" content="EVOX — o CRM do corretor de seguros">
-<meta property="og:description" content="Funil, WhatsApp, follow-up e um Agente IA que atende seus leads 24h.">
-<meta property="og:image" content="/site/img/painel.webp?v=3">
-<meta name="theme-color" content="#071221">
-<link rel="icon" href="/assets/evox/favicon.png">
-<link rel="apple-touch-icon" href="/assets/evox/apple-touch-icon.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Raio-X do Corretor · EVOX</title>
+<meta name="description" content="5 perguntas para descobrir quantas vendas de seguro estão escapando — e como o EVOX fecha cada buraco com IA.">
+<meta name="theme-color" content="#F6F8FB">
+<link rel="icon" href="img/evox-emblema.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{
-  --p:#0A66F5;--p2:#004BCA;--c:#1CBEFF;--ink:#071221;--ink2:#0D1B30;
-  --bg:#F6F8FB;--card:#FFFFFF;--line:#E6EAF0;--t1:#071221;--t2:#5B6678;--tm:#8A94A6;
-  --verde:#12B76A;--raio:20px;
-  --sombra:0 1px 2px rgba(7,18,33,.04),0 12px 32px -12px rgba(7,18,33,.14);
-  --grande:0 40px 80px -30px rgba(7,18,33,.35),0 0 0 1px rgba(7,18,33,.06);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--t1);background:var(--bg);line-height:1.55;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-img{display:block;max-width:100%;height:auto}
-a{color:inherit;text-decoration:none}
-.wrap{width:100%;max-width:1180px;margin:0 auto;padding:0 24px}
-@media(max-width:600px){.wrap{padding:0 16px}}
+  /* Visual copiado do site oficial do EVOX (evox/public/site/index.html) */
+  :root {
+    --p: #0A66F5; --p2: #004BCA; --c: #1CBEFF; --ink: #071221; --ink2: #0D1B30;
+    --bg: #F6F8FB; --card: #FFFFFF; --line: #E6EAF0; --t1: #071221; --t2: #5B6678; --tm: #8A94A6;
+    --verde: #12B76A; --vermelho: #E5484D; --ouro: #F5A524;
+    --sombra: 0 1px 2px rgba(7,18,33,.04), 0 12px 32px -12px rgba(7,18,33,.14);
+    --grande: 0 40px 80px -30px rgba(7,18,33,.35), 0 0 0 1px rgba(7,18,33,.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-family: Inter, system-ui, -apple-system, sans-serif; color: var(--t1); background: var(--bg); line-height: 1.55; overflow-x: hidden; -webkit-font-smoothing: antialiased; min-height: 100dvh; }
+  button { font-family: inherit; color: inherit; }
+  img { display: block; max-width: 100%; height: auto; }
+  .inicio { cursor: pointer; color: inherit; text-decoration: none; }
+  em { font-style: normal; background: linear-gradient(90deg, var(--p), var(--c)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brilho { position: fixed; inset: -200px -20% auto; height: 760px; z-index: -1; pointer-events: none;
+    background: radial-gradient(600px 340px at 50% 30%, rgba(28,190,255,.18), transparent 70%), radial-gradient(700px 400px at 30% 10%, rgba(10,102,245,.14), transparent 70%); }
+  .wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 24px; }
 
-/* Botões */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:52px;padding:0 26px;border-radius:14px;font-weight:600;font-size:16px;transition:transform .15s,box-shadow .15s,background .15s;cursor:pointer;border:0;white-space:nowrap}
-.btn-p{background:var(--p);color:#fff;box-shadow:0 6px 0 var(--p2),0 14px 28px -8px rgba(10,102,245,.55)}
-.btn-p:hover{transform:translateY(-1px);box-shadow:0 7px 0 var(--p2),0 18px 32px -8px rgba(10,102,245,.6)}
-.btn-p:active{transform:translateY(5px);box-shadow:0 1px 0 var(--p2),0 6px 14px -6px rgba(10,102,245,.5)}
-.btn-o{background:var(--card);color:var(--t1);border:1px solid var(--line);box-shadow:var(--sombra)}
-.btn-o:hover{border-color:#cdd5e1}
-.btn-claro{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.18)}
-.btn-claro:hover{background:rgba(255,255,255,.14)}
-.btn-sm{height:42px;padding:0 18px;font-size:15px;border-radius:12px}
+  /* topo */
+  .topo { position: sticky; top: 0; z-index: 50; background: rgba(246,248,251,.82); backdrop-filter: saturate(180%) blur(14px); -webkit-backdrop-filter: saturate(180%) blur(14px); border-bottom: 1px solid var(--line); }
+  .topo .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; gap: 16px; }
+  .topo .logo { height: 30px; width: auto; }
+  .topo-dir { display: flex; align-items: center; gap: 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--sombra); font-size: 14px; font-weight: 600; color: var(--t2); }
+  .chip b { color: var(--p); }
+  .chip.pulo { animation: pulo .45s ease; }
+  @keyframes pulo { 40% { transform: scale(1.12); border-color: var(--p); } }
+  .som { width: 40px; height: 40px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--sombra); display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .som svg { width: 17px; height: 17px; stroke: var(--t2); }
+  .progresso { height: 3px; background: var(--line); }
+  .progresso i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--p), var(--c)); transition: width .6s cubic-bezier(.2,.9,.3,1.1); }
 
-/* Topo */
-.topo{position:sticky;top:0;z-index:50;background:rgba(246,248,251,.82);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
-.topo.rolou{border-color:var(--line)}
-.topo .wrap{display:flex;align-items:center;justify-content:space-between;height:72px;gap:16px}
-.topo img{height:30px;width:auto}
-.menu{display:flex;gap:30px;font-size:15px;font-weight:500;color:var(--t2)}
-.menu a:hover{color:var(--t1)}
-.acoes{display:flex;gap:10px;align-items:center}
-@media(max-width:900px){.menu{display:none}}
-@media(max-width:480px){.topo img{height:26px}}
+  /* telas */
+  .tela { display: none; padding: 64px 0 96px; animation: entra .5s ease both; }
+  .tela.on { display: block; }
+  @keyframes entra { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .grade { display: grid; gap: 56px; grid-template-columns: 1fr 1fr; align-items: center; }
+  .grade.topo-al { align-items: start; }
+  .selo { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 14px; font-weight: 500; color: var(--t2); box-shadow: var(--sombra); }
+  .selo b { background: #E8F0FF; color: var(--p); font-weight: 600; padding: 3px 10px; border-radius: 999px; font-size: 13px; }
+  .rotulo { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--p); }
+  h1 { font-size: clamp(38px, 5.6vw, 66px); line-height: 1.04; letter-spacing: -.035em; font-weight: 800; margin-top: 22px; }
+  h2 { font-size: clamp(28px, 3.8vw, 44px); line-height: 1.08; letter-spacing: -.03em; font-weight: 800; margin-top: 12px; }
+  .lead { font-size: 18px; color: var(--t2); margin-top: 18px; max-width: 600px; }
+  .pergunta-perfil { margin-top: 32px; font-size: 15px; font-weight: 700; }
+  .miudo { margin-top: 18px; font-size: 14px; color: var(--tm); display: flex; flex-wrap: wrap; gap: 16px; }
+  .miudo span::before { content: "✓ "; color: var(--verde); font-weight: 800; }
 
-/* Hero */
-.hero{position:relative;padding:72px 0 0;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:-200px -20% auto;height:760px;background:radial-gradient(600px 340px at 50% 30%,rgba(28,190,255,.18),transparent 70%),radial-gradient(700px 400px at 30% 10%,rgba(10,102,245,.14),transparent 70%);pointer-events:none}
-.hero .wrap{position:relative;text-align:center}
-.selo{display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 8px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:14px;font-weight:500;color:var(--t2);box-shadow:var(--sombra)}
-.selo b{background:#E8F0FF;color:var(--p);font-weight:600;padding:3px 10px;border-radius:999px;font-size:13px}
-h1{font-size:clamp(38px,6.4vw,72px);line-height:1.04;letter-spacing:-.035em;font-weight:800;margin:24px auto 0;max-width:900px}
-h1 em,h2 em{font-style:normal;background:linear-gradient(90deg,var(--p),var(--c));-webkit-background-clip:text;background-clip:text;color:transparent}
-.hero p.sub{font-size:clamp(17px,2vw,20px);color:var(--t2);max-width:640px;margin:22px auto 0}
-.hero .ctas{display:flex;gap:14px;justify-content:center;margin-top:34px;flex-wrap:wrap}
-.miudo{margin-top:16px;font-size:14px;color:var(--tm)}
-.vitrine{position:relative;margin:64px auto 0;max-width:1080px}
-.janela{border-radius:18px;overflow:hidden;background:#fff;box-shadow:var(--grande)}
-.janela .barra{height:34px;background:#EEF2F7;display:flex;align-items:center;gap:7px;padding:0 14px}
-.janela .barra i{width:11px;height:11px;border-radius:50%;background:#D5DCE6}
-.janela .barra span{margin-left:12px;font-size:12px;color:var(--tm);background:#fff;padding:3px 12px;border-radius:7px}
-.celular{position:absolute;right:-28px;bottom:-40px;width:230px;border-radius:36px;padding:9px;background:var(--ink);box-shadow:0 40px 70px -20px rgba(7,18,33,.55)}
-.celular img{border-radius:28px}
-.flutua{position:absolute;left:-36px;top:42%;background:var(--card);border-radius:16px;padding:14px 16px;box-shadow:var(--grande);display:flex;gap:12px;align-items:center;text-align:left;max-width:280px;animation:boia 5s ease-in-out infinite}
-.flutua .ic{flex:none;width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--p),var(--c));display:grid;place-items:center;color:#fff}
-.flutua b{display:block;font-size:14px}
-.flutua small{font-size:13px;color:var(--t2)}
-@keyframes boia{50%{transform:translateY(-8px)}}
-@media(max-width:1100px){.celular{right:8px}.flutua{left:8px}}
-@media(max-width:760px){.celular{width:150px;border-radius:26px;padding:6px;bottom:-24px}.celular img{border-radius:21px}.flutua{display:none}.janela .barra{height:24px}.janela .barra span{display:none}}
-.pe-hero{height:110px}
+  /* cartões e opções */
+  .cartao { background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--sombra); transition: transform .15s, box-shadow .15s, border-color .15s; }
+  button.cartao { cursor: pointer; text-align: left; }
+  button.cartao:hover { border-color: #BBD2F7; transform: translateY(-2px); box-shadow: 0 1px 2px rgba(7,18,33,.04), 0 18px 36px -14px rgba(10,102,245,.3); }
+  button.cartao:active { transform: translateY(2px); }
+  .perfis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .perfil { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; font-size: 15px; font-weight: 700; }
+  .ic { width: 42px; height: 42px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; background: #E8F0FF; color: var(--p); font-weight: 800; font-size: 14px; }
+  .ic svg { width: 21px; height: 21px; stroke: var(--p); }
+  .opcoes { display: grid; gap: 12px; margin-top: 28px; }
+  .op { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; font-size: 16px; font-weight: 600; line-height: 1.35; animation: entra .4s ease both; }
+  .op.escolhida { border-color: var(--p); background: #F2F7FF; box-shadow: 0 0 0 3px rgba(10,102,245,.15), var(--sombra); }
+  .op.escolhida .ic { background: linear-gradient(135deg, var(--p), var(--c)); color: #fff; }
+  .op.apagada { opacity: .35; pointer-events: none; }
 
-/* Números */
-.numeros{padding:28px 0 8px}
-.numeros .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.num{text-align:center;padding:10px}
-.num b{display:block;font-size:clamp(26px,3.4vw,38px);font-weight:800;letter-spacing:-.03em}
-.num span{font-size:14px;color:var(--t2)}
-@media(max-width:700px){.numeros .wrap{grid-template-columns:repeat(2,1fr)}}
+  /* botões (iguais ao site) */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 56px; padding: 0 26px; border-radius: 14px; font-weight: 700; font-size: 16px; transition: transform .15s, box-shadow .15s, background .15s; cursor: pointer; border: 0; width: 100%; }
+  .btn-p { background: var(--p); color: #fff; box-shadow: 0 6px 0 var(--p2), 0 14px 28px -8px rgba(10,102,245,.55); }
+  .btn-p:hover { transform: translateY(-1px); box-shadow: 0 7px 0 var(--p2), 0 18px 32px -8px rgba(10,102,245,.6); }
+  .btn-p:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--p2), 0 6px 14px -6px rgba(10,102,245,.5); }
+  .btn-v { background: var(--verde); color: #fff; box-shadow: 0 6px 0 #0B8A4E, 0 14px 28px -8px rgba(18,183,106,.55); }
+  .btn-v:active { transform: translateY(5px); box-shadow: 0 1px 0 #0B8A4E; }
+  .btn-ess { background: #fff; color: var(--p); border: 1.5px solid #BBD2F7; box-shadow: 0 5px 0 #D5E3F8, 0 14px 24px -14px rgba(10,102,245,.45); }
+  .btn-ess:active { transform: translateY(4px); box-shadow: 0 1px 0 #D5E3F8; }
+  .acao { margin-top: 20px; }
 
-/* Seções */
-section{padding:110px 0}
-@media(max-width:700px){section{padding:76px 0}}
-.rotulo{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--p);margin-bottom:14px}
-h2{font-size:clamp(30px,4.4vw,50px);line-height:1.08;letter-spacing:-.03em;font-weight:800}
-.lead{font-size:18px;color:var(--t2);margin-top:18px;max-width:600px}
-.centro{text-align:center}.centro .lead{margin-left:auto;margin-right:auto}
+  /* ferida e solução */
+  .ferida { margin-top: 20px; overflow: hidden; animation: entra .45s ease both; }
+  .ferida .dor { padding: 18px 20px; background: #FFF4F4; border-bottom: 1px solid #FBDADB; }
+  .ferida .cura { padding: 18px 20px; display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: start; }
+  .ferida small { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+  .ferida .dor small { color: var(--vermelho); }
+  .ferida .cura small { color: var(--verde); }
+  .ferida .dor p { font-size: 18px; font-weight: 700; letter-spacing: -.01em; line-height: 1.35; }
+  .ferida .cura p { color: var(--t2); font-size: 15px; line-height: 1.6; }
+  .ferida .cura p b { color: var(--t1); }
+  .ferida .cura img { width: 96px; height: 72px; object-fit: cover; object-position: top left; border-radius: 10px; border: 1px solid var(--line); }
 
+  /* janela do sistema */
+  .janela { border-radius: 18px; overflow: hidden; background: #fff; box-shadow: var(--grande); }
+  .janela .barra { height: 34px; background: #EEF2F7; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+  .janela .barra i { width: 11px; height: 11px; border-radius: 50%; background: #D5DCE6; }
+  .janela .barra span { margin-left: 12px; font-size: 12px; color: var(--tm); background: #fff; padding: 3px 12px; border-radius: 7px; }
+  .jan-corpo { padding: 22px; }
+  .jan-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .jan-topo b { display: block; font-size: 19px; letter-spacing: -.02em; }
+  .jan-topo small { display: block; color: var(--t2); font-size: 13px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--verde); background: #E7F8EF; padding: 5px 10px; border-radius: 999px; white-space: nowrap; }
+  .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--verde); }
+  .medidor { margin-top: 18px; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: linear-gradient(180deg, #fff, #F8FAFD); }
+  .medidor-l { display: flex; align-items: baseline; justify-content: space-between; }
+  .medidor-l span { font-size: 13px; color: var(--t2); font-weight: 600; }
+  .medidor-l b { font-size: 30px; font-weight: 800; letter-spacing: -.03em; }
+  .medidor-l b small { font-size: 14px; color: var(--tm); font-weight: 600; }
+  .medidor-b { margin-top: 10px; height: 8px; border-radius: 999px; background: #EEF2F7; overflow: hidden; }
+  .medidor-b i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ouro), var(--vermelho)); transition: width .8s ease; }
+  .itens { display: grid; gap: 8px; margin-top: 12px; }
+  .item { display: grid; grid-template-columns: 38px 1fr auto; gap: 12px; align-items: center; padding: 11px; border-radius: 13px; border: 1px solid var(--line); background: #fff; }
+  .item .ic { width: 38px; height: 38px; border-radius: 10px; font-size: 12px; }
+  .item b { display: block; font-size: 14px; }
+  .item small { display: block; font-size: 12.5px; color: var(--tm); margin-top: 1px; }
+  .estado { font-size: 11.5px; font-weight: 700; padding: 5px 9px; border-radius: 999px; color: var(--tm); background: #EEF2F7; white-space: nowrap; }
+  .estado.analisando { color: #B26A00; background: #FFF4DE; animation: pisca 1s infinite; }
+  .estado.vazando { color: #C92A2F; background: #FFE9EA; }
+  @keyframes pisca { 50% { opacity: .4; } }
+  .vaz { grid-template-columns: 38px 1fr; align-items: start; animation: entra .45s ease both; }
+  .vaz .sol { display: flex; gap: 6px; font-size: 13px; color: #0B8A4E; margin-top: 6px; line-height: 1.45; }
+  .flutua { position: absolute; left: -36px; bottom: 30px; background: var(--card); border-radius: 16px; padding: 14px 16px; box-shadow: var(--grande); display: flex; gap: 12px; align-items: center; max-width: 280px; animation: boia 5s ease-in-out infinite; }
+  .flutua .ic { background: linear-gradient(135deg, var(--p), var(--c)); color: #fff; }
+  .flutua b { display: block; font-size: 14px; }
+  .flutua small { font-size: 13px; color: var(--t2); }
+  @keyframes boia { 50% { transform: translateY(-8px); } }
+  .palco-capa { position: relative; }
 
-/* Vídeo: palco escuro com moldura 3D e capítulos */
-.video-sec{padding:50px 0 40px}
-.palco{position:relative;margin:0 auto;max-width:1120px;border-radius:34px;padding:56px 48px 52px;background:
-  radial-gradient(700px 360px at 50% -40px,rgba(28,190,255,.28),transparent 70%),
-  radial-gradient(600px 400px at 100% 100%,rgba(10,102,245,.35),transparent 65%),
-  linear-gradient(180deg,#0B1830 0%,#071221 100%);
-  color:#E9EEF7;box-shadow:0 60px 120px -50px rgba(7,18,33,.8),0 0 0 1px rgba(255,255,255,.06) inset;overflow:hidden}
-.palco::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(ellipse at 50% 30%,#000 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 30%,transparent 75%);pointer-events:none}
-.palco > *{position:relative}
-.palco .rotulo{color:var(--c)}
-.palco h2{color:#fff}
-.palco .lead{color:#9AA7BD;margin-left:auto;margin-right:auto}
-.narrador{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:6px 16px 6px 6px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:14px;color:#C9D3E3}
-.narrador img{width:34px;height:34px;border-radius:50%;object-fit:contain;padding:7px;background:#fff;box-shadow:0 0 0 2px rgba(28,190,255,.45)}
-.narrador b{color:#fff;font-weight:600}
-.narrador em{font-style:normal}
-@media(max-width:600px){.narrador .so-pc{display:none}.narrador{font-size:13px}}
-.cena3d{perspective:1800px;margin-top:40px}
-.moldura{position:relative;border-radius:20px;padding:10px;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.14);
-  transform:rotateX(10deg) scale(.97);transform-origin:50% 0;transition:transform .7s cubic-bezier(.2,.7,.2,1),box-shadow .7s;
-  box-shadow:0 70px 100px -40px rgba(10,102,245,.75),0 30px 60px -30px rgba(0,0,0,.6)}
-.cena3d:hover .moldura,.moldura.tocando{transform:none;box-shadow:0 50px 90px -40px rgba(10,102,245,.6),0 20px 40px -24px rgba(0,0,0,.5)}
-.moldura .barra{display:flex;align-items:center;gap:7px;padding:4px 6px 12px}
-.moldura .barra i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.22)}
-.moldura .barra i:first-child{background:#FF5F57}.moldura .barra i:nth-child(2){background:#FEBC2E}.moldura .barra i:nth-child(3){background:#28C840}
-.moldura .barra span{margin:0 auto;font-size:12px;color:#9AA7BD;letter-spacing:.02em;transform:translateX(-20px)}
-.video-caixa{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9}
-.video-caixa video{width:100%;height:100%;display:block;object-fit:cover;background:#000}
-.video-play{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:0;cursor:pointer;
-  background:radial-gradient(circle at 50% 50%,rgba(7,18,33,.35),rgba(7,18,33,.78));color:#fff;font:inherit;transition:background .3s}
-.video-play:hover{background:radial-gradient(circle at 50% 50%,rgba(7,18,33,.2),rgba(7,18,33,.65))}
-.video-play .bola{position:relative;width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--c));display:grid;place-items:center;box-shadow:0 8px 0 var(--p2),0 24px 50px -10px rgba(10,102,245,.8);transition:transform .2s}
-.video-play .bola::after{content:"";position:absolute;inset:-12px;border-radius:50%;border:2px solid rgba(28,190,255,.6);animation:onda 2s ease-out infinite}
-@keyframes onda{from{transform:scale(.85);opacity:1}to{transform:scale(1.35);opacity:0}}
-.video-play:hover .bola{transform:translateY(-2px) scale(1.05)}
-.video-play b{font-size:20px;font-weight:700;letter-spacing:-.01em;text-shadow:0 2px 14px rgba(0,0,0,.5)}
-.video-play small{font-size:14px;color:#C9D3E3;margin-top:-8px}
-.video-caixa.tocando .video-play{display:none}
-.capitulos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:28px}
-.cap{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#C9D3E3;font:inherit;font-size:14px;text-align:left;cursor:pointer;transition:background .2s,border-color .2s,transform .2s}
-.cap:hover{background:rgba(255,255,255,.09);transform:translateY(-1px)}
-.cap time{flex:none;font-size:12px;font-weight:700;color:var(--c);background:rgba(28,190,255,.12);padding:3px 7px;border-radius:7px;font-variant-numeric:tabular-nums}
-.cap.ativo{background:rgba(10,102,245,.28);border-color:rgba(28,190,255,.55);color:#fff}
-@media(max-width:900px){.capitulos{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.palco{padding:36px 14px 18px;border-radius:24px}.moldura{padding:6px;transform:none}.moldura .barra{display:none}.video-play .bola{width:70px;height:70px}.video-play b{font-size:16px}.cap{font-size:13px;padding:10px}}
+  /* raio-x */
+  .nota { display: flex; align-items: flex-end; gap: 10px; margin-top: 18px; }
+  .nota b { font-size: clamp(76px, 10vw, 120px); font-weight: 800; letter-spacing: -.05em; line-height: .85; }
+  .nota span { font-size: 15px; color: var(--t2); margin-bottom: 10px; font-weight: 600; }
+  .nivel { display: inline-flex; margin-top: 16px; font-size: 13px; font-weight: 800; letter-spacing: .06em; color: #fff; background: var(--vermelho); border-radius: 999px; padding: 6px 14px; }
 
-/* Dores */
-.dores{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px}
-.dor{background:var(--card);border:1px solid var(--line);border-radius:var(--raio);padding:30px;box-shadow:var(--sombra)}
-.dor .antes{font-size:15px;color:var(--tm);text-decoration:line-through;text-decoration-color:rgba(217,45,32,.5)}
-.dor h3{font-size:21px;letter-spacing:-.02em;margin:12px 0 8px}
-.dor p{color:var(--t2);font-size:16px}
-.ico{width:48px;height:48px;border-radius:14px;background:#E8F0FF;color:var(--p);display:grid;place-items:center;margin-bottom:18px}
-@media(max-width:900px){.dores{grid-template-columns:1fr}}
+  /* vídeo: palco escuro igual ao site */
+  .palco { position: relative; border-radius: 34px; padding: 50px 44px 44px; overflow: hidden; color: #E9EEF7;
+    background: radial-gradient(700px 360px at 50% -40px, rgba(28,190,255,.28), transparent 70%), radial-gradient(600px 400px at 100% 100%, rgba(10,102,245,.35), transparent 65%), linear-gradient(180deg, #0B1830 0%, #071221 100%);
+    box-shadow: 0 60px 120px -50px rgba(7,18,33,.8), 0 0 0 1px rgba(255,255,255,.06) inset; }
+  .palco::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); }
+  .palco > * { position: relative; }
+  .palco .rotulo { color: var(--c); }
+  .palco h2 { color: #fff; }
+  .palco .lead { color: #9AA7BD; }
+  .moldura { margin-top: 30px; border-radius: 18px; overflow: hidden; background: #0D1B30; box-shadow: 0 50px 100px -30px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.08); }
+  .moldura .barra { height: 34px; background: #13233D; display: flex; align-items: center; gap: 7px; padding: 0 14px; color: #8EA0BD; font-size: 12px; }
+  .moldura .barra i { width: 11px; height: 11px; border-radius: 50%; }
+  .moldura .barra i:nth-child(1) { background: #FF5F57; } .moldura .barra i:nth-child(2) { background: #FEBC2E; } .moldura .barra i:nth-child(3) { background: #28C840; }
+  .moldura .barra span { margin: 0 auto; transform: translateX(-30px); }
+  .video-caixa { position: relative; background: #000; aspect-ratio: 16 / 9; }
+  .video-caixa video { width: 100%; height: 100%; display: block; background: #000; }
+  .video-play { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border: 0; cursor: pointer; color: #fff; font-size: 16px; font-weight: 700;
+    background: radial-gradient(circle at 50% 50%, rgba(7,18,33,.35), rgba(7,18,33,.78)); }
+  .video-play .bola { width: 92px; height: 92px; border-radius: 50%; background: linear-gradient(135deg, var(--p), var(--c)); display: grid; place-items: center; box-shadow: 0 8px 0 var(--p2), 0 24px 50px -10px rgba(10,102,245,.8); animation: batida 1.6s infinite; }
+  .video-play .bola svg { width: 32px; height: 32px; margin-left: 5px; }
+  @keyframes batida { 50% { transform: scale(1.06); } }
+  .ctrl { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 12px; background: linear-gradient(transparent, rgba(7,18,33,.85)); opacity: 0; transition: opacity .2s; }
+  .ctrl { opacity: 1; }
+  .ctrl button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: #fff; cursor: pointer; font-size: 12px; }
+  .vol { -webkit-appearance: none; appearance: none; width: 110px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, #1CBEFF var(--v, 100%), rgba(255,255,255,.25) var(--v, 100%)); cursor: pointer; }
+  .vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .vol::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+  @media (max-width: 600px) { .vol { width: 70px; } }
+  .ctrl span { margin-left: auto; font-size: 12px; color: #C9D3E3; font-variant-numeric: tabular-nums; }
+  .missao { margin-top: 20px; padding: 20px 22px; border-radius: 20px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); display: grid; grid-template-columns: 1fr auto; gap: 14px 20px; align-items: center; }
+  .missao small { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--c); }
+  .missao strong { display: block; font-size: 17px; color: #fff; margin-top: 4px; }
+  .missao .pct { font-size: 24px; font-weight: 800; color: var(--c); font-variant-numeric: tabular-nums; }
+  .missao-b { grid-column: span 2; position: relative; height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); }
+  .missao-b i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--p), var(--c)); transition: width .4s linear; }
+  .missao-b b { position: absolute; left: 50%; top: -5px; bottom: -5px; width: 3px; border-radius: 2px; background: var(--ouro); box-shadow: 0 0 10px var(--ouro); }
+  .missao p { grid-column: span 2; font-size: 13.5px; color: #9AA7BD; }
+  .liberado { display: none; margin-top: 18px; animation: aparece .6s cubic-bezier(.2,.9,.3,1.3) both; }
+  .liberado.on { display: block; }
+  .planos-area { display: none; padding-top: 64px; scroll-margin-top: 80px; }
+  .planos-area.on { display: block; animation: entra .6s ease both; }
+  @keyframes aparece { from { opacity: 0; transform: scale(.92); } }
 
-/* Agente IA — fundo escuro */
-.escuro{background:var(--ink);color:#E9EEF7;position:relative;overflow:hidden}
-.escuro::before{content:"";position:absolute;width:900px;height:900px;right:-300px;top:-300px;background:radial-gradient(circle,rgba(10,102,245,.32),transparent 60%);pointer-events:none}
-.escuro .lead{color:#9AA7BD}
-.escuro .rotulo{color:var(--c)}
-.dupla{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;position:relative}
-@media(max-width:960px){.dupla{grid-template-columns:1fr;gap:44px}}
-.lista{list-style:none;margin-top:30px;display:grid;gap:16px}
-.lista li{display:flex;gap:14px;font-size:16px}
-.lista li svg{flex:none;margin-top:3px;color:var(--c)}
-.lista b{color:#fff}
-.chat{background:var(--ink2);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:22px;box-shadow:0 40px 80px -30px rgba(0,0,0,.6)}
-.chat-topo{display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:18px}
-.chat-topo .av{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--p),var(--c));display:grid;place-items:center;color:#fff}
-.chat-topo b{font-size:15px;color:#fff;display:block}
-.chat-topo small{font-size:13px;color:#7F8DA6;display:flex;align-items:center;gap:6px}
-.chat-topo small i{width:8px;height:8px;border-radius:50%;background:var(--verde);box-shadow:0 0 0 0 rgba(18,183,106,.6);animation:pulsa 2s infinite}
-@keyframes pulsa{70%{box-shadow:0 0 0 8px rgba(18,183,106,0)}100%{box-shadow:0 0 0 0 rgba(18,183,106,0)}}
-.msg{max-width:88%;padding:12px 15px;border-radius:16px;font-size:15px;line-height:1.5;margin-bottom:12px;opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s}
-.chat.vivo .msg{opacity:1;transform:none}
-.msg.eu{margin-left:auto;background:var(--p);color:#fff;border-bottom-right-radius:5px}
-.msg.ia{background:rgba(255,255,255,.06);color:#DCE3EF;border-bottom-left-radius:5px}
-.msg.ia ul{margin:8px 0 0 18px}
-.passo{display:flex;align-items:center;gap:8px;font-size:13px;color:#7F8DA6;margin:-4px 0 12px;opacity:0;transition:opacity .5s}
-.chat.vivo .passo{opacity:1}
-.passo svg{color:var(--verde)}
+  /* planos (iguais ao site) */
+  .planos { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin: 44px auto 0; max-width: 940px; align-items: stretch; }
+  .plano { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 26px; padding: 34px; display: flex; flex-direction: column; box-shadow: var(--sombra); }
+  .plano.ess { background: linear-gradient(180deg, #FFFFFF 0%, #F2F7FF 100%); border: 1px solid #D6E4FA; box-shadow: 0 30px 60px -32px rgba(10,102,245,.35), 0 1px 2px rgba(7,18,33,.04); }
+  .plano.ess::before { content: ""; position: absolute; left: 24px; right: 24px; top: 0; height: 4px; border-radius: 0 0 6px 6px; background: linear-gradient(90deg, var(--p), var(--c)); }
+  .plano.top { background: var(--ink); color: #E9EEF7; border-color: var(--ink); box-shadow: 0 40px 80px -30px rgba(10,102,245,.55); }
+  .plano .tag { position: absolute; top: -14px; left: 34px; background: linear-gradient(90deg, var(--p), var(--c)); color: #fff; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 999px; }
+  .plano.ess .tag { background: #E8F0FF; color: var(--p); box-shadow: 0 0 0 4px #fff; }
+  .plano .tag.rec { background: linear-gradient(90deg, #12B76A, #0B8A4E); color: #fff; box-shadow: 0 0 0 4px #fff; }
+  .plano.top .tag.rec { box-shadow: 0 0 0 4px var(--bg); }
+  .plano h3 { font-size: 22px; letter-spacing: -.02em; }
+  .plano .desc { font-size: 15px; color: var(--t2); margin-top: 6px; }
+  .plano.top .desc { color: #9AA7BD; }
+  .preco { margin: 22px 0 4px; display: flex; align-items: baseline; gap: 6px; }
+  .preco small { font-size: 18px; font-weight: 600; }
+  .preco b { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+  .preco span { font-size: 16px; color: var(--t2); }
+  .plano.top .preco span { color: #9AA7BD; }
+  .plano ul { list-style: none; margin: 22px 0 28px; display: grid; gap: 11px; flex: 1; align-content: start; }
+  .plano li { display: flex; gap: 11px; font-size: 15px; }
+  .plano li::before { content: "✓"; flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: #E8F0FF; color: var(--p); margin-top: 1px; }
+  .plano.top li::before { background: rgba(28,190,255,.14); color: var(--c); }
+  .plano li.nao { color: var(--tm); }
+  .plano li.nao::before { content: "–"; background: #EEF1F6; color: #B6C0CF; }
+  .aviso-email { margin-top: 14px; font-size: 13px; line-height: 19px; color: var(--t2); }
+  .aviso-email b { color: var(--t1); font-weight: 600; }
+  .plano.top .aviso-email { color: #B9C3D3; }
+  .plano.top .aviso-email b { color: #fff; }
+  .seus { max-width: 940px; margin: 30px auto 0; padding: 22px 24px; }
+  .seus > small { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--verde); margin-bottom: 4px; }
 
-/* Funil */
-.foto{border-radius:18px;overflow:hidden;box-shadow:var(--grande);background:#fff}
-.botao-ia{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 18px;border-radius:12px;font-weight:600;font-size:15px}
-.botao-ia.on{background:var(--p);color:#fff;box-shadow:0 5px 0 var(--p2)}
-.botao-ia.off{background:#fff;color:var(--p);border:1px solid #C9D9F7;box-shadow:0 5px 0 #DCE6F7}
-.botao-ia i{width:8px;height:8px;border-radius:50%}
-.botao-ia.on i{background:#4ADE80;animation:pulsa 2s infinite}
-.botao-ia.off i{background:#B6C0CF}
-.botoes-ia{display:flex;gap:14px;flex-wrap:wrap;margin-top:28px}
-.etapas{display:grid;gap:12px;margin-top:30px}
-.etapa{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
-.etapa .cor{flex:none;width:6px;align-self:stretch;border-radius:4px}
-.etapa b{display:block;font-size:16px}
-.etapa span{font-size:15px;color:var(--t2)}
+  /* medalha, aviso e confete */
+  .modal { position: fixed; inset: 0; z-index: 80; display: none; place-items: center; padding: 20px; background: rgba(7,18,33,.45); backdrop-filter: blur(6px); }
+  .modal.on { display: grid; }
+  .modal .janela { width: min(100%, 400px); text-align: center; animation: aparece .55s cubic-bezier(.2,.9,.3,1.3) both; }
+  .modal .jan-corpo { padding: 30px 26px 26px; }
+  .medalha-ic { width: 92px; height: 92px; margin: 0 auto 16px; border-radius: 26px; display: grid; place-items: center; font-size: 42px; background: linear-gradient(135deg, var(--p), var(--c)); box-shadow: 0 8px 0 var(--p2), 0 24px 50px -10px rgba(10,102,245,.7); animation: gira 1.2s ease both; }
+  @keyframes gira { from { transform: rotateY(360deg) scale(.6); } }
+  .modal h3 { font-size: 24px; font-weight: 800; letter-spacing: -.03em; margin-top: 8px; }
+  .modal p { color: var(--t2); font-size: 15px; margin-top: 8px; }
+  .aviso { position: fixed; left: 50%; top: 88px; z-index: 90; transform: translate(-50%, -14px); opacity: 0; pointer-events: none; transition: all .35s cubic-bezier(.2,.9,.3,1.3);
+    background: var(--ink); color: #fff; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 12px; box-shadow: var(--grande); white-space: nowrap; }
+  .aviso.on { opacity: 1; transform: translate(-50%, 0); }
+  .aviso b { color: var(--c); }
+  canvas#confete { position: fixed; inset: 0; pointer-events: none; z-index: 95; }
 
-/* WhatsApp */
-.cel-grande{max-width:330px;margin:0 auto;border-radius:44px;padding:11px;background:var(--ink);box-shadow:0 50px 90px -30px rgba(7,18,33,.5)}
-.cel-grande .tela{border-radius:34px;overflow:hidden;aspect-ratio:390/760}
-.cel-grande img{width:100%;height:100%;object-fit:cover;object-position:top}
-.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
-.chip{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:15px;font-weight:500}
-.chip svg{color:var(--p)}
-
-/* Recursos */
-.grade{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:56px}
-.rec{background:var(--card);border:1px solid var(--line);border-radius:var(--raio);padding:26px;transition:transform .2s,box-shadow .2s}
-.rec:hover{transform:translateY(-3px);box-shadow:var(--sombra)}
-.rec h3{font-size:18px;letter-spacing:-.01em;margin-bottom:6px}
-.rec p{font-size:15px;color:var(--t2)}
-@media(max-width:900px){.grade{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.grade{grid-template-columns:1fr}}
-
-/* Passos */
-.passos{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:56px;counter-reset:p}
-.p3{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--raio);padding:30px}
-.p3::before{counter-increment:p;content:counter(p);display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:var(--ink);color:#fff;font-weight:800;font-size:18px;margin-bottom:18px}
-.p3 h3{font-size:20px;letter-spacing:-.02em;margin-bottom:8px}
-.p3 p{color:var(--t2)}
-@media(max-width:900px){.passos{grid-template-columns:1fr}}
-
-/* Seguradoras */
-.faixa{background:linear-gradient(135deg,#E8F0FF,#E4F7FF);border-radius:28px;padding:56px;display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:center}
-.faixa .marcas{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.faixa .marcas div{background:#fff;border-radius:14px;padding:16px;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px;box-shadow:var(--sombra)}
-.faixa .marcas svg{color:var(--p)}
-@media(max-width:900px){.faixa{grid-template-columns:1fr;padding:32px 22px}}
-
-/* Planos */
-.planos{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:56px auto 0;max-width:940px}
-.plano{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:34px;display:flex;flex-direction:column;box-shadow:var(--sombra)}
-.plano.top{background:var(--ink);color:#E9EEF7;border-color:var(--ink);position:relative;box-shadow:0 40px 80px -30px rgba(10,102,245,.55)}
-.plano .tag{position:absolute;top:-14px;left:34px;background:linear-gradient(90deg,var(--p),var(--c));color:#fff;font-size:13px;font-weight:700;padding:6px 14px;border-radius:999px}
-.plano h3{font-size:22px;letter-spacing:-.02em}
-.plano .desc{font-size:15px;color:var(--t2);margin-top:6px}
-.plano.top .desc{color:#9AA7BD}
-.preco{margin:24px 0 6px;display:flex;align-items:baseline;gap:6px}
-.preco small{font-size:18px;font-weight:600}
-.preco b{font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1}
-.preco span{font-size:16px;color:var(--t2)}
-.plano.top .preco span{color:#9AA7BD}
-.plano ul{list-style:none;margin:24px 0 30px;display:grid;gap:12px;flex:1;align-content:start}
-.plano li{display:flex;gap:11px;font-size:15px}
-.plano li svg{flex:none;margin-top:2px;color:var(--p)}
-.plano.top li svg{color:var(--c)}
-.plano li.nao{color:var(--tm)}
-.plano li.nao svg{color:#B6C0CF}
-.plano .btn{width:100%}
-.aviso-email{display:flex;gap:8px;align-items:flex-start;margin:14px 2px 0;font-size:13px;line-height:19px;color:#5B6678;text-align:left}
-.aviso-email svg{flex:none;margin-top:2px;color:#0A66F5}
-.aviso-email b{color:#071221;font-weight:600}
-.plano.top .aviso-email{color:#B9C3D3}
-.plano.top .aviso-email svg{color:#4DA3FF}
-.plano.top .aviso-email b{color:#FFFFFF}
-.recarga{max-width:940px;margin:22px auto 0;background:var(--card);border:1px dashed #C9D9F7;border-radius:22px;padding:24px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-.recarga b{font-size:17px}
-.recarga p{font-size:15px;color:var(--t2);margin-top:4px;max-width:480px}
-.valores{display:flex;gap:10px;flex-wrap:wrap}
-.valores span{padding:10px 16px;border-radius:12px;background:#E8F0FF;color:var(--p);font-weight:700;font-size:15px}
-@media(max-width:820px){.planos{grid-template-columns:1fr}.plano{padding:28px 22px}}
-
-
-/* Cartão Essencial: claro, com acabamento azul e a "prova" do que ele entrega (a IA ligada no funil). */
-.plano.ess{position:relative;overflow:visible;background:linear-gradient(180deg,#FFFFFF 0%,#F2F7FF 100%);border:1px solid #D6E4FA;box-shadow:0 30px 60px -32px rgba(10,102,245,.35),0 1px 2px rgba(7,18,33,.04)}
-.plano.ess::before{content:"";position:absolute;left:24px;right:24px;top:0;height:4px;border-radius:0 0 6px 6px;background:linear-gradient(90deg,var(--p),var(--c))}
-.plano.ess .tag{background:#E8F0FF;color:var(--p);box-shadow:0 0 0 4px #fff}
-.plano.ess .preco b{background:linear-gradient(90deg,var(--ink) 0%,#123A7A 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.plano .prova{margin:20px 0 4px;padding:16px;border-radius:18px;background:#fff;border:1px solid #DCE7F8;display:flex;align-items:center;gap:14px}
-.plano .prova .botao-ia{height:38px;padding:0 14px;font-size:14px;flex:none}
-.plano .prova p{font-size:14px;color:var(--t2);line-height:1.4}
-.plano .prova p b{color:var(--t1)}
-.plano li svg{width:20px;height:20px;padding:3px;border-radius:50%;background:#E8F0FF;box-sizing:border-box;margin-top:0}
-.plano.top li svg{background:rgba(28,190,255,.14)}
-.plano li.nao svg{background:#EEF1F6}
-.plano.ess .btn-ess{background:#fff;color:var(--p);border:1.5px solid #BBD2F7;box-shadow:0 5px 0 #D5E3F8,0 14px 24px -14px rgba(10,102,245,.45)}
-.plano.ess .btn-ess:hover{transform:translateY(-1px);border-color:var(--p)}
-.plano.ess .btn-ess:active{transform:translateY(4px);box-shadow:0 1px 0 #D5E3F8}
-.plano .ideal{margin:-6px 0 24px;padding:16px 18px;border-radius:16px;background:linear-gradient(135deg,#E8F0FF,#E4F7FF);display:flex;gap:12px;align-items:flex-start}
-.plano .ideal svg{flex:none;color:var(--p);margin-top:1px}
-.plano .ideal p{font-size:14px;line-height:1.45;color:var(--t2)}
-.plano .ideal b{display:block;color:var(--t1);font-size:14px;margin-bottom:2px}
-@media(max-width:480px){.plano .prova{flex-direction:column;align-items:flex-start}}
-
-/* Perguntas */
-.faq{max-width:780px;margin:48px auto 0}
-details{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:12px;overflow:hidden}
-summary{list-style:none;cursor:pointer;padding:20px 22px;font-weight:600;font-size:17px;display:flex;justify-content:space-between;gap:16px;align-items:center}
-summary::-webkit-details-marker{display:none}
-summary::after{content:"+";font-size:24px;font-weight:400;color:var(--p);transition:transform .2s;flex:none}
-details[open] summary::after{transform:rotate(45deg)}
-details p{padding:0 22px 20px;color:var(--t2);font-size:16px}
-
-/* Final */
-.final{text-align:center}
-.final .caixa{background:var(--ink);border-radius:32px;padding:80px 32px;color:#fff;position:relative;overflow:hidden}
-.final .caixa::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%,rgba(28,190,255,.28),transparent 70%)}
-.final .caixa > *{position:relative}
-.final img.emb{width:64px;margin:0 auto 26px}
-.final .lead{color:#9AA7BD;margin-left:auto;margin-right:auto}
-.final .ctas{display:flex;gap:14px;justify-content:center;margin-top:34px;flex-wrap:wrap}
-@media(max-width:600px){.final .caixa{padding:56px 20px;border-radius:24px}.btn{width:100%}.hero .ctas .btn{width:auto}}
-
-footer{padding:48px 0 60px;color:var(--tm);font-size:14px}
-footer .wrap{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
-footer img{height:24px;width:auto}
-footer nav{display:flex;gap:22px}
-footer a:hover{color:var(--t1)}
-
-/* Entrada suave ao rolar */
-.sobe{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
-.sobe.ok{opacity:1;transform:none}
-@media(prefers-reduced-motion:reduce){.sobe,.msg,.passo{opacity:1!important;transform:none!important;transition:none}.flutua{animation:none}}
+  @media (max-width: 900px) {
+    .grade, .planos { grid-template-columns: 1fr; gap: 32px; }
+    .so-pc, .flutua { display: none; }
+    .tela { padding: 34px 0 70px; }
+    .wrap { padding: 0 16px; }
+    .perfis { grid-template-columns: 1fr 1fr; }
+    .palco { padding: 30px 16px 22px; border-radius: 24px; }
+    .plano { padding: 28px 22px; }
+    .topo .logo { height: 26px; }
+    #chipPasso { display: none; }
+    .fixo-cel { position: sticky; bottom: 0; z-index: 10; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 35%); }
+    .palco .fixo-cel { background: none; }
+  }
 </style>
 </head>
 <body>
+<div class="brilho"></div>
 
-<header class="topo" id="topo">
+<header class="topo">
   <div class="wrap">
-    <a href="#"><img src="/assets/evox/evox-logo.png" alt="EVOX"></a>
-    <nav class="menu">
-      <a href="#agente">Agente IA</a>
-      <a href="#funil">Funil</a>
-      <a href="#recursos">Recursos</a>
-      <a href="#planos">Planos</a>
-      <a href="#perguntas">Perguntas</a>
-    </nav>
-    <div class="acoes">
-      <a class="btn btn-p btn-sm" href="#planos">Quero o EVOX</a>
+    <a href="#" class="inicio" onclick="reiniciar(event)" title="Voltar ao início"><img class="logo" src="img/evox-logo.png" alt="EVOX"></a>
+    <div class="topo-dir">
+      <span class="chip" id="chipPasso">Raio-X <b id="passoTxt">0/5</b></span>
+      <span class="chip" id="chipXp">⚡ <b id="pts">0</b> XP</span>
+      <button class="som" id="som" onclick="alternarSom()" aria-label="Ligar ou desligar o som"></button>
     </div>
   </div>
+  <div class="progresso"><i id="barra"></i></div>
 </header>
 
 <main>
-  <!-- HERO -->
-  <div class="hero">
-    <div class="wrap">
-      <span class="selo sobe"><b>Novo</b> Feito só para corretor de seguros</span>
-      <h1 class="sobe">O CRM que <em>atende, acompanha e vende</em> junto com você</h1>
-      <p class="sub sobe">Funil de vendas, WhatsApp, agenda e mensalidades num lugar só. E um Agente IA que responde seus leads na hora, dia e noite, enquanto você fecha negócio.</p>
-      <div class="ctas sobe">
-        <a class="btn btn-p" href="#planos">Quero o EVOX
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        <a class="btn btn-o" href="#video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>Ver o vídeo</a>
+  <!-- CAPA -->
+  <section class="tela on" id="t-capa">
+    <div class="wrap grade">
+      <div>
+        <span class="selo"><b>Raio-X</b> Para corretor de seguros · 60s</span>
+        <h1>Quantas vendas de seguro <em>escaparam este mês</em> sem você perceber?</h1>
+        <p class="lead">Responda 5 perguntas rápidas, descubra onde a sua corretora está perdendo dinheiro e libere a apresentação que mostra como o EVOX fecha cada buraco com IA.</p>
+        <p class="pergunta-perfil">Para começar: o que você mais vende?</p>
+        <div class="perfis" id="perfis"></div>
+        <p class="miudo"><span>Leva 60 segundos</span><span>Diagnóstico na hora</span><span>Sem cadastro</span></p>
       </div>
-      <p class="miudo sobe">Funciona no computador e no celular.</p>
-
-      <div class="vitrine sobe">
+      <div class="palco-capa so-pc">
         <div class="janela">
-          <div class="barra"><i></i><i></i><i></i><span>app.evox.com.br</span></div>
-          <img src="/site/img/painel.webp?v=3" alt="Painel do EVOX com o funil de vendas" width="2880" height="1800">
+          <div class="barra"><i></i><i></i><i></i><span>app.evox.com.br/raio-x</span></div>
+          <div class="jan-corpo">
+            <div class="jan-topo"><div><b>Raio-X da corretora</b><small>5 pontos onde a venda costuma escapar</small></div><span class="status">Pronto</span></div>
+            <div class="itens" id="itensCapa"></div>
+          </div>
         </div>
-        <div class="flutua">
-          <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div>
-          <div><b>Lead respondido em 8 segundos</b><small>O Agente IA já qualificou e moveu o card</small></div>
-        </div>
-        <div class="celular"><img src="/site/img/celular.webp?v=3" alt="EVOX no celular" width="780" height="1688"></div>
+        <div class="flutua"><span class="ic">✦</span><div><b>Diagnóstico em 60 segundos</b><small>Responda e veja seus vazamentos</small></div></div>
       </div>
-      <div class="pe-hero"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- NÚMEROS -->
-  <div class="numeros">
-    <div class="wrap">
-      <div class="num sobe"><b>24h</b><span>atendimento do lead</span></div>
-      <div class="num sobe"><b>1 agente</b><span>por etapa do funil</span></div>
-      <div class="num sobe"><b>0</b><span>follow-up esquecido</span></div>
-      <div class="num sobe"><b>PC + celular</b><span>onde você estiver</span></div>
-    </div>
-  </div>
-
-  <!-- VÍDEO -->
-  <section class="video-sec" id="video">
-    <div class="wrap">
-      <div class="palco centro sobe">
-        <span class="rotulo">Veja funcionando</span>
-        <h2>O EVOX <em>por dentro</em>, em 3 minutos</h2>
-        <p class="lead">O funil, a IA atendendo um lead de verdade no WhatsApp, e o Agente IA criando uma campanha na Meta sozinho, como um gestor de tráfego.</p>
-        <span class="narrador"><img src="/assets/evox/evox-emblema.png" alt=""><span>Apresentado por <b>Daniel Baptista</b><em class="so-pc">, corretor de seguros</em></span></span>
-        <div class="cena3d">
-          <div class="moldura" id="moldura">
-            <div class="barra"><i></i><i></i><i></i><span>EVOX · Apresentação</span></div>
-            <div class="video-caixa" id="videoCaixa">
-              <video id="videoEvox" src="/site/video/evox-apresentacao.mp4?v=3" poster="/site/video/capa.jpg?v=3" preload="metadata" playsinline></video>
-              <button class="video-play" id="videoPlay" type="button" aria-label="Assistir ao vídeo">
-                <span class="bola"><svg width="36" height="36" viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span>
-                <b>Assistir à apresentação</b><small>3:20 · com som</small>
-              </button>
+  <!-- PERGUNTA -->
+  <section class="tela" id="t-pergunta">
+    <div class="wrap grade topo-al">
+      <div>
+        <span class="rotulo" id="pEtq"></span>
+        <h2 id="pTitulo"></h2>
+        <p class="lead" id="pDica"></p>
+        <div class="opcoes" id="pOpcoes"></div>
+        <div id="pFerida"></div>
+      </div>
+      <div>
+        <div class="janela">
+          <div class="barra"><i></i><i></i><i></i><span>app.evox.com.br/raio-x</span></div>
+          <div class="jan-corpo">
+            <div class="jan-topo"><div><b>Sua corretora</b><small>Raio-X em andamento</small></div><span class="status">Analisando</span></div>
+            <div class="medidor">
+              <div class="medidor-l"><span>Vendas escapando</span><b><span id="termoTxt">0</span><small>/100</small></b></div>
+              <div class="medidor-b"><i id="termo"></i></div>
             </div>
+            <div class="itens" id="itensVivo"></div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- DORES -->
-  <section>
-    <div class="wrap centro">
-      <span class="rotulo sobe">Por que o EVOX</span>
-      <h2 class="sobe">Lead que espera <em>esfria</em>.<br>Corretor que esquece <em>perde a venda</em>.</h2>
-      <p class="lead sobe">O dia do corretor é corrido: visita, cotação, renovação, cliente ligando. O EVOX cuida do que costuma ficar para trás.</p>
-      <div class="dores" style="text-align:left">
-        <div class="dor sobe">
-          <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-          <span class="antes">Responder o lead só no fim do dia</span>
-          <h3>Resposta na hora, até de madrugada</h3>
-          <p>O Agente IA atende pelo WhatsApp, faz as perguntas certas e deixa o lead pronto para você.</p>
-        </div>
-        <div class="dor sobe">
-          <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div>
-          <span class="antes">Anotar follow-up num papel</span>
-          <h3>Ninguém fica sem retorno</h3>
-          <p>Cada negócio tem etapa, valor e próximo passo. O agente da etapa cobra o retorno por você.</p>
-        </div>
-        <div class="dor sobe">
-          <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div>
-          <span class="antes">Descobrir a renovação depois que venceu</span>
-          <h3>Renovações e mensalidades no radar</h3>
-          <p>Agenda, datas importantes e mensalidades dos clientes num painel só, com aviso antes de vencer.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- AGENTE IA -->
-  <section class="escuro" id="agente">
-    <div class="wrap dupla">
+  <!-- RAIO-X -->
+  <section class="tela" id="t-raiox">
+    <div class="wrap grade topo-al">
       <div>
-        <span class="rotulo sobe">Agente IA · Plano Completo</span>
-        <h2 class="sobe">Um assistente que <em>faz</em>, não só responde</h2>
-        <p class="lead sobe">Você pede em português, do jeito que falaria com um funcionário. O Agente IA do EVOX executa: monta o funil, ajusta o CRM e cuida dos seus anúncios.</p>
-        <ul class="lista">
-          <li class="sobe"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Gestor de tráfego.</b> Cria e acompanha campanhas no Facebook e Instagram e diz quanto custou cada lead.</span></li>
-          <li class="sobe"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Configura o CRM por você.</b> Colunas, etiquetas, mensagens prontas: é só pedir.</span></li>
-          <li class="sobe"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Atende o funil 24h.</b> Ligue um agente em cada etapa e ele conversa com o lead no WhatsApp.</span></li>
-          <li class="sobe"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Seguro e separado.</b> Cada conta tem a sua máquina própria. O que é seu fica só com você.</span></li>
-        </ul>
+        <span class="rotulo">Seu Raio-X está pronto</span>
+        <div class="nota"><b id="pct">0</b><span>/100 de vendas escapando</span></div>
+        <span class="nivel" id="rNivel"></span>
+        <h2 id="rTitulo"></h2>
+        <p class="lead" id="rTexto"></p>
+        <div class="acao fixo-cel"><button class="btn btn-p" onclick="irVideo()">Ver como o EVOX resolve isso <span>▶</span></button></div>
       </div>
-      <div class="chat sobe" id="chat">
-        <div class="chat-topo">
-          <div class="av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div>
-          <div><b>Agente IA EVOX</b><small><i></i>trabalhando para você</small></div>
+      <div class="janela">
+        <div class="barra"><i></i><i></i><i></i><span>app.evox.com.br/raio-x</span></div>
+        <div class="jan-corpo">
+          <div class="jan-topo"><div><b>Onde a venda está escapando</b><small>E como o EVOX fecha cada buraco</small></div><span class="status">Concluído</span></div>
+          <div class="itens" id="rLista"></div>
         </div>
-        <div class="msg eu">Cria uma campanha de plano de saúde PME no Instagram, R$ 50 por dia, região do Rio.</div>
-        <div class="passo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Campanha criada · público: empresários, 28 a 55 anos</div>
-        <div class="msg ia">Pronto! A campanha "Saúde PME — Rio" está no ar com R$ 50/dia. Os leads vão cair direto na coluna <b>Lead novo</b>.</div>
-        <div class="msg eu">E me cria uma coluna "Aguardando documentos" depois de Proposta.</div>
-        <div class="passo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Coluna adicionada ao funil</div>
-        <div class="msg ia">Feito. Quer que eu ligue um agente nela para cobrar os documentos do cliente a cada 2 dias?</div>
       </div>
     </div>
   </section>
 
-  <!-- FUNIL -->
-  <section id="funil">
+  <!-- VÍDEO -->
+  <section class="tela" id="t-video">
     <div class="wrap">
-      <div class="centro">
-        <span class="rotulo sobe">Funil de vendas</span>
-        <h2 class="sobe">Cada etapa com <em>o seu próprio agente</em></h2>
-        <p class="lead sobe">Veja o valor de cada etapa, arraste os negócios e ligue o Agente IA com um clique. Ele sabe o que fazer em cada fase da venda.</p>
-        <div class="botoes-ia sobe" style="justify-content:center">
-          <span class="botao-ia on">✦ Agente IA ligado <i></i></span>
-          <span class="botao-ia off">✦ Ligar agente IA <i></i></span>
+      <div class="palco">
+        <span class="rotulo">Missão final</span>
+        <h2>O EVOX <em>por dentro</em>, em 3 minutos</h2>
+        <p class="lead">O funil, a IA atendendo um lead de verdade no WhatsApp e o Agente IA criando uma campanha na Meta sozinho. Na metade da apresentação, seus planos são liberados.</p>
+        <div class="moldura">
+          <div class="barra"><i></i><i></i><i></i><span>EVOX · Apresentação</span></div>
+          <div class="video-caixa parado" id="vbox">
+            <video id="vsl" playsinline preload="metadata" poster="video/capa.jpg" src="video/evox-apresentacao.mp4"></video>
+            <button class="video-play" id="play" onclick="tocar()"><span class="bola"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></span><span id="playTxt">Assistir à apresentação</span></button>
+            <div class="ctrl"><button onclick="tocar()" id="btnPausa">❚❚</button><button onclick="mudo()" id="btnMudo" aria-label="Som do vídeo">🔊</button><input type="range" class="vol" id="vol" min="0" max="1" step="0.05" value="1" aria-label="Volume do vídeo" oninput="volume(this.value)"><span id="tempoV">0:00</span><button onclick="telaCheia()">⛶</button></div>
+          </div>
         </div>
-      </div>
-      <div class="dupla" style="margin-top:64px">
-        <div class="foto sobe"><img src="/site/img/conversa.webp?v=3" alt="Negócio aberto com a conversa do cliente" width="2880" height="1800"></div>
-        <div class="etapas">
-          <div class="etapa sobe"><span class="cor" style="background:#98A2B3"></span><div><b>Lead novo</b><span>Dá boas-vindas, pergunta o tipo de seguro e quantas vidas.</span></div></div>
-          <div class="etapa sobe"><span class="cor" style="background:#1CBEFF"></span><div><b>Qualificado</b><span>Pede os dados que faltam para você cotar.</span></div></div>
-          <div class="etapa sobe"><span class="cor" style="background:#0A66F5"></span><div><b>Proposta enviada</b><span>Tira dúvidas e lembra o cliente da proposta.</span></div></div>
-          <div class="etapa sobe"><span class="cor" style="background:#F79009"></span><div><b>Negociação</b><span>Avisa você na hora em que o cliente quer fechar.</span></div></div>
+        <div class="missao">
+          <div><small id="missaoEtq">PLANOS BLOQUEADOS</small><strong id="missaoTxt">Assista até a marca dourada para liberar</strong></div>
+          <span class="pct" id="missaoPct">0%</span>
+          <div class="missao-b"><i id="missaoBarra"></i><b></b></div>
+          <p id="missaoDica">Não dá para pular: conta só o que você assistiu.</p>
         </div>
+        <div class="liberado fixo-cel" id="liberado"><button class="btn btn-v" onclick="verPlano()">🔓 Ver os planos aqui embaixo <span>↓</span></button></div>
       </div>
     </div>
-  </section>
-
-  <!-- WHATSAPP -->
-  <section style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
-    <div class="wrap dupla">
-      <div class="sobe"><div class="cel-grande"><div class="tela"><img src="/site/img/celular-conversa.webp?v=3" alt="Conversa de WhatsApp dentro do EVOX no celular"></div></div></div>
-      <div>
-        <span class="rotulo sobe">WhatsApp dentro do CRM</span>
-        <h2 class="sobe">A conversa e o negócio <em>na mesma tela</em></h2>
-        <p class="lead sobe">Nada de pular entre o WhatsApp e a planilha. Você vê a etapa, o valor e o histórico enquanto conversa, inclusive pelo celular.</p>
-        <div class="chips sobe">
-          <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Áudios</span>
-          <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>PDF de proposta</span>
-          <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M22 11h-6"/></svg>Vários números</span>
-          <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Notas do cliente</span>
-          <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Equipe no mesmo funil</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- RECURSOS -->
-  <section id="recursos">
-    <div class="wrap">
-      <div class="centro">
-        <span class="rotulo sobe">Tudo o que a corretora precisa</span>
-        <h2 class="sobe">Um sistema, <em>a rotina inteira</em></h2>
-      </div>
-      <div class="grade">
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></div><h3>Funil de vendas</h3><p>Colunas do seu jeito, total em R$ por etapa e negócios arrastáveis.</p></div>
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><h3>WhatsApp integrado</h3><p>Converse com o cliente sem sair do CRM, com áudio, foto e documento.</p></div>
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div><h3>Agenda e datas</h3><p>Visitas, retornos e datas importantes dos clientes no calendário.</p></div>
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div><h3>Mensalidades</h3><p>Acompanhe quem pagou e quem está para vencer.</p></div>
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><h3>Relatórios</h3><p>Leads no funil, taxa de conversão e valor ganho, sem montar planilha.</p></div>
-        <div class="rec sobe"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div><h3>Equipe e performance</h3><p>Cada corretor com seus negócios, e você vendo o desempenho de todos.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SEGURADORAS -->
-  <section style="padding-top:0">
-    <div class="wrap">
-      <div class="faixa sobe">
-        <div>
-          <span class="rotulo">Do seu jeito</span>
-          <h2>Trabalha com <em>qualquer seguradora</em></h2>
-          <p class="lead">O EVOX não prende você a um cotador. Você continua cotando onde já cota; o EVOX organiza a venda, o atendimento e o pós-venda.</p>
-        </div>
-        <div class="marcas">
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>Saúde</div>
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Vida</div>
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14l-1.5-6h-11zM7 17v2M17 17v2M6.5 11l1.5-4h8l1.5 4"/></svg>Auto</div>
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>Residencial</div>
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h.01M12 12h.01M16 12h.01"/><path d="M4 6h16v12H4z"/></svg>Odonto</div>
-          <div><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Previdência</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- COMO COMEÇAR -->
-  <section style="padding-top:20px">
-    <div class="wrap">
-      <div class="centro">
-        <span class="rotulo sobe">Como começar</span>
-        <h2 class="sobe">No ar <em>no mesmo dia</em></h2>
-      </div>
-      <div class="passos">
-        <div class="p3 sobe"><h3>Crie sua conta</h3><p>Seu funil já vem montado com as etapas da venda de seguros.</p></div>
-        <div class="p3 sobe"><h3>Conecte o WhatsApp</h3><p>Leia o QR Code com o celular e as conversas passam a entrar no EVOX.</p></div>
-        <div class="p3 sobe"><h3>Ligue o Agente IA</h3><p>Um clique em cada etapa e o atendimento passa a rodar 24 horas.</p></div>
-      </div>
-    </div>
-  </section>
-
   <!-- PLANOS -->
-  <section id="planos" style="padding-top:20px">
+  <div class="planos-area" id="t-plano">
+    <div class="wrap" style="text-align:center">
+      <span class="rotulo">Planos</span>
+      <h2>Escolha o <em>seu plano</em></h2>
+      <p class="lead" style="margin-left:auto;margin-right:auto">Os dois já vêm com a IA pronta para usar. Você não precisa configurar nada.</p>
+    </div>
     <div class="wrap">
-      <div class="centro">
-        <span class="rotulo sobe">Planos</span>
-        <h2 class="sobe">Escolha o <em>seu plano</em></h2>
-        <p class="lead sobe">Os dois já vêm com a IA pronta para usar. Você não precisa configurar nada.</p>
-      </div>
       <div class="planos">
-        <div class="plano ess sobe">
-          <span class="tag">Para começar</span>
+        <div class="plano ess" id="cardEss">
+          <span class="tag" id="tagEss">Para começar</span>
           <h3>Essencial</h3>
           <p class="desc">O CRM inteiro, com a IA atendendo o seu funil.</p>
           <div class="preco"><small>R$</small><b>189,90</b><span>/mês</span></div>
-          <div class="prova"><span class="botao-ia on">✦ Agente IA ligado <i></i></span><p><b>IA em cada etapa</b> do seu funil, atendendo 24h.</p></div>
-          <ul><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Funil de vendas completo</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>IA respondendo seus leads no WhatsApp em cada etapa do funil</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>WhatsApp dentro do CRM, com vários números</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Contatos, agenda e datas importantes</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Mensalidades dos clientes</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Relatórios, equipe e performance</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Funciona no computador e no celular</span></li><li class="nao"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Sem agente de tráfego pago e criação</span></li></ul>
-          <div class="ideal"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><p><b>Ideal para quem</b>quer o funil organizado e os leads atendidos pela IA, e cuida dos próprios anúncios.</p></div>
-          <a class="btn btn-ess" href="https://pay.kiwify.com.br/qp9Xp4v">Quero o Essencial</a>
-          <p class="aviso-email"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span>Depois de pagar, o acesso chega por e-mail em instantes. <b>Confira também o Spam e a aba Promoções.</b></span></p>
+          <ul>
+            <li>Funil de vendas completo</li>
+            <li>IA respondendo seus leads no WhatsApp em cada etapa do funil</li>
+            <li>WhatsApp dentro do CRM, com vários números</li>
+            <li>Contatos, agenda e datas importantes</li>
+            <li>Mensalidades dos clientes</li>
+            <li>Relatórios, equipe e performance</li>
+            <li class="nao">Sem agente de tráfego pago e criação</li>
+          </ul>
+          <button class="btn btn-ess" onclick="checkout('ess')">Quero o Essencial</button>
+          <p class="aviso-email">Depois de pagar, o acesso chega por e-mail em instantes. <b>Confira também o Spam e a aba Promoções.</b></p>
         </div>
-        <div class="plano top sobe">
-          <span class="tag">Mais completo</span>
+        <div class="plano top" id="cardTop">
+          <span class="tag" id="tagTop">Mais completo</span>
           <h3>Completo</h3>
           <p class="desc">Tudo incluso, com o Agente IA trabalhando junto com você.</p>
           <div class="preco"><small>R$</small><b>249,90</b><span>/mês</span></div>
-          <ul><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Funil de vendas completo</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>IA respondendo seus leads no WhatsApp em cada etapa do funil</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>WhatsApp dentro do CRM, com vários números</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Contatos, agenda e datas importantes</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Mensalidades dos clientes</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Relatórios, equipe e performance</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Funciona no computador e no celular</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Agente IA completo</b> no menu</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Gestor de tráfego pago:</b> cria e acompanha campanhas no Facebook e Instagram</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Criação:</b> textos de anúncio e mensagens prontas para seus clientes</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span><b>Configura o CRM por você:</b> colunas, etiquetas e agentes, é só pedir</span></li><li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Máquina própria e separada para o seu Agente IA</span></li></ul>
-          <a class="btn btn-p" href="https://pay.kiwify.com.br/u2MmyBH">Quero o Completo</a>
-          <p class="aviso-email"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span>Depois de pagar, o acesso chega por e-mail em instantes. <b>Confira também o Spam e a aba Promoções.</b></span></p>
+          <ul>
+            <li>Tudo do Essencial</li>
+            <li>Gestor de tráfego pago: cria e acompanha campanhas no Facebook e Instagram</li>
+            <li>Criação: textos de anúncio e mensagens prontas para seus clientes</li>
+            <li>Configura o CRM por você: colunas, etiquetas e agentes</li>
+            <li>Máquina própria e separada para o seu Agente IA</li>
+          </ul>
+          <button class="btn btn-p" onclick="checkout('top')">Quero o Completo</button>
+          <p class="aviso-email">Depois de pagar, o acesso chega por e-mail em instantes. <b>Confira também o Spam e a aba Promoções.</b></p>
         </div>
       </div>
-  </section>
-
-  <!-- PERGUNTAS -->
-
-  <section id="perguntas" style="padding-top:20px">
-    <div class="wrap">
-      <div class="centro">
-        <span class="rotulo sobe">Perguntas frequentes</span>
-        <h2 class="sobe">Ficou alguma <em>dúvida?</em></h2>
-      </div>
-      <div class="faq">
-        <details class="sobe"><summary>Paguei. Como recebo o acesso?</summary><p>Logo depois do pagamento chega um e-mail com o assunto <b>"Seu acesso ao EVOX está pronto"</b>, no endereço que você usou na compra. Clique em "Criar minha senha" e pronto. Se não aparecer na caixa de entrada, <b>procure no Spam e na aba Promoções</b> e marque como "Não é spam".</p></details>
-        <details class="sobe"><summary>Qual a diferença entre os planos?</summary><p>Os dois têm o CRM inteiro e a IA atendendo seus leads em cada etapa do funil. O Completo acrescenta o Agente IA do menu, que cuida dos seus anúncios no Facebook e Instagram e configura o CRM quando você pede.</p></details>
-        <details class="sobe"><summary>Preciso entender de tecnologia?</summary><p>Não. O EVOX foi feito para o corretor usar no dia a dia. O que for mais técnico você pede ao Agente IA, em português, e ele faz.</p></details>
-        <details class="sobe"><summary>O agente responde sozinho no meu WhatsApp?</summary><p>Só nas etapas em que você ligar. Você escolhe coluna por coluna e pode desligar quando quiser. Quando o cliente pede para falar com você, o agente para e te avisa.</p></details>
-        <details class="sobe"><summary>Funciona no celular?</summary><p>Sim. O EVOX funciona no computador e no celular, com uma tela pensada para cada um.</p></details>
-        <details class="sobe"><summary>O EVOX faz cotação nas seguradoras?</summary><p>Não, de propósito. Cada corretor trabalha com várias seguradoras e já tem onde cotar. O EVOX cuida do resto: atender, organizar, acompanhar e não deixar a venda esfriar.</p></details>
-        <details class="sobe"><summary>Meus dados ficam seguros?</summary><p>Cada conta tem o seu espaço separado, e o Agente IA de uma conta não enxerga nada de outra.</p></details>
-        <details class="sobe"><summary>Posso colocar minha equipe?</summary><p>Pode. Cada pessoa entra com o próprio acesso e você acompanha o desempenho de todos.</p></details>
-      </div>
+      <div class="cartao seus" id="seus"></div>
     </div>
+  </div>
   </section>
 
-  <!-- FINAL -->
-  <section class="final" id="comecar" style="padding-top:20px">
-    <div class="wrap">
-      <div class="caixa sobe">
-        <img class="emb" src="/assets/evox/evox-emblema.png" alt="">
-        <h2>Pare de perder venda <em>por falta de tempo</em></h2>
-        <p class="lead">Deixe o EVOX atender, organizar e lembrar. Você fica com a parte que só você faz: fechar.</p>
-        <div class="ctas">
-          <a class="btn btn-p" href="#planos">Ver os planos</a>
-          <a class="btn btn-claro" href="#video">Rever o vídeo</a>
-        </div>
-      </div>
-    </div>
-  </section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <img src="/assets/evox/evox-logo.png" alt="EVOX">
-    <nav><a href="/terms.html">Termos</a><a href="/privacy.html">Privacidade</a></nav>
-    <span>© 2026 EVOX</span>
+<div class="modal" id="medalha"><div class="janela">
+  <div class="barra"><i></i><i></i><i></i><span>conquista desbloqueada · +30 XP</span></div>
+  <div class="jan-corpo">
+    <div class="medalha-ic" id="mIcone">🏅</div>
+    <span class="rotulo">Medalha desbloqueada</span>
+    <h3 id="mTitulo"></h3>
+    <p id="mTexto"></p>
+    <div class="acao"><button class="btn btn-p" onclick="fecharMedalha()">Continuar <span>▶</span></button></div>
   </div>
-</footer>
+</div></div>
+<div class="aviso" id="aviso"></div>
+<canvas id="confete"></canvas>
 
 <script>
-(function(){
-  // Vídeo: o botão grande dá o play com som; a moldura 3D se endireita.
-  var cx=document.getElementById('videoCaixa'),vd=document.getElementById('videoEvox'),mol=document.getElementById('moldura');
-  function tocar(t){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;vd.muted=false;if(t!=null)vd.currentTime=t;var r=vd.play();if(r&&r.catch)r.catch(function(){});}
-  document.getElementById('videoPlay').addEventListener('click',function(){tocar()});
-  vd.addEventListener('play',function(){cx.classList.add('tocando');mol.classList.add('tocando');vd.controls=true;});
-  // Os links "Ver o vídeo" rolam até ele e já começam a tocar.
-  document.querySelectorAll('a[href="#video"]').forEach(function(a){a.addEventListener('click',function(){setTimeout(function(){tocar()},600)})});
-  var topo=document.getElementById('topo');
-  addEventListener('scroll',function(){topo.classList.toggle('rolou',scrollY>8)},{passive:true});
-  var els=document.querySelectorAll('.sobe');
-  if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('ok')});return;}
-  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('ok');io.unobserve(e.target);}})},{threshold:.12,rootMargin:'0px 0px -40px 0px'});
-  els.forEach(function(e){io.observe(e)});
-  // Conversa do agente aparece uma mensagem por vez
-  var chat=document.getElementById('chat');
-  var io2=new IntersectionObserver(function(es){if(es[0].isIntersecting){
-    var itens=chat.querySelectorAll('.msg,.passo');
-    itens.forEach(function(m,i){m.style.transitionDelay=(i*0.55)+'s'});
-    chat.classList.add('vivo');io2.disconnect();
-  }},{threshold:.3});
-  io2.observe(chat);
-})();
+const CHECKOUT = { ess: "https://pay.kiwify.com.br/qp9Xp4v", top: "https://pay.kiwify.com.br/u2MmyBH" };
+const LIBERA_EM = 0.5; // fração do vídeo que libera os planos
+
+const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const PERFIS = [
+  ["saude", "Saúde", '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/>'],
+  ["vida", "Vida", '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'],
+  ["auto", "Auto", '<path d="M5 17h14M6 17v2M18 17v2M3 13l2-6h14l2 6v4H3z"/><circle cx="7.5" cy="13.5" r="1"/><circle cx="16.5" cy="13.5" r="1"/>'],
+  ["residencial", "Residencial", '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>'],
+  ["odonto", "Odonto / Previdência", '<path d="M12 5c-2-2-6-2-7 1-1 3 1 6 2 9 .6 2 1 5 2.5 5s1.5-4 2.5-4 1 4 2.5 4 1.9-3 2.5-5c1-3 3-6 2-9-1-3-5-3-7-1z"/>'],
+  ["varios", "Um pouco de tudo", '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'],
+];
+const FRASE_PERFIL = {
+  saude: "Em plano de saúde, quem responde a cotação primeiro leva o cliente.",
+  vida: "Seguro de vida se vende no momento certo — e o momento passa rápido.",
+  auto: "No auto, o cliente cota em 3 corretores ao mesmo tempo. Fecha com quem responde.",
+  residencial: "No residencial, o ticket é menor: perder tempo com cada lead mata a margem.",
+  odonto: "Em odonto e previdência, a carteira recorrente é o que paga as contas.",
+  varios: "Quem vende de tudo precisa de um funil que não deixe nenhum ramo esquecido.",
+};
+
+// 5 perguntas de dor do corretor: dor = quanto aquela resposta faz a venda escapar (0–25)
+const PERGUNTAS = [
+  { id: "atendimento", sigla: "24h", nome: "Resposta ao lead", titulo: "Um lead pede cotação às 22h pelo WhatsApp. O que acontece?", dica: "Seja sincero. Ninguém está vendo.",
+    opcoes: [["Só vejo amanhã… e ele já cotou com outro", 25], ["Respondo do celular, cansado, no meio da família", 18], ["Mando um “já te retorno” e esqueço", 22], ["Tenho alguém atendendo, mas custa caro", 14]],
+    dor: "Lead que espera esfria. Quem responde a cotação primeiro, fecha.",
+    cura: "<b>O Agente IA atende no seu WhatsApp na hora, até de madrugada:</b> faz as perguntas certas (tipo de seguro, quantas vidas, idades) e deixa o lead pronto para você cotar.",
+    img: "img/celular-conversa.webp", vaz: "Leads esfriando fora do horário", sol: "Agente IA respondendo e qualificando 24h no WhatsApp" },
+  { id: "followup", sigla: "FUP", nome: "Proposta e retorno", titulo: "Você mandou a proposta. O cliente sumiu. E agora?", dica: "A pergunta que mais dói em corretor.",
+    opcoes: [["Espero ele voltar a falar", 25], ["Cobro quando lembro", 22], ["Anoto num papel ou planilha", 18], ["Tento uma vez e desisto", 25]],
+    dor: "A venda não se perde no “não”. Se perde no retorno que ninguém fez.",
+    cura: "<b>Cada etapa do funil tem o seu agente.</b> Em “Proposta enviada”, ele tira dúvidas e lembra o cliente da proposta sozinho. Nenhum negócio fica sem próximo passo.",
+    img: "img/painel.webp", vaz: "Propostas sem retorno", sol: "Agente da etapa cobrando o retorno por você" },
+  { id: "renovacao", sigla: "REN", nome: "Renovações e mensalidades", titulo: "Como você controla renovações e mensalidades da sua carteira?", dica: "Dinheiro que já é seu, mas pode escapar.",
+    opcoes: [["Descubro quando já venceu", 25], ["Na memória, do jeito que dá", 25], ["Planilha que ninguém atualiza", 20], ["Entro no sistema de cada seguradora", 15]],
+    dor: "Renovação perdida é cliente pronto entregue de bandeja para o concorrente.",
+    cura: "<b>Agenda, datas importantes e mensalidades num painel só,</b> com aviso antes de vencer. Você vê quem pagou e quem está para vencer.",
+    img: "img/painel.webp", vaz: "Renovações e mensalidades fora do radar", sol: "Mensalidades e renovações com aviso antes de vencer" },
+  { id: "leads", sigla: "ADS", nome: "Geração de leads", titulo: "De onde vêm os seus clientes hoje?", dica: "Indicação é ótima. Mas não paga as contas sozinha.",
+    opcoes: [["Indicação… e torcer para aparecer", 25], ["Compro lista ou lead frio", 20], ["Anuncio na Meta, mas não sei quanto custa cada lead", 20], ["Pago agência caro e não vejo retorno", 18]],
+    dor: "Sem fonte previsível de leads, todo mês começa do zero.",
+    cura: "<b>No Plano Completo, o Agente IA vira o seu gestor de tráfego:</b> cria e acompanha campanhas no Facebook e Instagram e diz quanto custou cada lead. Os leads caem direto no funil.",
+    img: "img/conversa.webp", vaz: "Sem fonte previsível de leads", sol: "Agente IA gestor de tráfego (Plano Completo)" },
+  { id: "organizacao", sigla: "CRM", nome: "Conversa e negócio", titulo: "Onde ficam a conversa com o cliente e o andamento do negócio?", dica: "Aquela cotação de saúde PME da semana passada… em que pé está?",
+    opcoes: [["Perdida no meio de 500 conversas do WhatsApp", 25], ["WhatsApp de um lado, planilha do outro", 20], ["Na minha cabeça", 25], ["Num CRM que não tem WhatsApp", 15]],
+    dor: "Pular entre WhatsApp, planilha e cotador faz negócio cair no esquecimento.",
+    cura: "<b>WhatsApp dentro do CRM:</b> a conversa, a etapa e o valor do negócio na mesma tela, com áudio, PDF da proposta e vários números. Até pelo celular.",
+    img: "img/conversa.webp", vaz: "Conversas e negócios espalhados", sol: "WhatsApp e funil na mesma tela, com valor por etapa" },
+];
+const MEDALHAS = {
+  2: ["🦅", "Olho de Águia", "Você enxergou dois buracos que a maioria dos corretores ignora."],
+  4: ["🔦", "Caçador de Vazamentos", "Falta só uma pergunta para o seu Raio-X completo."],
+};
+
+// ---------- sons (Web Audio, sem arquivos) ----------
+let somLigado = true, ctx = null;
+try { somLigado = localStorage.getItem("evox_som") !== "0"; } catch (e) {}
+function audio() { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ctx && ctx.state === "suspended") ctx.resume(); return ctx; }
+function nota(freq, ini, dur, tipo = "triangle", vol = 0.18) {
+  const c = audio(); if (!c || !somLigado) return;
+  const o = c.createOscillator(), g = c.createGain(), t = c.currentTime + ini;
+  o.type = tipo; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+const SOM = {
+  clique: () => { nota(1400, 0, 0.05, "square", 0.05); nota(900, 0.02, 0.06, "triangle", 0.12); },
+  alarme: () => { nota(440, 0, 0.12, "sawtooth", 0.05); nota(330, 0.12, 0.18, "sawtooth", 0.05); },
+  medalha: () => [523, 659, 784, 1047, 1319].forEach((f, i) => nota(f, i * 0.09, 0.3, "triangle", 0.16)),
+  vitoria: () => { [523, 659, 784].forEach((f, i) => nota(f, i * 0.12, 0.18)); [1047, 1319, 1568].forEach(f => nota(f, 0.4, 0.7, "triangle", 0.12)); },
+  desbloqueio: () => { [392, 523, 659, 784, 1047].forEach((f, i) => nota(f, i * 0.07, 0.25, "square", 0.06)); [1047, 1568].forEach(f => nota(f, 0.4, 0.8, "triangle", 0.14)); },
+};
+const ICONE_SOM = {
+  on: '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+  off: '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/>',
+};
+function pintarSom() { $("som").innerHTML = svg(somLigado ? ICONE_SOM.on : ICONE_SOM.off); }
+function alternarSom() { somLigado = !somLigado; pintarSom(); try { localStorage.setItem("evox_som", somLigado ? "1" : "0"); } catch (e) {} if (somLigado) SOM.clique(); }
+
+// ---------- estado ----------
+const $ = id => document.getElementById(id);
+const resp = {};
+let perfil = "", passo = 0, xp = 0, dorTotal = 0, medalhasGanhas = [];
+const DOR_MAX = PERGUNTAS.length * 25;
+
+function mostrar(id) {
+  document.querySelectorAll(".tela").forEach(t => t.classList.remove("on"));
+  $(id).classList.add("on");
+  window.scrollTo({ top: 0 });
+}
+function hud() {
+  const total = PERGUNTAS.length + 2;
+  $("barra").style.width = Math.round((Math.min(passo, total) / total) * 100) + "%";
+  $("passoTxt").textContent = passo < PERGUNTAS.length ? `${passo}/${PERGUNTAS.length}` : "pronto";
+  $("pts").textContent = xp;
+  const p = Math.round((dorTotal / DOR_MAX) * 100);
+  $("termo").style.width = p + "%"; $("termoTxt").textContent = p;
+  $("itensVivo").innerHTML = PERGUNTAS.map((q, i) => {
+    const r = resp[q.id];
+    const est = r ? ["vazando", r.dor >= 18 ? "Escapando" : "Atenção"] : i === passo ? ["analisando", "Analisando"] : ["", "Na fila"];
+    return `<div class="item"><span class="ic">${q.sigla}</span><span><b>${q.nome}</b><small>${r ? r.txt : "Aguardando resposta"}</small></span><span class="estado ${est[0]}">${est[1]}</span></div>`;
+  }).join("");
+}
+$("itensCapa").innerHTML = PERGUNTAS.map(q => `<div class="item"><span class="ic">${q.sigla}</span><span><b>${q.nome}</b><small>Ponto onde a venda costuma escapar</small></span><span class="estado">Na fila</span></div>`).join("");
+function ganharXP(n, msg) {
+  xp += n; hud();
+  $("chipXp").classList.remove("pulo"); void $("chipXp").offsetWidth; $("chipXp").classList.add("pulo");
+  aviso(`<b>+${n} XP</b> ${msg}`);
+}
+function aviso(html) {
+  const t = $("aviso"); t.innerHTML = html; t.classList.add("on");
+  clearTimeout(aviso.t); aviso.t = setTimeout(() => t.classList.remove("on"), 1500);
+}
+function vibrar(ms = 15) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+// ---------- capa ----------
+$("perfis").innerHTML = PERFIS.map(([id, txt, d]) => `<button class="cartao perfil" onclick="escolherPerfil('${id}','${txt}')"><span class="ic">${svg(d)}</span>${txt}</button>`).join("");
+function escolherPerfil(id, txt) {
+  audio(); SOM.clique(); vibrar(); perfil = id; resp.perfil = txt;
+  ganharXP(10, "· bem-vindo ao Raio-X");
+  passo = 0; setTimeout(renderPergunta, 300);
+}
+
+// ---------- perguntas ----------
+function renderPergunta() {
+  if (passo >= PERGUNTAS.length) return mostrarRaioX();
+  const p = PERGUNTAS[passo];
+  $("pEtq").textContent = `Pergunta ${passo + 1} de ${PERGUNTAS.length} · ${p.nome}`;
+  $("pTitulo").textContent = p.titulo;
+  $("pDica").textContent = p.dica;
+  $("pFerida").innerHTML = "";
+  const box = $("pOpcoes");
+  delete box.dataset.travado;
+  box.innerHTML = p.opcoes.map(([txt], i) => `<button class="cartao op" style="animation-delay:${i * 0.06}s" data-i="${i}"><span class="ic">${"ABCD"[i]}</span><span>${txt}</span></button>`).join("");
+  box.querySelectorAll(".op").forEach(b => b.onclick = () => escolher(p, +b.dataset.i, b));
+  hud(); mostrar("t-pergunta");
+}
+function escolher(p, i, botao) {
+  const box = $("pOpcoes");
+  if (box.dataset.travado) return;
+  box.dataset.travado = "1";
+  const [txt, dor] = p.opcoes[i];
+  botao.classList.add("escolhida");
+  box.querySelectorAll(".op").forEach(b => { if (b !== botao) b.classList.add("apagada"); });
+  SOM.clique(); vibrar();
+  resp[p.id] = { txt, dor };
+  dorTotal += dor;
+  setTimeout(() => { SOM.alarme(); vibrar(40); hud(); }, 200);
+  setTimeout(() => {
+    $("pFerida").innerHTML = `<div class="cartao ferida">
+      <div class="dor"><small>● Ferida encontrada</small><p>${p.dor}</p></div>
+      <div class="cura"><img src="${p.img}" alt=""><div><small>✓ No EVOX</small><p>${p.cura}</p></div></div>
+    </div>
+    <div class="acao fixo-cel"><button class="btn btn-p" onclick="proxima()">${passo === PERGUNTAS.length - 1 ? "Ver meu Raio-X" : "Próxima pergunta"} <span>▶</span></button></div>`;
+    ganharXP(20, ["· ferida exposta", "· sem mimimi", "· isso dói, né?", "· sinceridade = venda", "· quase lá"][passo % 5]);
+    setTimeout(() => $("pFerida").scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+  }, 450);
+}
+function proxima() {
+  SOM.clique(); passo++;
+  const m = MEDALHAS[passo];
+  if (m && !medalhasGanhas.includes(m[1])) { medalhasGanhas.push(m[1]); abrirMedalha(m); }
+  else renderPergunta();
+}
+function abrirMedalha([ic, t, txt]) {
+  $("mIcone").textContent = ic; $("mTitulo").textContent = t; $("mTexto").textContent = txt;
+  $("medalha").classList.add("on"); SOM.medalha(); confete(70); xp += 30; hud();
+}
+function fecharMedalha() { SOM.clique(); $("medalha").classList.remove("on"); renderPergunta(); }
+
+// ---------- raio-x ----------
+function itemVaz(q, atraso = 0) {
+  return `<div class="item vaz" style="animation-delay:${atraso}s"><span class="ic">${q.sigla}</span><span><b>${q.vaz}</b><span class="sol"><span>✓</span><span>${q.sol}</span></span></span></div>`;
+}
+function mostrarRaioX() {
+  passo = PERGUNTAS.length; hud();
+  const pct = Math.max(38, Math.round((dorTotal / DOR_MAX) * 100));
+  $("rNivel").textContent = pct >= 80 ? "VAZAMENTO CRÍTICO" : pct >= 65 ? "VAZAMENTO ALTO" : "VAZAMENTO MODERADO";
+  $("rTitulo").innerHTML = pct >= 65 ? "Sua corretora está <em>perdendo vendas toda semana.</em>" : "Tem venda <em>escapando pelos cantos.</em>";
+  $("rTexto").textContent = (FRASE_PERFIL[perfil] || "") + " A boa notícia: cada buraco desses tem conserto. Veja na apresentação a seguir.";
+  const piores = PERGUNTAS.slice().sort((a, b) => resp[b.id].dor - resp[a.id].dor);
+  $("rLista").innerHTML = piores.map((q, i) => itemVaz(q, 0.25 + i * 0.12)).join("");
+  mostrar("t-raiox");
+  setTimeout(() => { contar($("pct"), pct, 1600); SOM.alarme(); setTimeout(SOM.medalha, 1500); }, 250);
+  ganharXP(50, "· Raio-X completo");
+}
+function contar(el, alvo, ms) {
+  const t0 = performance.now();
+  (function f(t) { const p = Math.min(1, (t - t0) / ms); el.textContent = Math.round(alvo * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(f); })(t0);
+}
+
+// ---------- vídeo: só libera os planos depois de ver metade ----------
+const vsl = $("vsl");
+let maxVisto = 0, liberou = false, ultimo = 0;
+function irVideo() {
+  SOM.clique(); passo = PERGUNTAS.length + 1; hud();
+  if (maxVisto > 0) { vsl.currentTime = maxVisto; ultimo = maxVisto; $("playTxt").textContent = "Continuar de onde parou"; }
+  mostrar("t-video");
+}
+function tocar() { audio(); if (vsl.paused) { vsl.play(); SOM.clique(); } else vsl.pause(); }
+vsl.addEventListener("play", () => { $("play").style.display = "none"; $("vbox").classList.remove("parado"); $("btnPausa").textContent = "❚❚"; });
+vsl.addEventListener("pause", () => { $("play").style.display = ""; $("playTxt").textContent = "Continuar"; $("vbox").classList.add("parado"); $("btnPausa").textContent = "▶"; });
+vsl.addEventListener("click", tocar);
+// conta só o que foi assistido de verdade: pular para frente volta para o ponto já visto
+vsl.addEventListener("seeking", () => { if (vsl.currentTime > maxVisto + 1) vsl.currentTime = maxVisto; });
+vsl.addEventListener("seeked", () => { ultimo = vsl.currentTime; });
+vsl.addEventListener("timeupdate", () => {
+  if (!vsl.seeking) {
+    const dt = vsl.currentTime - ultimo;
+    if (dt >= 0 && dt < 2 + vsl.playbackRate * 1.5) maxVisto = Math.max(maxVisto, vsl.currentTime);
+    ultimo = vsl.currentTime;
+  }
+  const d = vsl.duration || 1, fr = maxVisto / d;
+  const m = Math.floor(vsl.currentTime / 60), s = Math.floor(vsl.currentTime % 60);
+  $("tempoV").textContent = `${m}:${String(s).padStart(2, "0")}`;
+  $("missaoBarra").style.width = Math.min(100, fr * 100) + "%";
+  if (!liberou) {
+    $("missaoPct").textContent = Math.min(99, Math.round((fr / LIBERA_EM) * 100)) + "%";
+    if (fr >= LIBERA_EM) liberar();
+  }
+});
+function marcarLiberado() {
+  $("missaoEtq").textContent = "PLANOS LIBERADOS"; $("missaoEtq").style.color = "#4ADE80";
+  $("missaoTxt").textContent = "Seus planos estão desbloqueados";
+  $("missaoPct").textContent = "100%"; $("missaoPct").style.color = "#4ADE80";
+  $("missaoDica").textContent = "Pode continuar assistindo: os planos já apareceram logo abaixo do vídeo.";
+  $("liberado").classList.add("on");
+}
+function liberar() {
+  liberou = true; marcarLiberado(); mostrarPlanos(); SOM.vitoria();
+  SOM.desbloqueio(); vibrar(80); confete(120);
+  xp += 100; hud(); aviso("<b>+100 XP</b> · planos desbloqueados 🔓");
+}
+function pintarVolume() {
+  const v = vsl.muted ? 0 : vsl.volume;
+  $("btnMudo").textContent = v === 0 ? "🔇" : v < 0.5 ? "🔉" : "🔊";
+  $("vol").value = v; $("vol").style.setProperty("--v", Math.round(v * 100) + "%");
+}
+function mudo() { if (vsl.muted || vsl.volume === 0) { vsl.muted = false; if (vsl.volume === 0) vsl.volume = 0.7; } else vsl.muted = true; pintarVolume(); }
+function volume(v) { vsl.volume = +v; vsl.muted = +v === 0; pintarVolume(); }
+vsl.addEventListener("volumechange", pintarVolume);
+function telaCheia() { const el = $("vbox"); if (el.requestFullscreen) el.requestFullscreen(); else if (vsl.webkitEnterFullscreen) vsl.webkitEnterFullscreen(); }
+
+// ---------- planos: recomenda pelo Raio-X ----------
+function mostrarPlanos() {
+  // quem sofre com geração de leads precisa do gestor de tráfego (só no Completo)
+  const recomendaCompleto = !resp.leads || resp.leads.dor >= 18;
+  $("tagTop").textContent = recomendaCompleto ? "✓ Recomendado para você" : "Mais completo";
+  $("tagTop").classList.toggle("rec", recomendaCompleto);
+  $("tagEss").textContent = recomendaCompleto ? "Para começar" : "✓ Recomendado para você";
+  $("tagEss").classList.toggle("rec", !recomendaCompleto);
+  const piores = PERGUNTAS.filter(p => resp[p.id]).sort((a, b) => resp[b.id].dor - resp[a.id].dor).slice(0, 3);
+  $("seus").innerHTML = `<small>OS SEUS VAZAMENTOS, RESOLVIDOS PELO EVOX</small><div class="itens">${piores.map(q => itemVaz(q)).join("")}</div>`;
+  $("t-plano").classList.add("on");
+}
+function verPlano() {
+  SOM.clique();
+  $("t-plano").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function checkout(qual) {
+  SOM.clique();
+  const url = CHECKOUT[qual];
+  const aba = window.open(url, "_blank");
+  if (aba) aba.opener = null; else window.location.href = url;
+}
+
+// Atualizar a página ou clicar na logo começa do zero (pedido do Daniel, 30/10/2026).
+function reiniciar(e) {
+  if (e) e.preventDefault();
+  try { localStorage.removeItem("evox_funil"); } catch (err) {}
+  window.location.href = window.location.pathname;
+}
+try { localStorage.removeItem("evox_funil"); } catch (err) {}
+pintarSom(); hud();
+
+// ---------- confete ----------
+function confete(n) {
+  const c = $("confete"), x = c.getContext("2d");
+  c.width = innerWidth; c.height = innerHeight;
+  const cores = ["#0A66F5", "#1CBEFF", "#12B76A", "#F5A524", "#071221"];
+  const ps = Array.from({ length: n }, () => ({ x: c.width / 2 + (Math.random() - 0.5) * 140, y: c.height * 0.35, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 14 - 4, s: 6 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, cor: cores[Math.floor(Math.random() * cores.length)] }));
+  let vida = 0;
+  (function f() {
+    x.clearRect(0, 0, c.width, c.height);
+    ps.forEach(p => { p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.cor; x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); x.restore(); });
+    if (++vida < 140) requestAnimationFrame(f); else x.clearRect(0, 0, c.width, c.height);
+  })();
+}
 </script>
 </body>
 </html>
