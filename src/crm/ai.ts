@@ -15,6 +15,7 @@
 import { randomBytes } from 'crypto';
 import { getCrmDb } from './schema.js';
 import { logger } from '../utils/logger.js';
+import { limiteAtingido } from '../tenancy/usoIa.js';
 
 function nid(): string { return 'crm_ai_' + randomBytes(6).toString('hex'); }
 const now = () => Date.now();
@@ -176,6 +177,7 @@ export function leadScore(tenantId: string, cardId: string): Insight | null {
 
 // ─── 2) Next step suggestion (LLM) ─────────────────────────────────────
 export async function nextStep(tenantId: string, cardId: string): Promise<Insight | null> {
+  if (limiteAtingido(tenantId)) return null;
   const context = gatherCardContext(tenantId, cardId);
   if (!context) return null;
 
@@ -209,6 +211,7 @@ Responda SOMENTE com a sugestão da próxima ação (máx 200 caracteres, sem ex
 
 // ─── 3) Conversation summary (LLM) ─────────────────────────────────────
 export async function summarizeConversation(tenantId: string, cardId: string): Promise<Insight | null> {
+  if (limiteAtingido(tenantId)) return null;
   const context = gatherCardContext(tenantId, cardId);
   if (!context || context.recentActivities.length === 0) return null;
 

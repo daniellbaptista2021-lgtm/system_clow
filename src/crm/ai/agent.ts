@@ -15,7 +15,7 @@
  */
 import { logger } from '../../utils/logger.js';
 import { obterCredencial, SemCredencialIa } from '../../tenancy/aiCredentials.js';
-import { conferirLimite, registrarUso } from '../../tenancy/usoIa.js';
+import { conferirLimite, registrarUso, limiteAtingido } from '../../tenancy/usoIa.js';
 import { getCrmDb } from '../schema.js';
 import * as store from '../store.js';
 import { sendOutbound } from '../inbox.js';
@@ -484,6 +484,13 @@ const COLUMN_AGENT_DEBOUNCE_SECONDS = 8;
 
 export function handleInboundForAI(ctx: InboundContext): void {
   const { channel, customerPhone } = ctx;
+
+  // Limite de IA do mês atingido: o atendimento automático para por inteiro
+  // (nem transcreve áudio). A conversa continua chegando no CRM para o corretor.
+  if (limiteAtingido(channel.tenantId)) {
+    logger.info(`[ai/agent] tenant=${channel.tenantId} no limite de IA do mês — mensagem de ${customerPhone} sem resposta automática`);
+    return;
+  }
 
   // Decide (pre-debounce) qual caminho. Se for "none", ja short-circuita
   // sem agendar timer — economiza memoria.

@@ -134,6 +134,20 @@ export function registrarUso(tenantId: string | undefined, uso: Parameters<typeo
   }
 }
 
+/**
+ * A conta já gastou o limite do mês? Pedido do Daniel (30/10/2026): limite
+ * atingido trava TODA a automação de IA — agente principal, agentes das colunas,
+ * follow-ups automáticos e insights — até virar o mês ou entrar crédito.
+ */
+export function limiteAtingido(tenantId: string | undefined): boolean {
+  if (!tenantId || tenantId === 'default' || !iaCentral()) return false;
+  try {
+    return gastoBrl(tenantId) >= limiteBrl(tenantId);
+  } catch {
+    return false;
+  }
+}
+
 /** Bloqueia antes de chamar a IA quando a conta já passou do limite do mês. */
 export function conferirLimite(tenantId: string | undefined): void {
   if (!tenantId || tenantId === 'default' || !iaCentral()) return;

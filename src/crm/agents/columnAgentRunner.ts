@@ -23,6 +23,7 @@
 import { logger } from '../../utils/logger.js';
 import { getCluster } from '../../utils/clusterStore.js';
 import { getTenant } from '../../tenancy/tenantStore.js';
+import { limiteAtingido } from '../../tenancy/usoIa.js';
 import {
   callDeepSeekWithTools,
   transcribeAudio,
@@ -120,7 +121,7 @@ export interface RunColumnAgentInput {
 
 export type RunResult =
   | { status: 'executed'; reply: string }
-  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' | 'meta_commentary' | 'agent_disabled' }
+  | { status: 'blocked'; reason: 'out_of_hours' | 'max_turns' | 'anti_loop' | 'no_text' | 'audio_disabled' | 'transcribe_failed' | 'meta_commentary' | 'agent_disabled' | 'limite_ia' }
   | { status: 'locked_out' }
   | { status: 'error'; message: string };
 
@@ -140,6 +141,16 @@ export async function runColumnAgent(input: RunColumnAgentInput): Promise<RunRes
       event: 'blocked', reason: 'agent_disabled',
     });
     return { status: 'blocked', reason: 'agent_disabled' };
+  }
+
+  // Limite de IA do mês atingido: agente da coluna não roda (nem por timer).
+  if (limiteAtingido(tenantId)) {
+    logger.info(`[col-agent.runner] aborted card=${card.id} reason=limite_ia`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'limite_ia',
+    });
+    return { status: 'blocked', reason: 'limite_ia' };
   }
 
   // 1) Cluster lock
@@ -535,6 +546,16 @@ export async function runFromInactivityFire(input: InactivityFireInput): Promise
       event: 'blocked', reason: 'agent_disabled_inactivity',
     });
     return { status: 'blocked', reason: 'agent_disabled' };
+  }
+
+  // Limite de IA do mês atingido: agente da coluna não roda (nem por timer).
+  if (limiteAtingido(tenantId)) {
+    logger.info(`[col-agent.runFromFire] aborted card=${card.id} reason=limite_ia`);
+    recordAgentMetric({
+      tenantId, columnId: column.id, cardId: card.id,
+      event: 'blocked', reason: 'limite_ia_inactivity',
+    });
+    return { status: 'blocked', reason: 'limite_ia' };
   }
 
   // Tenta resolver phone do contato pra context
