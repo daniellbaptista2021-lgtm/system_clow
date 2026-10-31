@@ -254,6 +254,26 @@
     #chipPasso { display: none; }
     .fixo-cel { position: sticky; bottom: 0; z-index: 10; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 35%); }
     .palco .fixo-cel { background: none; }
+    /* celular: nada pode passar da largura da tela */
+    .grade { grid-template-columns: minmax(0, 1fr); }
+    .grade > * { min-width: 0; }
+    h1 { font-size: clamp(31px, 8.6vw, 42px); }
+    h2 { font-size: clamp(25px, 7vw, 32px); }
+    .lead { font-size: 16px; }
+    .selo { font-size: 13px; }
+    .perfis { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .perfil { font-size: 16px; padding: 14px 14px; gap: 12px; min-width: 0; }
+    .perfil .txt { min-width: 0; flex: 1; }
+    .op .txt { min-width: 0; flex: 1; }
+    .perfil .ic { width: 36px; height: 36px; }
+    .seta { width: 30px; height: 30px; }
+    /* na pergunta, o painel "ao vivo" ficava embaixo das respostas e deixava a página enorme */
+    #t-pergunta .grade > div:last-child { display: none; }
+    #pFerida { scroll-margin-top: 84px; }
+    .ferida .cura { grid-template-columns: 1fr; }
+    .ferida .cura img { display: none; }
+    /* o aviso de pontos cobria título e botão: no celular os pontos ficam só no contador do topo */
+    .aviso { display: none; }
   }
 </style>
 </head>
