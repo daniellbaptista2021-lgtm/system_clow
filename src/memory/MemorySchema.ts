@@ -109,6 +109,24 @@ const MIGRATIONS: Migration[] = [
       END`,
     ],
   },
+  {
+    // Memória permanente da conta, igual à do OpenClaw (pedido do Daniel,
+    // 31/10/2026): o agente grava o fato na hora em que ele aparece e a lista
+    // inteira entra em toda conversa — não depende de a sessão fechar direito.
+    version: 3,
+    description: 'Fatos permanentes da conta (memória que o agente grava)',
+    up: [
+      `CREATE TABLE IF NOT EXISTS memory_facts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL DEFAULT 'outro',
+        titulo TEXT NOT NULL UNIQUE,
+        conteudo TEXT NOT NULL,
+        criado_em INTEGER NOT NULL,
+        atualizado_em INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_memory_facts_tipo ON memory_facts(tipo)`,
+    ],
+  },
 ];
 
 // ════════════════════════════════════════════════════════════════════════════

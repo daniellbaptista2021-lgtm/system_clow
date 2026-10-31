@@ -80,7 +80,8 @@ export function closeMemoryDb(tenantId: string = 'default'): void {
  * Get the memory directory path.
  */
 export function getMemoryDir(): string {
-  return path.join(os.homedir(), '.clow', 'memory');
+  const home = process.env.CLOW_HOME || path.join(os.homedir(), '.clow');
+  return path.join(home, 'memory');
 }
 
 /**

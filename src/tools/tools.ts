@@ -24,6 +24,7 @@ import { DownloadTool } from './DownloadTool/DownloadTool.js';
 import { EnterPlanModeTool } from './EnterPlanModeTool/EnterPlanModeTool.js';
 import { ExitPlanModeTool } from './ExitPlanModeTool/ExitPlanModeTool.js';
 import { CrmTools } from './CrmTool/CrmTool.js';
+import { MemoryTool } from './MemoryTool/MemoryTool.js';
 import { getSwarmRuntimeTools } from '../swarm/tools/runtimeTools.js';
 import type { MCPManager } from '../mcp/MCPManager.js';
 import { adaptAllMCPTools } from '../mcp/mcpToolAdapter.js';
@@ -43,6 +44,7 @@ export function getAllBaseTools(): Tools {
     GlobTool,
     GrepTool,
     TodoWriteTool,
+    MemoryTool,
     WebFetchTool,
     WebSearchTool,
     ...getSwarmRuntimeTools(),

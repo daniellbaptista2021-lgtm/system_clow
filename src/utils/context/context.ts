@@ -420,6 +420,18 @@ export async function assembleFullContext(tenantId?: string, isAdmin: boolean = 
     fullPrompt += '\n\n' + memoryPrompt;
   }
 
+  // Memória permanente da conta (fatos que o agente grava na hora, igual ao
+  // OpenClaw). Vem inteira e antes do resumo das sessões: é o que ele "sabe".
+  if (tenantId) {
+    try {
+      const { fatosParaPrompt, INSTRUCOES_MEMORIA } = await import('../../memory/MemoryFacts.js');
+      const fatos = fatosParaPrompt(tenantId);
+      fullPrompt += '\n\n' + INSTRUCOES_MEMORIA + (fatos ? '\n\n' + fatos : '');
+    } catch {
+      // Sem a memória de fatos o agente segue com o resumo das sessões.
+    }
+  }
+
   // Inject persistent memory from past sessions
   try {
     const { generateMemoryContext } = await import('../../memory/MemoryContextInjector.js');
