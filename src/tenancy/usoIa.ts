@@ -6,13 +6,14 @@
  * que o cliente NUNCA vê como valor — só como barra de uso, igual ao plano Pro
  * do Claude:
  *
- *   Essencial (R$ 189,90) → R$ 70 de IA por mês
- *   Completo  (R$ 249,90) → R$ 120 de IA por mês
+ *   Essencial (R$ 189,90) → R$ 80 de IA por mês
+ *   Completo  (R$ 249,90) → R$ 100 de IA por mês
+ *   (valores ajustados pelo Daniel em 30/10/2026; antes eram R$ 70 e R$ 120)
  *
  * Cada resposta da IA traz quantos tokens gastou; aqui isso vira dólar pelo
  * preço do modelo, dólar vira real pela cotação de `EVOX_DOLAR_BRL`, e soma no
- * mês da conta. Crédito comprado (R$ 50/100/150) soma no limite do mês em que
- * entrou. Chegou a 100%, a IA para de responder naquela conta até virar o mês
+ * mês da conta. Crédito comprado (R$ 50/100/150) soma 85% do valor pago ao
+ * limite do mês em que entrou: os outros 15% ficam com o EVOX. Chegou a 100%, a IA para de responder naquela conta até virar o mês
  * ou entrar crédito — melhor parar do que estourar a fatura do DeepSeek.
  */
 import { getCrmDb } from '../crm/schema.js';
@@ -20,10 +21,18 @@ import { logger } from '../utils/logger.js';
 
 export type PlanoIa = 'essencial' | 'completo';
 
-export const LIMITE_PLANO_BRL: Record<PlanoIa, number> = { essencial: 70, completo: 120 };
+export const LIMITE_PLANO_BRL: Record<PlanoIa, number> = { essencial: 80, completo: 100 };
 
-/** Pacotes de crédito extra: preço que o cliente paga = reais somados ao limite. */
+/** Pacotes de crédito extra: preço que o cliente paga (desse valor, 85% vira limite). */
 export const PACOTES_CREDITO_BRL = [50, 100, 150];
+
+/** Parte da recarga que vira crédito de IA do cliente; os outros 15% ficam com o EVOX. */
+export const PARTE_CLIENTE_RECARGA = 0.85;
+
+/** Reais de IA que uma recarga paga libera para o cliente. */
+export function creditoDaRecarga(valorPagoBrl: number): number {
+  return Math.round(valorPagoBrl * PARTE_CLIENTE_RECARGA * 100) / 100;
+}
 
 // Preço do deepseek-flash por token (US$). Ajustável sem deploy: quando a
 // DeepSeek mudar a tabela, só a env muda.
@@ -152,7 +161,7 @@ export function resumoUso(tenantId: string) {
     bloqueado: gasto >= limite,
     renova_em: renovaEm(),
     // Uso extra comprado neste mês, contado em pacotes (o menor vale 1).
-    extra_pacotes: Math.round((extra / PACOTES_CREDITO_BRL[0]) * 10) / 10,
+    extra_pacotes: Math.round((extra / creditoDaRecarga(PACOTES_CREDITO_BRL[0])) * 10) / 10,
     // Crédito é igual nos dois planos (decisão do Daniel): o plano mais caro só
     // ganha no limite da mensalidade. Por isso o pacote nunca é mostrado em %
     // do plano — isso faria o mesmo pacote parecer menor no Completo.

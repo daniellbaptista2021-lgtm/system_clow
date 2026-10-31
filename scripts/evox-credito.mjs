@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Libera crédito de IA (ou troca o plano) de uma conta do EVOX.
 //   node scripts/evox-credito.mjs pedidos                       → lista pedidos pendentes
-//   node scripts/evox-credito.mjs liberar <pedido>              → credita o pedido pago
+//   node scripts/evox-credito.mjs liberar <pedido>              → credita o pedido pago (85% do valor)
 //   node scripts/evox-credito.mjs credito <conta> <valor>        → crédito avulso (R$)
 //   node scripts/evox-credito.mjs plano <conta> essencial|completo
 import Database from 'better-sqlite3';
@@ -21,9 +21,11 @@ if (cmd === 'pedidos') {
 } else if (cmd === 'liberar') {
   const p = db.prepare("SELECT * FROM evox_pedido_credito WHERE id=? AND status='pendente'").get(Number(a));
   if (!p) { console.error('Pedido não encontrado ou já liberado.'); process.exit(1); }
-  db.prepare('INSERT INTO evox_credito_ia (tenant_id, mes, valor_brl, origem, criado_em) VALUES (?,?,?,?,?)').run(p.tenant_id, mes, p.valor_brl, 'pedido #' + p.id, Date.now());
+  // Recarga paga: 85% vira crédito de IA do cliente, 15% fica com o EVOX (igual a PARTE_CLIENTE_RECARGA em src/tenancy/usoIa.ts).
+  const credito = Math.round(p.valor_brl * 0.85 * 100) / 100;
+  db.prepare('INSERT INTO evox_credito_ia (tenant_id, mes, valor_brl, origem, criado_em) VALUES (?,?,?,?,?)').run(p.tenant_id, mes, credito, 'pedido #' + p.id, Date.now());
   db.prepare("UPDATE evox_pedido_credito SET status='pago' WHERE id=?").run(p.id);
-  console.log(`Liberado: R$ ${p.valor_brl} para ${p.tenant_id} em ${mes}.`);
+  console.log(`Liberado: pago R$ ${p.valor_brl} → R$ ${credito} de crédito de IA para ${p.tenant_id} em ${mes}.`);
 } else if (cmd === 'credito') {
   db.prepare('INSERT INTO evox_credito_ia (tenant_id, mes, valor_brl, origem, criado_em) VALUES (?,?,?,?,?)').run(a, mes, Number(b), 'avulso', Date.now());
   console.log(`Crédito de R$ ${b} para ${a} em ${mes}.`);
