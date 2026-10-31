@@ -33,6 +33,7 @@ import { getMissionRunner } from './missions.js';
 import {
   flushSession,
   recordTranscriptForSession,
+  saveSessionMetadataForSession,
 } from '../utils/session/sessionStorage.js';
 import {
   getTotalCostUSD,
@@ -41,6 +42,13 @@ import {
   runWithExecutionContext,
 } from '../bootstrap/state.js';
 import { logger } from '../utils/logger.js';
+import {
+  deleteTenantConversation,
+  getTenantConversation,
+  listTenantConversations,
+  markConversationCompacted,
+  updateTenantConversation,
+} from './conversationStore.js';
 
 // ─── Build Routes ───────────────────────────────────────────────────────────
 
@@ -71,6 +79,47 @@ export function buildRoutes(pool: SessionPool): Hono {
       activeSessions: pool.size,
       uptimeSeconds: Math.floor(process.uptime()),
     });
+  });
+
+  // ── Durable web conversations ─────────────────────────────────────
+  app.get('/v1/conversations', async (c) => {
+    const { tenantId } = getTenantContext(c);
+    if (!tenantId) return c.json({ error: 'tenant_required' }, 403);
+    return c.json({ conversations: await listTenantConversations(tenantId) });
+  });
+
+  app.get('/v1/conversations/:id', async (c) => {
+    const { tenantId } = getTenantContext(c);
+    if (!tenantId) return c.json({ error: 'tenant_required' }, 403);
+    const result = await getTenantConversation(tenantId, c.req.param('id'));
+    if (!result) return c.json({ error: 'conversation_not_found' }, 404);
+    return c.json(result);
+  });
+
+  app.patch('/v1/conversations/:id', async (c) => {
+    const { tenantId } = getTenantContext(c);
+    if (!tenantId) return c.json({ error: 'tenant_required' }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    try {
+      const conversation = await updateTenantConversation(tenantId, c.req.param('id'), body);
+      if (!conversation) return c.json({ error: 'conversation_not_found' }, 404);
+      return c.json({ conversation });
+    } catch (error: any) {
+      return c.json({ error: 'invalid_conversation', message: error?.message || 'Dados inválidos' }, 400);
+    }
+  });
+
+  app.delete('/v1/conversations/:id', async (c) => {
+    const { tenantId } = getTenantContext(c);
+    if (!tenantId) return c.json({ error: 'tenant_required' }, 403);
+    const sessionId = c.req.param('id');
+    const existing = await getTenantConversation(tenantId, sessionId);
+    if (!existing) return c.json({ error: 'conversation_not_found' }, 404);
+    pool.delete(sessionId);
+    const deleted = await deleteTenantConversation(tenantId, sessionId);
+    if (!deleted) return c.json({ error: 'conversation_not_found' }, 404);
+    audit('session_delete', tenantId, { sessionId, source: 'conversation_sidebar' }, sessionId);
+    return c.json({ id: sessionId, deleted: true });
   });
 
   // ── Helper: Check session ownership ──────────────────────────────
@@ -309,6 +358,7 @@ export function buildRoutes(pool: SessionPool): Hono {
         tenantId,
       }, async () => {
         let assistantRecorded = false;
+        let compactedThisTurn = false;
         const costBefore = engine!.getInstanceCostUsd();
 
         try {
@@ -350,6 +400,16 @@ export function buildRoutes(pool: SessionPool): Hono {
                 break;
 
               case 'system':
+                if (event.subtype === 'compact_complete') {
+                  compactedThisTurn = true;
+                  if (tenantId) {
+                    await markConversationCompacted(tenantId, sessionId);
+                    await saveSessionMetadataForSession(sessionId, 'conversation_compact_snapshot', {
+                      at: Date.now(),
+                      messages: engine!.getMessages(),
+                    });
+                  }
+                }
                 await stream.writeSSE({
                   event: 'system',
                   data: JSON.stringify({
@@ -403,6 +463,17 @@ export function buildRoutes(pool: SessionPool): Hono {
           }
 
           await flushSession();
+
+          const context = engine!.getContextInfo();
+          await stream.writeSSE({
+            event: 'context_status',
+            data: JSON.stringify({
+              usage_percent: Math.round(context.usagePercent),
+              in_warning_zone: context.usagePercent >= 75,
+              compacted: compactedThisTurn,
+              recommend_new_conversation: compactedThisTurn || context.usagePercent >= 82,
+            }),
+          });
 
           await stream.writeSSE({
             event: 'done',

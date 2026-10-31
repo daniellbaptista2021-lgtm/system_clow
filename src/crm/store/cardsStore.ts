@@ -129,8 +129,11 @@ export function moveCard(tenantId: string, cardId: string, toColumnId: string, p
   const pos = position ?? getNextCardPosition(db, toColumnId);
   const moved = updateCard(tenantId, cardId, { columnId: toColumnId, position: pos });
   if (moved && moved.columnId !== existing.columnId) {
+    const previous = db.prepare('SELECT column_changed_at FROM crm_cards WHERE id = ? AND tenant_id = ?')
+      .get(cardId, tenantId) as { column_changed_at?: number } | undefined;
+    const changedAt = Math.max(Date.now(), (previous?.column_changed_at || 0) + 1);
     db.prepare('UPDATE crm_cards SET column_changed_at = ? WHERE id = ? AND tenant_id = ?')
-      .run(Date.now(), cardId, tenantId);
+      .run(changedAt, cardId, tenantId);
     logActivity(tenantId, {
       cardId, contactId: existing.contactId, type: 'stage_change', channel: 'manual',
       content: `Movido de ${existing.columnId} para ${toColumnId}`,

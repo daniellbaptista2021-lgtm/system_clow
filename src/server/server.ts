@@ -254,7 +254,7 @@ async function main(): Promise<void> {
     c.header('Referrer-Policy', 'no-referrer');
     if (p === '/' || p === '/signup' || p === '/pricing' || p === '/signup.html' || p === '/pricing.html') return c.redirect(`${territorioOrigin()}/app/crm`);
     if (p === '/auth/login' || p === '/auth/signup' || p.startsWith('/auth/sso')) return c.json({ error: 'territorio_required', message: 'Entre pelo Território Próprio.' }, 403);
-    if (p.startsWith('/v1/sessions') && !c.req.header('Authorization')?.startsWith('Bearer tp.')) return c.json({ error: 'territorio_required' }, 401);
+    if ((p.startsWith('/v1/sessions') || p.startsWith('/v1/conversations')) && !c.req.header('Authorization')?.startsWith('Bearer tp.')) return c.json({ error: 'territorio_required' }, 401);
     return next();
   });
   app.route('/', buildTerritorioRoutes());
@@ -273,12 +273,18 @@ async function main(): Promise<void> {
   // Auth: Clow sonnet bridge (short-circuits for clow_sonnet_* tokens)
   app.use('/v1/sessions/*', clowSonnetGuard);
   app.use('/v1/sessions', clowSonnetGuard);
+  app.use('/v1/conversations/*', clowSonnetGuard);
+  app.use('/v1/conversations', clowSonnetGuard);
 
   // Auth: multi-tenant via API key (skip health, webhooks, admin)
   app.use('/v1/sessions/*', tenantAuth);
   app.use('/v1/sessions', tenantAuth);
+  app.use('/v1/conversations/*', tenantAuth);
+  app.use('/v1/conversations', tenantAuth);
   app.use('/v1/sessions/*', exigirPlanoCompleto);
   app.use('/v1/sessions', exigirPlanoCompleto);
+  app.use('/v1/conversations/*', exigirPlanoCompleto);
+  app.use('/v1/conversations', exigirPlanoCompleto);
   app.route('/p', publicProposals);
   app.use('/v1/crm/*', tenantAuth);
   // ONDA 30 — API v2 (mounts after tenantAuth for same auth model)
@@ -292,6 +298,8 @@ async function main(): Promise<void> {
   // foi resolvido e a sessao roda sem credencial.
   app.use('/v1/sessions/*', marcarTenant);
   app.use('/v1/sessions', marcarTenant);
+  app.use('/v1/conversations/*', marcarTenant);
+  app.use('/v1/conversations', marcarTenant);
   app.use('/v1/crm/*', marcarTenant);
   app.use('/v1/crm', marcarTenant);
   app.use('/v2/crm/*', marcarTenant);

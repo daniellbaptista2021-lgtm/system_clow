@@ -100,7 +100,19 @@ function getSessionTenantIdFromEntries(entries: any[]): string | undefined {
 }
 
 function transcriptEntriesToApiMessages(entries: any[]): ClovMessage[] {
-  return entries.reduce<ClovMessage[]>((messages, entry) => {
+  let startIndex = 0;
+  let initial: ClovMessage[] = [];
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry?.type !== 'conversation_compact_snapshot' || !Array.isArray(entry?.value?.messages)) continue;
+    initial = entry.value.messages.filter((message: any) =>
+      message && (message.role === 'user' || message.role === 'assistant' || message.role === 'tool') && typeof message.content === 'string',
+    );
+    startIndex = i + 1;
+    break;
+  }
+
+  return entries.slice(startIndex).reduce<ClovMessage[]>((messages, entry) => {
     if (entry?.role === 'assistant' && typeof entry.content === 'string') {
       messages.push({ role: 'assistant', content: entry.content });
       return messages;
@@ -124,7 +136,7 @@ function transcriptEntriesToApiMessages(entries: any[]): ClovMessage[] {
     }
 
     return messages;
-  }, []);
+  }, initial);
 }
 
 // ─── The Pool ───────────────────────────────────────────────────────────────

@@ -37,7 +37,9 @@ import { getSessionId, getCwd } from '../../bootstrap/state.js';
 
 // ─── Singleton state ────────────────────────────────────────────────────────
 
-const CLOW_HOME = path.join(os.homedir(), '.clow');
+// Keep transcripts beside the CRM and memory databases in production so they
+// survive code deployments and follow the configured data directory.
+const CLOW_HOME = process.env.CLOW_HOME || path.join(os.homedir(), '.clow');
 let _index: SessionIndex | null = null;
 let _writers = new Map<string, JSONLWriter>();
 let _dedups = new Map<string, BoundedUUIDSet>();
@@ -191,6 +193,30 @@ export async function recordToolUse(toolName: string, input: unknown, output: st
 
 export async function flushSession(): Promise<void> {
   for (const w of _writers.values()) await w.flush();
+}
+
+/** Permanently remove one transcript after closing its open writer. */
+export async function deleteSessionTranscript(sessionId: string): Promise<boolean> {
+  const writer = _writers.get(sessionId);
+  if (writer) {
+    await writer.close();
+    _writers.delete(sessionId);
+  }
+  _dedups.delete(sessionId);
+
+  const fp = sessionFilePath(sessionId);
+  let deleted = false;
+  try {
+    fs.unlinkSync(fp);
+    deleted = true;
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  try { fs.unlinkSync(`${fp}.lock`); } catch { /* optional lock */ }
+  for (let i = 1; i <= 5; i++) {
+    try { fs.unlinkSync(`${fp}.${i}`); } catch { /* optional rotated file */ }
+  }
+  return deleted;
 }
 
 // ─── Read ───────────────────────────────────────────────────────────────────
