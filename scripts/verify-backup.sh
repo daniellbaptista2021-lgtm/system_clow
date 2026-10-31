@@ -14,8 +14,11 @@ set -euo pipefail
 
 CLOW_HOME="${CLOW_HOME:-$HOME/.clow}"
 BACKUP_ROOT="$CLOW_HOME/backups"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SQLITE3_BIN="$(command -v sqlite3 2>/dev/null || true)"
+NODE_BIN="$(command -v node 2>/dev/null || true)"
 
-command -v sqlite3 >/dev/null 2>&1 || { echo "sqlite3 binary not found in PATH" >&2; exit 2; }
+[ -n "$SQLITE3_BIN" ] || [ -n "$NODE_BIN" ] || { echo "sqlite3 and node binaries not found in PATH" >&2; exit 2; }
 [ -d "$BACKUP_ROOT" ] || { echo "no backups dir: $BACKUP_ROOT" >&2; exit 1; }
 
 if [ $# -ge 1 ]; then
@@ -38,7 +41,16 @@ for db in "$DIR/crm.sqlite3" "$DIR/memory/"*.sqlite3; do
   checked=$((checked + 1))
   rel="${db#$DIR/}"
   # integrity_check returns "ok" (single line) or one or more error rows
-  result="$(sqlite3 "$db" 'PRAGMA integrity_check;' 2>&1 || true)"
+  if [ -n "$SQLITE3_BIN" ]; then
+    result="$("$SQLITE3_BIN" "$db" 'PRAGMA integrity_check;' 2>&1 || true)"
+  else
+    result="$(cd "$PROJECT_ROOT" && "$NODE_BIN" -e '
+      const Database = require("better-sqlite3");
+      const db = new Database(process.argv[1], { readonly: true });
+      console.log(db.pragma("integrity_check", { simple: true }));
+      db.close();
+    ' "$db" 2>&1 || true)"
+  fi
   if [ "$result" = "ok" ]; then
     echo "  ✓ $rel"
   else

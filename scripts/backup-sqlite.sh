@@ -26,11 +26,14 @@ CLOW_HOME="${CLOW_HOME:-$HOME/.clow}"
 BACKUP_ROOT="$CLOW_HOME/backups"
 TIMESTAMP="$(date -u +'%Y-%m-%d-%H')"
 TARGET="$BACKUP_ROOT/$TIMESTAMP"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SQLITE3_BIN="$(command -v sqlite3 2>/dev/null || true)"
+NODE_BIN="$(command -v node 2>/dev/null || true)"
 
 log() { printf '[backup-sqlite] %s\n' "$*"; }
 fail() { printf '[backup-sqlite] ERROR: %s\n' "$*" >&2; exit 1; }
 
-command -v sqlite3 >/dev/null 2>&1 || fail "sqlite3 binary not found in PATH"
+[ -n "$SQLITE3_BIN" ] || [ -n "$NODE_BIN" ] || fail "sqlite3 and node binaries not found in PATH"
 [ -d "$CLOW_HOME" ] || fail "CLOW_HOME does not exist: $CLOW_HOME"
 
 mkdir -p "$TARGET/memory"
@@ -39,7 +42,19 @@ backup_db() {
   local src="$1" dst="$2"
   # `.backup` is online and atomic — sqlite3 takes a read lock and writes a
   # consistent snapshot, even with concurrent writers in WAL mode.
-  if sqlite3 "$src" ".backup '$dst'"; then
+  if [ -n "$SQLITE3_BIN" ]; then
+    "$SQLITE3_BIN" "$src" ".backup '$dst'" || fail "backup failed: $src"
+  else
+    (cd "$PROJECT_ROOT" && "$NODE_BIN" -e '
+      const Database = require("better-sqlite3");
+      const [src, dst] = process.argv.slice(1);
+      const db = new Database(src, { readonly: true });
+      db.backup(dst).then(() => db.close()).catch((error) => {
+        console.error(error.message); process.exit(1);
+      });
+    ' "$src" "$dst") || fail "backup failed: $src"
+  fi
+  if [ -f "$dst" ]; then
     log "✓ $(basename "$src") → $(printf '%s' "$dst" | sed "s|$BACKUP_ROOT/||")"
   else
     fail "backup failed: $src"
