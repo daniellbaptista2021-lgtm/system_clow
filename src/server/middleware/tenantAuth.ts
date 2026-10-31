@@ -97,19 +97,6 @@ export async function tenantAuth(c: Context, next: Next): Promise<Response | voi
     return next();
   }
 
-  // SSE (live updates) is opened via the browser's native EventSource, que
-  // não tem como mandar um header Authorization — só a URL. Por isso essa
-  // rota carrega o token como query param (?token=) e resolve o tenant
-  // sozinha (ver src/crm/routes/agents.ts, GET /events). Sem este skip, a
-  // conexão nunca passava daqui: 401 antes mesmo de chegar no handler que
-  // sabe ler o query param (incidente 2026-08-21 — updates ao vivo nunca
-  // funcionaram, nem antes nem depois de existir o publish() do outro lado).
-  // Sessão do Território (tp.) não é API key: o handler não a resolveria
-  // sozinho, então ela segue para a validação abaixo.
-  if (reqPath === '/v1/crm/events' && !territorioExclusivo() && !c.req.query('token')?.startsWith('tp.')) {
-    return next();
-  }
-
   // Skip auth if clowSonnetGuard already authenticated this request
   const alreadyAuthed = (c as unknown as { get?: (k: string) => unknown }).get?.('authMode');
   if (alreadyAuthed === 'clow_sonnet' || alreadyAuthed === 'admin_session') {

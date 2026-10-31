@@ -26,7 +26,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
-import { tenantAuth } from '../../../src/server/middleware/tenantAuth.js';
+import { tenantAuth, createAdminSessionToken } from '../../../src/server/middleware/tenantAuth.js';
 import { createTenant, updateTenant } from '../../../src/tenancy/tenantStore.js';
 import { checkAndIncrementMessageQuota } from '../../../src/billing/quotaGuard.js';
 
@@ -35,11 +35,13 @@ let tmpHome: string;
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'clow-suspend-'));
   process.env.CLOW_HOME = tmpHome;
+  process.env.CLOW_ADMIN_SESSION_SECRET = 'segredo-de-teste-do-sse';
 });
 
 afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true });
   delete process.env.CLOW_HOME;
+  delete process.env.CLOW_ADMIN_SESSION_SECRET;
 });
 
 function buildApp(): Hono {
@@ -47,6 +49,7 @@ function buildApp(): Hono {
   app.use('/v1/crm/*', tenantAuth);
   app.use('/v1/sessions/*', tenantAuth);
   app.get('/v1/crm/contacts', (c) => c.json({ ok: true, where: 'crm' }));
+  app.get('/v1/crm/events', (c) => c.json({ ok: true, tenantId: c.get('tenantId') }));
   app.post('/v1/sessions', (c) => c.json({ ok: true, where: 'sessions' }));
   app.get('/health', (c) => c.json({ ok: true, where: 'health' }));
   return app;
@@ -66,6 +69,21 @@ describe('tenantAuth — happy path', () => {
     const r = await fetchAs(app, '/v1/crm/contacts', apiKey);
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ ok: true, where: 'crm' });
+  });
+
+  it('autentica o EventSource pelo token na URL', async () => {
+    const { tenant, apiKey } = createTenant({ email: 'sse@test', name: 'SSE', tier: 'starter' });
+    const r = await buildApp().request(`/v1/crm/events?token=${encodeURIComponent(apiKey)}`);
+    expect(r.status).toBe(200);
+    expect((await r.json()).tenantId).toBe(tenant.id);
+  });
+
+  it('aceita a sessão do administrador no EventSource', async () => {
+    const { tenant } = createTenant({ email: 'admin@clow.dev', name: 'Admin', tier: 'starter' });
+    const token = createAdminSessionToken('admin');
+    const r = await buildApp().request(`/v1/crm/events?token=${encodeURIComponent(token)}`);
+    expect(r.status).toBe(200);
+    expect((await r.json()).tenantId).toBe(tenant.id);
   });
 });
 
