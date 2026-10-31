@@ -25,17 +25,38 @@ window.addEventListener('territorio-session', () => {
 
 // ─── API helper ────────────────────────────────────────────────────────
 const API_BASE = '/v1/crm';
+let credentialRefreshPromise = null;
 
-async function api(path, opts = {}) {
+async function refreshCrmCredential() {
+  if (!credentialRefreshPromise) {
+    credentialRefreshPromise = (async () => {
+      const fresh = await tryExchange();
+      if (!fresh) return null;
+      state.apiKey = fresh;
+      window.clowStorage.setItem('clow_crm_key', fresh);
+      return fresh;
+    })().finally(() => { credentialRefreshPromise = null; });
+  }
+  return credentialRefreshPromise;
+}
+
+async function api(path, opts = {}, retried = false) {
   const headers = {
     'Authorization': `Bearer ${state.apiKey}`,
     ...(opts.headers || {}),
   };
+  let body = opts.body;
   if (!(opts.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-    if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+    if (body && typeof body !== 'string') body = JSON.stringify(body);
   }
-  const r = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+  const r = await fetch(`${API_BASE}${path}`, { ...opts, body, headers });
+  // Uma chave antiga podia ser revogada quando a mesma pessoa abria o CRM em
+  // outro aparelho. Recupera a sessão do EVOX e repete a ação uma única vez.
+  if (r.status === 401 && !retried) {
+    const fresh = await refreshCrmCredential();
+    if (fresh) return api(path, opts, true);
+  }
   if (r.status === 204) return null;
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.message || data.error || `HTTP ${r.status}`);

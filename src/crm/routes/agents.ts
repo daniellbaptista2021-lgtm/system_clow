@@ -43,6 +43,7 @@ import { findTenantByApiKeyHash, hashApiKey } from '../../tenancy/tenantStore.js
 import { readMedia } from '.././media.js';
 import type { BoardType, ChannelType, BillingCycle, AgentRole } from '.././types.js';
 import { logger } from '../../utils/logger.js';
+import { normalizarNomePerfil } from '../../tenancy/perfil.js';
 /**
  * CRM REST API routes — mounted at /v1/crm.
  *
@@ -355,6 +356,23 @@ export function registerAgentsRoutes(app: Hono): void {
     const ok2 = store.deleteAgent(tenantOf(c), c.req.param('id'));
     return ok2 ? c.body(null, 204) : notFound(c, 'agent');
   });
+  // Nome exibido no topo do CRM. Atualiza os dois campos porque contas
+  // antigas usam `name` e contas criadas pelo checkout usam `full_name`.
+  app.put('/perfil/nome', async (c) => {
+    const body = await c.req.json().catch(() => ({} as any));
+    const nome = normalizarNomePerfil(body?.nome);
+    if (!nome) {
+      return c.json({
+        ok: false,
+        error: 'nome_invalido',
+        message: 'Digite um nome entre 3 e 80 caracteres.',
+      }, 400);
+    }
+    const { updateTenant } = await import('../../tenancy/tenantStore.js');
+    const atualizado = updateTenant(tenantOf(c), { name: nome, full_name: nome });
+    if (!atualizado) return c.json({ ok: false, error: 'conta_nao_encontrada' }, 404);
+    return c.json({ ok: true, nome });
+  });
   // Foto de perfil da conta (EVOX, 29/10/2026). Chega como data URL ja
   // reduzida pelo navegador; aqui so aceita imagem e ate 2 MB.
   app.post('/perfil/foto', async (c) => {
@@ -428,7 +446,7 @@ export function registerAgentsRoutes(app: Hono): void {
         tenant: {
           id: t.id,
           email: t.email,
-          name: t.name,
+          name: t.full_name || t.name,
           tier: t.tier,
           status: t.status,
           hasStripe: !!t.stripe_customer_id,

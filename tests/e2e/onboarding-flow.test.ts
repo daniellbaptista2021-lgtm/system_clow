@@ -12,7 +12,7 @@
  *   3. Stripe webhook (checkout.session.completed) for that email
  *   4. Tenant ends with stripe IDs + tier wired up
  *   5. POST /auth/login → JWT token
- *   6. POST /v1/crm/auth/exchange → CRM api_key
+ *   6. POST /v1/crm/auth/exchange → credencial da sessão do CRM
  *   7. CRM CRUD: create board / column / contact / channel via api_key
  *   8. POST /auth/authorized-phones — set phone whitelist
  *   9. POST /webhooks/crm/evolution/:secret with a real Evolution ReceivedCallback
@@ -239,10 +239,10 @@ describe('E2E onboarding flow — signup → checkout → CRM → inbound messag
   });
 
   // ─── 6. CRM api_key exchange ──────────────────────────────────────────────
-  it('step 6 — POST /v1/crm/auth/exchange returns a usable CRM api_key', async () => {
+  it('step 6 — POST /v1/crm/auth/exchange returns the usable user session', async () => {
     const r = await api('/v1/crm/auth/exchange', { token: userToken });
     expect(r.status, r.body).toBe(200);
-    expect(r.body.api_key).toMatch(/^clow_/);
+    expect(r.body.api_key).toBe(userToken);
     expect(r.body.tenant_id).toBe(tenantId);
     expect(r.body.tier).toBe('profissional');
     crmApiKey = r.body.api_key;

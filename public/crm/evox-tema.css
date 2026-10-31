@@ -242,6 +242,13 @@ input:focus, select:focus, textarea:focus {
 }
 .evox-usuario-nome { font-weight: 650; font-size: 14px; color: var(--text); }
 .evox-usuario-papel { font-size: 12px; color: var(--text-faint); }
+.evox-nome-botao {
+  display: inline-flex; align-items: center; gap: 5px; padding: 0 !important;
+  border: 0 !important; background: transparent !important; box-shadow: none !important;
+  color: var(--text) !important; cursor: pointer;
+}
+.evox-nome-botao > span:last-child { color: var(--text-faint); font-size: 12px; }
+.evox-nome-botao:hover > span:last-child { color: var(--purple); }
 
 /* Título grande da página */
 .evox-cabeca { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 2px 2px 14px; }

@@ -348,15 +348,11 @@ export function registerAuthExchangeRoutes(app: Hono): void {
       const ts = await import('../../tenancy/tenantStore.js');
       const t = ts.getTenant(userTok.tid);
       if (!t) return c.json({ error: 'tenant_not_found' }, 404);
-      // Sessão curta permanece curta. Trocar por API key tornaria o acesso permanente.
-      if (token.startsWith('tp.')) return c.json({ api_key: token, tenant_id: t.id, tenant_name: t.name, tenant_email: t.email, tier: t.tier });
-      // Revoga apenas as keys do MESMO usuário (token.uid). Multi-user no
-      // mesmo tenant não pode invalidar a sessão dos outros.
-      const userKey = userTok.uid;
-      ts.revokeOldCrmShellKeysForUser(t.id, userKey);
-      const apiKey = ts.createApiKeyForTenant(t.id, `crm-shell-${userKey}-${Date.now()}`);
+      // O middleware do CRM aceita a própria sessão. Não a trocamos por uma
+      // API key permanente e, principalmente, não revogamos a credencial do
+      // celular quando a mesma pessoa abre o CRM no computador (ou vice-versa).
       return c.json({
-        api_key: apiKey,
+        api_key: token,
         tenant_id: t.id,
         tenant_name: t.name,
         tenant_email: t.email,
@@ -372,12 +368,8 @@ export function registerAuthExchangeRoutes(app: Hono): void {
       const tenants = ts.listTenants();
       const tenant = tenants.find(t => t.email === 'admin@clow.dev') || tenants[0];
       if (!tenant) return c.json({ error: 'no_tenant' }, 404);
-      // Admin tem userKey = 'admin' (sessão única por usuário admin nomeado).
-      const userKey = `admin-${adm.username || 'root'}`;
-      ts.revokeOldCrmShellKeysForUser(tenant.id, userKey);
-      const apiKey = ts.createApiKeyForTenant(tenant.id, `crm-shell-${userKey}-${Date.now()}`);
       return c.json({
-        api_key: apiKey,
+        api_key: token,
         tenant_id: tenant.id,
         tenant_name: tenant.name,
         tenant_email: tenant.email,

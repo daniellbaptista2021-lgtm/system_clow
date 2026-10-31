@@ -12,6 +12,10 @@
     nome.textContent = n;
     avatar.textContent = n.split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase();
   }
+  window.evoxAplicarNome = function (n) {
+    if (fonte) fonte.textContent = n;
+    copiarNome();
+  };
   if (fonte) new MutationObserver(copiarNome).observe(fonte, { childList: true, characterData: true, subtree: true });
   copiarNome();
 
@@ -37,19 +41,24 @@
 /* Barra de baixo do celular: atalhos para as telas principais. "Mais" abre o
  * menu completo (o mesmo botão ☰ do crm.js, que fica escondido no celular). */
 (function () {
-  const barra = document.getElementById('evoxAbasBaixo'); if (!barra) return;
-  barra.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-ir]'); if (!b) return;
-    const ir = b.dataset.ir;
-    if (ir === 'menu') { document.getElementById('sidebarToggle')?.click(); return; }
-    document.querySelector(`.sidebar .nav-item[data-view="${ir}"]`)?.click();
-  });
-  function marcar() {
-    const ativa = [...document.querySelectorAll('.view.active')].find((v) => getComputedStyle(v).display !== 'none')?.dataset.view;
-    barra.querySelectorAll('button[data-ir]').forEach((b) => b.classList.toggle('ativa', b.dataset.ir === ativa));
+  function iniciar() {
+    const barra = document.getElementById('evoxAbasBaixo'); if (!barra || barra.dataset.ligada) return;
+    barra.dataset.ligada = '1';
+    barra.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-ir]'); if (!b) return;
+      const ir = b.dataset.ir;
+      if (ir === 'menu') { document.getElementById('sidebarToggle')?.click(); return; }
+      document.querySelector(`.sidebar .nav-item[data-view="${ir}"]`)?.click();
+    });
+    function marcar() {
+      const ativa = [...document.querySelectorAll('.view.active')].find((v) => getComputedStyle(v).display !== 'none')?.dataset.view;
+      barra.querySelectorAll('button[data-ir]').forEach((b) => b.classList.toggle('ativa', b.dataset.ir === ativa));
+    }
+    document.querySelectorAll('.view').forEach((v) => new MutationObserver(marcar).observe(v, { attributes: true, attributeFilter: ['class'] }));
+    marcar();
   }
-  document.querySelectorAll('.view').forEach((v) => new MutationObserver(marcar).observe(v, { attributes: true, attributeFilter: ['class'] }));
-  marcar();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar, { once: true });
+  else iniciar();
 })();
 
 /* Celular: o campo de mensagem é estreito; o texto de dica fica curto. */
@@ -68,9 +77,21 @@
   const menu = document.getElementById('evoxFotoMenu');
   const arquivo = document.getElementById('evoxFotoArquivo');
   if (!avatar || !menu || !arquivo) return;
-  const token = () => { try { return localStorage.getItem('clow_crm_key') || localStorage.getItem('clow_token') || ''; } catch (e) { return ''; } };
+  const token = () => { try { return localStorage.getItem('clow_token') || localStorage.getItem('clow_crm_key') || ''; } catch (e) { return ''; } };
   const api = (caminho, opts = {}) => fetch('/v1/crm' + caminho, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' } });
   let temFoto = false;
+
+  async function alterarNome() {
+    const atual = (document.getElementById('tenantName')?.textContent || '').trim();
+    const novo = window.prompt('Como seu nome deve aparecer no EVOX?', atual === '—' ? '' : atual);
+    if (novo === null) return;
+    try {
+      const r = await api('/perfil/nome', { method: 'PUT', body: JSON.stringify({ nome: novo }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.message || 'Não consegui salvar o nome.');
+      window.evoxAplicarNome?.(j.nome);
+    } catch (err) { alert(err.message || 'Não consegui salvar o nome.'); }
+  }
 
   async function mostrar(url) {
     temFoto = !!url;
@@ -92,13 +113,14 @@
 
   avatar.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!temFoto) { arquivo.click(); return; }
     menu.hidden = !menu.hidden;
   });
+  document.getElementById('evoxEditarNome')?.addEventListener('click', alterarNome);
   document.addEventListener('click', () => { menu.hidden = true; });
   menu.addEventListener('click', async (e) => {
     const b = e.target.closest('button[data-acao]'); if (!b) return;
     menu.hidden = true;
+    if (b.dataset.acao === 'nome') await alterarNome();
     if (b.dataset.acao === 'trocar') arquivo.click();
     if (b.dataset.acao === 'remover') { await api('/perfil/foto', { method: 'DELETE' }); mostrar(null); }
   });

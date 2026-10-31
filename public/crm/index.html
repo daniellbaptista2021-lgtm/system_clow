@@ -21,12 +21,13 @@
 <link rel="icon" href="/assets/evox/favicon.png">
 <link rel="manifest" href="/crm/manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/evox/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/crm/crm.css?v=vector3">
 <link rel="stylesheet" href="/crm/evox-recursos.css?v=2cb">
-<link rel="stylesheet" href="/crm/evox-tema.css?v=19">
+<link rel="stylesheet" href="/crm/evox-tema.css?v=20">
 </head>
 <body>
 
@@ -84,7 +85,7 @@
     <div class="evox-topo">
       <span class="evox-topo-logo evox-logo" role="img" aria-label="EVOX"></span>
       <label class="evox-busca"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="evoxBusca" type="search" placeholder="Buscar leads, contatos, negócios..." autocomplete="off"></label>
-      <div class="evox-usuario"><button type="button" class="evox-avatar" id="evoxAvatar" title="Foto de perfil" aria-haspopup="menu">—</button><input type="file" id="evoxFotoArquivo" accept="image/png,image/jpeg,image/webp" hidden><div class="evox-foto-menu" id="evoxFotoMenu" role="menu" hidden><button type="button" role="menuitem" data-acao="trocar">Trocar foto</button><button type="button" role="menuitem" data-acao="remover">Remover foto</button></div><div><div class="evox-usuario-nome" id="evoxUsuarioNome">—</div><div class="evox-usuario-papel">Corretor</div></div></div>
+      <div class="evox-usuario"><button type="button" class="evox-avatar" id="evoxAvatar" title="Editar perfil" aria-haspopup="menu">—</button><input type="file" id="evoxFotoArquivo" accept="image/png,image/jpeg,image/webp" hidden><div class="evox-foto-menu" id="evoxFotoMenu" role="menu" hidden><button type="button" role="menuitem" data-acao="nome">Alterar nome</button><button type="button" role="menuitem" data-acao="trocar">Trocar foto</button><button type="button" role="menuitem" data-acao="remover">Remover foto</button></div><div><button type="button" class="evox-nome-botao" id="evoxEditarNome" title="Alterar nome"><span class="evox-usuario-nome" id="evoxUsuarioNome">—</span><span aria-hidden="true">✎</span></button><div class="evox-usuario-papel">Corretor</div></div></div>
     </div>
     <!-- AGENTE IA VIEW (embutido, mesma aba) -->
     <div class="view" data-view="agente" data-plano="completo" id="agenteView" hidden>
@@ -501,14 +502,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/crm/clow-dialog.js?v=vector3"></script>
 <script src="/crm/media-viewer.js?v=vector3"></script>
-<script type="module" src="/crm/crm.js?v=evox8"></script>
+<script type="module" src="/crm/crm.js?v=evox9"></script>
 <script src="/crm/crm-extras.js?v=vector3"></script>
 <!-- Antes do settings-ext: ele procura window.UsoIA ao desenhar as configurações. -->
 <script src="/crm/uso-ia.js?v=3"></script>
 <script src="/crm/whatsapp-qr.js?v=vector3"></script>
 <script src="/crm/crm-settings-ext.js?v=evox2-vector3"></script>
 <script src="/crm/agent-config-modal.js?v=evox3"></script>
-<script src="/crm/evox-ui.js?v=6"></script>
+<script src="/crm/evox-ui.js?v=7"></script>
 <script src="/crm/mcp-panel.js?v=vector3"></script>
 <!-- "Apresentação" saiu do menu; o arquivo segue preservado no repositório. -->
 <script src="/crm/datas.js?v=1"></script>
